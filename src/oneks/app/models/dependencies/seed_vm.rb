@@ -57,6 +57,17 @@ module OneKS
         end
 
         def create(group)
+            if @id
+                resumable = resumable_bootstrap?(group)
+                return resumable if OpenNebula.is_error?(resumable)
+                return true if resumable
+
+                return OpenNebula::Error.new(
+                    'Existing seed is not resumable; refusing duplicate creation',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
             Log.info(COMP, 'Creating Seed VM for ControlPlane provisioning', group.cluster_id)
 
             cluster = group.parent_cluster
@@ -101,6 +112,32 @@ module OneKS
                 "VM seed creation failed: #{e.message}",
                 OpenNebula::Error::EACTION
             )
+        end
+
+        # An observer timeout does not stop the seed's native CAPI operation.
+        # Reconcile its identity and state before deciding whether to recreate it.
+        def resumable_bootstrap?(group)
+            return false unless @id
+
+            vm = OpenNebula::VirtualMachine.new_with_id(@id, group.client)
+            rc = vm.info
+            return rc if OpenNebula.is_error?(rc)
+
+            cluster = group.parent_cluster
+            return cluster if OpenNebula.is_error?(cluster)
+
+            unless vm.name == "#{group.uuid}-seed" && vm['UID'].to_s == group.owner_id.to_s &&
+                   vm['USER_TEMPLATE/ONEAPP_ONEKS_CLUSTER_NAME'] == cluster.uuid
+                return OpenNebula::Error.new(
+                    'Seed ownership mismatch; recovery requires reconciliation',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
+            vm['STATE'].to_s == '3' && vm['LCM_STATE'].to_s == '3' &&
+                %w[PROVISIONING_MGMT PROVISIONING_CP PIVOTING_CLUSTER RUNNING].include?(
+                    vm['USER_TEMPLATE/ONEKS_STATE']
+                )
         end
 
         # Monitor seed VM creation

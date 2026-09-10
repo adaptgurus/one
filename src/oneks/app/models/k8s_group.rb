@@ -337,6 +337,31 @@ module OneKS
         # Resets the dependency readiness and lets each dependency decide
         # how to repair or recreate its managed resource.
         def recover_dependencies
+            seed = dependencies.find {|dep| dep.is_a?(SeedVM) && dep.id }
+            if seed
+                resumable = seed.resumable_bootstrap?(self)
+                return resumable if OpenNebula.is_error?(resumable)
+
+                if resumable
+                    # Keep the existing CAPI operation and its VMs. Bootstrap
+                    # reattaches observers; only live readiness can advance it.
+                    dependencies.each {|dep| dep.ready = false }
+                    return true
+                end
+
+                # Failure/unknown appliance state is not proof that its CAPI
+                # operation stopped. Keep the seed, endpoints and nodes intact.
+                return OpenNebula::Error.new(
+                    'Seed state requires reconciliation; preserving existing resources',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
+            return OpenNebula::Error.new(
+                'Existing group VMs require reconciliation before dependency recovery',
+                OpenNebula::Error::EACTION
+            ) unless vms.empty?
+
             dependencies.each do |dep|
                 begin
                     dep.ready = false
@@ -349,14 +374,6 @@ module OneKS
                         OpenNebula::Error::EACTION
                     )
                 end
-            end
-
-            # Delete any VMs associated with the group in case they were created by a dependency
-            vms.dup.each do |vm_id|
-                rc = OneHelper::VirtualMachine.delete(@client, vm_id, :force => true)
-                return rc if OpenNebula.is_error?(rc)
-
-                del_vm(vm_id)
             end
 
             true

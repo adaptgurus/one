@@ -1,0 +1,40 @@
+NAME    = "<%= group[:router_template_name] %>"
+CONTEXT = [
+  NETWORK                        = "YES",
+  ONEAPP_VNF_DNS_ENABLED         = "YES",
+  ONEAPP_VNF_DNS_NAMESERVERS     = "1.1.1.1,8.8.8.8",
+  ONEAPP_VNF_DNS_USE_ROOTSERVERS = "NO",
+  ONEAPP_VNF_NAT4_ENABLED        = "YES",
+  ONEAPP_VNF_NAT4_INTERFACES_OUT = "eth0",
+  ONEAPP_VNF_ROUTER4_ENABLED     = "YES",
+  SSH_PUBLIC_KEY                 = "$USER[SSH_PUBLIC_KEY]",
+  TOKEN                          = "YES"
+]
+CPU = "1"
+DISK = [
+  IMAGE_ID = "<%= Integer(group[:user_inputs_values][:router_image_id]) %>"
+]
+GRAPHICS = [
+  LISTEN = "127.0.0.1",
+  TYPE   = "vnc"
+]
+LXD_SECURITY_PRIVILEGED = "true"
+MEMORY = "512"
+NIC_DEFAULT = [
+  MODEL = "virtio"
+]
+SCHED_REQUIREMENTS = "<%= cluster[:deployment][:sched_requirements] %>"
+OS = [
+  ARCH            = "x86_64",
+  MACHINE = "q35"
+]
+VROUTER = "YES"
+ONEKS = [
+  CLUSTER_ID   = <%= cluster[:id] %>,
+  CLUSTER_NAME = "<%= cluster[:uuid] %>",
+  TYPE         = "CLUSTER_ROUTER"
+]
+
+CPU_MODEL = [ MODEL = "host-passthrough" ]
+SCHED_DS_REQUIREMENTS = "ID = <%= Integer(group[:user_inputs_values][:system_datastore_id]) %>"
+VMGROUP = [ VMGROUP_ID = "<%= Integer(group[:user_inputs_values][:router_vmgroup_id]) %>", ROLE = "endpoints" ]
