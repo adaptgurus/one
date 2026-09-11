@@ -1,18 +1,14 @@
 ---
-# This file describes the information and actions available in the VM tab
-
-# Resource
-
+# LayerSentry customer VM view. Native OpenNebula actions remain authoritative.
 resource_name: "VM"
-
-# Actions - Which buttons are visible to operate over the resources
 
 actions:
   create_dialog: true
-  create_app_dialog: true # reference to create_dialog in marketplace-app-tab.yaml
+  create_app_dialog: true
   deploy: false
   migrate: false
   migrate_live: false
+  live-migrate: false
   hold: false
   release: false
   suspend: false
@@ -37,10 +33,8 @@ actions:
   vnc: true
   ssh: true
   rdp: true
-  edit_labels: false
-  backup: false  
-
-# Filters - List of criteria to filter the resources
+  edit_labels: true
+  backup: true
 
 filters:
   state: true
@@ -51,17 +45,13 @@ filters:
   ips: true
   hostname: true
 
-
-# Info Tabs - Which info tabs are used to show extended information
-
 info-tabs:
-
   info:
     enabled: true
     information_panel:
       enabled: true
       actions:
-        rename: false
+        rename: true
     permissions_panel:
       enabled: true
       actions:
@@ -92,19 +82,35 @@ info-tabs:
     actions:
       disk-attach:
         enabled: true
+      disk-attach-image: true
+      disk-attach-volatile: true
       disk-detach: true
       disk-resize: true
       disk_saveas:
         enabled: true
+      disk-saveas: true
+      disk-snapshot-create: true
+      disk-snapshot-delete: true
+      disk-snapshot-rename: true
+      disk-snapshot-revert: true
 
   network:
     enabled: true
     actions:
       nic-attach: true
+      nic-attach-alias: true
       nic-detach: true
       nic-update: true
       sg-attach: true
       sg-detach: true
+
+  # Dedicated accelerators use the existing native PCI inventory and
+  # attach/detach handlers. Host preparation and device availability still gate it.
+  pci:
+    enabled: true
+    actions:
+      pci-attach: true
+      pci-detach: true
 
   snapshot:
     enabled: true
@@ -114,10 +120,10 @@ info-tabs:
       snapshot-delete: true
 
   backup:
-    enabled: false
+    enabled: true
 
   history:
-    enabled: false
+    enabled: true
 
   sched_actions:
     enabled: true
@@ -133,4 +139,4 @@ info-tabs:
       update_configuration: false
 
   template:
-    enabled: false
+    enabled: true
