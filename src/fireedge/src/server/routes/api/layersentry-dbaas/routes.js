@@ -19,6 +19,7 @@ const Actions = {
 const commonCluster = {
   clusterId: { from: resource },
 }
+const wholeBody = { from: postBody, all: true }
 
 const Commands = {
   [Actions.LIST]: {
@@ -31,7 +32,7 @@ const Commands = {
     path: `${basepath}/:clusterId/databases`,
     httpMethod: POST,
     auth: true,
-    params: { ...commonCluster, body: { from: postBody } },
+    params: { ...commonCluster, body: wholeBody },
   },
   [Actions.SHOW]: {
     path: `${basepath}/:clusterId/databases/:name`,
@@ -46,7 +47,7 @@ const Commands = {
     params: {
       ...commonCluster,
       name: { from: resource },
-      body: { from: postBody },
+      body: wholeBody,
     },
   },
   [Actions.DELETE]: {
@@ -63,7 +64,7 @@ const Commands = {
       ...commonCluster,
       name: { from: resource },
       operation: { from: resource },
-      body: { from: postBody },
+      body: wholeBody,
     },
   },
 }
