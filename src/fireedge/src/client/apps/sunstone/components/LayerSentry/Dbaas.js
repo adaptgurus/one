@@ -116,6 +116,20 @@ const endpointText = (endpoint = {}) => {
   }`
 }
 
+const monitoringText = (monitoring = {}) => {
+  if (!monitoring.known) return 'Unknown'
+  if (!monitoring.enabled) return 'Disabled'
+
+  return monitoring.healthy ? 'Healthy' : 'Degraded'
+}
+
+const monitoringColor = (monitoring = {}) => {
+  if (!monitoring.known) return 'warning'
+  if (!monitoring.enabled) return 'default'
+
+  return monitoring.healthy ? 'success' : 'error'
+}
+
 const firstQualified = (catalog = {}) => {
   const engine = Object.keys(catalog.engines ?? {})[0] ?? ''
 
@@ -334,6 +348,9 @@ const ScaleDialog = ({ database, catalog, onClose, onSubmit, busy }) => {
   const [version, setVersion] = useState(database?.spec?.desiredVersion ?? '')
   const [replicas, setReplicas] = useState(database?.spec?.replicas ?? 3)
   const [storage, setStorage] = useState(database?.spec?.storageGiB ?? 20)
+  const [protectionGroupRef, setProtectionGroupRef] = useState(
+    database?.spec?.protectionGroupRef ?? ''
+  )
   const [deletionProtection, setDeletionProtection] = useState(
     database?.spec?.deletionProtection ?? true
   )
@@ -342,12 +359,14 @@ const ScaleDialog = ({ database, catalog, onClose, onSubmit, busy }) => {
     setVersion(database?.spec?.desiredVersion ?? '')
     setReplicas(database?.spec?.replicas ?? 3)
     setStorage(database?.spec?.storageGiB ?? 20)
+    setProtectionGroupRef(database?.spec?.protectionGroupRef ?? '')
     setDeletionProtection(database?.spec?.deletionProtection ?? true)
   }, [database])
 
   if (!database) return null
   const topology = database.spec?.haTopology?.mode || 'provider-managed'
   const versions = catalog?.engines?.[database.spec?.engine] ?? []
+  const minimumReplicas = topology === 'ha' ? 3 : 1
 
   return (
     <Dialog
@@ -382,7 +401,7 @@ const ScaleDialog = ({ database, catalog, onClose, onSubmit, busy }) => {
           label="Replicas"
           type="number"
           value={replicas}
-          inputProps={{ min: topology === 'ha' ? 3 : 1 }}
+          inputProps={{ min: minimumReplicas }}
           disabled={topology === 'single'}
           onChange={(event) => setReplicas(event.target.value)}
         />
@@ -398,6 +417,12 @@ const ScaleDialog = ({ database, catalog, onClose, onSubmit, busy }) => {
           value={database.spec.storageClass ?? ''}
           InputProps={{ readOnly: true }}
           helperText="Changing storage class requires a separately qualified migration workflow."
+        />
+        <TextField
+          label="Protection group reference"
+          value={protectionGroupRef}
+          onChange={(event) => setProtectionGroupRef(event.target.value)}
+          helperText="Optional P3 recovery-reference integration"
         />
         <FormControlLabel
           control={(
@@ -417,6 +442,7 @@ const ScaleDialog = ({ database, catalog, onClose, onSubmit, busy }) => {
             busy ||
             !version ||
             !versions.includes(version) ||
+            Number(replicas) < minimumReplicas ||
             Number(storage) < database.spec.storageGiB
           }
           onClick={() =>
@@ -426,7 +452,7 @@ const ScaleDialog = ({ database, catalog, onClose, onSubmit, busy }) => {
               storageGiB: Number(storage),
               storageClass: database.spec.storageClass ?? '',
               haTopology: database.spec.haTopology,
-              protectionGroupRef: database.spec.protectionGroupRef ?? '',
+              protectionGroupRef: protectionGroupRef.trim(),
               deletionProtection,
             })
           }
@@ -513,39 +539,62 @@ const RecoveryDialog = ({ database, mode, onClose, onSubmit, busy }) => {
   )
 }
 
-const CredentialsDialog = ({ database, credentials, onClose }) => (
-  <Dialog
-    open={Boolean(database && credentials)}
-    onClose={onClose}
-    maxWidth="sm"
-    fullWidth
-  >
-    <DialogTitle>Temporary connection credentials</DialogTitle>
-    <DialogContent
-      sx={{ display: 'grid', gap: 2, pt: '12px !important' }}
+const CredentialsDialog = ({ database, credentials, onClose }) => {
+  const [showPassword, setShowPassword] = useState(false)
+
+  useEffect(() => {
+    setShowPassword(false)
+  }, [credentials])
+
+  const copy = (value) => {
+    if (value && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(value)
+    }
+  }
+
+  return (
+    <Dialog
+      open={Boolean(database && credentials)}
+      onClose={onClose}
+      maxWidth="sm"
+      fullWidth
     >
-      <Alert severity="warning">
-        These credentials are held only in page memory and automatically cleared
-        after 60 seconds. Copy them to an approved secrets manager; do not save them
-        in the browser.
-      </Alert>
-      <TextField
-        label="Username"
-        value={credentials?.username ?? ''}
-        InputProps={{ readOnly: true }}
-      />
-      <TextField
-        label="Password"
-        value={credentials?.password ?? ''}
-        type="text"
-        InputProps={{ readOnly: true }}
-      />
-    </DialogContent>
-    <DialogActions>
-      <Button onClick={onClose}>Clear credentials</Button>
-    </DialogActions>
-  </Dialog>
-)
+      <DialogTitle>Temporary connection credentials</DialogTitle>
+      <DialogContent
+        sx={{ display: 'grid', gap: 2, pt: '12px !important' }}
+      >
+        <Alert severity="warning">
+          These credentials are held only in page memory and automatically cleared
+          after 60 seconds. Copy them to an approved secrets manager; do not save them
+          in the browser.
+        </Alert>
+        <TextField
+          label="Username"
+          value={credentials?.username ?? ''}
+          InputProps={{ readOnly: true }}
+        />
+        <TextField
+          label="Password"
+          value={credentials?.password ?? ''}
+          type={showPassword ? 'text' : 'password'}
+          InputProps={{ readOnly: true }}
+        />
+      </DialogContent>
+      <DialogActions sx={{ flexWrap: 'wrap' }}>
+        <Button onClick={() => copy(credentials?.username)}>
+          Copy username
+        </Button>
+        <Button onClick={() => copy(credentials?.password)}>
+          Copy password
+        </Button>
+        <Button onClick={() => setShowPassword((current) => !current)}>
+          {showPassword ? 'Hide password' : 'Reveal password'}
+        </Button>
+        <Button onClick={onClose}>Clear credentials</Button>
+      </DialogActions>
+    </Dialog>
+  )
+}
 
 /**
  * LayerSentry-branded provider-neutral DBaaS page.
@@ -824,9 +873,10 @@ const Dbaas = () => {
                 <TableCell>Database</TableCell>
                 <TableCell>Engine</TableCell>
                 <TableCell>Status</TableCell>
-                <TableCell>Replicas</TableCell>
+                <TableCell>Topology / replicas</TableCell>
                 <TableCell>Storage</TableCell>
                 <TableCell>Endpoint</TableCell>
+                <TableCell>Monitoring</TableCell>
                 <TableCell>Recovery</TableCell>
                 <TableCell align="right">Actions</TableCell>
               </TableRow>
@@ -859,6 +909,11 @@ const Dbaas = () => {
                           {active.kind}: {active.state}
                         </Typography>
                       )}
+                      {active?.message && (
+                        <Typography variant="caption" display="block" color="text.secondary">
+                          {active.message}
+                        </Typography>
+                      )}
                       {status.message && (
                         <Typography variant="caption" display="block" color="text.secondary">
                           {status.message}
@@ -866,12 +921,24 @@ const Dbaas = () => {
                       )}
                     </TableCell>
                     <TableCell>
-                      {status.readyReplicas ?? 0} / {spec.replicas ?? 0}
+                      <Typography variant="body2">
+                        {spec.haTopology?.mode || 'provider-managed'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {status.readyReplicas ?? 0} / {spec.replicas ?? 0} ready
+                      </Typography>
                     </TableCell>
                     <TableCell>
                       {status.appliedStorageGiB || spec.storageGiB || 0} GiB
                     </TableCell>
                     <TableCell>{endpointText(status.endpoint)}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        color={monitoringColor(status.monitoring)}
+                        label={monitoringText(status.monitoring)}
+                      />
+                    </TableCell>
                     <TableCell>
                       <Typography variant="caption" display="block">
                         Backup: {status.lastBackupRef || 'None'}
