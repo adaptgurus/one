@@ -6,7 +6,9 @@ on:
       - 'src/fireedge/package.json'
       - 'src/fireedge/package-lock.json'
       - 'src/fireedge/src/server/routes/api/zendesk/**'
+      - 'src/fireedge/src/server/routes/websockets/guacamoleProxy.js'
       - 'src/fireedge/tests/layersentry/zendesk*.test.cjs'
+      - 'src/fireedge/tests/layersentry/guacamole-proxy.test.cjs'
       - '.github/workflows/layersentry-lock-remediation.yml'
   workflow_dispatch:
 
@@ -29,7 +31,7 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: src/fireedge/package-lock.json
-      - name: Verify Zendesk source is migrated to the promise API
+      - name: Verify migrated integration contracts
         run: |
           grep -q "await zendeskClient.users.auth()" src/server/routes/api/zendesk/functions.js
           grep -q "await zendeskClient.requests.list" src/server/routes/api/zendesk/functions.js
@@ -40,8 +42,9 @@ jobs:
             echo 'Legacy node-zendesk callback use remains.' >&2
             exit 2
           fi
-          echo 'http-proxy-middleware references (informational):'
-          grep -R --line-number --exclude='package.json' --exclude='package-lock.json' --exclude-dir='node_modules' --exclude-dir='dist' 'http-proxy-middleware' . || true
+          grep -q 'pathFilter: endpointExternalGuacamole' src/server/routes/websockets/guacamoleProxy.js
+          grep -q 'proxyReqWs: setHeaders' src/server/routes/websockets/guacamoleProxy.js
+          grep -q 'proxyReq: setHeaders' src/server/routes/websockets/guacamoleProxy.js
       - name: Generate zero-critical security modernization candidate
         run: |
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact \
@@ -49,6 +52,7 @@ jobs:
             dompurify@3.4.15 \
             express@4.22.2 \
             fast-xml-parser@4.5.7 \
+            http-proxy-middleware@4.2.0 \
             immutable@4.3.9 \
             jsonwebtoken@9.0.3 \
             lodash@4.18.1 \
@@ -64,7 +68,7 @@ jobs:
           npm audit fix --omit=dev --package-lock-only --ignore-scripts --no-fund || true
       - name: Install candidate lock on Node 22
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: LayerSentry and Zendesk regression tests on Node 22
+      - name: LayerSentry integration and regression tests on Node 22
         run: node --test tests/layersentry/*.test.cjs
       - name: Full FireEdge production build on Node 22
         run: NODE_ENV=production npm run build
@@ -85,10 +89,10 @@ jobs:
           const p=require('./package-lock.json')
           const expected={
             axios:'1.20.0', dompurify:'3.4.15', express:'4.22.2',
-            'fast-xml-parser':'4.5.7', immutable:'4.3.9', jsonwebtoken:'9.0.3',
-            lodash:'4.18.1', luxon:'2.5.2', multer:'2.3.0',
-            'node-zendesk':'6.0.1', 'socket.io':'4.8.3',
-            'socket.io-client':'4.8.3', webpack:'5.110.3'
+            'fast-xml-parser':'4.5.7', 'http-proxy-middleware':'4.2.0',
+            immutable:'4.3.9', jsonwebtoken:'9.0.3', lodash:'4.18.1',
+            luxon:'2.5.2', multer:'2.3.0', 'node-zendesk':'6.0.1',
+            'socket.io':'4.8.3', 'socket.io-client':'4.8.3', webpack:'5.110.3'
           }
           for (const [name, wanted] of Object.entries(expected)) {
             const actual=p.packages[`node_modules/${name}`]?.version
