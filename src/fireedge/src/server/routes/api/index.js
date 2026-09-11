@@ -54,6 +54,7 @@ const routes = [
   'oneflow',
   'oneform',
   'oneks',
+  'layersentry-dbaas',
   'vm',
   'vmpool',
   'zendesk',
@@ -65,12 +66,6 @@ const routes = [
 
 const serverRoutes = []
 
-/**
- * Parse files for actions.
- *
- * @param {Array} files - files
- * @returns {Array} files
- */
 const parseFiles = (files = []) => {
   let rtn
   if (files && Array.isArray(files)) {
@@ -89,7 +84,6 @@ const parseFiles = (files = []) => {
 
 routes.forEach((file) => {
   try {
-    // eslint-disable-next-line global-require
     const fileInfo = require(`./${file}`)
 
     if (fileInfo && Array.isArray(fileInfo) && fileInfo.length) {
@@ -111,7 +105,6 @@ routes.forEach((file) => {
                 )
               }
 
-              /** Request with files */
               const files = upload.array(uploadFiles)
               files(req, res, (err) => {
                 if (err) {
