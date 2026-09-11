@@ -48,19 +48,11 @@ const TRANSITIONAL_PHASES = new Set([
   'Deleting',
   'Unknown',
 ])
-
-const EMPTY_CREATE = {
-  name: '',
-  engine: 'postgresql',
-  version: '',
-  replicas: 3,
-  storageGiB: 20,
-  storageClass: '',
-  topology: 'ha',
-  protectionGroupRef: '',
-  deletionProtection: true,
+const ENGINE_LABELS = {
+  postgresql: 'PostgreSQL',
+  pxc: 'MySQL compatible (PXC)',
+  psmdb: 'MongoDB compatible (PSMDB)',
 }
-
 const EMPTY_RECOVERY = { backupRef: '', target: '' }
 
 const unwrapCluster = (entry) => entry?.DOCUMENT ?? entry ?? {}
@@ -85,18 +77,22 @@ const jsonRequest = async (url, options = {}) => {
       ...(options.headers ?? {}),
     },
   })
-  let payload
+  let envelope
   try {
-    payload = await response.json()
+    envelope = await response.json()
   } catch (_) {
-    payload = undefined
+    envelope = undefined
   }
   if (!response.ok) {
-    const message = payload?.error ?? payload?.message ?? `Request failed (${response.status})`
+    const message =
+      envelope?.data?.error ??
+      envelope?.error ??
+      envelope?.message ??
+      `Request failed (${response.status})`
     throw new Error(message)
   }
 
-  return payload
+  return envelope?.data !== undefined ? envelope.data : envelope
 }
 
 const phaseColor = (phase) => {
@@ -115,26 +111,44 @@ const phaseColor = (phase) => {
 const endpointText = (endpoint = {}) => {
   if (!endpoint?.host) return 'Pending'
 
-  return `${endpoint.protocol || 'db'}://${endpoint.host}${endpoint.port ? `:${endpoint.port}` : ''}`
+  return `${endpoint.protocol || 'db'}://${endpoint.host}${
+    endpoint.port ? `:${endpoint.port}` : ''
+  }`
 }
 
-const CreateDialog = ({ open, onClose, onSubmit, busy }) => {
-  const [form, setForm] = useState(EMPTY_CREATE)
+const firstQualified = (catalog = {}) => {
+  const engine = Object.keys(catalog.engines ?? {})[0] ?? ''
+
+  return {
+    name: '',
+    engine,
+    version: catalog.engines?.[engine]?.[0] ?? '',
+    replicas: 3,
+    storageGiB: 20,
+    storageClass: catalog.storageClasses?.[0] ?? '',
+    topology: 'ha',
+    protectionGroupRef: '',
+    deletionProtection: true,
+  }
+}
+
+const CreateDialog = ({ open, catalog, onClose, onSubmit, busy }) => {
+  const [form, setForm] = useState(() => firstQualified(catalog))
   const set = (field) => (event) =>
     setForm((current) => ({ ...current, [field]: event.target.value }))
 
   useEffect(() => {
-    if (!open) setForm(EMPTY_CREATE)
-  }, [open])
+    if (open) setForm(firstQualified(catalog))
+  }, [open, catalog])
 
   const submit = () =>
     onSubmit({
       name: form.name.trim(),
       engine: form.engine,
-      version: form.version.trim(),
+      version: form.version,
       replicas: Number(form.replicas),
       storageGiB: Number(form.storageGiB),
-      storageClass: form.storageClass.trim(),
+      storageClass: form.storageClass,
       haTopology: {
         mode: form.topology,
         replicas: Number(form.replicas),
@@ -143,14 +157,25 @@ const CreateDialog = ({ open, onClose, onSubmit, busy }) => {
       deletionProtection: Boolean(form.deletionProtection),
     })
 
+  const engines = Object.keys(catalog?.engines ?? {})
+  const versions = catalog?.engines?.[form.engine] ?? []
+  const storageClasses = catalog?.storageClasses ?? []
+
   return (
-    <Dialog open={open} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={open}
+      onClose={busy ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>Create LayerSentry database</DialogTitle>
-      <DialogContent sx={{ display: 'grid', gap: 2, pt: '12px !important' }}>
+      <DialogContent
+        sx={{ display: 'grid', gap: 2, pt: '12px !important' }}
+      >
         <Alert severity="info">
-          LayerSentry provisions the selected certified database engine through the
-          managed Kubernetes data-service provider. Provider implementation details
-          and admin credentials are not exposed here.
+          Only administrator-qualified database versions and persistent CSI classes
+          are selectable. Provider implementation details and admin credentials stay
+          server-side.
         </Alert>
         <TextField
           label="Database name"
@@ -159,27 +184,48 @@ const CreateDialog = ({ open, onClose, onSubmit, busy }) => {
           helperText="Lowercase DNS label, for example orders-db"
           required
         />
-        <FormControl fullWidth>
+        <FormControl fullWidth required>
           <InputLabel id="layersentry-engine-label">Database engine</InputLabel>
           <Select
             labelId="layersentry-engine-label"
             label="Database engine"
             value={form.engine}
-            onChange={set('engine')}
+            onChange={(event) => {
+              const engine = event.target.value
+              setForm((current) => ({
+                ...current,
+                engine,
+                version: catalog?.engines?.[engine]?.[0] ?? '',
+              }))
+            }}
           >
-            <MenuItem value="postgresql">PostgreSQL</MenuItem>
-            <MenuItem value="pxc">MySQL compatible (PXC)</MenuItem>
-            <MenuItem value="psmdb">MongoDB compatible (PSMDB)</MenuItem>
+            {engines.map((engine) => (
+              <MenuItem key={engine} value={engine}>
+                {ENGINE_LABELS[engine] ?? engine}
+              </MenuItem>
+            ))}
           </Select>
         </FormControl>
-        <TextField
-          label="Certified engine version"
-          value={form.version}
-          onChange={set('version')}
-          required
-          helperText="Use a version qualified by your LayerSentry administrator."
-        />
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+        <FormControl fullWidth required>
+          <InputLabel id="layersentry-version-label">Certified engine version</InputLabel>
+          <Select
+            labelId="layersentry-version-label"
+            label="Certified engine version"
+            value={form.version}
+            onChange={set('version')}
+          >
+            {versions.map((version) => (
+              <MenuItem key={version} value={version}>{version}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+            gap: 2,
+          }}
+        >
           <FormControl fullWidth>
             <InputLabel id="layersentry-topology-label">Topology</InputLabel>
             <Select
@@ -191,7 +237,10 @@ const CreateDialog = ({ open, onClose, onSubmit, busy }) => {
                 setForm((current) => ({
                   ...current,
                   topology,
-                  replicas: topology === 'single' ? 1 : Math.max(3, Number(current.replicas) || 3),
+                  replicas:
+                    topology === 'single'
+                      ? 1
+                      : Math.max(3, Number(current.replicas) || 3),
                 }))
               }}
             >
@@ -209,7 +258,13 @@ const CreateDialog = ({ open, onClose, onSubmit, busy }) => {
             required
           />
         </Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' },
+            gap: 2,
+          }}
+        >
           <TextField
             label="Storage (GiB)"
             type="number"
@@ -218,18 +273,27 @@ const CreateDialog = ({ open, onClose, onSubmit, busy }) => {
             onChange={set('storageGiB')}
             required
           />
-          <TextField
-            label="Storage class"
-            value={form.storageClass}
-            onChange={set('storageClass')}
-            helperText="Qualified persistent CSI class"
-          />
+          <FormControl fullWidth required>
+            <InputLabel id="layersentry-storage-label">Persistent storage class</InputLabel>
+            <Select
+              labelId="layersentry-storage-label"
+              label="Persistent storage class"
+              value={form.storageClass}
+              onChange={set('storageClass')}
+            >
+              {storageClasses.map((storageClass) => (
+                <MenuItem key={storageClass} value={storageClass}>
+                  {storageClass}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </Box>
         <TextField
           label="Protection group reference"
           value={form.protectionGroupRef}
           onChange={set('protectionGroupRef')}
-          helperText="Optional P3 recovery reference integration"
+          helperText="Optional P3 recovery-reference integration"
         />
         <FormControlLabel
           control={(
@@ -251,7 +315,13 @@ const CreateDialog = ({ open, onClose, onSubmit, busy }) => {
         <Button
           variant="contained"
           onClick={submit}
-          disabled={busy || !form.name.trim() || !form.version.trim()}
+          disabled={
+            busy ||
+            !form.name.trim() ||
+            !form.engine ||
+            !form.version ||
+            !form.storageClass
+          }
         >
           {busy ? 'Submitting…' : 'Create database'}
         </Button>
@@ -260,7 +330,7 @@ const CreateDialog = ({ open, onClose, onSubmit, busy }) => {
   )
 }
 
-const ScaleDialog = ({ database, onClose, onSubmit, busy }) => {
+const ScaleDialog = ({ database, catalog, onClose, onSubmit, busy }) => {
   const [version, setVersion] = useState(database?.spec?.desiredVersion ?? '')
   const [replicas, setReplicas] = useState(database?.spec?.replicas ?? 3)
   const [storage, setStorage] = useState(database?.spec?.storageGiB ?? 20)
@@ -277,21 +347,37 @@ const ScaleDialog = ({ database, onClose, onSubmit, busy }) => {
 
   if (!database) return null
   const topology = database.spec?.haTopology?.mode || 'provider-managed'
+  const versions = catalog?.engines?.[database.spec?.engine] ?? []
 
   return (
-    <Dialog open={Boolean(database)} onClose={busy ? undefined : onClose} maxWidth="sm" fullWidth>
+    <Dialog
+      open={Boolean(database)}
+      onClose={busy ? undefined : onClose}
+      maxWidth="sm"
+      fullWidth
+    >
       <DialogTitle>Scale or upgrade {database.spec.name}</DialogTitle>
-      <DialogContent sx={{ display: 'grid', gap: 2, pt: '12px !important' }}>
+      <DialogContent
+        sx={{ display: 'grid', gap: 2, pt: '12px !important' }}
+      >
         <Alert severity="warning">
-          Changes are asynchronous. The page keeps the provider operation visible until
-          authoritative convergence is observed. Persistent storage can grow but cannot shrink.
+          Changes are asynchronous. LayerSentry keeps the operation visible until
+          authoritative convergence is observed. Persistent storage can grow but
+          cannot shrink or switch storage class in place.
         </Alert>
-        <TextField
-          label="Engine version"
-          value={version}
-          onChange={(event) => setVersion(event.target.value)}
-          required
-        />
+        <FormControl fullWidth required>
+          <InputLabel id="layersentry-upgrade-version-label">Certified engine version</InputLabel>
+          <Select
+            labelId="layersentry-upgrade-version-label"
+            label="Certified engine version"
+            value={version}
+            onChange={(event) => setVersion(event.target.value)}
+          >
+            {versions.map((item) => (
+              <MenuItem key={item} value={item}>{item}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
         <TextField
           label="Replicas"
           type="number"
@@ -307,6 +393,12 @@ const ScaleDialog = ({ database, onClose, onSubmit, busy }) => {
           inputProps={{ min: database.spec.storageGiB }}
           onChange={(event) => setStorage(event.target.value)}
         />
+        <TextField
+          label="Persistent storage class"
+          value={database.spec.storageClass ?? ''}
+          InputProps={{ readOnly: true }}
+          helperText="Changing storage class requires a separately qualified migration workflow."
+        />
         <FormControlLabel
           control={(
             <Switch
@@ -321,16 +413,23 @@ const ScaleDialog = ({ database, onClose, onSubmit, busy }) => {
         <Button onClick={onClose} disabled={busy}>Cancel</Button>
         <Button
           variant="contained"
-          disabled={busy || !version.trim() || Number(storage) < database.spec.storageGiB}
-          onClick={() => onSubmit({
-            version: version.trim(),
-            replicas: Number(replicas),
-            storageGiB: Number(storage),
-            storageClass: database.spec.storageClass ?? '',
-            haTopology: database.spec.haTopology,
-            protectionGroupRef: database.spec.protectionGroupRef ?? '',
-            deletionProtection,
-          })}
+          disabled={
+            busy ||
+            !version ||
+            !versions.includes(version) ||
+            Number(storage) < database.spec.storageGiB
+          }
+          onClick={() =>
+            onSubmit({
+              version,
+              replicas: Number(replicas),
+              storageGiB: Number(storage),
+              storageClass: database.spec.storageClass ?? '',
+              haTopology: database.spec.haTopology,
+              protectionGroupRef: database.spec.protectionGroupRef ?? '',
+              deletionProtection,
+            })
+          }
         >
           {busy ? 'Submitting…' : 'Apply change'}
         </Button>
@@ -354,12 +453,19 @@ const RecoveryDialog = ({ database, mode, onClose, onSubmit, busy }) => {
       <DialogTitle>
         {mode === 'restore' ? 'Restore database backup' : 'Point-in-time recovery'}
       </DialogTitle>
-      <DialogContent sx={{ display: 'grid', gap: 2, pt: '12px !important' }}>
+      <DialogContent
+        sx={{ display: 'grid', gap: 2, pt: '12px !important' }}
+      >
         {mode === 'restore' ? (
           <TextField
             label="Backup reference"
             value={form.backupRef}
-            onChange={(event) => setForm((current) => ({ ...current, backupRef: event.target.value }))}
+            onChange={(event) =>
+              setForm((current) => ({
+                ...current,
+                backupRef: event.target.value,
+              }))
+            }
             required
           />
         ) : (
@@ -372,7 +478,12 @@ const RecoveryDialog = ({ database, mode, onClose, onSubmit, busy }) => {
               type="datetime-local"
               value={form.target}
               InputLabelProps={{ shrink: true }}
-              onChange={(event) => setForm((current) => ({ ...current, target: event.target.value }))}
+              onChange={(event) =>
+                setForm((current) => ({
+                  ...current,
+                  target: event.target.value,
+                }))
+              }
               required
             />
           </>
@@ -383,12 +494,17 @@ const RecoveryDialog = ({ database, mode, onClose, onSubmit, busy }) => {
         <Button
           variant="contained"
           color="warning"
-          disabled={busy || (mode === 'restore' ? !form.backupRef.trim() : !form.target)}
-          onClick={() => onSubmit(
-            mode === 'restore'
-              ? { backupRef: form.backupRef.trim() }
-              : { target: new Date(form.target).toISOString() }
-          )}
+          disabled={
+            busy ||
+            (mode === 'restore' ? !form.backupRef.trim() : !form.target)
+          }
+          onClick={() =>
+            onSubmit(
+              mode === 'restore'
+                ? { backupRef: form.backupRef.trim() }
+                : { target: new Date(form.target).toISOString() }
+            )
+          }
         >
           {busy ? 'Submitting…' : mode === 'restore' ? 'Restore' : 'Start PITR'}
         </Button>
@@ -398,14 +514,26 @@ const RecoveryDialog = ({ database, mode, onClose, onSubmit, busy }) => {
 }
 
 const CredentialsDialog = ({ database, credentials, onClose }) => (
-  <Dialog open={Boolean(database && credentials)} onClose={onClose} maxWidth="sm" fullWidth>
+  <Dialog
+    open={Boolean(database && credentials)}
+    onClose={onClose}
+    maxWidth="sm"
+    fullWidth
+  >
     <DialogTitle>Temporary connection credentials</DialogTitle>
-    <DialogContent sx={{ display: 'grid', gap: 2, pt: '12px !important' }}>
+    <DialogContent
+      sx={{ display: 'grid', gap: 2, pt: '12px !important' }}
+    >
       <Alert severity="warning">
-        These credentials are held only in this page memory and are automatically cleared after
-        60 seconds. Copy them to an approved secrets manager; do not save them in the browser.
+        These credentials are held only in page memory and automatically cleared
+        after 60 seconds. Copy them to an approved secrets manager; do not save them
+        in the browser.
       </Alert>
-      <TextField label="Username" value={credentials?.username ?? ''} InputProps={{ readOnly: true }} />
+      <TextField
+        label="Username"
+        value={credentials?.username ?? ''}
+        InputProps={{ readOnly: true }}
+      />
       <TextField
         label="Password"
         value={credentials?.password ?? ''}
@@ -429,6 +557,7 @@ const Dbaas = () => {
   const oneKsQuery = OneKsAPI.useGetOneKsClustersQuery()
   const clusters = oneKsQuery.data ?? []
   const [selectedCluster, setSelectedCluster] = useState('')
+  const [catalog, setCatalog] = useState({ engines: {}, storageClasses: [] })
   const [databases, setDatabases] = useState([])
   const [loading, setLoading] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -443,57 +572,70 @@ const Dbaas = () => {
   useEffect(() => {
     if (!selectedCluster && clusters.length) {
       const first = clusterId(clusters[0])
-      if (first !== undefined && first !== null) setSelectedCluster(String(first))
+      if (first !== undefined && first !== null) {
+        setSelectedCluster(String(first))
+      }
     }
   }, [clusters, selectedCluster])
 
-  const baseUrl = useMemo(
-    () => selectedCluster
-      ? `${API_ROOT}/${encodeURIComponent(selectedCluster)}/databases`
-      : '',
+  const clusterRoot = useMemo(
+    () =>
+      selectedCluster
+        ? `${API_ROOT}/${encodeURIComponent(selectedCluster)}`
+        : '',
     [selectedCluster]
   )
+  const baseUrl = clusterRoot ? `${clusterRoot}/databases` : ''
 
-  const refresh = useCallback(async (quiet = false) => {
-    if (!baseUrl) {
-      setDatabases([])
+  const refresh = useCallback(
+    async (quiet = false) => {
+      if (!clusterRoot) {
+        setDatabases([])
+        setCatalog({ engines: {}, storageClasses: [] })
 
-      return
-    }
-    if (!quiet) setLoading(true)
-    try {
-      const data = await jsonRequest(baseUrl)
-      setDatabases(Array.isArray(data) ? data : [])
-      setError('')
-    } catch (requestError) {
-      setError(requestError.message)
-    } finally {
-      if (!quiet) setLoading(false)
-    }
-  }, [baseUrl])
+        return
+      }
+      if (!quiet) setLoading(true)
+      try {
+        const [qualified, data] = await Promise.all([
+          jsonRequest(`${clusterRoot}/catalog`),
+          jsonRequest(`${clusterRoot}/databases`),
+        ])
+        setCatalog(qualified ?? { engines: {}, storageClasses: [] })
+        setDatabases(Array.isArray(data) ? data : [])
+        setError('')
+      } catch (requestError) {
+        setError(requestError.message)
+      } finally {
+        if (!quiet) setLoading(false)
+      }
+    },
+    [clusterRoot]
+  )
 
   useEffect(() => {
     refresh()
   }, [refresh])
 
   const shouldPoll = databases.some(
-    (database) => database?.status?.activeOperation || TRANSITIONAL_PHASES.has(database?.status?.phase)
+    (database) =>
+      database?.status?.activeOperation ||
+      TRANSITIONAL_PHASES.has(database?.status?.phase)
   )
 
   useEffect(() => {
-    if (!baseUrl) return undefined
+    if (!clusterRoot) return undefined
     const interval = setInterval(
       () => refresh(true),
       shouldPoll ? 5000 : 15000
     )
 
     return () => clearInterval(interval)
-  }, [baseUrl, refresh, shouldPoll])
+  }, [clusterRoot, refresh, shouldPoll])
 
   useEffect(
     () => () => {
       if (credentialsTimer.current) clearTimeout(credentialsTimer.current)
-      setCredentials(null)
     },
     []
   )
@@ -512,32 +654,44 @@ const Dbaas = () => {
     }
   }
 
-  const createDatabase = (body) => mutate(
-    () => jsonRequest(baseUrl, { method: 'POST', body: JSON.stringify(body) }),
-    () => setCreateOpen(false)
-  )
-
-  const updateDatabase = (database, body) => mutate(
-    () => jsonRequest(`${baseUrl}/${encodeURIComponent(database.spec.name)}`, {
-      method: 'PUT',
-      body: JSON.stringify(body),
-    }),
-    () => setEditDatabase(null)
-  )
-
-  const action = (database, operation, body = {}) => mutate(
-    () => jsonRequest(
-      `${baseUrl}/${encodeURIComponent(database.spec.name)}/actions/${encodeURIComponent(operation)}`,
-      { method: 'POST', body: JSON.stringify(body) }
+  const createDatabase = (body) =>
+    mutate(
+      () =>
+        jsonRequest(baseUrl, {
+          method: 'POST',
+          body: JSON.stringify(body),
+        }),
+      () => setCreateOpen(false)
     )
-  )
+
+  const updateDatabase = (database, body) =>
+    mutate(
+      () =>
+        jsonRequest(`${baseUrl}/${encodeURIComponent(database.spec.name)}`, {
+          method: 'PUT',
+          body: JSON.stringify(body),
+        }),
+      () => setEditDatabase(null)
+    )
+
+  const action = (database, operation, body = {}) =>
+    mutate(() =>
+      jsonRequest(
+        `${baseUrl}/${encodeURIComponent(
+          database.spec.name
+        )}/actions/${encodeURIComponent(operation)}`,
+        { method: 'POST', body: JSON.stringify(body) }
+      )
+    )
 
   const getCredentials = async (database) => {
     setBusy(true)
     setError('')
     try {
       const value = await jsonRequest(
-        `${baseUrl}/${encodeURIComponent(database.spec.name)}/actions/credentials`,
+        `${baseUrl}/${encodeURIComponent(
+          database.spec.name
+        )}/actions/credentials`,
         { method: 'POST', body: '{}' }
       )
       if (credentialsTimer.current) clearTimeout(credentialsTimer.current)
@@ -563,6 +717,10 @@ const Dbaas = () => {
 
   if (view !== 'cloud') return <Redirect to="/dashboard" />
 
+  const hasQualifiedCatalog =
+    Object.keys(catalog.engines ?? {}).length > 0 &&
+    (catalog.storageClasses ?? []).length > 0
+
   return (
     <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1400, mx: 'auto' }}>
       <Box
@@ -576,7 +734,9 @@ const Dbaas = () => {
         }}
       >
         <Box>
-          <Typography variant="h4" component="h1">LayerSentry DBaaS</Typography>
+          <Typography variant="h4" component="h1">
+            LayerSentry DBaaS
+          </Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5 }}>
             Provision and recover managed databases on your LayerSentry Kubernetes clusters.
           </Typography>
@@ -594,30 +754,46 @@ const Dbaas = () => {
                 const id = clusterId(entry)
 
                 return (
-                  <MenuItem key={id} value={String(id)}>{clusterName(entry)}</MenuItem>
+                  <MenuItem key={id} value={String(id)}>
+                    {clusterName(entry)}
+                  </MenuItem>
                 )
               })}
             </Select>
           </FormControl>
-          <Button variant="outlined" onClick={() => refresh()} disabled={loading || !baseUrl}>
+          <Button
+            variant="outlined"
+            onClick={() => refresh()}
+            disabled={loading || !clusterRoot}
+          >
             Refresh
           </Button>
-          <Button variant="contained" onClick={() => setCreateOpen(true)} disabled={!baseUrl || busy}>
+          <Button
+            variant="contained"
+            onClick={() => setCreateOpen(true)}
+            disabled={!clusterRoot || busy || !hasQualifiedCatalog}
+          >
             Create database
           </Button>
         </Box>
       </Box>
 
       <Alert severity="info" sx={{ mb: 2 }}>
-        LayerSentry DBaaS uses database-native backup and recovery. VM snapshots alone are not
-        shown as database-consistent recovery points. Operations remain visible as running or
-        unknown until the provider proves their outcome.
+        LayerSentry DBaaS uses database-native backup and recovery. VM snapshots
+        alone are not database-consistent recovery points. Operations remain
+        running or unknown until authoritative provider state proves their outcome.
       </Alert>
 
       {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
       {oneKsQuery.isError && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           Kubernetes cluster inventory is unavailable; DBaaS access cannot be authorized.
+        </Alert>
+      )}
+      {selectedCluster && !loading && !hasQualifiedCatalog && !error && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          This cluster has no qualified DB engine/version or persistent CSI catalog.
+          Database creation is disabled rather than guessing compatibility.
         </Alert>
       )}
 
@@ -636,8 +812,8 @@ const Dbaas = () => {
         <Paper variant="outlined" sx={{ p: 3 }}>
           <Typography variant="h6">No managed databases</Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5 }}>
-            Create the first database after a qualified persistent CSI class and DBaaS provider
-            are available on this cluster.
+            Create the first database after qualified persistent CSI and DBaaS
+            catalog entries are available on this cluster.
           </Typography>
         </Paper>
       ) : (
@@ -664,14 +840,20 @@ const Dbaas = () => {
                 return (
                   <TableRow key={spec.name} hover>
                     <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>{spec.name}</Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        {spec.name}
+                      </Typography>
                       <Typography variant="caption" color="text.secondary">
                         {status.currentVersion || spec.desiredVersion}
                       </Typography>
                     </TableCell>
-                    <TableCell>{String(spec.engine || '').toUpperCase()}</TableCell>
+                    <TableCell>{ENGINE_LABELS[spec.engine] ?? spec.engine}</TableCell>
                     <TableCell sx={{ minWidth: 180 }}>
-                      <Chip size="small" color={phaseColor(status.phase)} label={status.phase || 'Pending'} />
+                      <Chip
+                        size="small"
+                        color={phaseColor(status.phase)}
+                        label={status.phase || 'Pending'}
+                      />
                       {active && (
                         <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
                           {active.kind}: {active.state}
@@ -683,8 +865,12 @@ const Dbaas = () => {
                         </Typography>
                       )}
                     </TableCell>
-                    <TableCell>{status.readyReplicas ?? 0} / {spec.replicas ?? 0}</TableCell>
-                    <TableCell>{status.appliedStorageGiB || spec.storageGiB || 0} GiB</TableCell>
+                    <TableCell>
+                      {status.readyReplicas ?? 0} / {spec.replicas ?? 0}
+                    </TableCell>
+                    <TableCell>
+                      {status.appliedStorageGiB || spec.storageGiB || 0} GiB
+                    </TableCell>
                     <TableCell>{endpointText(status.endpoint)}</TableCell>
                     <TableCell>
                       <Typography variant="caption" display="block">
@@ -695,16 +881,33 @@ const Dbaas = () => {
                       </Typography>
                     </TableCell>
                     <TableCell align="right" sx={{ minWidth: 330 }}>
-                      <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-                        <Button size="small" onClick={() => setEditDatabase(database)} disabled={!ready || busy}>
+                      <Box
+                        sx={{
+                          display: 'flex',
+                          gap: 0.5,
+                          justifyContent: 'flex-end',
+                          flexWrap: 'wrap',
+                        }}
+                      >
+                        <Button
+                          size="small"
+                          onClick={() => setEditDatabase(database)}
+                          disabled={!ready || busy}
+                        >
                           Scale / upgrade
                         </Button>
-                        <Button size="small" onClick={() => action(database, 'backup')} disabled={!ready || busy}>
+                        <Button
+                          size="small"
+                          onClick={() => action(database, 'backup')}
+                          disabled={!ready || busy}
+                        >
                           Backup
                         </Button>
                         <Button
                           size="small"
-                          onClick={() => setRecovery({ database, mode: 'restore' })}
+                          onClick={() =>
+                            setRecovery({ database, mode: 'restore' })
+                          }
                           disabled={!ready || busy || !status.lastBackupRef}
                         >
                           Restore
@@ -716,16 +919,31 @@ const Dbaas = () => {
                         >
                           PITR
                         </Button>
-                        <Button size="small" onClick={() => getCredentials(database)} disabled={!ready || busy}>
+                        <Button
+                          size="small"
+                          onClick={() => getCredentials(database)}
+                          disabled={!ready || busy}
+                        >
                           Credentials
                         </Button>
                         <Button
                           size="small"
                           color="error"
-                          disabled={busy || spec.deletionProtection || Boolean(active)}
+                          disabled={
+                            busy || spec.deletionProtection || Boolean(active)
+                          }
                           onClick={() => {
-                            if (window.confirm(`Delete database ${spec.name}? This requests provider deletion.`)) {
-                              mutate(() => jsonRequest(`${baseUrl}/${encodeURIComponent(spec.name)}`, { method: 'DELETE' }))
+                            if (
+                              window.confirm(
+                                `Delete database ${spec.name}? This requests provider deletion.`
+                              )
+                            ) {
+                              mutate(() =>
+                                jsonRequest(
+                                  `${baseUrl}/${encodeURIComponent(spec.name)}`,
+                                  { method: 'DELETE' }
+                                )
+                              )
                             }
                           }}
                         >
@@ -743,12 +961,14 @@ const Dbaas = () => {
 
       <CreateDialog
         open={createOpen}
+        catalog={catalog}
         onClose={() => setCreateOpen(false)}
         onSubmit={createDatabase}
         busy={busy}
       />
       <ScaleDialog
         database={editDatabase}
+        catalog={catalog}
         onClose={() => setEditDatabase(null)}
         onSubmit={(body) => updateDatabase(editDatabase, body)}
         busy={busy}
@@ -762,10 +982,13 @@ const Dbaas = () => {
           const mode = recovery.mode
 
           return mutate(
-            () => jsonRequest(
-              `${baseUrl}/${encodeURIComponent(database.spec.name)}/actions/${mode}`,
-              { method: 'POST', body: JSON.stringify(body) }
-            ),
+            () =>
+              jsonRequest(
+                `${baseUrl}/${encodeURIComponent(
+                  database.spec.name
+                )}/actions/${mode}`,
+                { method: 'POST', body: JSON.stringify(body) }
+              ),
             () => setRecovery({ database: null, mode: '' })
           )
         }}
