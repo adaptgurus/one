@@ -1,0 +1,8 @@
+---
+# LayerSentry DBaaS is a provider-neutral customer surface. FireEdge authorizes
+# every request against the selected OneKS cluster before the server-side proxy
+# reaches the LayerSentry DBaaS API. No provider admin credential is exposed.
+resource_name: "DBAAS"
+actions: {}
+filters: {}
+info-tabs: {}
