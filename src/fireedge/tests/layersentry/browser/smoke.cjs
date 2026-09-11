@@ -2,6 +2,34 @@
 const assert = require('node:assert/strict')
 const { chromium } = require('playwright')
 
+const waitForScope = async (page, browserErrors, expected) => {
+  try {
+    await page.waitForFunction(
+      (mode) =>
+        document.documentElement.getAttribute('data-layersentry-self-service') ===
+        mode,
+      expected,
+      { timeout: 10000 }
+    )
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => ({
+      readyState: document.readyState,
+      scope: document.documentElement.getAttribute(
+        'data-layersentry-self-service'
+      ),
+      root: document.getElementById('root')?.innerText ?? '',
+      scripts: [...document.scripts].map((script) => script.src),
+    }))
+
+    throw new Error(
+      `LayerSentry browser scope did not become ${expected}. ` +
+        `diagnostics=${JSON.stringify(diagnostics)} ` +
+        `browserErrors=${JSON.stringify(browserErrors)}; ` +
+        `original=${error.message}`
+    )
+  }
+}
+
 const run = async () => {
   let browser
 
@@ -16,9 +44,7 @@ const run = async () => {
     })
 
     await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' })
-    await page.waitForFunction(
-      () => document.documentElement.dataset.layersentrySelfService === 'light'
-    )
+    await waitForScope(page, browserErrors, 'light')
 
     assert.match(await page.locator('#root').innerText(), /LAYER\s*SENTRY/)
     assert.equal(
@@ -52,9 +78,7 @@ const run = async () => {
 
     await page.getByRole('button', { name: 'Use LayerSentry appearance' }).click()
     await page.locator('#theme-toggle').click()
-    await page.waitForFunction(
-      () => document.documentElement.dataset.layersentrySelfService === 'dark'
-    )
+    await waitForScope(page, browserErrors, 'dark')
     assert.equal(
       await page.evaluate(() => getComputedStyle(document.body).backgroundColor),
       'rgb(16, 24, 39)'
