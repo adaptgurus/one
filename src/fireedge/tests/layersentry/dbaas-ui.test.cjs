@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
+const Module = require('node:module')
 const { readFileSync } = require('node:fs')
 const { resolve } = require('node:path')
 
@@ -52,6 +53,93 @@ test('proxy reauthorizes selected OneKS cluster before DBaaS access', () => {
   assert.match(proxy, /request:\s*clusterId/)
   assert.match(proxy, /loadConfig\(params\.clusterId\)/)
   assert.match(proxy, /cluster access denied/)
+})
+
+test('user authorized for OneKS A cannot proxy DBaaS traffic to OneKS B', async () => {
+  const modulePath = resolve(
+    root,
+    'server/routes/api/layersentry-dbaas/functions.js'
+  )
+  const originalLoad = Module._load
+  const authorizationRequests = []
+  let upstreamCalls = 0
+
+  Module._load = function mockLoad(request, parent, isMain) {
+    if (request === 'axios') {
+      return async () => {
+        upstreamCalls += 1
+
+        return { status: 200, data: {} }
+      }
+    }
+    if (request === 'https') {
+      return { Agent: class Agent {} }
+    }
+    if (request === 'server/utils/constants') {
+      return {
+        defaults: { defaultEmptyFunction: () => {} },
+        httpCodes: {
+          badRequest: { id: 400 },
+          unauthorized: { id: 401 },
+          serviceUnavailable: { id: 503 },
+        },
+      }
+    }
+    if (request === 'server/utils/server') {
+      return {
+        httpResponse: (code, data, message) => ({
+          status: code.id,
+          data,
+          message,
+        }),
+      }
+    }
+    if (request === 'server/routes/api/oneks/routes') {
+      return {
+        Commands: { SHOW: { httpMethod: 'POST', apiPath: '/oneks/show' } },
+        Actions: { SHOW: 'SHOW' },
+      }
+    }
+    if (request === 'server/routes/api/oneks/utils') {
+      return {
+        oneKsConnection: ({ request: requestedCluster }, onAllowed, onDenied) => {
+          authorizationRequests.push(requestedCluster)
+
+          return requestedCluster === 'cluster-a' ? onAllowed() : onDenied()
+        },
+      }
+    }
+
+    return originalLoad.call(this, request, parent, isMain)
+  }
+
+  let handlers
+  try {
+    delete require.cache[require.resolve(modulePath)]
+    handlers = require(modulePath)
+  } finally {
+    Module._load = originalLoad
+  }
+
+  const res = { locals: {}, set: () => {} }
+  let nextCalls = 0
+  await Promise.resolve(
+    handlers.list(
+      res,
+      () => {
+        nextCalls += 1
+      },
+      { clusterId: 'cluster-b' },
+      { user: 'user-a', password: 'session-secret' }
+    )
+  )
+
+  assert.deepEqual(authorizationRequests, ['cluster-b'])
+  assert.equal(upstreamCalls, 0)
+  assert.equal(res.locals.httpCode.status, 401)
+  assert.equal(res.locals.httpCode.message, 'cluster access denied')
+  assert.equal(nextCalls, 1)
+  delete require.cache[require.resolve(modulePath)]
 })
 
 test('proxy permits only the public DBaaS action contract', () => {
