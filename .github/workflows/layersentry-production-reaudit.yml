@@ -1,0 +1,63 @@
+name: LayerSentry production re-audit
+
+on:
+  pull_request:
+    paths:
+      - 'src/fireedge/**'
+      - '.github/workflows/layersentry-production-reaudit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-production-reaudit-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  browser-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/fireedge
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+      - name: Install locked FireEdge dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: LayerSentry source and regression tests
+        run: node --test tests/layersentry/*.test.cjs
+      - name: Install Chromium test runner without changing the lock
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Build browser acceptance harness
+        run: npx webpack --config tests/layersentry/browser/webpack.config.cjs
+      - name: Run real Chromium acceptance
+        run: |
+          python3 -m http.server 4173 --directory tests/layersentry/browser/dist >/tmp/layersentry-browser.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:4173/ >/dev/null
+          node tests/layersentry/browser/smoke.cjs
+      - name: Full FireEdge production build
+        run: npm run build
+      - name: Runtime dependency audit
+        run: |
+          npm audit --omit=dev --json > /tmp/layersentry-npm-audit.json || true
+          node - <<'NODE'
+          const fs = require('fs')
+          const report = JSON.parse(fs.readFileSync('/tmp/layersentry-npm-audit.json', 'utf8'))
+          const counts = report?.metadata?.vulnerabilities ?? {}
+          console.log('RUNTIME_AUDIT_COUNTS=' + JSON.stringify(counts))
+          if ((counts.critical ?? 0) > 0) process.exitCode = 2
+          NODE
