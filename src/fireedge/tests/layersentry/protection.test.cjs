@@ -5,7 +5,7 @@ const { readFileSync } = require('node:fs')
 const { resolve } = require('node:path')
 let normalizeProtectionRequest
 before(async () => {
-  const source = readFileSync(resolve(__dirname, '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/protection.js'), 'utf8')
+  const source = readFileSync(resolve(__dirname, '../../src/modules/utils/layersentryProtection.js'), 'utf8')
   const module = await import('data:text/javascript;base64,' + Buffer.from(source).toString('base64'))
   normalizeProtectionRequest = module.normalizeProtectionRequest
 })

@@ -33,11 +33,11 @@ import { VmTemplate } from '@ResourcesModule'
 import {
   jsonToXml,
   filterTemplateData,
+  normalizeProtectionRequest,
   transformActionsInstantiate,
 } from '@UtilsModule'
 
 import { RESOURCE_NAMES, T, TAB_FORM_MAP, PATH } from '@ConstantsModule'
-import { normalizeProtectionRequest } from '@modules/resources/VmTemplate/Forms/InstantiateForm/protection'
 
 const _ = require('lodash')
 
@@ -100,9 +100,6 @@ export function InstantiateVmTemplate() {
             }
           )
 
-          // Cloud-only LayerSentry protection intent. This is deliberately
-          // persisted as REQUESTED_NOT_ACTIVE metadata; it cannot activate
-          // replication, retention, network mapping or failover by itself.
           if (
             view === 'cloud' &&
             modifiedFields?.extra?.LayerSentryProtection
