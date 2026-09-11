@@ -134,10 +134,15 @@ module OneKS
                 )
             end
 
+            resumable_states = [
+                'PROVISIONING_MGMT',
+                'PROVISIONING_CP',
+                'PIVOTING_CLUSTER',
+                'RUNNING'
+            ]
+
             vm['STATE'].to_s == '3' && vm['LCM_STATE'].to_s == '3' &&
-                %w[PROVISIONING_MGMT PROVISIONING_CP PIVOTING_CLUSTER RUNNING].include?(
-                    vm['USER_TEMPLATE/ONEKS_STATE']
-                )
+                resumable_states.include?(vm['USER_TEMPLATE/ONEKS_STATE'])
         end
 
         # Monitor seed VM creation
