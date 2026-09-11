@@ -122,7 +122,7 @@
     "luxon": "2.1.1",
     "marked": "4.0.10",
     "morgan": "1.10.0",
-    "multer": "1.4.3",
+    "multer": "2.3.0",
     "node-zendesk": "2.2.0",
     "notistack": "3.0.2",
     "opennebula-guacamole": "1.1.0",
