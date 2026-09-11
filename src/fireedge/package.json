@@ -106,7 +106,7 @@
     "he": "1.2.0",
     "helmet": "4.1.1",
     "http": "0.0.1-security",
-    "http-proxy-middleware": "4.2.0",
+    "http-proxy-middleware": "3.0.7",
     "https": "1.0.0",
     "iconoir-react": "6.11.0",
     "immutable": "4.3.9",
