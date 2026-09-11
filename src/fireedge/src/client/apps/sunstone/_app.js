@@ -22,8 +22,21 @@ import { isDevelopment, processTabManifest } from '@UtilsModule'
 import { Sidebar } from '@ComponentsModule'
 import { ENDPOINTS, getEndpointsByView } from 'client/apps/sunstone/routes'
 import Router from 'client/router'
+import {
+  SelfServiceAppearance,
+  LayerSentryLogo,
+  AppearanceSwitch,
+} from 'client/apps/sunstone/components/LayerSentry'
+import {
+  ENABLE_SELF_SERVICE_APPEARANCE,
+  isSelfServiceView,
+  presentEndpoints,
+  readAppearance,
+  writeAppearance,
+  classicRequested,
+} from 'client/apps/sunstone/components/LayerSentry/presentation'
 import { ENDPOINTS as DEV_ENDPOINTS } from 'client/router/dev'
-import { ReactElement, useEffect, useMemo } from 'react'
+import { ReactElement, useEffect, useMemo, useState } from 'react'
 import { matchPath, useLocation } from 'react-router-dom'
 import { _APPS, SERVER_CONFIG, PATH } from '@ConstantsModule'
 import {
@@ -72,7 +85,7 @@ const isDisabledLayoutRoute = (pathname, routes = []) => {
 const SunstoneApp = () => {
   const [getSupport, { isSuccess: isSupportSuccess }] =
     SupportAPI.useLazyCheckOfficialSupportQuery()
-  const { pathname } = useLocation()
+  const { pathname, search } = useLocation()
   const { changeAppTitle } = useGeneralApi()
   const { isLogged, externalRedirect } = useAuth()
   const { views, view } = useViews()
@@ -117,6 +130,30 @@ const SunstoneApp = () => {
     [endpoints, pathname]
   )
 
+  const [appearanceEnabled, setAppearanceEnabled] = useState(() => {
+    try {
+      return readAppearance(typeof window === 'undefined' ? undefined : window.localStorage)
+    } catch {
+      return true
+    }
+  })
+  const isSelfService = isSelfServiceView(view, isLogged, isLayoutDisabled)
+  const classicOverride = classicRequested(search)
+  const useLayerSentry = ENABLE_SELF_SERVICE_APPEARANCE && isSelfService && appearanceEnabled && !classicOverride
+  const sidebarEndpoints = useMemo(
+    () => presentEndpoints(endpoints, useLayerSentry),
+    [endpoints, useLayerSentry]
+  )
+  const toggleAppearance = () => {
+    const next = !appearanceEnabled
+    setAppearanceEnabled(next)
+    try {
+      writeAppearance(window.localStorage, next)
+    } catch {
+      // Appearance still changes in this tab when storage is unavailable.
+    }
+  }
+
   return (
     <AuthLayout
       subscriptions={[
@@ -124,9 +161,23 @@ const SunstoneApp = () => {
         oneApi.endpoints.getSunstoneViews,
       ]}
     >
+      <SelfServiceAppearance enabled={useLayerSentry}>
       {isLogged && (
         <>
-          {!isLayoutDisabled && <Sidebar endpoints={endpoints} />}
+          {!isLayoutDisabled && (
+            <Sidebar
+              endpoints={sidebarEndpoints}
+              logoComponent={useLayerSentry ? LayerSentryLogo : undefined}
+              footerContent={isSelfService && ENABLE_SELF_SERVICE_APPEARANCE ? ({ expanded }) => (
+                <AppearanceSwitch
+                  enabled={useLayerSentry}
+                  expanded={expanded}
+                  locked={classicOverride}
+                  onToggle={toggleAppearance}
+                />
+              ) : undefined}
+            />
+          )}
           <Notifier />
           <NotifierUpload />
           <ModalHost />
@@ -136,6 +187,7 @@ const SunstoneApp = () => {
         redirectWhenAuth={externalRedirect || PATH.DASHBOARD}
         endpoints={endpoints}
       />
+      </SelfServiceAppearance>
     </AuthLayout>
   )
 }

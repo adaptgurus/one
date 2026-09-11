@@ -1,0 +1,45 @@
+name: LayerSentry dependency lock remediation
+
+on:
+  pull_request:
+    paths:
+      - 'src/fireedge/package.json'
+      - 'src/fireedge/package-lock.json'
+      - '.github/workflows/layersentry-lock-remediation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate-lock:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: src/fireedge
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+      - name: Generate npm lock with fixed Multer
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact multer@2.3.0
+      - name: Verify locked Multer and audit runtime tree
+        run: |
+          node -e "const p=require('./package-lock.json'); console.log('LOCKED_MULTER=' + p.packages['node_modules/multer'].version); if (p.packages['node_modules/multer'].version !== '2.3.0') process.exit(2)"
+          npm audit --omit=dev --json > dependency-audit.json || true
+          node -e "const a=require('./dependency-audit.json'); console.log('RUNTIME_AUDIT_COUNTS=' + JSON.stringify(a.metadata?.vulnerabilities ?? {}))"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fireedge-multer-2.3.0-lock
+          path: |
+            src/fireedge/package.json
+            src/fireedge/package-lock.json
+            src/fireedge/dependency-audit.json
+          if-no-files-found: error
+          retention-days: 1

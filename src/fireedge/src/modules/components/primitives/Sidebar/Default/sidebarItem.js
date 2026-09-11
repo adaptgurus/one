@@ -50,6 +50,7 @@ const hasSelectedRoute = (pathname, routes = []) =>
  */
 export const SidebarItem = ({
   title,
+  displayTitle,
   icon,
   routes,
   path,
@@ -82,6 +83,11 @@ export const SidebarItem = ({
   }
 
   const dataCy = title?.toLocaleLowerCase()
+  // Preserve existing translations and selector IDs; only the display copy changes.
+  const translatedTitle = translate(title)
+  const visibleTitle = displayTitle && translatedTitle === title
+    ? translate(displayTitle)
+    : translatedTitle
   const itemDataCy = hasChildren ? dataCy : 'main-menu-item'
 
   return (
@@ -99,7 +105,7 @@ export const SidebarItem = ({
           renderIcon(icon, { className: 'icon', key: 'sidebar-icon' })}
         {isExpanded && (
           <Typography className="title" data-cy="main-menu-item-text">
-            {translate(title)}
+            {visibleTitle}
           </Typography>
         )}
         {isExpanded &&
@@ -130,6 +136,7 @@ export const SidebarItem = ({
 
 SidebarItem.propTypes = {
   title: PropTypes.string,
+  displayTitle: PropTypes.string,
   icon: PropTypes.oneOfType([PropTypes.elementType, PropTypes.object]),
   routes: PropTypes.array,
   path: PropTypes.string,

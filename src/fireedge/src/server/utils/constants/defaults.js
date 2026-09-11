@@ -197,11 +197,13 @@ const defaults = {
   keysRDP: {
     hostname: { key: 'full address:s:', value: '' },
     username: { key: 'username:s:', value: '' },
-    password: { key: 'password 51:b:', value: '' },
+    // Do not emit `password 51:b:` without a real DPAPI-encrypted blob.
+    // An empty value makes Windows mstsc reject the entire .rdp file.
     port: { key: 'server port:i:', value: '' },
-    'server-layout': { key: 'keyboard layout:i:', value: '' },
+    // Guacamole `server-layout` tokens (for example en-us-qwerty) are not
+    // Windows .rdp keyboard-layout values and must not be copied verbatim.
     'disable-audio': { key: 'audiomode:i:', value: 0 },
-    'enable-audio-input': { key: 'redirectaudiocapture:1:', value: 0 },
+    'enable-audio-input': { key: 'redirectaudiocapture:i:', value: 0 },
     'enable-wallpaper': {
       key: 'disable wallpaper:i:',
       value: 0,

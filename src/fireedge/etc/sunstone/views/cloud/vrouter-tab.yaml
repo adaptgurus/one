@@ -1,0 +1,43 @@
+---
+resource_name: "VROUTER"
+actions:
+  instantiate_dialog: true
+  delete: true
+  chown: false
+  recover: true
+  chgrp: false
+  lock: true
+  unlock: true
+  edit_labels: true
+filters:
+  owner: true
+  group: true
+info-tabs:
+  info:
+    enabled: true
+    information_panel:
+      enabled: true
+      actions:
+        rename: true
+    permissions_panel:
+      enabled: true
+      actions:
+        chmod: true
+    ownership_panel:
+      enabled: true
+      actions:
+        chown: false
+        chgrp: false
+    attributes_panel:
+      enabled: true
+      actions:
+        copy: true
+        add: false
+        edit: false
+        delete: false
+  vms:
+    enabled: true
+  nics:
+    enabled: true
+  template:
+    enabled: true

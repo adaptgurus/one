@@ -33,12 +33,15 @@ import { VmTemplate } from '@ResourcesModule'
 import {
   jsonToXml,
   filterTemplateData,
+  normalizeProtectionRequest,
+  resolvePublishedGpuRequest,
   transformActionsInstantiate,
 } from '@UtilsModule'
 
 import { RESOURCE_NAMES, T, TAB_FORM_MAP, PATH } from '@ConstantsModule'
 
 const _ = require('lodash')
+const GPU_REQUEST_ERROR = 'LayerSentry published GPU request is no longer valid'
 
 /**
  * Displays the instantiation form for a VM Template.
@@ -46,23 +49,21 @@ const _ = require('lodash')
  * @returns {ReactElement} Instantiation form
  */
 export function InstantiateVmTemplate() {
-  // Reset modified fields + path on mount
   useEffect(() => {
     resetFieldPath()
     resetModifiedFields()
   }, [])
 
-  // Get store
   const store = useStore()
-
-  // Get history
   const history = useHistory()
   const { state: { ID: templateId, NAME: templateName } = {} } = useLocation()
-
-  // Hooks
-  const { enqueueInfo, resetFieldPath, resetModifiedFields } = useGeneralApi()
+  const {
+    enqueueError,
+    enqueueInfo,
+    resetFieldPath,
+    resetModifiedFields,
+  } = useGeneralApi()
   const [instantiate] = VmTemplateAPI.useInstantiateTemplateMutation()
-
   const { adminGroup, oneConfig } = useSystemData()
 
   const { data: apiTemplateDataExtended, isError } =
@@ -76,33 +77,26 @@ export function InstantiateVmTemplate() {
     { skip: templateId === undefined }
   )
 
-  // Clone template to be able to modify it
   const dataTemplateExtended = _.cloneDeep(apiTemplateDataExtended)
 
-  // Get users and groups
   UserAPI.useGetUsersQuery(undefined, { refetchOnMountOrArgChange: false })
   GroupAPI.useGetGroupsQuery(undefined, { refetchOnMountOrArgChange: false })
 
-  // Features of the view
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
   const resource = RESOURCE_NAMES.VM_TEMPLATE
   const { features } = getResourceView(resource)
 
   const onSubmit = async (templates) => {
     try {
-      // Get current state and modified fields
       const currentState = store.getState()
       const modifiedFields = currentState.general?.modifiedFields
 
-      // Iterate over all the templates
       await Promise.all(
         templates.map((rawTemplate) => {
-          // Get the original template
           const existingTemplate = {
             ...apiTemplateData?.TEMPLATE,
           }
 
-          // Filter template to delete attributes that the user has not interact with them
           const filteredTemplate = filterTemplateData(
             rawTemplate,
             modifiedFields,
@@ -113,20 +107,59 @@ export function InstantiateVmTemplate() {
             }
           )
 
-          // Every action that is not an human action
+          if (view === 'cloud') {
+            // Catalog metadata belongs to the source VM template, not the
+            // resulting VM instance. Never carry physical-address-like data
+            // from a browser request into PCI constraints.
+            delete filteredTemplate.LAYERSENTRY_GPU_PROFILES
+            delete filteredTemplate.LAYERSENTRY_GPU_REQUEST
+
+            if (modifiedFields?.extra?.LayerSentryGpu) {
+              const gpuRequest = resolvePublishedGpuRequest(
+                rawTemplate?.extra?.LAYERSENTRY_GPU_REQUEST,
+                apiTemplateData?.TEMPLATE
+              )
+
+              if (!gpuRequest.valid) {
+                throw new Error(GPU_REQUEST_ERROR)
+              }
+
+              if (gpuRequest.requested) {
+                const existingPci = filteredTemplate.PCI
+                  ? [].concat(filteredTemplate.PCI)
+                  : []
+
+                filteredTemplate.PCI = [...existingPci, ...gpuRequest.pci]
+                filteredTemplate.LAYERSENTRY_GPU_REQUEST = {
+                  PROFILE_ID: gpuRequest.profileId,
+                  COUNT: String(gpuRequest.count),
+                  SOURCE: 'PUBLISHED_TEMPLATE_PROFILE',
+                }
+              }
+            }
+          }
+
+          if (
+            view === 'cloud' &&
+            modifiedFields?.extra?.LayerSentryProtection
+          ) {
+            const protection = normalizeProtectionRequest(
+              rawTemplate?.extra?.LAYERSENTRY_PROTECTION
+            )
+            if (protection) {
+              filteredTemplate.LAYERSENTRY_PROTECTION = protection
+            }
+          }
+
           transformActionsInstantiate(
             filteredTemplate,
             apiTemplateData,
             features
           )
 
-          // Convert template to xml
           const xmlFinal = jsonToXml(filteredTemplate)
-
-          // Modify template
           rawTemplate.template = xmlFinal
 
-          // Instantiate virtual machine
           return instantiate(rawTemplate).unwrap()
         })
       )
@@ -139,7 +172,13 @@ export function InstantiateVmTemplate() {
       const total = templates.length
       const templateInfo = `#${templateId} ${templateName}`
       enqueueInfo(T.InfoVMTemplateInstantiated, [total, templateInfo])
-    } catch {}
+    } catch (error) {
+      if (error?.message === GPU_REQUEST_ERROR) {
+        enqueueError(
+          'The selected GPU profile is no longer available or the requested count exceeds its published limit.'
+        )
+      }
+    }
   }
 
   if (!templateId || isError) {

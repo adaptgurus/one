@@ -1,0 +1,35 @@
+---
+resource_name: "VM-GROUP"
+actions:
+  create_dialog: true
+  update_dialog: true
+  enable: true
+  disable: true
+  chgrp: false
+  chown: false
+  delete: true
+  edit_labels: true
+filters:
+  state: true
+info-tabs:
+  info:
+    enabled: true
+    information_panel:
+      enabled: true
+      actions:
+        rename: true
+    permissions_panel:
+      enabled: true
+      actions:
+        chmod: true
+    ownership_panel:
+      enabled: true
+      actions:
+        chown: false
+        chgrp: false
+    roles_panel:
+      enabled: true
+    roles-affinity_panel:
+      enabled: true
+  vms:
+    enabled: true

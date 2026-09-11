@@ -29,6 +29,8 @@ import Placement from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/Extr
 import Scheduling from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration/scheduleAction'
 import Storage from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration/storage'
 import Pci from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration/pci'
+import Gpu from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/gpu'
+import Protection from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/protection'
 import { Box } from '@mui/material'
 import { Tabs } from '@ComponentsModule'
 
@@ -41,6 +43,8 @@ export const STEP_ID = 'extra'
 /** @type {TabType[]} */
 export const TABS = [
   Storage,
+  Gpu,
+  Protection,
   Networking,
   Pci,
   Placement,
@@ -100,8 +104,12 @@ const Content = ({
 
   const tabs = useMemo(
     () =>
-      TABS.filter(({ id }) => sectionsAvailable.includes(id)).map(
-        ({ Content: TabContent, name, getError, icon, ...section }) => ({
+      TABS.filter(
+        ({ id, isVisible }) =>
+          sectionsAvailable.includes(id) &&
+          (typeof isVisible !== 'function' || isVisible({ vmTemplate, view }))
+      ).map(
+        ({ Content: TabContent, name, getError, icon, isVisible, ...section }) => ({
           ...section,
           name,
           title: translate(name),
@@ -122,7 +130,18 @@ const Content = ({
           ),
         })
       ),
-    [view, control, translate]
+    [
+      view,
+      control,
+      translate,
+      vmTemplate,
+      data,
+      setFormData,
+      hypervisor,
+      oneConfig,
+      adminGroup,
+      sectionsAvailable,
+    ]
   )
 
   const ActiveTab = tabs[selected] ?? tabs[0]
@@ -170,7 +189,7 @@ const ExtraConfiguration = ({ vmTemplate, oneConfig, adminGroup }) => {
   return {
     id: STEP_ID,
     label: T.AdvancedOptions,
-    resolver: SCHEMA,
+    resolver: () => SCHEMA(vmTemplate),
     optionsValidate: { abortEarly: false },
     content: (props) =>
       Content({

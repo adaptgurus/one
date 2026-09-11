@@ -15,6 +15,7 @@
  * ------------------------------------------------------------------------- */
 import {
   DashboardDots as DashboardIcon,
+  RefreshDouble as AttentionIcon,
   Settings as SettingsIcon,
 } from 'iconoir-react'
 import loadable from '@loadable/component'
@@ -22,6 +23,14 @@ import { T } from '@ConstantsModule'
 
 const Dashboard = loadable(
   () => import('@ContainersModule').then((module) => module.Dashboard),
+  { ssr: false }
+)
+const Attention = loadable(
+  () => import('client/apps/sunstone/components/LayerSentry/Attention'),
+  { ssr: false }
+)
+const Dbaas = loadable(
+  () => import('client/apps/sunstone/components/LayerSentry/Dbaas'),
   { ssr: false }
 )
 const Settings = loadable(
@@ -39,6 +48,8 @@ const Guacamole = loadable(
 
 export const PATH = {
   DASHBOARD: '/dashboard',
+  ATTENTION: '/attention',
+  DBAAS: '/dbaas',
   SETTINGS: '/settings',
   GUACAMOLE: '/guacamole/:id/:type',
 }
@@ -51,6 +62,22 @@ export const ENDPOINTS = [
     icon: DashboardIcon,
     position: 1,
     Component: Dashboard,
+  },
+  {
+    title: 'LayerSentry DBaaS',
+    path: PATH.DBAAS,
+    sidebar: true,
+    icon: DashboardIcon,
+    position: 2,
+    Component: Dbaas,
+  },
+  {
+    title: 'Alerts & attention',
+    path: PATH.ATTENTION,
+    sidebar: false,
+    icon: AttentionIcon,
+    position: 1,
+    Component: Attention,
   },
   {
     title: T.Settings,
