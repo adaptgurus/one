@@ -29,6 +29,10 @@ const Attention = loadable(
   () => import('client/apps/sunstone/components/LayerSentry/Attention'),
   { ssr: false }
 )
+const Dbaas = loadable(
+  () => import('client/apps/sunstone/components/LayerSentry/Dbaas'),
+  { ssr: false }
+)
 const Settings = loadable(
   () => import('@ContainersModule').then((module) => module.Settings),
   {
@@ -45,6 +49,7 @@ const Guacamole = loadable(
 export const PATH = {
   DASHBOARD: '/dashboard',
   ATTENTION: '/attention',
+  DBAAS: '/dbaas',
   SETTINGS: '/settings',
   GUACAMOLE: '/guacamole/:id/:type',
 }
@@ -57,6 +62,14 @@ export const ENDPOINTS = [
     icon: DashboardIcon,
     position: 1,
     Component: Dashboard,
+  },
+  {
+    title: 'LayerSentry DBaaS',
+    path: PATH.DBAAS,
+    sidebar: true,
+    icon: DashboardIcon,
+    position: 2,
+    Component: Dbaas,
   },
   {
     title: 'Alerts & attention',
