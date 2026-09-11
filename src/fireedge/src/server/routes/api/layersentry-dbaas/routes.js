@@ -8,6 +8,7 @@ const { resource, postBody } = fromData
 const basepath = '/layersentry/dbaas'
 
 const Actions = {
+  CATALOG: 'layersentry.dbaas.catalog',
   LIST: 'layersentry.dbaas.list',
   CREATE: 'layersentry.dbaas.create',
   SHOW: 'layersentry.dbaas.show',
@@ -22,6 +23,12 @@ const commonCluster = {
 const wholeBody = { from: postBody, all: true }
 
 const Commands = {
+  [Actions.CATALOG]: {
+    path: `${basepath}/:clusterId/catalog`,
+    httpMethod: GET,
+    auth: true,
+    params: commonCluster,
+  },
   [Actions.LIST]: {
     path: `${basepath}/:clusterId/databases`,
     httpMethod: GET,
