@@ -59,26 +59,37 @@ test('customer dashboard is workload-only and avoids provider capacity/host card
   for (const { id } of cards) assert.equal(['hosts', 'hosts-summary', 'host-cpu-chart', 'host-memory-chart', 'cluster-capacity', 'system'].includes(id), false)
 })
 
-test('native VM self-service safety/function set remains present', () => {
+test('native VM self-service includes console, compute, storage, network, GPU/PCI, snapshots and protection', () => {
   const vm = existing('vm-tab.yaml')
-  for (const action of ['vnc', 'ssh', 'rdp', 'resume', 'reboot', 'poweroff', 'terminate']) assert.equal(vm.actions[action], true, action)
+  for (const action of ['vnc', 'ssh', 'rdp', 'resume', 'reboot', 'poweroff', 'terminate', 'backup']) assert.equal(vm.actions[action], true, action)
+  for (const action of ['deploy', 'migrate', 'live-migrate', 'chown', 'chgrp']) assert.notEqual(vm.actions[action], true, action)
+  assert.equal(vm['info-tabs'].info.capacity_panel.actions.resize, true)
   assert.equal(vm['info-tabs'].storage.actions['disk-attach'].enabled, true)
-  assert.equal(vm['info-tabs'].storage.actions['disk-detach'], true)
-  assert.equal(vm['info-tabs'].storage.actions['disk-resize'], true)
-  assert.equal(vm['info-tabs'].network.actions['nic-attach'], true)
-  assert.equal(vm['info-tabs'].network.actions['nic-detach'], true)
-  assert.equal(vm['info-tabs'].network.actions['nic-update'], true)
-  assert.equal(vm['info-tabs'].network.actions['sg-attach'], true)
-  assert.equal(vm['info-tabs'].network.actions['sg-detach'], true)
-  assert.equal(vm['info-tabs'].snapshot.actions['snapshot-create'], true)
-  assert.equal(vm['info-tabs'].snapshot.actions['snapshot-revert'], true)
-  assert.equal(vm['info-tabs'].snapshot.actions['snapshot-delete'], true)
+  for (const action of ['disk-attach-image', 'disk-attach-volatile', 'disk-detach', 'disk-resize', 'disk-saveas', 'disk-snapshot-create', 'disk-snapshot-delete', 'disk-snapshot-rename', 'disk-snapshot-revert']) assert.equal(vm['info-tabs'].storage.actions[action], true, action)
+  for (const action of ['nic-attach', 'nic-attach-alias', 'nic-detach', 'nic-update', 'sg-attach', 'sg-detach']) assert.equal(vm['info-tabs'].network.actions[action], true, action)
+  assert.equal(vm['info-tabs'].pci.actions['pci-attach'], true)
+  assert.equal(vm['info-tabs'].pci.actions['pci-detach'], true)
+  for (const action of ['snapshot-create', 'snapshot-revert', 'snapshot-delete']) assert.equal(vm['info-tabs'].snapshot.actions[action], true, action)
+  for (const action of ['backup-configure', 'backup-create', 'backup-restore']) assert.equal(vm['info-tabs'].backup.actions[action], true, action)
+  assert.equal(vm['info-tabs'].history.enabled, true)
+  assert.equal(vm['info-tabs'].logs.enabled, true)
 })
 
-test('VM template instantiation retains customer network/storage/backup configuration', () => {
+test('native 7.4.1 VM group and guest execution tabs are explicitly configured', () => {
+  const vm = read('vm-tab.yaml')
+  assert.equal(vm['info-tabs'].vm_group.enabled, true)
+  assert.equal(vm['info-tabs'].vm_group.actions['vmgroup-add'], true)
+  assert.equal(vm['info-tabs'].vm_group.actions['vmgroup-del'], true)
+  assert.equal(vm['info-tabs'].exec.enabled, true)
+  assert.equal(vm['info-tabs'].exec.actions.exec, true)
+  assert.equal(vm['info-tabs'].exec.actions['exec-retry'], true)
+  assert.equal(vm['info-tabs'].exec.actions['exec-cancel'], true)
+})
+
+test('VM template instantiation retains customer network/storage/protection configuration', () => {
   const cfg = existing('vm-template-tab.yaml')
   assert.equal(cfg.actions.instantiate_dialog, true)
-  for (const key of ['capacity', 'network', 'storage', 'vm_group', 'sched_action', 'booting']) assert.equal(cfg.dialogs.instantiate_dialog[key], true, key)
+  for (const key of ['capacity', 'network', 'storage', 'protection', 'vm_group', 'sched_action', 'booting']) assert.equal(cfg.dialogs.instantiate_dialog[key], true, key)
 })
 
 test('native OneKS customer lifecycle includes create, worker groups, recovery, upgrade and access', () => {
@@ -128,6 +139,17 @@ test('application templates remain publish-and-consume for ordinary customers', 
   for (const action of ['create_dialog', 'update_dialog', 'delete', 'share', 'chown', 'chgrp']) assert.notEqual(cfg.actions[action], true, action)
   assert.equal(cfg['info-tabs'].roles.enabled, true)
   assert.equal(cfg['info-tabs'].networks.enabled, true)
+})
+
+test('self-service account has quota/reporting and only safe credential actions', () => {
+  const cfg = read('user-tab.yaml')
+  assert.equal(cfg['info-tabs'].quota.enabled, true)
+  assert.equal(cfg['info-tabs'].accounting.enabled, true)
+  assert.equal(cfg['info-tabs'].showback.enabled, true)
+  assert.equal(cfg['info-tabs'].authentication.actions.update_password, true)
+  assert.equal(cfg['info-tabs'].authentication.actions.public_ssh_key, true)
+  assert.equal(cfg['info-tabs'].authentication.actions.private_ssh_key, false)
+  assert.equal(cfg['info-tabs'].authentication.actions.change_authentication, false)
 })
 
 test('self-service support can create tickets and comments', () => {
