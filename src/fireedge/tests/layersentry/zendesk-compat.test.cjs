@@ -166,7 +166,10 @@ test('Zendesk list uses requests.list with sorting and counts known states only'
   const { res, nextCalls } = await callRoute(harness.routes.list, {})
 
   assert.equal(nextCalls, 1)
-  assert.deepEqual(listOptions, { sort_by: 'id', sort_order: 'desc' })
+  // listOptions is created inside a vm.Context. Compare scalar contract fields
+  // instead of object prototypes from different JavaScript realms.
+  assert.equal(listOptions.sort_by, 'id')
+  assert.equal(listOptions.sort_order, 'desc')
   assert.equal(res.locals.httpCode.code, 200)
   assert.equal(res.locals.httpCode.data.open, 2)
   assert.equal(res.locals.httpCode.data.solved, 1)
@@ -232,10 +235,12 @@ test('Zendesk create uploads valid files in order and sends their tokens', async
     ['/tmp/a.log', 'a.log'],
     ['/tmp/b.log', 'b.log'],
   ])
-  assert.deepEqual(createdTicket.request.comment.uploads, [
-    'token-a.log',
-    'token-b.log',
-  ])
+  // Ticket objects originate in the vm.Context. Copy to this realm before a
+  // structural assertion so the test checks data, not cross-realm prototypes.
+  assert.deepEqual(
+    Array.from(createdTicket.request.comment.uploads),
+    ['token-a.log', 'token-b.log']
+  )
   assert.equal(res.locals.httpCode.code, 200)
   assert.equal(res.locals.httpCode.data.id, 50)
 })
@@ -298,16 +303,11 @@ test('Zendesk update unwraps v6 response envelopes', async () => {
   assert.equal(res.locals.httpCode.data.id, 51)
 })
 
-test('Zendesk routes deny missing OpenNebula session state before client creation', async () => {
-  const harness = makeHarness({ session: undefined })
-  // Explicitly override the default object created by the harness.
-  const isolated = makeHarness({ session: null })
-  isolated.session.zendesk = undefined
+test('Zendesk routes deny an OpenNebula session without Zendesk authentication', async () => {
+  const harness = makeHarness({ session: { tokens: true } })
+  const { res, nextCalls } = await callRoute(harness.routes.list, {})
 
-  const { res, nextCalls } = await callRoute(isolated.routes.list, {})
   assert.equal(nextCalls, 1)
   assert.equal(res.locals.httpCode.code, 401)
-  assert.equal(isolated.createdConfigs.length, 0)
-
-  assert.ok(harness.routes)
+  assert.equal(harness.createdConfigs.length, 0)
 })
