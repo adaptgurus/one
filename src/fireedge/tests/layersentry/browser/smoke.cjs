@@ -30,6 +30,32 @@ const waitForScope = async (page, browserErrors, expected) => {
   }
 }
 
+const waitForClassicScope = async (page, browserErrors) => {
+  try {
+    await page.waitForFunction(
+      () =>
+        !document.documentElement.hasAttribute('data-layersentry-self-service'),
+      undefined,
+      { timeout: 10000 }
+    )
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => ({
+      readyState: document.readyState,
+      scope: document.documentElement.getAttribute(
+        'data-layersentry-self-service'
+      ),
+      root: document.getElementById('root')?.innerText ?? '',
+    }))
+
+    throw new Error(
+      `LayerSentry browser scope did not clean up for classic appearance. ` +
+        `diagnostics=${JSON.stringify(diagnostics)} ` +
+        `browserErrors=${JSON.stringify(browserErrors)}; ` +
+        `original=${error.message}`
+    )
+  }
+}
+
 const run = async () => {
   let browser
 
@@ -65,12 +91,7 @@ const run = async () => {
 
     await page.locator('#draft-input').fill('unsaved customer value')
     await page.getByRole('button', { name: 'Use classic appearance' }).click()
-    assert.equal(
-      await page.evaluate(() =>
-        document.documentElement.hasAttribute('data-layersentry-self-service')
-      ),
-      false
-    )
+    await waitForClassicScope(page, browserErrors)
     assert.equal(
       await page.locator('#draft-input').inputValue(),
       'unsaved customer value'
