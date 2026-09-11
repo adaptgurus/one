@@ -4,9 +4,7 @@ const axios = require('axios')
 const { URL } = require('url')
 const { defaults, httpCodes } = require('server/utils/constants')
 const { httpResponse } = require('server/utils/server')
-const {
-  oneKsConnection,
-} = require('server/routes/api/oneks/utils')
+const { oneKsConnection } = require('server/routes/api/oneks/utils')
 const {
   Commands: OneKsCommands,
   Actions: OneKsActions,
@@ -25,10 +23,14 @@ const fail = (res, next, code, message) => {
 }
 
 const loadConfig = (clusterId) => {
-  if (!configPath) throw new Error('LayerSentry DBaaS cluster configuration is not configured')
+  if (!configPath) {
+    throw new Error('LayerSentry DBaaS cluster configuration is not configured')
+  }
   const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8'))
   const cluster = parsed?.clusters?.[String(clusterId)]
-  if (!cluster) throw new Error('LayerSentry DBaaS is not enabled for this Kubernetes cluster')
+  if (!cluster) {
+    throw new Error('LayerSentry DBaaS is not enabled for this Kubernetes cluster')
+  }
 
   const target = new URL(cluster.url)
   if (target.protocol !== 'https:' || target.username || target.password) {
@@ -49,7 +51,8 @@ const authorizeCluster = (clusterId, userData, onAllowed, onDenied) => {
   const { user, password } = userData ?? {}
   if (!user || !password || !clusterId) return onDenied()
   const command = OneKsCommands[OneKsActions.SHOW]
-  oneKsConnection(
+
+  return oneKsConnection(
     {
       method: command.httpMethod,
       path: command.apiPath,
@@ -62,7 +65,7 @@ const authorizeCluster = (clusterId, userData, onAllowed, onDenied) => {
   )
 }
 
-const proxyRequest = async (res, next, params, method, suffix, body) => {
+const proxyRequest = async (res, next, params, method, path, body) => {
   let cluster
   try {
     cluster = loadConfig(params.clusterId)
@@ -70,13 +73,18 @@ const proxyRequest = async (res, next, params, method, suffix, body) => {
     return fail(res, next, serviceUnavailable, error.message)
   }
   if (cluster.token.length < 32) {
-    return fail(res, next, serviceUnavailable, 'LayerSentry DBaaS API credential is invalid')
+    return fail(
+      res,
+      next,
+      serviceUnavailable,
+      'LayerSentry DBaaS API credential is invalid'
+    )
   }
 
   try {
     const response = await axios({
       method,
-      url: `${cluster.url}/v1/databases${suffix}`,
+      url: `${cluster.url}${path}`,
       data: body,
       timeout: 30000,
       maxContentLength: 4 * 1024 * 1024,
@@ -97,7 +105,10 @@ const proxyRequest = async (res, next, params, method, suffix, body) => {
     res.set('Cache-Control', 'no-store')
     res.set('X-Content-Type-Options', 'nosniff')
     if (params.operation === 'credentials') res.set('Pragma', 'no-cache')
-    res.locals.httpCode = httpResponse(responseCode(response.status), response.data)
+    res.locals.httpCode = httpResponse(
+      responseCode(response.status),
+      response.data
+    )
     return next()
   } catch (_) {
     return fail(
@@ -109,39 +120,53 @@ const proxyRequest = async (res, next, params, method, suffix, body) => {
   }
 }
 
-const run = (method, suffixBuilder, includeBody = false) =>
+const run = (method, pathBuilder, includeBody = false) =>
   (
     res = {},
     next = defaultEmptyFunction,
     params = {},
     userData = {}
   ) => {
-    if (!params.clusterId) return fail(res, next, badRequest, 'missing cluster id')
+    if (!params.clusterId) {
+      return fail(res, next, badRequest, 'missing cluster id')
+    }
     return authorizeCluster(
       params.clusterId,
       userData,
-      () => proxyRequest(
-        res,
-        next,
-        params,
-        method,
-        suffixBuilder(params),
-        includeBody ? params.body ?? {} : undefined
-      ),
+      () =>
+        proxyRequest(
+          res,
+          next,
+          params,
+          method,
+          pathBuilder(params),
+          includeBody ? params.body ?? {} : undefined
+        ),
       () => fail(res, next, unauthorized, 'cluster access denied')
     )
   }
 
-const list = run('GET', () => '')
-const create = run('POST', () => '', true)
-const show = run('GET', ({ name }) => `/${encodeURIComponent(name)}`)
-const update = run('PUT', ({ name }) => `/${encodeURIComponent(name)}`, true)
-const remove = run('DELETE', ({ name }) => `/${encodeURIComponent(name)}`)
+const catalog = run('GET', () => '/v1/catalog')
+const list = run('GET', () => '/v1/databases')
+const create = run('POST', () => '/v1/databases', true)
+const show = run(
+  'GET',
+  ({ name }) => `/v1/databases/${encodeURIComponent(name)}`
+)
+const update = run(
+  'PUT',
+  ({ name }) => `/v1/databases/${encodeURIComponent(name)}`,
+  true
+)
+const remove = run(
+  'DELETE',
+  ({ name }) => `/v1/databases/${encodeURIComponent(name)}`
+)
 const action = run(
   'POST',
   ({ name, operation }) =>
-    `/${encodeURIComponent(name)}/actions/${encodeURIComponent(operation)}`,
+    `/v1/databases/${encodeURIComponent(name)}/actions/${encodeURIComponent(operation)}`,
   true
 )
 
-module.exports = { list, create, show, update, remove, action }
+module.exports = { catalog, list, create, show, update, remove, action }
