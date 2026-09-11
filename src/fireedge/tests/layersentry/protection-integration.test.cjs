@@ -18,11 +18,14 @@ test('protection request tab is self-service only', () => {
   assert.notEqual(admin.dialogs.instantiate_dialog.protection, true)
 })
 
-test('instantiate form includes protection schema and tab but filters it through native view config', () => {
+test('instantiate form includes GPU/protection tabs and filters both through native view config', () => {
   const tabs = text('src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/index.js')
   const schema = text('src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/schema.js')
+  assert.match(tabs, /import Gpu/)
   assert.match(tabs, /import Protection/)
-  assert.match(tabs, /Storage,\s*Protection,\s*Networking/)
+  assert.match(tabs, /Storage,\s*Gpu,\s*Protection,\s*Networking/)
+  assert.match(tabs, /sectionsAvailable\.includes\(id\)/)
+  assert.match(schema, /GPU_SCHEMA/)
   assert.match(schema, /PROTECTION_SCHEMA/)
   assert.match(schema, /\.concat\(PROTECTION_SCHEMA\)/)
 })
