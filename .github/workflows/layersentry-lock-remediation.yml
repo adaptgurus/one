@@ -14,7 +14,7 @@ permissions:
 jobs:
   generate-lock:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: src/fireedge
@@ -27,16 +27,47 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: src/fireedge/package-lock.json
-      - name: Generate npm lock with fixed Multer
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact multer@2.3.0
-      - name: Verify locked Multer and audit runtime tree
+      - name: Generate security modernization candidate lock
         run: |
-          node -e "const p=require('./package-lock.json'); console.log('LOCKED_MULTER=' + p.packages['node_modules/multer'].version); if (p.packages['node_modules/multer'].version !== '2.3.0') process.exit(2)"
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact \
+            axios@1.20.0 \
+            dompurify@3.4.15 \
+            express@4.22.2 \
+            fast-xml-parser@4.5.7 \
+            immutable@4.3.9 \
+            jsonwebtoken@9.0.3 \
+            lodash@4.18.1 \
+            luxon@2.5.2 \
+            multer@2.3.0 \
+            socket.io@4.8.3 \
+            socket.io-client@4.8.3 \
+            webpack@5.110.3
+      - name: Install candidate lock
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: LayerSentry regression tests
+        run: node --test tests/layersentry/*.test.cjs
+      - name: Full FireEdge production build
+        run: NODE_ENV=production npm run build
+      - name: Audit candidate runtime tree
+        run: |
           npm audit --omit=dev --json > dependency-audit.json || true
           node -e "const a=require('./dependency-audit.json'); console.log('RUNTIME_AUDIT_COUNTS=' + JSON.stringify(a.metadata?.vulnerabilities ?? {}))"
+          node - <<'NODE'
+          const p=require('./package-lock.json')
+          for (const [name, expected] of Object.entries({
+            axios:'1.20.0', dompurify:'3.4.15', express:'4.22.2',
+            'fast-xml-parser':'4.5.7', immutable:'4.3.9', jsonwebtoken:'9.0.3',
+            lodash:'4.18.1', luxon:'2.5.2', multer:'2.3.0',
+            'socket.io':'4.8.3', 'socket.io-client':'4.8.3', webpack:'5.110.3'
+          })) {
+            const actual=p.packages[`node_modules/${name}`]?.version
+            console.log(`LOCKED_${name}=${actual}`)
+            if (actual !== expected) process.exitCode=2
+          }
+          NODE
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: fireedge-multer-2.3.0-lock
+          name: fireedge-security-modernization-candidate
           path: |
             src/fireedge/package.json
             src/fireedge/package-lock.json
