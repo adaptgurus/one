@@ -13,6 +13,7 @@ const {
 const { defaultEmptyFunction } = defaults
 const { badRequest, unauthorized, serviceUnavailable } = httpCodes
 const configPath = process.env.LAYERSENTRY_DBAAS_CLUSTERS_FILE
+const allowedOperations = new Set(['backup', 'restore', 'pitr', 'credentials'])
 
 const responseCode = (status) =>
   Object.values(httpCodes).find((code) => code?.id === status) ?? serviceUnavailable
@@ -69,8 +70,13 @@ const proxyRequest = async (res, next, params, method, path, body) => {
   let cluster
   try {
     cluster = loadConfig(params.clusterId)
-  } catch (error) {
-    return fail(res, next, serviceUnavailable, error.message)
+  } catch (_) {
+    return fail(
+      res,
+      next,
+      serviceUnavailable,
+      'LayerSentry DBaaS is unavailable for this Kubernetes cluster'
+    )
   }
   if (cluster.token.length < 32) {
     return fail(
@@ -129,6 +135,9 @@ const run = (method, pathBuilder, includeBody = false) =>
   ) => {
     if (!params.clusterId) {
       return fail(res, next, badRequest, 'missing cluster id')
+    }
+    if (params.operation && !allowedOperations.has(params.operation)) {
+      return fail(res, next, badRequest, 'unsupported database action')
     }
     return authorizeCluster(
       params.clusterId,
