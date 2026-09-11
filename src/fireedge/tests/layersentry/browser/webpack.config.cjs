@@ -20,7 +20,7 @@ module.exports = {
           options: {
             presets: [
               ['@babel/preset-env', { targets: { chrome: '120' } }],
-              '@babel/preset-react',
+              ['@babel/preset-react', { runtime: 'automatic' }],
             ],
           },
         },
