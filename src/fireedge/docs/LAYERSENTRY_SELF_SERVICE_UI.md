@@ -13,6 +13,8 @@ Evidence base:
 - exact parent is one commit above OpenNebula `release-7.4.1`
 - central engineering contract: `adaptgurus/codexagentlogic`
 - PR: `adaptgurus/one#1`, intentionally kept draft until live staging gates are complete
+- final runtime/test head qualified by production re-audit: `79cd0e1ceb502b1d37b5ddd6b8924e30a4e6d431`
+- final locked Chromium/production re-audit: GitHub Actions run `34638356574`
 
 ## Implemented source scope
 
@@ -94,9 +96,9 @@ Until that adapter exists, native OneKS lifecycle is source-complete but optiona
 
 The inherited FireEdge lock initially reported **6 critical, 29 high, 15 moderate and 9 low** advisories under `npm audit --omit=dev`.
 
-The validated hardened lock now includes patched versions of the directly exposed/network/security-sensitive dependencies, including Axios, DOMPurify, Express, fast-xml-parser, http-proxy-middleware, Immutable, jsonwebtoken, Lodash, Luxon, Multer, Socket.IO client/server, Webpack and `node-zendesk`. `d3-scale` is upgraded and `d3-color` is pinned to the fixed 3.1.0 implementation. The legacy `opennebula-guacamole` package is constrained to patched compatible Luxon/`ws` transitives.
+The validated hardened lock now includes patched versions of the directly exposed/network/security-sensitive dependencies, including Axios, DOMPurify, Express, fast-xml-parser, `http-proxy-middleware`, Immutable, jsonwebtoken, Lodash, Luxon, Multer, Socket.IO client/server, Webpack and `node-zendesk`. `d3-scale` is upgraded and `d3-color` is pinned to the fixed 3.1.0 implementation. The legacy `opennebula-guacamole` package is constrained to patched compatible Luxon/`ws` transitives.
 
-The final generated candidate audit is:
+The checked-in hardened tree audit is:
 
 - **0 critical**
 - **1 high**
@@ -106,13 +108,13 @@ The final generated candidate audit is:
 
 The remaining high is `serialize-javascript` through the legacy Webpack build-tool chain (`copy-webpack-plugin` / `terser-webpack-plugin`). The audit-proposed remediation is a semver-major build-tool upgrade. It is not used as a FireEdge HTTP request handler. That remaining build-chain upgrade is deliberately not forced into this portal branch without a separate build-tool compatibility qualification.
 
-`node-zendesk` 6 requires modern Node. FireEdge now declares **Node >=18**. The hardened candidate was tested with Node 22 for the full build and additionally with Node 18 for locked install, all LayerSentry tests and `build-server`. Production packaging should prefer a currently supported Node LTS rather than treating Node 18 as the operational recommendation.
+`node-zendesk` 6 requires modern Node. FireEdge declares **Node >=18**. The hardened candidate was tested with Node 22 for the full build and additionally with Node 18 for locked install, all LayerSentry tests and `build-server`. Production packaging should prefer a currently supported Node LTS rather than treating Node 18 as the operational recommendation.
 
 ## Zendesk and Guacamole compatibility hardening
 
 The support API was migrated from the callback-era `node-zendesk` 2.x integration to the v6 Promise API. Focused tests cover authentication, ticket listing/status counts, comments, create/update response envelopes, attachment token ordering, upload failures and session denial. Failed attachment uploads now complete the route with an error instead of leaving a request hanging.
 
-The Guacamole external-console proxy was migrated from the old `http-proxy-middleware` two-argument API to v4's options contract. Tests preserve the external path filter, WebSocket upgrade hook, path rewrite, authoritative zone routing, RPC-host fallback and WebSocket negotiation headers. No request Host header is accepted as a routing target.
+The Guacamole external-console proxy was migrated from the old `http-proxy-middleware` two-argument API to the modern one-object options contract and pinned to patched `http-proxy-middleware` **3.0.7**, which preserves the declared Node 18 runtime floor. Tests preserve the external path filter, WebSocket upgrade hook, path rewrite, authoritative zone routing, RPC-host fallback and WebSocket negotiation headers. No request Host header is accepted as a routing target.
 
 ## Automated validation evidence
 
@@ -127,21 +129,33 @@ Before the hardened manifest/lock was committed, the exact generated candidate p
 
 The generated `package.json` and `package-lock.json` were then committed together from the validated working tree so the branch never intentionally carried a mismatched manifest/lock.
 
-A real Playwright/Chromium harness is also part of the branch. It tests actual browser rendering, light/dark appearance, scoped styles, reversible classic appearance without losing an unsaved field, keyboard focus visibility, request-only DR evidence, published GPU evidence, attention severity, JavaScript/console errors and 375px mobile overflow. The harness uses the same automatic JSX runtime contract as production FireEdge and waits for React effect cleanup during appearance switching.
+The final checked-in runtime/test head `79cd0e1ceb502b1d37b5ddd6b8924e30a4e6d431` then passed GitHub Actions production re-audit run `34638356574` using the locked dependency tree:
 
-A final production re-audit is required on the **checked-in hardened lock** before this document can call the Chromium gate green.
+- locked `npm ci` succeeded;
+- **117 / 117 LayerSentry source/integration/regression tests passed**;
+- the complete FireEdge production build succeeded, including client, server and all module-federation remotes;
+- runtime audit reproduced **0 critical / 1 high / 12 moderate / 3 low**;
+- Playwright installed Chromium without modifying the repository lock;
+- the browser harness built successfully; and
+- the **real Chromium acceptance step completed successfully**, including the corrected 375px mobile overflow check and appearance state-preservation checks.
 
-The repository-wide OpenNebula smoke workflow is separate. Its Ruby RuboCop phase scans inherited Ruby source outside this portal change and has historically reported pre-existing/P1 offenses. That failure must not be relabelled as a passing smoke test, but unrelated broad Ruby autocorrection must not be mixed into this customer-portal branch.
+The browser harness tests actual browser rendering, light/dark appearance, scoped styles, reversible classic appearance without losing an unsaved field, keyboard focus visibility, request-only DR evidence, published GPU evidence, attention severity, JavaScript/console errors and 375px mobile overflow. The harness uses the same automatic JSX runtime contract as production FireEdge and waits for React effect cleanup during appearance switching.
+
+The repository-wide OpenNebula smoke workflow remains a separate red gate. On the same PR merge ref it inspected **484 Ruby files and reported 348 RuboCop offenses, 330 autocorrectable**. The portal PR changes no Ruby source; the reported set spans inherited OpenNebula and P1 OneKS code. This failure is therefore recorded, not relabelled as green, and broad Ruby autocorrection is intentionally not mixed into the P2 customer-portal branch.
+
+The protected-files policy also correctly recognizes the hardened `src/fireedge/package.json` and `src/fireedge/package-lock.json` as protected changes. Its configured reviewer names are not collaborators on this fork, so GitHub cannot satisfy the requested-reviewer gate automatically. That is a repository-governance/human-approval gate; the protection is not weakened or bypassed by this branch.
 
 ## Readiness interpretation
 
 ### Native self-service portal source/CI readiness
 
-The intended native customer feature surface is approximately **97–98% source/CI ready** after the GPU, browser-harness, Zendesk, Guacamole and dependency hardening work. This percentage covers the portal code and its automated validation denominator; it does not silently include backend products that are explicitly separate workstreams.
+For the **implemented P2 native self-service portal scope**, source and dedicated CI qualification are complete: the locked install, 117 regression tests, full production build, runtime audit and real Chromium acceptance are green on the final runtime/test head.
+
+This does not silently include backend products that are explicitly separate workstreams, and it does not convert repository evidence into a live-deployment certificate.
 
 ### Full deployed LayerSentry production qualification
 
-Do **not** label the deployed product 98% production-certified from repository evidence alone. Live qualification still requires the authorized OpenNebula staging environment, and separate product services remain unfinished: optional Helm/plugin runtime, tenant Grafana SSO, notification delivery, P3 DR activation/recovery, and the current OpenEverest adapter.
+Do **not** label the deployed product production-certified from repository evidence alone. Live qualification still requires the authorized OpenNebula staging environment, and separate product services remain unfinished: optional Helm/plugin runtime, tenant Grafana SSO, notification delivery, P3 DR activation/recovery, and the current OpenEverest adapter.
 
 ## Mandatory staging acceptance before merge/deployment
 
@@ -162,10 +176,10 @@ Do **not** label the deployed product 98% production-certified from repository e
 15. Compare admin/groupadmin/user/login/console behavior with the base, including translations, mobile/zoom, keyboard navigation, dialogs and open-form preservation while toggling appearance.
 16. Complete P2/P3 backend qualification independently before enabling plugins, Grafana SSO, notification delivery, OpenEverest lifecycle or DR execution.
 
-Keep PR #1 draft and production unchanged until these live gates have evidence.
+Keep PR #1 draft and production unchanged until these live gates have evidence and the protected package manifest/lock receive the repository's required human approval.
 
 ## Rollback
 
 **Use classic appearance** changes presentation only and does not navigate or remount the native Router/ModalHost. `layersentry-ui=classic` is an emergency per-location appearance fallback. Deployment rollback must use a complete prior FireEdge artifact/package; never mix client/remote-module outputs from different builds and never roll back cloud resources merely to roll back UI presentation.
 
-The authorized remote desktop/lab endpoint was offline during the latest engineering pass, so no installed frontend, customer VM, storage object, real console session, Zendesk tenant or DR environment was modified or live-verified.
+The authorized remote desktop/lab endpoint was rechecked on 2026-09-12 and remains offline (last seen 2026-09-07), so no installed frontend, customer VM, storage object, real console session, Zendesk tenant or DR environment was modified or live-verified during this completion pass.
