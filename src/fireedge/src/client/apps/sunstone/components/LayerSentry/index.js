@@ -1,5 +1,5 @@
 /* LayerSentry self-service presentation. SPDX-License-Identifier: Apache-2.0 */
-import React, { Fragment, useEffect } from 'react'
+import { Fragment, useEffect } from 'react'
 import PropTypes from 'prop-types'
 import { GlobalStyles, useTheme } from '@mui/material'
 import { installScope } from './presentation'
