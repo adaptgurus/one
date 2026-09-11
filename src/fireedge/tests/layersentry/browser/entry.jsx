@@ -65,6 +65,14 @@ window.__LAYERSENTRY_BROWSER_EVIDENCE__ = {
   attentionEvidence,
 }
 
+const evidenceStyles = {
+  maxWidth: '100%',
+  overflowX: 'auto',
+  overflowWrap: 'anywhere',
+  whiteSpace: 'pre-wrap',
+  wordBreak: 'break-word',
+}
+
 const Harness = () => {
   const [appearance, setAppearance] = useState(true)
   const [mode, setMode] = useState('light')
@@ -74,7 +82,7 @@ const Harness = () => {
   return (
     <ThemeProvider theme={theme}>
       <SelfServiceAppearance enabled={appearance}>
-        <Box sx={{ p: 2, maxWidth: 760, mx: 'auto' }}>
+        <Box sx={{ p: 2, maxWidth: 760, mx: 'auto', minWidth: 0 }}>
           <LayerSentryLogo withText />
           <Box sx={{ display: 'flex', gap: 1, my: 2, flexWrap: 'wrap' }}>
             <AppearanceSwitch
@@ -105,8 +113,12 @@ const Harness = () => {
           </Paper>
           <div id="attention-first">{attentionEvidence[0]?.severity}</div>
           <div id="attention-second">{attentionEvidence[1]?.severity}</div>
-          <pre id="protection-json">{JSON.stringify(protectionEvidence)}</pre>
-          <pre id="gpu-json">{JSON.stringify(gpuEvidence)}</pre>
+          <pre id="protection-json" style={evidenceStyles}>
+            {JSON.stringify(protectionEvidence)}
+          </pre>
+          <pre id="gpu-json" style={evidenceStyles}>
+            {JSON.stringify(gpuEvidence)}
+          </pre>
         </Box>
       </SelfServiceAppearance>
     </ThemeProvider>
