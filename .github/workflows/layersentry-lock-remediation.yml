@@ -5,6 +5,8 @@ on:
     paths:
       - 'src/fireedge/package.json'
       - 'src/fireedge/package-lock.json'
+      - 'src/fireedge/src/server/routes/api/zendesk/**'
+      - 'src/fireedge/tests/layersentry/zendesk*.test.cjs'
       - '.github/workflows/layersentry-lock-remediation.yml'
   workflow_dispatch:
 
@@ -14,7 +16,7 @@ permissions:
 jobs:
   generate-lock:
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: src/fireedge
@@ -27,18 +29,21 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: src/fireedge/package-lock.json
-      - name: Prove legacy Zendesk client is not referenced by FireEdge source
+      - name: Verify Zendesk source is migrated to the promise API
         run: |
-          if grep -R --line-number --exclude='package.json' --exclude='package-lock.json' --exclude-dir='node_modules' --exclude-dir='dist' -E "node-zendesk|require\(['\"]node-zendesk['\"]\)|from ['\"]node-zendesk['\"]" .; then
-            echo 'node-zendesk is still referenced; do not remove it blindly.' >&2
+          grep -q "await zendeskClient.users.auth()" src/server/routes/api/zendesk/functions.js
+          grep -q "await zendeskClient.requests.list" src/server/routes/api/zendesk/functions.js
+          grep -q "await zendeskClient.requests.listComments" src/server/routes/api/zendesk/functions.js
+          grep -q "await zendeskClient.requests.create" src/server/routes/api/zendesk/functions.js
+          grep -q "await zendeskClient.requests.update" src/server/routes/api/zendesk/functions.js
+          if grep -nE "users\.auth\([^)]*=>|requests\.(getRequest|listComments|create|update)\([^;]*=>" src/server/routes/api/zendesk/functions.js; then
+            echo 'Legacy node-zendesk callback use remains.' >&2
             exit 2
           fi
-          echo 'UNUSED_NODE_ZENDESK=confirmed'
           echo 'http-proxy-middleware references (informational):'
           grep -R --line-number --exclude='package.json' --exclude='package-lock.json' --exclude-dir='node_modules' --exclude-dir='dist' 'http-proxy-middleware' . || true
       - name: Generate zero-critical security modernization candidate
         run: |
-          npm uninstall --package-lock-only --ignore-scripts --no-audit --no-fund node-zendesk
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund --save-exact \
             axios@1.20.0 \
             dompurify@3.4.15 \
@@ -49,17 +54,19 @@ jobs:
             lodash@4.18.1 \
             luxon@2.5.2 \
             multer@2.3.0 \
+            node-zendesk@6.0.1 \
             socket.io@4.8.3 \
             socket.io-client@4.8.3 \
             webpack@5.110.3
+          npm pkg set 'engines.node=>=18'
           npm pkg set 'overrides.opennebula-guacamole.luxon=1.28.1' 'overrides.opennebula-guacamole.ws=5.2.5'
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm audit fix --omit=dev --package-lock-only --ignore-scripts --no-fund || true
-      - name: Install candidate lock
+      - name: Install candidate lock on Node 22
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: LayerSentry regression tests
+      - name: LayerSentry and Zendesk regression tests on Node 22
         run: node --test tests/layersentry/*.test.cjs
-      - name: Full FireEdge production build
+      - name: Full FireEdge production build on Node 22
         run: NODE_ENV=production npm run build
       - name: Audit candidate runtime tree
         run: |
@@ -80,16 +87,13 @@ jobs:
             axios:'1.20.0', dompurify:'3.4.15', express:'4.22.2',
             'fast-xml-parser':'4.5.7', immutable:'4.3.9', jsonwebtoken:'9.0.3',
             lodash:'4.18.1', luxon:'2.5.2', multer:'2.3.0',
-            'socket.io':'4.8.3', 'socket.io-client':'4.8.3', webpack:'5.110.3'
+            'node-zendesk':'6.0.1', 'socket.io':'4.8.3',
+            'socket.io-client':'4.8.3', webpack:'5.110.3'
           }
           for (const [name, wanted] of Object.entries(expected)) {
             const actual=p.packages[`node_modules/${name}`]?.version
             console.log(`LOCKED_${name}=${actual}`)
             if (actual !== wanted) process.exitCode=2
-          }
-          if (p.packages['node_modules/node-zendesk']) {
-            console.error('node-zendesk unexpectedly remains in candidate lock')
-            process.exitCode=2
           }
           const nestedLuxon=p.packages['node_modules/opennebula-guacamole/node_modules/luxon']?.version
           const nestedWs=p.packages['node_modules/opennebula-guacamole/node_modules/ws']?.version
@@ -97,6 +101,17 @@ jobs:
           console.log(`LOCKED_OPENNEBULA_GUACAMOLE_WS=${nestedWs}`)
           if (nestedLuxon !== '1.28.1' || nestedWs !== '5.2.5') process.exitCode=2
           NODE
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '18'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+      - name: Verify declared Node 18 floor
+        run: |
+          node --version
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test tests/layersentry/*.test.cjs
+          NODE_ENV=production npm run build-server
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: fireedge-security-modernization-zero-critical
