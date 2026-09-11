@@ -79,7 +79,7 @@ const makeHarness = ({ getZone } = {}) => {
   }
 }
 
-test('Guacamole proxy uses the v4 one-object API and preserves websocket upgrade', () => {
+test('Guacamole proxy uses the modern one-object API and preserves websocket upgrade', () => {
   const harness = makeHarness()
 
   assert.equal(harness.generatedPaths, 1)
