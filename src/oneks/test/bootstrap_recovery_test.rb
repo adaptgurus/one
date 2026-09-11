@@ -16,11 +16,9 @@ module ODS
     # Minimal schema placeholder for lifecycle unit tests.
     class Schema
 
-        def self.params
-        end
+        def self.params; end
 
-        def self.rule(*)
-        end
+        def self.rule(*); end
 
     end
 
@@ -84,8 +82,7 @@ module OneKS
     # Test logger placeholder.
     module Log
 
-        def self.info(*)
-        end
+        def self.info(*); end
 
     end
 
