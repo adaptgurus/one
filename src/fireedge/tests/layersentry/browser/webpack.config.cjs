@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 const path = require('node:path')
+const CopyPlugin = require('copy-webpack-plugin')
 
 module.exports = {
   mode: 'production',
@@ -26,6 +27,16 @@ module.exports = {
       },
     ],
   },
+  plugins: [
+    new CopyPlugin({
+      patterns: [
+        {
+          from: path.resolve(__dirname, 'index.html'),
+          to: 'index.html',
+        },
+      ],
+    }),
+  ],
   resolve: { extensions: ['.js', '.jsx'] },
   performance: { hints: false },
 }
