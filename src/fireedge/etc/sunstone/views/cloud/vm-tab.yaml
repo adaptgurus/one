@@ -35,6 +35,7 @@ actions:
   rdp: true
   edit_labels: true
   backup: true
+  restore: false
 
 filters:
   state: true
@@ -76,6 +77,12 @@ info-tabs:
         add: false
         edit: false
         delete: false
+
+  vm_group:
+    enabled: true
+    actions:
+      vmgroup-add: true
+      vmgroup-del: true
 
   storage:
     enabled: true
@@ -121,6 +128,10 @@ info-tabs:
 
   backup:
     enabled: true
+    actions:
+      backup-configure: true
+      backup-create: true
+      backup-restore: true
 
   history:
     enabled: true
@@ -133,10 +144,22 @@ info-tabs:
       sched-delete: true
       charter_create: true
 
+  # 7.4.1 native guest execution. The existing OpenNebula authorization,
+  # context/guest prerequisites, status polling, retry and cancel handlers apply.
+  exec:
+    enabled: true
+    actions:
+      exec: true
+      exec-retry: true
+      exec-cancel: true
+
   configuration:
     enabled: false
     actions:
       update_configuration: false
 
   template:
+    enabled: true
+
+  logs:
     enabled: true
