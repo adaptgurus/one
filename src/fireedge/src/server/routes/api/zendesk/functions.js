@@ -25,6 +25,7 @@ const { defaultEmptyFunction, defaultSeverities, defaultWebpackMode } = defaults
 const { ok, internalServerError, badRequest, unauthorized } = httpCodes
 
 const httpBadRequest = httpResponse(badRequest, '', '')
+const MAX_ZENDESK_ERROR_LENGTH = 2048
 
 /**
  * Format create ticket.
@@ -34,7 +35,7 @@ const httpBadRequest = httpResponse(badRequest, '', '')
  * @param {string} configFormatCreate.body - body
  * @param {string} configFormatCreate.version - one version
  * @param {string} configFormatCreate.severity - ticket severity
- * @param {object} configFormatCreate.attachments - attachment file
+ * @param {string[]} configFormatCreate.attachments - attachment tokens
  * @returns {object|undefined} format message create ticket
  */
 const formatCreate = ({
@@ -99,97 +100,191 @@ const formatComment = ({ body = '', solved = '', attachments = [] }) => {
 }
 
 /**
- * Parse Buffer error.
+ * Return only the resource body from node-zendesk methods that return the
+ * v4+ `{ response, result }` envelope. `getAll` and upload calls already
+ * return the resource body directly, so they pass through unchanged.
  *
- * @param {object} err - buffer error
- * @param {string} err.error - buffer error
- * @returns {string} string error
+ * @param {*} value - node-zendesk result
+ * @returns {*} resource body
  */
-const parseBufferError = (err) => {
-  if (!err?.result) return
+const unwrapZendeskResult = (value) =>
+  value &&
+  typeof value === 'object' &&
+  !Array.isArray(value) &&
+  Object.prototype.hasOwnProperty.call(value, 'result')
+    ? value.result
+    : value
 
-  let rtn = ''
-  try {
-    const errorJson = JSON.parse(err.result.toString())
-    if (!errorJson?.error) return
+/**
+ * Normalize a Zendesk error without exposing stack traces or unbounded data.
+ * Supports legacy Buffer-shaped errors and the promise-client Error shape.
+ *
+ * @param {Error|object} err - Zendesk error
+ * @returns {string} safe error message
+ */
+const parseZendeskError = (err) => {
+  if (!err) return 'Zendesk request failed'
 
-    rtn = errorJson.error.title ? `${errorJson.error.title}: ` : ''
-    rtn += errorJson.error.message ?? ''
-  } catch {}
+  let payload = err.result
+  if (Buffer.isBuffer(payload)) payload = payload.toString('utf8')
 
-  return rtn
+  if (typeof payload === 'string') {
+    try {
+      payload = JSON.parse(payload)
+    } catch {
+      payload = undefined
+    }
+  }
+
+  if (payload && typeof payload === 'object') {
+    const zendeskError = payload.error ?? payload
+    const title = zendeskError?.title ? `${zendeskError.title}: ` : ''
+    const message = zendeskError?.message ?? zendeskError?.description
+    if (message) {
+      return `${title}${message}`.slice(0, MAX_ZENDESK_ERROR_LENGTH)
+    }
+  }
+
+  return String(err.message || 'Zendesk request failed').slice(
+    0,
+    MAX_ZENDESK_ERROR_LENGTH
+  )
+}
+
+/**
+ * Build node-zendesk v4+ client options. `remoteUri` was the legacy option;
+ * `endpointUri` is authoritative in the promise client. Keeping the fallback
+ * allows sessions created before an in-place FireEdge upgrade to be reused.
+ *
+ * @param {object} config - stored Zendesk configuration
+ * @returns {object} normalized node-zendesk configuration
+ */
+const normalizeZendeskConfig = (config = {}) => {
+  const { remoteUri, ...rest } = config
+  const endpointUri = config.endpointUri || remoteUri
+
+  return {
+    ...rest,
+    ...(endpointUri ? { endpointUri } : {}),
+  }
+}
+
+const createZendeskClient = (config) =>
+  zendesk.createClient(normalizeZendeskConfig(config))
+
+/**
+ * Upload valid attachment files and return Zendesk upload tokens in order.
+ * Any failed upload fails the whole request instead of leaving the HTTP route
+ * hanging indefinitely.
+ *
+ * @param {object} zendeskClient - node-zendesk client
+ * @param {object[]} attachments - multer attachment descriptors
+ * @returns {Promise<string[]>} uploaded Zendesk tokens
+ */
+const uploadAttachments = async (zendeskClient, attachments = []) => {
+  if (!Array.isArray(attachments) || attachments.length === 0) return []
+  if (typeof zendeskClient?.attachments?.upload !== 'function') return []
+
+  const validAttachments = attachments.filter(
+    (att) => att && att.originalname && att.path
+  )
+  const tokens = []
+
+  for (const attachment of validAttachments) {
+    const result = await zendeskClient.attachments.upload(attachment.path, {
+      filename: attachment.originalname,
+    })
+    const payload = unwrapZendeskResult(result)
+    const token = payload?.upload?.token
+
+    if (!token) throw new Error('Zendesk attachment upload returned no token')
+    tokens.push(token)
+  }
+
+  return tokens
+}
+
+const getZendeskSession = (user, password) => {
+  const session = getSession(user, password)
+
+  return session && typeof session === 'object' ? session : undefined
+}
+
+const setResponse = (response, method, data = '') => {
+  response.locals.httpCode = httpResponse(method, data)
 }
 
 /**
  * Login on Zendesk.
  *
+ * node-zendesk v4 removed callbacks; this route intentionally uses the
+ * promise API and stores only the configuration required to recreate a client.
+ *
  * @param {object} response - http response
  * @param {Function} next - express stepper
  * @param {object} params - params of http request
  * @param {string} params.user - zendesk user
- * @param {string} params.pass - zendesk.pass
+ * @param {string} params.pass - zendesk pass
  * @param {object} userData - user of http request
  * @param {string} userData.user - username
  * @param {string} userData.password - user password
  */
-const login = (
+const login = async (
   response = {},
   next = defaultEmptyFunction,
   params = {},
   userData = {}
 ) => {
   const sunstoneConfig = getSunstoneConfig()
-  const remoteUri = sunstoneConfig.support_url || ''
+  const endpointUri = sunstoneConfig.support_url || ''
   const { user, password } = userData
   const { user: zendeskUser, pass } = params
 
-  if (!(remoteUri && zendeskUser && pass && user && password)) {
+  if (!(endpointUri && zendeskUser && pass && user && password)) {
     response.locals.httpCode = httpBadRequest
     next()
+
+    return
+  }
+
+  const session = getZendeskSession(user, password)
+  if (!session) {
+    setResponse(response, unauthorized)
+    next()
+
+    return
   }
 
   const zendeskData = {
     username: zendeskUser,
     password: pass,
-    remoteUri,
+    endpointUri,
     debug: env.NODE_ENV === defaultWebpackMode,
   }
-  const session = getSession(user, password)
-  /** ZENDESK AUTH */
-  const zendeskClient = zendesk.createClient(zendeskData)
-  /**
-   * TODO:
-   *
-   * Analyze if it is possible to have error and result at the same time
-   *
-   * This can be changed in order to perform a return with HTTP 500
-   * instead returning a HTTP 500 with response data.
-   */
-  zendeskClient.users.auth((err, _, result) => {
-    let method = ok
-    let data = result
-    if (err) {
-      if (session.zendesk) {
-        delete session.zendesk
-      }
-      method = internalServerError
-      data = parseBufferError(err)
-    }
-    if (result && result.authenticity_token) {
-      const zendeskUserData = {
-        ...zendeskData,
-        id: result.id,
-      }
-      session.zendesk = zendeskUserData
+
+  try {
+    const zendeskClient = createZendeskClient(zendeskData)
+    const result = unwrapZendeskResult(await zendeskClient.users.auth())
+
+    if (!result?.id) {
+      throw new Error('Zendesk authentication returned no user id')
     }
 
-    response.locals.httpCode = httpResponse(method, data)
-    next()
-  })
+    session.zendesk = {
+      ...zendeskData,
+      id: result.id,
+    }
+    setResponse(response, ok, result)
+  } catch (error) {
+    if (session.zendesk) delete session.zendesk
+    setResponse(response, internalServerError, parseZendeskError(error))
+  }
+
+  next()
 }
 
 /**
- * List on Zendesk.
+ * List Zendesk requests visible to the authenticated end user.
  *
  * @param {object} response - http response
  * @param {Function} next - express stepper
@@ -198,58 +293,61 @@ const login = (
  * @param {string} userData.user - username
  * @param {string} userData.password - user password
  */
-const list = (
+const list = async (
   response = {},
   next = defaultEmptyFunction,
   params = {},
   userData = {}
 ) => {
   const { user, password } = userData
-  if (user && password) {
-    const session = getSession(user, password)
-    if (session.zendesk && session.zendesk.id) {
-      /** LIST ZENDESK */
-      const zendeskClient = zendesk.createClient(session.zendesk)
-      zendeskClient.requests.getRequest(
-        { sort_by: 'id', sort_order: 'desc' },
-        (err, _, result) => {
-          let method = ok
-          let data = ''
-
-          if (err) {
-            method = internalServerError
-            data = parseBufferError(err)
-          } else if (result) {
-            const ticketCount = {
-              new: 0,
-              open: 0,
-              pending: 0,
-              hold: 0,
-              solved: 0,
-              closed: 0,
-            }
-            const tickets = Array.isArray(result) ? result : result
-            tickets.forEach((ticket) => {
-              ticket?.status && (ticketCount[ticket.status] += 1)
-            })
-            data = {
-              tickets: result,
-              ...ticketCount,
-            }
-          }
-
-          response.locals.httpCode = httpResponse(method, data)
-          next()
-        }
-      )
-    } else {
-      response.locals.httpCode = httpResponse(unauthorized)
-      next()
-    }
-  } else {
+  if (!(user && password)) {
     response.locals.httpCode = httpBadRequest
     next()
+
+    return
   }
+
+  const session = getZendeskSession(user, password)
+  if (!(session?.zendesk && session.zendesk.id)) {
+    setResponse(response, unauthorized)
+    next()
+
+    return
+  }
+
+  try {
+    const zendeskClient = createZendeskClient(session.zendesk)
+    const tickets = await zendeskClient.requests.list({
+      sort_by: 'id',
+      sort_order: 'desc',
+    })
+    const ticketCount = {
+      new: 0,
+      open: 0,
+      pending: 0,
+      hold: 0,
+      solved: 0,
+      closed: 0,
+    }
+
+    ;(Array.isArray(tickets) ? tickets : []).forEach((ticket) => {
+      if (
+        ticket?.status &&
+        Object.prototype.hasOwnProperty.call(ticketCount, ticket.status)
+      ) {
+        ticketCount[ticket.status] += 1
+      }
+    })
+
+    setResponse(response, ok, {
+      tickets: Array.isArray(tickets) ? tickets : [],
+      ...ticketCount,
+    })
+  } catch (error) {
+    setResponse(response, internalServerError, parseZendeskError(error))
+  }
+
+  next()
 }
 
 /**
@@ -263,41 +361,39 @@ const list = (
  * @param {string} userData.user - username
  * @param {string} userData.password - user password
  */
-const comments = (
+const comments = async (
   response = {},
   next = defaultEmptyFunction,
   params = {},
   userData = {}
 ) => {
-  const { id } = params
+  const ticketId = Number(params.id)
   const { user, password } = userData
-  if (Number.isInteger(parseInt(id, 10)) && user && password) {
-    const session = getSession(user, password)
-    if (session.zendesk) {
-      /** GET COMMENTS ON TICKET ZENDESK */
-      const zendeskClient = zendesk.createClient(session.zendesk)
-      zendeskClient.requests.listComments(id, (err, _, result) => {
-        let method = ok
-        let data = ''
 
-        if (err) {
-          method = internalServerError
-          data = parseBufferError(err)
-        } else if (result) {
-          data = result
-        }
-
-        response.locals.httpCode = httpResponse(method, data)
-        next()
-      })
-    } else {
-      response.locals.httpCode = httpResponse(unauthorized)
-      next()
-    }
-  } else {
+  if (!(Number.isInteger(ticketId) && ticketId > 0 && user && password)) {
     response.locals.httpCode = httpBadRequest
     next()
+
+    return
   }
+
+  const session = getZendeskSession(user, password)
+  if (!session?.zendesk) {
+    setResponse(response, unauthorized)
+    next()
+
+    return
+  }
+
+  try {
+    const zendeskClient = createZendeskClient(session.zendesk)
+    const result = await zendeskClient.requests.listComments(ticketId)
+    setResponse(response, ok, result)
+  } catch (error) {
+    setResponse(response, internalServerError, parseZendeskError(error))
+  }
+
+  next()
 }
 
 /**
@@ -310,11 +406,12 @@ const comments = (
  * @param {string} params.body - body
  * @param {string} params.version - version
  * @param {string} params.severity - severity
+ * @param {object[]} params.attachments - uploaded files
  * @param {object} userData - user of http request
  * @param {string} userData.user - username
  * @param {string} userData.password - user password
  */
-const create = (
+const create = async (
   response = {},
   next = defaultEmptyFunction,
   params = {},
@@ -323,79 +420,49 @@ const create = (
   const { subject, body, version, severity, attachments } = params
   const { user, password } = userData
   if (
-    subject &&
-    body &&
-    version &&
-    severity &&
-    defaultSeverities.includes(severity) &&
-    user &&
-    password
+    !(
+      subject &&
+      body &&
+      version &&
+      severity &&
+      defaultSeverities.includes(severity) &&
+      user &&
+      password
+    )
   ) {
-    const session = getSession(user, password)
-    if (session.zendesk && session.zendesk.id) {
-      const zendeskClient = zendesk.createClient(session.zendesk)
-
-      const sendRequest = (requestParams = {}) => {
-        /** CREATE TICKET ZENDESK */
-        const ticket = formatCreate(requestParams)
-        zendeskClient.requests.create(ticket, (err, _, result) => {
-          let method = ok
-          let data = ''
-
-          if (err) {
-            method = internalServerError
-            data = parseBufferError(err)
-          } else if (result) {
-            data = result
-          }
-          response.locals.httpCode = httpResponse(method, data)
-          next()
-        })
-      }
-
-      /** UPLOAD FILES */
-      let uploadedAttachments
-      if (
-        attachments &&
-        typeof zendeskClient?.attachments?.upload === 'function'
-      ) {
-        attachments.forEach((att = {}) => {
-          if (att && att.originalname && att.path) {
-            zendeskClient.attachments.upload(
-              att.path,
-              {
-                filename: att.originalname,
-              },
-              (err, _, result) => {
-                const token =
-                  (result && result.upload && result.upload.token) || ''
-                if (uploadedAttachments) {
-                  uploadedAttachments.push(token)
-                } else {
-                  uploadedAttachments = [token]
-                }
-                if (
-                  !err &&
-                  token &&
-                  uploadedAttachments.length === attachments.length
-                ) {
-                  sendRequest({ ...params, attachments: uploadedAttachments })
-                }
-              }
-            )
-          }
-        })
-      } else {
-        sendRequest({ ...params, attachments })
-      }
-    } else {
-      response.locals.httpCode = httpResponse(unauthorized)
-      next()
-    }
-  } else {
     response.locals.httpCode = httpBadRequest
     next()
+
+    return
   }
+
+  const session = getZendeskSession(user, password)
+  if (!(session?.zendesk && session.zendesk.id)) {
+    setResponse(response, unauthorized)
+    next()
+
+    return
+  }
+
+  try {
+    const zendeskClient = createZendeskClient(session.zendesk)
+    const uploadedAttachments = await uploadAttachments(
+      zendeskClient,
+      attachments
+    )
+    const ticket = formatCreate({
+      ...params,
+      attachments: uploadedAttachments,
+    })
+    const result = unwrapZendeskResult(
+      await zendeskClient.requests.create(ticket)
+    )
+    setResponse(response, ok, result)
+  } catch (error) {
+    setResponse(response, internalServerError, parseZendeskError(error))
+  }
+
+  next()
 }
 
 /**
@@ -413,81 +480,50 @@ const create = (
  * @param {string} userData.user - username
  * @param {string} userData.password - user password
  */
-const update = (
+const update = async (
   response = {},
   next = defaultEmptyFunction,
   params = {},
   userData = {}
 ) => {
-  const { id, body, attachments } = params
+  const ticketId = Number(params.id)
+  const { body, attachments } = params
   const { user, password } = userData
 
-  if (Number.isInteger(parseInt(id, 10)) && body && user && password) {
-    const session = getSession(userData.user, userData.password)
-    if (session.zendesk && session.zendesk.id) {
-      const zendeskClient = zendesk.createClient(session.zendesk)
-
-      const sendRequest = (requestParams = {}) => {
-        /** UPDATE TICKET ZENDESK */
-        const ticket = formatComment(requestParams)
-        zendeskClient.requests.update(id, ticket, (err, _, result) => {
-          let method = ok
-          let data = ''
-
-          if (err) {
-            method = internalServerError
-            data = parseBufferError(err)
-          } else if (result) {
-            data = result
-          }
-          response.locals.httpCode = httpResponse(method, data)
-          next()
-        })
-      }
-
-      /** UPLOAD FILES */
-      let uploadedAttachments
-      if (
-        attachments &&
-        typeof zendeskClient?.attachments?.upload === 'function'
-      ) {
-        attachments.forEach((att = {}) => {
-          if (att && att.originalname && att.path) {
-            zendeskClient.attachments.upload(
-              att.path,
-              {
-                filename: att.originalname,
-              },
-              (err, _, result) => {
-                const token =
-                  (result && result.upload && result.upload.token) || ''
-                if (uploadedAttachments) {
-                  uploadedAttachments.push(token)
-                } else {
-                  uploadedAttachments = [token]
-                }
-                if (
-                  !err &&
-                  token &&
-                  uploadedAttachments.length === attachments.length
-                ) {
-                  sendRequest({ ...params, attachments: uploadedAttachments })
-                }
-              }
-            )
-          }
-        })
-      } else {
-        sendRequest({ ...params, attachments })
-      }
-    } else {
-      response.locals.httpCode = httpResponse(unauthorized)
-      next()
-    }
-  } else {
+  if (!(Number.isInteger(ticketId) && ticketId > 0 && body && user && password)) {
     response.locals.httpCode = httpBadRequest
     next()
+
+    return
   }
+
+  const session = getZendeskSession(user, password)
+  if (!(session?.zendesk && session.zendesk.id)) {
+    setResponse(response, unauthorized)
+    next()
+
+    return
+  }
+
+  try {
+    const zendeskClient = createZendeskClient(session.zendesk)
+    const uploadedAttachments = await uploadAttachments(
+      zendeskClient,
+      attachments
+    )
+    const ticket = formatComment({
+      ...params,
+      attachments: uploadedAttachments,
+    })
+    const result = unwrapZendeskResult(
+      await zendeskClient.requests.update(ticketId, ticket)
+    )
+    setResponse(response, ok, result)
+  } catch (error) {
+    setResponse(response, internalServerError, parseZendeskError(error))
+  }
+
+  next()
 }
 
 const functionRoutes = {
