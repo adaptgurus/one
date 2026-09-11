@@ -17,7 +17,11 @@ jobs:
         with:
           ruby-version: 3.4
       - name: Install rubocop
-        run: gem install rubocop
+        # Keep the smoke gate reproducible. OpenNebula's 2026-08-17 green
+        # upstream smoke baseline used 1.89.0; an unpinned install began
+        # resolving to 1.91.0 and changed the lint contract underneath 7.4.1.
+        # Adopting later cops should be an explicit, reviewed policy change.
+        run: gem install rubocop -v 1.89.0
       - name: Update apt packages
         run: sudo apt update
       - name: Install CppCheck
