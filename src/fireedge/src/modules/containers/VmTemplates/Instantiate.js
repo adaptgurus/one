@@ -34,12 +34,14 @@ import {
   jsonToXml,
   filterTemplateData,
   normalizeProtectionRequest,
+  resolvePublishedGpuRequest,
   transformActionsInstantiate,
 } from '@UtilsModule'
 
 import { RESOURCE_NAMES, T, TAB_FORM_MAP, PATH } from '@ConstantsModule'
 
 const _ = require('lodash')
+const GPU_REQUEST_ERROR = 'LayerSentry published GPU request is no longer valid'
 
 /**
  * Displays the instantiation form for a VM Template.
@@ -55,7 +57,12 @@ export function InstantiateVmTemplate() {
   const store = useStore()
   const history = useHistory()
   const { state: { ID: templateId, NAME: templateName } = {} } = useLocation()
-  const { enqueueInfo, resetFieldPath, resetModifiedFields } = useGeneralApi()
+  const {
+    enqueueError,
+    enqueueInfo,
+    resetFieldPath,
+    resetModifiedFields,
+  } = useGeneralApi()
   const [instantiate] = VmTemplateAPI.useInstantiateTemplateMutation()
   const { adminGroup, oneConfig } = useSystemData()
 
@@ -100,6 +107,38 @@ export function InstantiateVmTemplate() {
             }
           )
 
+          if (view === 'cloud') {
+            // Catalog metadata belongs to the source VM template, not the
+            // resulting VM instance. Never carry physical-address-like data
+            // from a browser request into PCI constraints.
+            delete filteredTemplate.LAYERSENTRY_GPU_PROFILES
+            delete filteredTemplate.LAYERSENTRY_GPU_REQUEST
+
+            if (modifiedFields?.extra?.LayerSentryGpu) {
+              const gpuRequest = resolvePublishedGpuRequest(
+                rawTemplate?.extra?.LAYERSENTRY_GPU_REQUEST,
+                apiTemplateData?.TEMPLATE
+              )
+
+              if (!gpuRequest.valid) {
+                throw new Error(GPU_REQUEST_ERROR)
+              }
+
+              if (gpuRequest.requested) {
+                const existingPci = filteredTemplate.PCI
+                  ? [].concat(filteredTemplate.PCI)
+                  : []
+
+                filteredTemplate.PCI = [...existingPci, ...gpuRequest.pci]
+                filteredTemplate.LAYERSENTRY_GPU_REQUEST = {
+                  PROFILE_ID: gpuRequest.profileId,
+                  COUNT: String(gpuRequest.count),
+                  SOURCE: 'PUBLISHED_TEMPLATE_PROFILE',
+                }
+              }
+            }
+          }
+
           if (
             view === 'cloud' &&
             modifiedFields?.extra?.LayerSentryProtection
@@ -133,7 +172,13 @@ export function InstantiateVmTemplate() {
       const total = templates.length
       const templateInfo = `#${templateId} ${templateName}`
       enqueueInfo(T.InfoVMTemplateInstantiated, [total, templateInfo])
-    } catch {}
+    } catch (error) {
+      if (error?.message === GPU_REQUEST_ERROR) {
+        enqueueError(
+          'The selected GPU profile is no longer available or the requested count exceeds its published limit.'
+        )
+      }
+    }
   }
 
   if (!templateId || isError) {

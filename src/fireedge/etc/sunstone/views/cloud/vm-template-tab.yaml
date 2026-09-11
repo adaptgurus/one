@@ -55,6 +55,7 @@ dialogs:
     vm_group: true
     network: true
     storage: true
+    gpu: true
     protection: true
     placement: true
     sched_action: true

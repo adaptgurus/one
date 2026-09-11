@@ -22,22 +22,28 @@ import {
   PLACEMENT_FIELDS,
   BOOT_ORDER_FIELD,
 } from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration/schema'
+import { SCHEMA as GPU_SCHEMA } from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/gpu/schema'
 import { SCHEMA as PROTECTION_SCHEMA } from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/protection/schema'
-import { getObjectSchemaFromFields } from '@UtilsModule'
+import {
+  getObjectSchemaFromFields,
+  getPublishedGpuProfiles,
+} from '@UtilsModule'
 import { UserInputObject } from '@ConstantsModule'
 
 /**
- * @param {UserInputObject[]} userInputs - User inputs
+ * @param {object} vmTemplate - VM template being instantiated
  * @returns {ObjectSchema} Extra configuration schema
  */
-export const SCHEMA = object()
-  .concat(SCHED_ACTION_SCHEMA)
-  .concat(NETWORK_SCHEMA)
-  .concat(STORAGE_SCHEMA)
-  .concat(PROTECTION_SCHEMA)
-  .concat(
-    getObjectSchemaFromFields([
-      ...PLACEMENT_FIELDS({ instantiate: true }),
-      BOOT_ORDER_FIELD,
-    ])
-  )
+export const SCHEMA = (vmTemplate = {}) =>
+  object()
+    .concat(SCHED_ACTION_SCHEMA)
+    .concat(NETWORK_SCHEMA)
+    .concat(STORAGE_SCHEMA)
+    .concat(GPU_SCHEMA(getPublishedGpuProfiles(vmTemplate?.TEMPLATE)))
+    .concat(PROTECTION_SCHEMA)
+    .concat(
+      getObjectSchemaFromFields([
+        ...PLACEMENT_FIELDS({ instantiate: true }),
+        BOOT_ORDER_FIELD,
+      ])
+    )
