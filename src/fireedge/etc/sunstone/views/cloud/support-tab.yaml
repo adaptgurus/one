@@ -1,0 +1,17 @@
+---
+resource_name: "SUPPORT"
+actions:
+  create_dialog: true
+  logout: true
+  edit_labels: true
+filters:
+  state: true
+info-tabs:
+  info:
+    enabled: true
+    information_panel:
+      enabled: true
+  comments:
+    enabled: true
+    actions:
+      comment: true

@@ -22,9 +22,19 @@ const LABELS = Object.freeze({
   '/backupjobs': 'Backup jobs and schedules',
   '/vm-group': 'VM placement groups',
   '/marketplace-app': 'Application catalog',
-  '/oneks': 'Kubernetes clusters',
+  '/kubernetes': 'Kubernetes clusters',
+  '/user': 'My account and usage',
   '/settings': 'My preferences',
   '/support': 'Help and support',
+})
+
+const SECTION_LABELS = Object.freeze({
+  Instances: 'Compute',
+  Templates: 'Catalog and templates',
+  Storage: 'Storage and protection',
+  Networks: 'Network and security',
+  System: 'Account',
+  Support: 'Help and support',
 })
 
 /** Pure, fail-closed view boundary. Never broaden this to role-name matching. */
@@ -38,7 +48,7 @@ export const presentEndpoints = (endpoints, enabled) => {
 
   return endpoints.map((endpoint) => {
     if (!endpoint || typeof endpoint !== 'object') return endpoint
-    const label = LABELS[endpoint.path]
+    const label = LABELS[endpoint.path] ?? SECTION_LABELS[endpoint.title]
 
     return {
       ...endpoint,

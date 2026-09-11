@@ -1,29 +1,18 @@
 ---
-# This file describes the information and actions available in the USER tab
-
-# Resource
-
+# Self account, quota, accounting and showback. Cloud users can update their
+# own password/public SSH key through the existing authenticated user flow;
+# private key material and authentication-driver changes stay disabled.
 resource_name: "USER"
-
-# Actions - Which buttons are visible to operate over the resources
-
 actions:
   create_dialog: false
   chgrp: false
   delete: false
   enable: false
   disable: false
-
-# Filters - List of criteria to filter the resources
-
 filters:
   label: false
   state: false
-
-# Info Tabs - Which info tabs are used to show extended information
-
 info-tabs:
-
   info:
     enabled: true
     information_panel:
@@ -37,34 +26,29 @@ info-tabs:
         add: false
         edit: false
         delete: false
-
   group:
     enabled: false
     actions:
       chgrp: false
-
   quota:
     enabled: true
     actions:
       quotas_dialog: true
-
   accounting:
     enabled: true
     actions:
       get_accounting: true
-
   showback:
     enabled: true
     actions:
       get_showback: true
-
   authentication:
-    enabled: false
+    enabled: true
     actions:
       change_authentication: false
-      update_password: false
+      update_password: true
       login_token: false
       two_factor_auth: false
-      public_ssh_key: false
+      public_ssh_key: true
       private_ssh_key: false
       private_ssh_key_passphrase: false
