@@ -31,9 +31,12 @@ test('customer cannot type arbitrary qualified version or storage class', () => 
   assert.match(ui, /Persistent storage class/)
 })
 
-test('credentials are memory-only and automatically cleared', () => {
+test('credentials are memory-only, masked by default and automatically cleared', () => {
   assert.match(ui, /setTimeout\(\(\) => \{[\s\S]*setCredentials\(null\)/)
   assert.match(ui, /60000/)
+  assert.match(ui, /type=\{showPassword \? 'text' : 'password'\}/)
+  assert.match(ui, /Reveal password/)
+  assert.match(ui, /Copy password/)
   assert.doesNotMatch(ui, /localStorage|sessionStorage|indexedDB/i)
 })
 
@@ -46,7 +49,22 @@ test('server routes require authenticated FireEdge session', () => {
 test('proxy reauthorizes selected OneKS cluster before DBaaS access', () => {
   assert.match(proxy, /oneKsConnection/)
   assert.match(proxy, /OneKsActions\.SHOW/)
+  assert.match(proxy, /request:\s*clusterId/)
+  assert.match(proxy, /loadConfig\(params\.clusterId\)/)
   assert.match(proxy, /cluster access denied/)
+})
+
+test('proxy permits only the public DBaaS action contract', () => {
+  assert.match(
+    proxy,
+    /new Set\(\['backup', 'restore', 'pitr', 'credentials'\]\)/
+  )
+  assert.match(proxy, /unsupported database action/)
+})
+
+test('invalid server-side DBaaS configuration fails closed without path leakage', () => {
+  assert.match(proxy, /LayerSentry DBaaS is unavailable for this Kubernetes cluster/)
+  assert.doesNotMatch(proxy, /fail\(res, next, serviceUnavailable, error\.message\)/)
 })
 
 test('provider API token and trust material remain server-side files', () => {
@@ -67,7 +85,25 @@ test('asynchronous and unknown provider state is presented truthfully', () => {
   assert.match(ui, /TRANSITIONAL_PHASES/)
   assert.match(ui, /'Unknown'/)
   assert.match(ui, /activeOperation/)
+  assert.match(ui, /active\?\.message/)
   assert.match(ui, /authoritative provider state/)
+})
+
+test('customer status shows topology, monitoring and recovery evidence', () => {
+  assert.match(ui, /Topology \/ replicas/)
+  assert.match(ui, /status\.monitoring/)
+  assert.match(ui, /monitoring\.healthy/)
+  assert.match(ui, /lastBackupRef/)
+  assert.match(ui, /lastRecoveryRef/)
+})
+
+test('qualified update supports scale, grow, upgrade and protection configuration', () => {
+  assert.match(ui, /minimumReplicas/)
+  assert.match(ui, /Number\(storage\) < database\.spec\.storageGiB/)
+  assert.match(ui, /versions\.includes\(version\)/)
+  assert.match(ui, /setProtectionGroupRef/)
+  assert.match(ui, /protectionGroupRef:\s*protectionGroupRef\.trim\(\)/)
+  assert.match(ui, /deletionProtection/)
 })
 
 test('database recovery uses native backup reference and PITR workflows', () => {
