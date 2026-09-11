@@ -64,7 +64,10 @@ jobs:
             socket.io-client@4.8.3 \
             webpack@5.110.3
           npm pkg set 'engines.node=>=18'
-          npm pkg set 'overrides.opennebula-guacamole.luxon=1.28.1' 'overrides.opennebula-guacamole.ws=5.2.5'
+          npm pkg set \
+            'overrides.d3-color=3.1.0' \
+            'overrides.opennebula-guacamole.luxon=1.28.1' \
+            'overrides.opennebula-guacamole.ws=5.2.5'
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
           npm audit fix --omit=dev --package-lock-only --ignore-scripts --no-fund || true
       - name: Install candidate lock on Node 22
@@ -101,11 +104,13 @@ jobs:
             console.log(`LOCKED_${name}=${actual}`)
             if (actual !== wanted) process.exitCode=2
           }
+          const d3Color=p.packages['node_modules/d3-color']?.version
           const nestedLuxon=p.packages['node_modules/opennebula-guacamole/node_modules/luxon']?.version
           const nestedWs=p.packages['node_modules/opennebula-guacamole/node_modules/ws']?.version
+          console.log(`LOCKED_D3_COLOR=${d3Color}`)
           console.log(`LOCKED_OPENNEBULA_GUACAMOLE_LUXON=${nestedLuxon}`)
           console.log(`LOCKED_OPENNEBULA_GUACAMOLE_WS=${nestedWs}`)
-          if (nestedLuxon !== '1.28.1' || nestedWs !== '5.2.5') process.exitCode=2
+          if (d3Color !== '3.1.0' || nestedLuxon !== '1.28.1' || nestedWs !== '5.2.5') process.exitCode=2
           NODE
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
