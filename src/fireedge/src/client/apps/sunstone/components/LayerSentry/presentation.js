@@ -7,6 +7,7 @@ export const ENABLE_SELF_SERVICE_APPEARANCE = true
 
 const LABELS = Object.freeze({
   '/dashboard': 'Overview',
+  '/attention': 'Alerts & attention',
   '/vm': 'Virtual machines',
   '/vm-template': 'VM templates',
   '/image': 'Disk images',
@@ -49,9 +50,12 @@ export const presentEndpoints = (endpoints, enabled) => {
   return endpoints.map((endpoint) => {
     if (!endpoint || typeof endpoint !== 'object') return endpoint
     const label = LABELS[endpoint.path] ?? SECTION_LABELS[endpoint.title]
+    const cloudOnlyPresentation =
+      endpoint.path === '/attention' ? { sidebar: true } : {}
 
     return {
       ...endpoint,
+      ...cloudOnlyPresentation,
       ...(label ? { displayTitle: label } : {}),
       ...(Array.isArray(endpoint.routes)
         ? { routes: presentEndpoints(endpoint.routes, true) }
