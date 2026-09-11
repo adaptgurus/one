@@ -29,6 +29,7 @@ import Placement from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/Extr
 import Scheduling from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration/scheduleAction'
 import Storage from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration/storage'
 import Pci from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration/pci'
+import Protection from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/protection'
 import { Box } from '@mui/material'
 import { Tabs } from '@ComponentsModule'
 
@@ -41,6 +42,7 @@ export const STEP_ID = 'extra'
 /** @type {TabType[]} */
 export const TABS = [
   Storage,
+  Protection,
   Networking,
   Pci,
   Placement,

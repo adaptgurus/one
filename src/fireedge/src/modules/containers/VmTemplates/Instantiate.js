@@ -37,6 +37,7 @@ import {
 } from '@UtilsModule'
 
 import { RESOURCE_NAMES, T, TAB_FORM_MAP, PATH } from '@ConstantsModule'
+import { normalizeProtectionRequest } from '@modules/resources/VmTemplate/Forms/InstantiateForm/protection'
 
 const _ = require('lodash')
 
@@ -46,23 +47,16 @@ const _ = require('lodash')
  * @returns {ReactElement} Instantiation form
  */
 export function InstantiateVmTemplate() {
-  // Reset modified fields + path on mount
   useEffect(() => {
     resetFieldPath()
     resetModifiedFields()
   }, [])
 
-  // Get store
   const store = useStore()
-
-  // Get history
   const history = useHistory()
   const { state: { ID: templateId, NAME: templateName } = {} } = useLocation()
-
-  // Hooks
   const { enqueueInfo, resetFieldPath, resetModifiedFields } = useGeneralApi()
   const [instantiate] = VmTemplateAPI.useInstantiateTemplateMutation()
-
   const { adminGroup, oneConfig } = useSystemData()
 
   const { data: apiTemplateDataExtended, isError } =
@@ -76,33 +70,26 @@ export function InstantiateVmTemplate() {
     { skip: templateId === undefined }
   )
 
-  // Clone template to be able to modify it
   const dataTemplateExtended = _.cloneDeep(apiTemplateDataExtended)
 
-  // Get users and groups
   UserAPI.useGetUsersQuery(undefined, { refetchOnMountOrArgChange: false })
   GroupAPI.useGetGroupsQuery(undefined, { refetchOnMountOrArgChange: false })
 
-  // Features of the view
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
   const resource = RESOURCE_NAMES.VM_TEMPLATE
   const { features } = getResourceView(resource)
 
   const onSubmit = async (templates) => {
     try {
-      // Get current state and modified fields
       const currentState = store.getState()
       const modifiedFields = currentState.general?.modifiedFields
 
-      // Iterate over all the templates
       await Promise.all(
         templates.map((rawTemplate) => {
-          // Get the original template
           const existingTemplate = {
             ...apiTemplateData?.TEMPLATE,
           }
 
-          // Filter template to delete attributes that the user has not interact with them
           const filteredTemplate = filterTemplateData(
             rawTemplate,
             modifiedFields,
@@ -113,20 +100,30 @@ export function InstantiateVmTemplate() {
             }
           )
 
-          // Every action that is not an human action
+          // Cloud-only LayerSentry protection intent. This is deliberately
+          // persisted as REQUESTED_NOT_ACTIVE metadata; it cannot activate
+          // replication, retention, network mapping or failover by itself.
+          if (
+            view === 'cloud' &&
+            modifiedFields?.extra?.LayerSentryProtection
+          ) {
+            const protection = normalizeProtectionRequest(
+              rawTemplate?.extra?.LAYERSENTRY_PROTECTION
+            )
+            if (protection) {
+              filteredTemplate.LAYERSENTRY_PROTECTION = protection
+            }
+          }
+
           transformActionsInstantiate(
             filteredTemplate,
             apiTemplateData,
             features
           )
 
-          // Convert template to xml
           const xmlFinal = jsonToXml(filteredTemplate)
-
-          // Modify template
           rawTemplate.template = xmlFinal
 
-          // Instantiate virtual machine
           return instantiate(rawTemplate).unwrap()
         })
       )
