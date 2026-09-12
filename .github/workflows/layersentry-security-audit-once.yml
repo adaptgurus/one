@@ -43,6 +43,7 @@ jobs:
             'morgan': '1.12.1',
             'terser-webpack-plugin': '5.6.1',
             'uuid': '11.1.1',
+            'webpack-cli': '5.1.4',
             'yaml': '1.10.3'
           }
           for (const [name, version] of Object.entries(updates)) {
@@ -70,7 +71,7 @@ jobs:
           const expected={
             '@babel/core':'7.29.7','babel-loader':'9.2.1',compression:'1.8.2','copy-webpack-plugin':'14.0.0',
             'fast-xml-parser':'5.11.1',jimp:'1.6.1',morgan:'1.12.1','terser-webpack-plugin':'5.6.1',
-            uuid:'11.1.1',yaml:'1.10.3',qs:'6.16.0'
+            uuid:'11.1.1','webpack-cli':'5.1.4',yaml:'1.10.3',qs:'6.16.0'
           }
           for (const [name,wanted] of Object.entries(expected)) {
             const actual=lock.packages[`node_modules/${name}`]?.version
@@ -121,4 +122,4 @@ jobs:
       - name: Full FireEdge production build
         run: npm run build
       - name: Show candidate diff summary
-        run: git diff --stat && git diff -- package.json src/server/utils/logo.js | head -n 260
+        run: git diff --stat && git diff -- package.json src/server/utils/logo.js | head -n 280
