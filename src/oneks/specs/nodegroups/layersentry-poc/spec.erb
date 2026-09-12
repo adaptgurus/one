@@ -1,0 +1,94 @@
+apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+kind: RKE2ConfigTemplate
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: <%= cluster[:uuid] %>
+  name: <%= group[:uuid] %>
+spec:
+  template:
+    spec:
+      preRKE2Commands:
+      - install -d /var/lib/rancher/rke2/agent/images && touch /var/lib/rancher/rke2/agent/images/.cache.json
+      - >-
+        install -d /var/lib/rancher/rke2/agent/etc/kubelet.conf.d &&
+        printf 'apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nruntimeRequestTimeout: 30m\n' > /var/lib/rancher/rke2/agent/etc/kubelet.conf.d/90-layersentry-poc.conf
+      - >-
+        install -d /var/lib/rancher/rke2/agent/images &&
+        curl -fsSL --retry 2 --max-time 600 https://github.com/rancher/rke2/releases/download/v1.36.4%2Brke2r1/rke2-images-core.linux-amd64.tar.zst -o /var/tmp/rke2-images-core.linux-amd64.tar.zst.part &&
+        printf '%s  %s\n' '8988a2eff587dd88b8eab86fe719703e9541a1f08d22771a94cbec446a13db86' '/var/tmp/rke2-images-core.linux-amd64.tar.zst.part' | sha256sum -c - &&
+        mv /var/tmp/rke2-images-core.linux-amd64.tar.zst.part /var/lib/rancher/rke2/agent/images/00-rke2-images-core.linux-amd64.tar.zst
+      - >-
+        install -d /var/lib/rancher/rke2/agent/images &&
+        curl -fsSL --retry 2 --max-time 600 https://github.com/rancher/rke2/releases/download/v1.36.4%2Brke2r1/rke2-images-canal.linux-amd64.tar.zst -o /var/tmp/rke2-images-canal.linux-amd64.tar.zst.part &&
+        printf '%s  %s\n' '4359b651bfdec8f3bcc01b351b33a55ff21f06b18a767366db6f3800d5750871' '/var/tmp/rke2-images-canal.linux-amd64.tar.zst.part' | sha256sum -c - &&
+        mv /var/tmp/rke2-images-canal.linux-amd64.tar.zst.part /var/lib/rancher/rke2/agent/images/rke2-images-canal.linux-amd64.tar.zst
+      - >-
+        for archive in /var/lib/rancher/rke2/agent/images/*.tar.zst; do
+        touch -m -d "@$(stat -c %Y "$archive")" "$archive"; done
+      - >-
+        if test -f /etc/sysconfig/qemu-ga; then
+        sed -i '/^FILTER_RPC_ARGS="--allow-rpcs=/ { /guest-exec/! s/"$/,guest-exec,guest-exec-status"/; }' /etc/sysconfig/qemu-ga;
+        systemctl restart qemu-guest-agent; fi
+      - >-
+        vmid=$(sed -n 's/^export VMID="\([0-9][0-9]*\)"$/\1/p' /var/run/one-context/one_env | sort -u);
+        case "$vmid" in ''|*[!0-9]*) exit 1;; esac;
+        test -n "$vmid" &&
+        install -d -m 0700 /etc/rancher/rke2/config.yaml.d &&
+        printf 'kubelet-arg:\n  - provider-id=one://%s\n' "$vmid" > /etc/rancher/rke2/config.yaml.d/90-opennebula-identity.yaml
+      - (RETRY=60; while ! nslookup get.rke2.io; do ((--RETRY)) || break; sleep 5;
+        done)
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineDeployment
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: <%= cluster[:uuid] %>
+  name: <%= group[:uuid] %>
+spec:
+  clusterName: <%= cluster[:uuid] %>
+  replicas: <%= group[:user_inputs_values][:count] %>
+  selector:
+    matchLabels: {}
+  template:
+    spec:
+      bootstrap:
+        configRef:
+          apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
+          kind: RKE2ConfigTemplate
+          name: <%= group[:uuid] %>
+      clusterName: <%= cluster[:uuid] %>
+      infrastructureRef:
+        apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+        kind: ONEMachineTemplate
+        name: <%= group[:uuid] %>
+      version: <%= cluster[:kubernetes_version] %>+rke2r1
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: ONEMachineTemplate
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: <%= cluster[:uuid] %>
+  name: <%= group[:uuid] %>
+spec:
+  template:
+    spec:
+      templateName: <%= group[:group_template_name] %>
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineHealthCheck
+metadata:
+  name: "<%= group[:uuid] %>"
+spec:
+  clusterName: <%= cluster[:uuid] %>
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/deployment-name: "<%= group[:uuid] %>"
+  nodeStartupTimeout: 60m
+  maxUnhealthy: 100%
+  unhealthyConditions:
+  - type: Ready
+    status: "False"
+    timeout: 15m
+  - type: Ready
+    status: "Unknown"
+    timeout: 15m

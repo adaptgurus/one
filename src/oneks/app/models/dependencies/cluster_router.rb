@@ -90,6 +90,9 @@ module OneKS
         #   - returns the VR ID if detected
         #   - OpenNebula::Error on timeout or error
         def wait_for_vrouter(group, stop_flag)
+            existing = existing_vrouter(group)
+            return existing if OpenNebula.is_error?(existing) || existing
+
             Log.info(
                 COMP,
                 'Waiting for Cluster Router creation by the Seed VM',
@@ -118,6 +121,36 @@ module OneKS
                 "Error waiting for vrouter for cluster #{group.cluster_id}: #{e.message}",
                 OpenNebula::Error::EACTION
             )
+        end
+
+        # Allocation may have completed after a previous observer timed out.
+        # CAPONE names its control-plane router after the exact cluster UUID.
+        def existing_vrouter(group)
+            cluster = group.parent_cluster
+            return cluster if OpenNebula.is_error?(cluster)
+
+            pool = OpenNebula::VirtualRouterPool.new(group.client, -1)
+            rc = pool.info
+            return rc if OpenNebula.is_error?(rc)
+
+            matches = pool.select {|router| router.name == "#{cluster.uuid}-cp" }
+            if matches.size > 1 || matches.any? {|router| router.owner_id != group.owner_id }
+                return OpenNebula::Error.new(
+                    'Ambiguous or foreign cluster router; recovery requires reconciliation',
+                    OpenNebula::Error::EACTION
+                )
+            end
+            return if matches.empty?
+
+            router = matches.first
+            if @id && @id != router.id
+                return OpenNebula::Error.new(
+                    'Cluster router ID changed; recovery requires reconciliation',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
+            @id = router.id
         end
 
         class << self

@@ -1,0 +1,199 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    cluster.x-k8s.io/cluster-name: <%= cluster[:uuid] %>
+  name: <%= cluster[:uuid] %>
+stringData:
+  ONE_AUTH: <%= one_auth %>
+  ONE_XMLRPC: <%= one_xmlrpc %>
+type: Opaque
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: Cluster
+metadata:
+  labels:
+    cluster.x-k8s.io/cluster-name: <%= cluster[:uuid] %>
+  name: <%= cluster[:uuid] %>
+spec:
+  controlPlaneEndpoint:
+    host:
+    port: 6443
+  controlPlaneRef:
+    apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+    kind: RKE2ControlPlane
+    name: <%= cluster[:uuid] %>
+  infrastructureRef:
+    apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+    kind: ONECluster
+    name: <%= cluster[:uuid] %>
+---
+apiVersion: controlplane.cluster.x-k8s.io/v1beta1
+kind: RKE2ControlPlane
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    cluster.x-k8s.io/cluster-name: <%= cluster[:uuid] %>
+  name: <%= cluster[:uuid] %>
+spec:
+  machineTemplate:
+    infrastructureRef:
+      apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+      kind: ONEMachineTemplate
+      name: <%= cluster[:uuid] %>-cp
+  preRKE2Commands:
+  - |-
+    set -eu
+    install -d -m 0755 /usr/local/libexec/oneks
+    printf '#!/bin/sh\nexec /var/lib/rancher/rke2/bin/kubectl "$@"\n' > /usr/local/libexec/oneks/kubectl
+    chmod 0700 /usr/local/libexec/oneks/kubectl
+    if selinuxenabled; then
+      semanage fcontext -a -t virt_qemu_ga_unconfined_exec_t /usr/local/libexec/oneks/kubectl ||
+        semanage fcontext -m -t virt_qemu_ga_unconfined_exec_t /usr/local/libexec/oneks/kubectl
+      restorecon /usr/local/libexec/oneks/kubectl
+      setsebool -P virt_qemu_ga_run_unconfined on
+    fi
+  - |-
+    install -d -m 0700 /etc/rancher/rke2/config.yaml.d
+    cat > /etc/rancher/rke2/config.yaml.d/95-poc-leader-grace.yaml <<'LEADER'
+    kube-scheduler-arg:
+      - leader-elect-lease-duration=60s
+      - leader-elect-renew-deadline=40s
+      - leader-elect-retry-period=10s
+    kube-controller-manager-arg:
+      - leader-elect-lease-duration=60s
+      - leader-elect-renew-deadline=40s
+      - leader-elect-retry-period=10s
+    kube-cloud-controller-manager-arg:
+      - leader-elect-lease-duration=60s
+      - leader-elect-renew-deadline=40s
+      - leader-elect-retry-period=10s
+    LEADER
+  - install -d /var/lib/rancher/rke2/agent/images && touch /var/lib/rancher/rke2/agent/images/.cache.json
+  - |
+    install -d /var/lib/rancher/rke2/server/manifests
+    cat > /var/lib/rancher/rke2/server/manifests/rke2-canal-config.yaml <<'CANAL'
+    apiVersion: helm.cattle.io/v1
+    kind: HelmChartConfig
+    metadata:
+      name: rke2-canal
+      namespace: kube-system
+    spec:
+      valuesContent: |-
+        flannel:
+          healthz:
+            livenessProbe:
+              initialDelaySeconds: 120
+              timeoutSeconds: 5
+              failureThreshold: 12
+            readinessProbe:
+              timeoutSeconds: 5
+        calico:
+          livenessProbe:
+            initialDelaySeconds: 120
+            failureThreshold: 12
+    CANAL
+  - >-
+    install -d /var/lib/rancher/rke2/agent/etc/kubelet.conf.d &&
+    printf 'apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nruntimeRequestTimeout: 30m\n' > /var/lib/rancher/rke2/agent/etc/kubelet.conf.d/90-layersentry-poc.conf
+  - >-
+    install -d /var/lib/rancher/rke2/agent/images &&
+    curl -fsSL --retry 2 --max-time 600 https://github.com/rancher/rke2/releases/download/v1.36.4%2Brke2r1/rke2-images-core.linux-amd64.tar.zst -o /var/tmp/rke2-images-core.linux-amd64.tar.zst.part &&
+    printf '%s  %s\n' '8988a2eff587dd88b8eab86fe719703e9541a1f08d22771a94cbec446a13db86' '/var/tmp/rke2-images-core.linux-amd64.tar.zst.part' | sha256sum -c - &&
+    mv /var/tmp/rke2-images-core.linux-amd64.tar.zst.part /var/lib/rancher/rke2/agent/images/00-rke2-images-core.linux-amd64.tar.zst
+  - >-
+    install -d /var/lib/rancher/rke2/agent/images &&
+    curl -fsSL --retry 2 --max-time 600 https://github.com/rancher/rke2/releases/download/v1.36.4%2Brke2r1/rke2-images-canal.linux-amd64.tar.zst -o /var/tmp/rke2-images-canal.linux-amd64.tar.zst.part &&
+    printf '%s  %s\n' '4359b651bfdec8f3bcc01b351b33a55ff21f06b18a767366db6f3800d5750871' '/var/tmp/rke2-images-canal.linux-amd64.tar.zst.part' | sha256sum -c - &&
+    mv /var/tmp/rke2-images-canal.linux-amd64.tar.zst.part /var/lib/rancher/rke2/agent/images/rke2-images-canal.linux-amd64.tar.zst
+  - >-
+    for archive in /var/lib/rancher/rke2/agent/images/*.tar.zst; do
+    touch -m -d "@$(stat -c %Y "$archive")" "$archive"; done
+  - >-
+    if test -f /etc/sysconfig/qemu-ga; then
+    sed -i '/^FILTER_RPC_ARGS="--allow-rpcs=/ { /guest-exec/! s/"$/,guest-exec,guest-exec-status"/; }' /etc/sysconfig/qemu-ga;
+    systemctl restart qemu-guest-agent; fi
+  - (RETRY=60; while ! nslookup get.rke2.io; do ((--RETRY)) || break; sleep 5; done)
+  - >-
+    vmid=$(sed -n 's/^export VMID="\([0-9][0-9]*\)"$/\1/p' /var/run/one-context/one_env | sort -u);
+    case "$vmid" in ''|*[!0-9]*) exit 1;; esac;
+    test -n "$vmid" &&
+    install -d -m 0700 /etc/rancher/rke2/config.yaml.d &&
+    printf 'disable: [servicelb, rke2-traefik, rke2-traefik-crd, rke2-metrics-server, rke2-snapshot-controller, rke2-snapshot-controller-crd, rke2-snapshot-validation-webhook]\n' > /etc/rancher/rke2/config.yaml.d/80-services.yaml &&
+    printf 'kubelet-arg:\n  - provider-id=one://%s\n' "$vmid" > /etc/rancher/rke2/config.yaml.d/90-opennebula-identity.yaml
+  registrationMethod: control-plane-endpoint
+  replicas: <%= group[:user_inputs_values][:count] %>
+  rolloutStrategy:
+    rollingUpdate:
+      maxSurge: 1
+    type: RollingUpdate
+  serverConfig:
+    cni: canal
+  version: <%= cluster[:kubernetes_version] %>+rke2r1
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: ONECluster
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    cluster.x-k8s.io/cluster-name: <%= cluster[:uuid] %>
+  name: <%= cluster[:uuid] %>
+spec:
+  privateNetwork:
+    name: <%= cluster[:deployment][:networks][:private][:name].to_s.dump %>
+  publicNetwork:
+    floatingOnly: false
+    floatingIP:
+    name: <%= cluster[:deployment][:networks][:public][:name].to_s.dump %>
+  secretName: <%= cluster[:uuid] %>
+  templates:
+    - templateContent: |
+<%= templates[:router].indent(8) %>
+      templateName: "<%= group[:router_template_name] %>"
+    - templateContent: |
+<%= templates[:controlplane].indent(8) %>
+      templateName: "<%= group[:group_template_name] %>"
+  virtualRouter:
+    replicas: 2
+    listenerPorts:
+    - 6443
+    - 9345
+    templateName: "<%= group[:router_template_name] %>"
+---
+apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
+kind: ONEMachineTemplate
+metadata:
+  annotations:
+    helm.sh/resource-policy: keep
+  labels:
+    cluster.x-k8s.io/cluster-name: <%= cluster[:uuid] %>
+  name: <%= cluster[:uuid] %>-cp
+spec:
+  template:
+    spec:
+      templateName: "<%= group[:group_template_name] %>"
+<% if group[:user_inputs_values][:count].to_i > 1 %>
+---
+apiVersion: cluster.x-k8s.io/v1beta1
+kind: MachineHealthCheck
+metadata:
+  name: "<%= cluster[:uuid] %>-cp-mhc"
+spec:
+  clusterName: <%= cluster[:uuid] %>
+  selector:
+    matchLabels:
+      cluster.x-k8s.io/control-plane: ""
+  nodeStartupTimeout: 60m
+  maxUnhealthy: 1
+  unhealthyConditions:
+  - type: Ready
+    status: "False"
+    timeout: 15m
+  - type: Ready
+    status: "Unknown"
+    timeout: 15m
+<% end %>
