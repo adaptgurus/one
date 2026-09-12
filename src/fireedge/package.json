@@ -31,7 +31,7 @@
   "author": "opennebula.io",
   "license": "Apache-2.0",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "keywords": [
     "opennebula",
@@ -56,7 +56,7 @@
   },
   "dependencies": {
     "@babel/cli": "7.15.7",
-    "@babel/core": "7.15.8",
+    "@babel/core": "7.29.7",
     "@babel/node": "7.15.8",
     "@babel/plugin-proposal-class-properties": "7.14.5",
     "@babel/plugin-proposal-nullish-coalescing-operator": "7.14.5",
@@ -82,13 +82,13 @@
     "@tanstack/react-virtual": "3.13.26",
     "atob": "2.1.2",
     "axios": "1.20.0",
-    "babel-loader": "8.2.1",
+    "babel-loader": "9.2.1",
     "babel-plugin-module-resolver": "4.0.0",
     "btoa": "1.2.1",
     "clsx": "1.1.1",
-    "compression": "1.7.4",
+    "compression": "1.8.2",
     "cookie-parser": "1.4.7",
-    "copy-webpack-plugin": "9.0.1",
+    "copy-webpack-plugin": "14.0.0",
     "core-js": "3.18.1",
     "cors": "2.8.5",
     "css-loader": "6.2.0",
@@ -98,7 +98,7 @@
     "dompurify": "3.4.15",
     "express": "4.22.2",
     "external-remotes-plugin": "1.0.0",
-    "fast-xml-parser": "4.5.7",
+    "fast-xml-parser": "5.11.1",
     "file-loader": "5.1.0",
     "fs-extra": "9.0.1",
     "fuse.js": "6.4.1",
@@ -111,7 +111,7 @@
     "iconoir-react": "6.11.0",
     "immutable": "4.3.9",
     "intersection-observer": "0.11.0",
-    "jimp": "0.22.12",
+    "jimp": "1.6.1",
     "jsdom": "19.0.0",
     "jsonschema": "1.2.7",
     "jsonwebtoken": "9.0.3",
@@ -121,7 +121,7 @@
     "lodash.get": "4.4.2",
     "luxon": "2.5.2",
     "marked": "4.0.10",
-    "morgan": "1.10.0",
+    "morgan": "1.12.1",
     "multer": "2.3.0",
     "node-zendesk": "6.0.1",
     "notistack": "3.0.2",
@@ -159,22 +159,22 @@
     "split-grid": "1.0.11",
     "sprintf-js": "1.1.2",
     "style-loader": "3.2.1",
-    "terser-webpack-plugin": "5.1.4",
+    "terser-webpack-plugin": "5.6.1",
     "time-fix-plugin": "2.0.7",
     "tiny-worker": "2.3.0",
     "upcast": "4.0.0",
     "uplot": "1.6.31",
     "uplot-react": "1.2.2",
     "url": "0.11.0",
-    "uuid": "8.3.1",
+    "uuid": "11.1.1",
     "webpack": "5.110.3",
-    "webpack-cli": "4.7.2",
+    "webpack-cli": "5.1.4",
     "webpack-node-externals": "2.5.2",
     "window-or-global": "1.0.1",
     "winston": "3.3.3",
     "worker-loader": "3.0.8",
     "xmlrpc": "1.3.2",
-    "yaml": "1.10.0",
+    "yaml": "1.10.3",
     "yup": "0.32.9",
     "zeromq": "6.5.0"
   },
@@ -183,6 +183,7 @@
     "opennebula-guacamole": {
       "luxon": "1.28.1",
       "ws": "5.2.5"
-    }
+    },
+    "qs": "6.16.0"
   }
 }

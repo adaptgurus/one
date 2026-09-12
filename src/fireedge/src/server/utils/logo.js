@@ -17,7 +17,7 @@ const { getSunstoneViewConfig } = require('server/utils/yml')
 const { existsSync, readdirSync, readFileSync } = require('fs')
 const path = require('path')
 const { global } = require('window-or-global')
-const Jimp = require('jimp')
+const { Jimp, JimpMime } = require('jimp')
 
 /**
  * Retrieves the logo filename.
@@ -150,7 +150,7 @@ const validateFavicon = (favicon) => {
 const encodeLogo = async (filePath) => {
   try {
     const image = await Jimp.read(filePath)
-    const data = await image.getBufferAsync(Jimp.MIME_PNG)
+    const data = await image.getBuffer(JimpMime.png)
 
     return `data:image/png;base64,${data.toString('base64')}`
   } catch (error) {
@@ -173,8 +173,8 @@ const encodeFavicon = async (filePath) => {
     }
 
     const image = await Jimp.read(filePath)
-    const resizedImage = await image.resize(32, 32)
-    const data = await resizedImage.getBufferAsync(Jimp.MIME_PNG)
+    const resizedImage = image.resize({ w: 32, h: 32 })
+    const data = await resizedImage.getBuffer(JimpMime.png)
 
     return `data:image/png;base64,${data.toString('base64')}`
   } catch (error) {
