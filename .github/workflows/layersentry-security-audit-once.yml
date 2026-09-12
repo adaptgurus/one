@@ -13,40 +13,16 @@ permissions:
 jobs:
   audit:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: src/fireedge
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v6
         with:
           ref: feat/self-service-v5-ui-20260911
           persist-credentials: false
-      - uses: actions/setup-node@v5
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: src/fireedge/package-lock.json
-      - name: Install exact lock
-        run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Print exact runtime advisory graph
+      - name: Map direct dependency usage only
         run: |
-          npm audit --omit=dev --json > /tmp/audit.json || true
-          node - <<'NODE'
-          const fs=require('fs')
-          const r=JSON.parse(fs.readFileSync('/tmp/audit.json','utf8'))
-          console.log('COUNTS='+JSON.stringify(r.metadata?.vulnerabilities||{}))
-          for (const [name,v] of Object.entries(r.vulnerabilities||{}).sort()) {
-            const via=(v.via||[]).map(x=>typeof x==='string'?x:{source:x.source,name:x.name,title:x.title,severity:x.severity,range:x.range,url:x.url})
-            console.log('VULN='+JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,via,effects:v.effects,fixAvailable:v.fixAvailable,nodes:v.nodes}))
-          }
-          NODE
-      - name: Map direct dependency usage
-        run: |
+          cd src/fireedge
           for token in "jimp" "fast-xml-parser" "uuid" "yaml" "morgan" "compression" "express" "copy-webpack-plugin" "terser-webpack-plugin" "@babel/core"; do
-            echo "===== USAGE $token ====="
-            git grep -n -i -- "$token" -- src webpack*.js '*.js' ':!package-lock.json' ':!package.json' || true
+            echo "===== $token ====="
+            git grep -n -i -- "$token" -- src webpack*.js '*.js' ':!package-lock.json' ':!package.json' 2>/dev/null | head -n 80 || true
           done
-      - name: Show npm dependency trees
-        run: |
-          npm ls @babel/core compression morgan express fast-xml-parser jimp uuid yaml copy-webpack-plugin terser-webpack-plugin serialize-javascript --all || true
