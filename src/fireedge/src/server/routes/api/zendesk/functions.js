@@ -490,7 +490,9 @@ const update = async (
   const { body, attachments } = params
   const { user, password } = userData
 
-  if (!(Number.isInteger(ticketId) && ticketId > 0 && body && user && password)) {
+  if (
+    !(Number.isInteger(ticketId) && ticketId > 0 && body && user && password)
+  ) {
     response.locals.httpCode = httpBadRequest
     next()
 
