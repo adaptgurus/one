@@ -1,4 +1,18 @@
-/* LayerSentry native attention model. SPDX-License-Identifier: Apache-2.0 */
+/* ------------------------------------------------------------------------- *
+ * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
+ * ------------------------------------------------------------------------- */
 
 const values = (value) => [value ?? []].flat().filter(Boolean)
 const countIds = (value) => values(value?.ID ?? value).length
@@ -35,7 +49,9 @@ export const buildAttentionItems = ({
         id: `vm-${vm.ID}-state`,
         severity: 'error',
         kind: 'Virtual machine',
-        title: `${vm.NAME ?? `VM #${vm.ID}`} needs attention`,
+        title: `${
+          vm.NAME ?? `VM #${vm.ID}`
+        } needs attention`,
         detail: `Observed OpenNebula state: ${stateName || 'unknown'}.`,
         path: `/vm/${vm.ID}`,
       })
@@ -50,7 +66,9 @@ export const buildAttentionItems = ({
         id: `vm-${vm.ID}-protection`,
         severity: 'warning',
         kind: 'Backup & DR',
-        title: `${vm.NAME ?? `VM #${vm.ID}`} protection is requested, not active`,
+        title: `${
+          vm.NAME ?? `VM #${vm.ID}`
+        } protection is requested, not active`,
         detail:
           'The VM contains a LayerSentry protection request, but no active/effective protection state has been published.',
         path: `/vm/${vm.ID}`,
@@ -67,7 +85,9 @@ export const buildAttentionItems = ({
         severity: 'error',
         kind: 'Backup',
         title: `${job.NAME ?? `Backup job #${job.ID}`} has failed VM backups`,
-        detail: `${failed} VM${failed === 1 ? '' : 's'} currently reported in ERROR_VMS.`,
+        detail: `${failed} VM${
+          failed === 1 ? '' : 's'
+        } currently reported in ERROR_VMS.`,
         path: `/backupjobs/${job.ID}`,
       })
     }
@@ -77,7 +97,9 @@ export const buildAttentionItems = ({
         severity: 'warning',
         kind: 'Backup',
         title: `${job.NAME ?? `Backup job #${job.ID}`} has outdated VM backups`,
-        detail: `${outdated} VM${outdated === 1 ? '' : 's'} currently reported as outdated.`,
+        detail: `${outdated} VM${
+          outdated === 1 ? '' : 's'
+        } currently reported as outdated.`,
         path: `/backupjobs/${job.ID}`,
       })
     }
@@ -90,7 +112,9 @@ export const buildAttentionItems = ({
         id: `k8s-${cluster.ID}-error`,
         severity: 'error',
         kind: 'Kubernetes',
-        title: `${cluster.NAME ?? `Cluster #${cluster.ID}`} lifecycle operation failed`,
+        title: `${
+          cluster.NAME ?? `Cluster #${cluster.ID}`
+        } lifecycle operation failed`,
         detail: `Observed OneKS state: ${stateName || 'unknown'}.`,
         path: `/kubernetes/${cluster.ID}`,
       })
