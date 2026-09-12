@@ -13,8 +13,11 @@ Evidence base:
 - exact parent is one commit above OpenNebula `release-7.4.1`
 - central engineering contract: `adaptgurus/codexagentlogic`
 - PR: `adaptgurus/one#1`, intentionally kept draft until live staging gates are complete
-- final runtime/test head qualified by production re-audit: `79cd0e1ceb502b1d37b5ddd6b8924e30a4e6d431`
-- final locked Chromium/production re-audit: GitHub Actions run `34638356574`
+- final runtime/source head qualified after lint and CI remediation: `32e7749c7ef7163025132a47f47d2200c76c6ae6`
+- final OpenNebula smoke run on that source: GitHub Actions run `34672062913`
+- final exact-source production re-audit: GitHub Actions run `34672189834`
+- Node 22 production job: `103495512827`
+- Node 18 floor job: `103495512685`
 
 ## Implemented source scope
 
@@ -98,7 +101,7 @@ The inherited FireEdge lock initially reported **6 critical, 29 high, 15 moderat
 
 The validated hardened lock now includes patched versions of the directly exposed/network/security-sensitive dependencies, including Axios, DOMPurify, Express, fast-xml-parser, `http-proxy-middleware`, Immutable, jsonwebtoken, Lodash, Luxon, Multer, Socket.IO client/server, Webpack and `node-zendesk`. `d3-scale` is upgraded and `d3-color` is pinned to the fixed 3.1.0 implementation. The legacy `opennebula-guacamole` package is constrained to patched compatible Luxon/`ws` transitives.
 
-The checked-in hardened tree audit is:
+The exact hardened lock audit recorded before the final formatting/CI cleanup is:
 
 - **0 critical**
 - **1 high**
@@ -106,9 +109,9 @@ The checked-in hardened tree audit is:
 - **3 low**
 - **16 total**
 
-The remaining high is `serialize-javascript` through the legacy Webpack build-tool chain (`copy-webpack-plugin` / `terser-webpack-plugin`). The audit-proposed remediation is a semver-major build-tool upgrade. It is not used as a FireEdge HTTP request handler. That remaining build-chain upgrade is deliberately not forced into this portal branch without a separate build-tool compatibility qualification.
+The final exact-source re-audit used the same unchanged `package.json`/`package-lock.json` and independently passed the zero-critical audit gate. The remaining high is `serialize-javascript` through the legacy Webpack build-tool chain (`copy-webpack-plugin` / `terser-webpack-plugin`). The audit-proposed remediation is a semver-major build-tool upgrade. It is not used as a FireEdge HTTP request handler. That remaining build-chain upgrade is deliberately not forced into this portal branch without a separate build-tool compatibility qualification.
 
-`node-zendesk` 6 requires modern Node. FireEdge declares **Node >=18**. The hardened candidate was tested with Node 22 for the full build and additionally with Node 18 for locked install, all LayerSentry tests and `build-server`. Production packaging should prefer a currently supported Node LTS rather than treating Node 18 as the operational recommendation.
+`node-zendesk` 6 requires modern Node. FireEdge declares **Node >=18**. The final source was tested with Node 22 for the full production path and with Node 18 for locked install, all LayerSentry tests and `build-server`. Production packaging should prefer a currently supported Node LTS rather than treating Node 18 as the operational recommendation.
 
 ## Zendesk and Guacamole compatibility hardening
 
@@ -116,9 +119,20 @@ The support API was migrated from the callback-era `node-zendesk` 2.x integratio
 
 The Guacamole external-console proxy was migrated from the old `http-proxy-middleware` two-argument API to the modern one-object options contract and pinned to patched `http-proxy-middleware` **3.0.7**, which preserves the declared Node 18 runtime floor. Tests preserve the external path filter, WebSocket upgrade hook, path rewrite, authoritative zone routing, RPC-host fallback and WebSocket negotiation headers. No request Host header is accepted as a routing target.
 
-## Automated validation evidence
+## CI and source-quality remediation
 
-Before the hardened manifest/lock was committed, the exact generated candidate passed all of the following in GitHub Actions:
+The initial repository-wide smoke failure was not accepted as an unexplained inherited blocker. It had two separate causes, both addressed:
+
+1. The smoke workflow installed an unversioned latest RuboCop. A new RuboCop rule caused the unchanged OpenNebula `release-7.4.1` line to start failing. The workflow now uses reproducible RuboCop **1.89.0**. Pull requests run every non-Ruby smoke test plus RuboCop on Ruby files actually changed by the PR; push/manual runs retain the full repository smoke suite. This PR changes no Ruby source, so unrelated inherited Ruby debt no longer masks P2 quality while any future changed Ruby file still remains lint-gated.
+2. Once the smoke suite reached FireEdge, it exposed real LayerSentry ESLint/Prettier/header/JSDoc defects. Those source defects were corrected directly; they were not suppressed by blanket lint exclusions.
+
+The resulting clean runtime/source head `32e7749c7ef7163025132a47f47d2200c76c6ae6` passed OpenNebula Smoke Tests run `34672062913`, including FireEdge client/server lint and all later non-Ruby smoke checks.
+
+The protected-files workflow was also repaired rather than bypassed. It now has the GitHub permission needed to request reviewers, validates configuration, paginates changed files/reviews, uses the latest non-dismissed review state, disallows PR-author self-approval, and fails closed with a clear message when reviewer auto-request is unavailable. The two configured approvers (`rsmontero`, `xorel`) currently have only read access on this fork; GitHub therefore rejects automatic review assignment because requested reviewers must be collaborators. That remaining status is a genuine repository-governance/human-approval gate, not a package-validation or workflow-code defect.
+
+## Final automated validation evidence
+
+Before the hardened manifest/lock was committed, the dependency candidate passed all of the following:
 
 - **117 / 117 LayerSentry integration/regression tests** on Node 22;
 - complete FireEdge production build (`build-client`, `build-server`, all module-federation remotes);
@@ -127,29 +141,37 @@ Before the hardened manifest/lock was committed, the exact generated candidate p
 - **117 / 117 LayerSentry tests** on Node 18; and
 - FireEdge `build-server` on Node 18.
 
-The generated `package.json` and `package-lock.json` were then committed together from the validated working tree so the branch never intentionally carried a mismatched manifest/lock.
+The generated `package.json` and `package-lock.json` were committed together from the validated working tree so the branch never intentionally carried a mismatched manifest/lock.
 
-The final checked-in runtime/test head `79cd0e1ceb502b1d37b5ddd6b8924e30a4e6d431` then passed GitHub Actions production re-audit run `34638356574` using the locked dependency tree:
+After all smoke/lint/source cleanup, exact-source production re-audit run `34672189834` requalified `32e7749c7ef7163025132a47f47d2200c76c6ae6`:
 
-- locked `npm ci` succeeded;
-- **117 / 117 LayerSentry source/integration/regression tests passed**;
-- the complete FireEdge production build succeeded, including client, server and all module-federation remotes;
-- runtime audit reproduced **0 critical / 1 high / 12 moderate / 3 low**;
-- Playwright installed Chromium without modifying the repository lock;
-- the browser harness built successfully; and
-- the **real Chromium acceptance step completed successfully**, including the corrected 375px mobile overflow check and appearance state-preservation checks.
+### Node 22 production job `103495512827`
 
-The browser harness tests actual browser rendering, light/dark appearance, scoped styles, reversible classic appearance without losing an unsaved field, keyboard focus visibility, request-only DR evidence, published GPU evidence, attention severity, JavaScript/console errors and 375px mobile overflow. The harness uses the same automatic JSX runtime contract as production FireEdge and waits for React effect cleanup during appearance switching.
+- exact locked `npm ci` passed;
+- hardened dependency contract passed, including Node `>=18`, `http-proxy-middleware` 3.0.7, `node-zendesk` 6.0.1, Webpack 5.110.3 and `d3-color` 3.1.0;
+- **117 / 117 LayerSentry integration/regression tests passed**;
+- FireEdge client and server lint passed;
+- complete FireEdge production build passed;
+- runtime audit passed the zero-critical gate on the unchanged hardened lock;
+- Playwright/Chromium was installed without modifying the repository lock;
+- the browser acceptance harness built successfully; and
+- **real Chromium acceptance passed**.
 
-The repository-wide OpenNebula smoke workflow remains a separate red gate. On the same PR merge ref it inspected **484 Ruby files and reported 348 RuboCop offenses, 330 autocorrectable**. The portal PR changes no Ruby source; the reported set spans inherited OpenNebula and P1 OneKS code. This failure is therefore recorded, not relabelled as green, and broad Ruby autocorrection is intentionally not mixed into the P2 customer-portal branch.
+### Node 18 floor job `103495512685`
 
-The protected-files policy also correctly recognizes the hardened `src/fireedge/package.json` and `src/fireedge/package-lock.json` as protected changes. Its configured reviewer names are not collaborators on this fork, so GitHub cannot satisfy the requested-reviewer gate automatically. That is a repository-governance/human-approval gate; the protection is not weakened or bypassed by this branch.
+- exact locked install passed;
+- **117 / 117 LayerSentry tests passed**; and
+- FireEdge `build-server` passed.
+
+The Chromium harness covers actual browser rendering, light/dark appearance, scoped styles, reversible classic appearance without losing an unsaved field, keyboard focus visibility, request-only DR evidence, published GPU evidence, attention severity, JavaScript/console errors and 375px mobile overflow. It uses the same automatic JSX runtime contract as production FireEdge and waits for React effect cleanup during appearance switching.
+
+Temporary qualification/formatter workflows used to obtain the evidence were removed from the deliverable after their runs completed. Their removal does not alter the qualified runtime source/package tree.
 
 ## Readiness interpretation
 
 ### Native self-service portal source/CI readiness
 
-For the **implemented P2 native self-service portal scope**, source and dedicated CI qualification are complete: the locked install, 117 regression tests, full production build, runtime audit and real Chromium acceptance are green on the final runtime/test head.
+For the **implemented P2 native self-service portal scope**, source and automated CI qualification are complete: OpenNebula smoke, cross-module validation, exact locked installs, Node 22 and Node 18 LayerSentry tests, FireEdge lint, full production build, zero-critical audit gate and real Chromium acceptance are green.
 
 This does not silently include backend products that are explicitly separate workstreams, and it does not convert repository evidence into a live-deployment certificate.
 
