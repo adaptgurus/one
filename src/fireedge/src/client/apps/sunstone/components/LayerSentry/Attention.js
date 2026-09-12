@@ -112,8 +112,8 @@ const Attention = () => {
 
       <Alert severity="info" sx={{ mb: 2 }}>
         This page is read-only. Opening or reading an item does not acknowledge,
-        recover, retry, or change the underlying resource. Email/webhook delivery
-        is not connected by this page.
+        recover, retry, or change the underlying resource. Email/webhook
+        delivery is not connected by this page.
       </Alert>
 
       {queryFailures.length > 0 && (
