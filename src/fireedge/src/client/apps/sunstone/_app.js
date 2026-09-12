@@ -132,14 +132,20 @@ const SunstoneApp = () => {
 
   const [appearanceEnabled, setAppearanceEnabled] = useState(() => {
     try {
-      return readAppearance(typeof window === 'undefined' ? undefined : window.localStorage)
+      return readAppearance(
+        typeof window === 'undefined' ? undefined : window.localStorage
+      )
     } catch {
       return true
     }
   })
   const isSelfService = isSelfServiceView(view, isLogged, isLayoutDisabled)
   const classicOverride = classicRequested(search)
-  const useLayerSentry = ENABLE_SELF_SERVICE_APPEARANCE && isSelfService && appearanceEnabled && !classicOverride
+  const useLayerSentry =
+    ENABLE_SELF_SERVICE_APPEARANCE &&
+    isSelfService &&
+    appearanceEnabled &&
+    !classicOverride
   const sidebarEndpoints = useMemo(
     () => presentEndpoints(endpoints, useLayerSentry),
     [endpoints, useLayerSentry]
@@ -162,31 +168,35 @@ const SunstoneApp = () => {
       ]}
     >
       <SelfServiceAppearance enabled={useLayerSentry}>
-      {isLogged && (
-        <>
-          {!isLayoutDisabled && (
-            <Sidebar
-              endpoints={sidebarEndpoints}
-              logoComponent={useLayerSentry ? LayerSentryLogo : undefined}
-              footerContent={isSelfService && ENABLE_SELF_SERVICE_APPEARANCE ? ({ expanded }) => (
-                <AppearanceSwitch
-                  enabled={useLayerSentry}
-                  expanded={expanded}
-                  locked={classicOverride}
-                  onToggle={toggleAppearance}
-                />
-              ) : undefined}
-            />
-          )}
-          <Notifier />
-          <NotifierUpload />
-          <ModalHost />
-        </>
-      )}
-      <Router
-        redirectWhenAuth={externalRedirect || PATH.DASHBOARD}
-        endpoints={endpoints}
-      />
+        {isLogged && (
+          <>
+            {!isLayoutDisabled && (
+              <Sidebar
+                endpoints={sidebarEndpoints}
+                logoComponent={useLayerSentry ? LayerSentryLogo : undefined}
+                footerContent={
+                  isSelfService && ENABLE_SELF_SERVICE_APPEARANCE
+                    ? ({ expanded }) => (
+                        <AppearanceSwitch
+                          enabled={useLayerSentry}
+                          expanded={expanded}
+                          locked={classicOverride}
+                          onToggle={toggleAppearance}
+                        />
+                      )
+                    : undefined
+                }
+              />
+            )}
+            <Notifier />
+            <NotifierUpload />
+            <ModalHost />
+          </>
+        )}
+        <Router
+          redirectWhenAuth={externalRedirect || PATH.DASHBOARD}
+          endpoints={endpoints}
+        />
       </SelfServiceAppearance>
     </AuthLayout>
   )
