@@ -8,12 +8,12 @@ on:
       - '.github/workflows/layersentry-security-audit-once.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   candidate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: src/fireedge
@@ -21,7 +21,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: feat/self-service-v5-ui-20260911
-          persist-credentials: false
+          persist-credentials: true
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
@@ -50,6 +50,7 @@ jobs:
             if (!(name in pkg.dependencies)) throw new Error(`missing direct dependency ${name}`)
             pkg.dependencies[name] = version
           }
+          pkg.engines = { ...(pkg.engines || {}), node: '>=22' }
           pkg.overrides = { ...(pkg.overrides || {}), qs: '6.16.0' }
           fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n')
 
@@ -64,15 +65,17 @@ jobs:
           npm install --package-lock-only --ignore-scripts --no-audit --no-fund
       - name: Install generated candidate lock
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Verify exact candidate versions
+      - name: Verify exact candidate versions and runtime floor
         run: |
           node - <<'NODE'
+          const pkg=require('./package.json')
           const lock=require('./package-lock.json')
           const expected={
             '@babel/core':'7.29.7','babel-loader':'9.2.1',compression:'1.8.2','copy-webpack-plugin':'14.0.0',
             'fast-xml-parser':'5.11.1',jimp:'1.6.1',morgan:'1.12.1','terser-webpack-plugin':'5.6.1',
             uuid:'11.1.1','webpack-cli':'5.1.4',yaml:'1.10.3',qs:'6.16.0'
           }
+          if(pkg.engines?.node!=='>=22') throw new Error(`unexpected Node floor ${pkg.engines?.node}`)
           for (const [name,wanted] of Object.entries(expected)) {
             const actual=lock.packages[`node_modules/${name}`]?.version
             console.log(`${name}=${actual}`)
@@ -87,11 +90,19 @@ jobs:
           const fs=require('fs')
           const report=JSON.parse(fs.readFileSync('/tmp/audit.json','utf8'))
           const counts=report?.metadata?.vulnerabilities ?? {}
-          console.log('CANDIDATE_AUDIT='+JSON.stringify(counts))
+          console.log('RUNTIME_AUDIT='+JSON.stringify(counts))
           if ((counts.total ?? 0) !== 0) {
             for (const [name,v] of Object.entries(report.vulnerabilities||{})) console.log('REMAINING',name,v.severity,v.range,v.fixAvailable)
             process.exitCode=2
           }
+          NODE
+      - name: Report complete dependency audit
+        run: |
+          npm audit --json > /tmp/full-audit.json || true
+          node - <<'NODE'
+          const fs=require('fs')
+          const report=JSON.parse(fs.readFileSync('/tmp/full-audit.json','utf8'))
+          console.log('FULL_AUDIT='+JSON.stringify(report?.metadata?.vulnerabilities ?? {}))
           NODE
       - name: Dependency API compatibility smoke
         run: |
@@ -121,5 +132,30 @@ jobs:
         run: npm run lint
       - name: Full FireEdge production build
         run: npm run build
-      - name: Show candidate diff summary
-        run: git diff --stat && git diff -- package.json src/server/utils/logo.js | head -n 280
+      - name: Install Chromium runner without changing lock
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Build browser acceptance harness
+        run: npx webpack --config tests/layersentry/browser/webpack.config.cjs
+      - name: Real Chromium acceptance
+        run: |
+          python3 -m http.server 4173 --directory tests/layersentry/browser/dist >/tmp/layersentry-browser.log 2>&1 &
+          trap 'kill $! 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:4173/ >/dev/null
+          node tests/layersentry/browser/smoke.cjs
+      - name: Commit exact qualified security update
+        working-directory: .
+        run: |
+          git diff --check
+          git status --short
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/fireedge/package.json src/fireedge/package-lock.json src/fireedge/src/server/utils/logo.js
+          git diff --cached --check
+          git commit -m 'security(fireedge): eliminate runtime dependency advisories'
+          git push origin HEAD:feat/self-service-v5-ui-20260911
