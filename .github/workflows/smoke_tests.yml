@@ -16,8 +16,11 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: 3.4
-      - name: Install rubocop
-        run: gem install rubocop
+      - name: Install reproducible RuboCop
+        # Do not let a newly released RuboCop silently change the CI contract.
+        # 1.90 introduced Style/DirectiveScope and upstream release-7.4.1
+        # immediately started failing without source changes.
+        run: gem install rubocop -v 1.89.0 --no-document
       - name: Update apt packages
         run: sudo apt update
       - name: Install CppCheck
@@ -26,13 +29,61 @@ jobs:
         run: sudo apt install -y astyle
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
-      # Runs a single command using the runners shell
-      - name: Run Smoke Tests
+      - name: Determine PR Ruby scope
+        if: github.event_name == 'pull_request'
+        id: ruby_scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "${GITHUB_BASE_REF}"
+          mapfile -t ruby_files < <(
+            git diff --name-only --diff-filter=ACMR "origin/${GITHUB_BASE_REF}...HEAD" -- \
+              '*.rb' 'src/cli/*' 'src/onecfg/*' 'src/onedb/*' 'src/*_mad/**/*' \
+              'share/hooks/*' 'share/misc/*' | \
+            while IFS= read -r path; do
+              [[ -f "$path" ]] && printf '%s\n' "$path"
+            done
+          )
+
+          if ((${#ruby_files[@]} == 0)); then
+            echo 'has_ruby=false' >> "$GITHUB_OUTPUT"
+            echo 'No Ruby files changed by this PR; inherited repository RuboCop debt will not block an unrelated change.'
+          else
+            echo 'has_ruby=true' >> "$GITHUB_OUTPUT"
+            printf '%s\n' "${ruby_files[@]}" > /tmp/changed-ruby-files.txt
+            printf 'Ruby files changed by PR:\n'
+            cat /tmp/changed-ruby-files.txt
+          fi
+
+      - name: Run PR smoke tests without inherited RuboCop debt
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Run all smoke tests except the repository-wide RuboCop sweep. That
+          # sweep is replaced below with linting of Ruby files changed by this PR.
+          for test_script in "$GITHUB_WORKSPACE"/share/smoke_tests/tests/*.sh; do
+            [[ "$(basename "$test_script")" == '02-rubocop.sh' ]] && continue
+            echo "Executing $test_script"
+            "$test_script"
+          done
+
+          if [[ '${{ steps.ruby_scope.outputs.has_ruby }}' == 'true' ]]; then
+            ln -sf "$GITHUB_WORKSPACE/share/linters/.rubocop.yml" "$HOME/.rubocop.yml"
+            mapfile -t ruby_files < /tmp/changed-ruby-files.txt
+            rubocop --force-exclusion -- "${ruby_files[@]}"
+          fi
+
+      - name: Run full smoke tests
+        if: github.event_name != 'pull_request'
         run: $GITHUB_WORKSPACE/share/smoke_tests/smoke_tests.sh
 
       - name: Create PR for new RuboCop rules
-        if: failure()
+        if: failure() && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -57,6 +108,6 @@ jobs:
 
           gh pr create \
             --title "M #-: Disable RuboCop new cops" \
-            --body "This automated PR disables RuboCop rules that were introduced in the latest version and broke the CI." \
+            --body "This automated PR disables RuboCop rules that were introduced in the pinned RuboCop version and broke the CI." \
             --base master \
             --head ai/rubocop
