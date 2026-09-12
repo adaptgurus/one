@@ -49,9 +49,7 @@ export const buildAttentionItems = ({
         id: `vm-${vm.ID}-state`,
         severity: 'error',
         kind: 'Virtual machine',
-        title: `${
-          vm.NAME ?? `VM #${vm.ID}`
-        } needs attention`,
+        title: `${vm.NAME ?? `VM #${vm.ID}`} needs attention`,
         detail: `Observed OpenNebula state: ${stateName || 'unknown'}.`,
         path: `/vm/${vm.ID}`,
       })
