@@ -1,4 +1,4 @@
-name: LayerSentry security audit once
+name: LayerSentry security candidate once
 
 on:
   push:
@@ -11,18 +11,116 @@ permissions:
   contents: read
 
 jobs:
-  audit:
+  candidate:
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/fireedge
     steps:
       - uses: actions/checkout@v6
         with:
           ref: feat/self-service-v5-ui-20260911
           persist-credentials: false
-      - name: Map direct dependency usage only
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+      - name: Apply security candidate in working tree only
         run: |
-          cd src/fireedge
-          for token in "jimp" "fast-xml-parser" "uuid" "yaml" "morgan" "compression" "express" "copy-webpack-plugin" "terser-webpack-plugin" "@babel/core"; do
-            echo "===== $token ====="
-            git grep -n -i -- "$token" -- src webpack*.js '*.js' ':!package-lock.json' ':!package.json' 2>/dev/null | head -n 80 || true
-          done
+          node - <<'NODE'
+          const fs = require('fs')
+          const path = 'package.json'
+          const pkg = JSON.parse(fs.readFileSync(path, 'utf8'))
+          const updates = {
+            '@babel/core': '7.29.7',
+            'compression': '1.8.2',
+            'copy-webpack-plugin': '14.0.0',
+            'fast-xml-parser': '5.11.1',
+            'jimp': '1.6.1',
+            'morgan': '1.12.1',
+            'terser-webpack-plugin': '5.6.1',
+            'uuid': '11.1.1',
+            'yaml': '1.10.3'
+          }
+          for (const [name, version] of Object.entries(updates)) {
+            if (!(name in pkg.dependencies)) throw new Error(`missing direct dependency ${name}`)
+            pkg.dependencies[name] = version
+          }
+          pkg.overrides = { ...(pkg.overrides || {}), qs: '6.16.0' }
+          fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + '\n')
+
+          const logoPath = 'src/server/utils/logo.js'
+          let logo = fs.readFileSync(logoPath, 'utf8')
+          logo = logo.replace("const Jimp = require('jimp')", "const { Jimp, JimpMime } = require('jimp')")
+          logo = logo.replaceAll('getBufferAsync(Jimp.MIME_PNG)', 'getBuffer(JimpMime.png)')
+          logo = logo.replace('const resizedImage = await image.resize(32, 32)', 'const resizedImage = image.resize({ w: 32, h: 32 })')
+          if (logo.includes('getBufferAsync') || logo.includes('Jimp.MIME_PNG') || logo.includes('resize(32, 32)')) {
+            throw new Error('legacy Jimp v0 API remains')
+          }
+          fs.writeFileSync(logoPath, logo)
+          NODE
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install generated candidate lock
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Verify exact candidate versions
+        run: |
+          node - <<'NODE'
+          const lock=require('./package-lock.json')
+          const expected={
+            '@babel/core':'7.29.7', compression:'1.8.2', 'copy-webpack-plugin':'14.0.0',
+            'fast-xml-parser':'5.11.1', jimp:'1.6.1', morgan:'1.12.1',
+            'terser-webpack-plugin':'5.6.1', uuid:'11.1.1', yaml:'1.10.3', qs:'6.16.0'
+          }
+          for (const [name,wanted] of Object.entries(expected)) {
+            const actual=lock.packages[`node_modules/${name}`]?.version
+            console.log(`${name}=${actual}`)
+            if (actual!==wanted) process.exitCode=2
+          }
+          const sj=lock.packages['node_modules/serialize-javascript']?.version
+          console.log(`serialize-javascript=${sj}`)
+          NODE
+      - name: Runtime dependency audit must be zero
+        run: |
+          npm audit --omit=dev --json > /tmp/audit.json || true
+          node - <<'NODE'
+          const fs=require('fs')
+          const report=JSON.parse(fs.readFileSync('/tmp/audit.json','utf8'))
+          const counts=report?.metadata?.vulnerabilities ?? {}
+          console.log('CANDIDATE_AUDIT='+JSON.stringify(counts))
+          if (Object.values(counts).some((n,i)=>i<5 && Number(n)!==0)) {
+            for (const [name,v] of Object.entries(report.vulnerabilities||{})) console.log('REMAINING',name,v.severity,v.range,v.fixAvailable)
+            process.exitCode=2
+          }
+          NODE
+      - name: Dependency API compatibility smoke
+        run: |
+          node - <<'NODE'
+          const assert=require('node:assert/strict')
+          const {Jimp,JimpMime}=require('jimp')
+          const {XMLParser,XMLBuilder}=require('fast-xml-parser')
+          const {v4}=require('uuid')
+          const YAML=require('yaml')
+          const qs=require('qs')
+          ;(async()=>{
+            const image=new Jimp({width:4,height:4,color:0xff0000ff})
+            image.resize({w:2,h:2})
+            const png=await image.getBuffer(JimpMime.png)
+            assert.ok(Buffer.isBuffer(png) && png.length>0)
+            const parser=new XMLParser(); const builder=new XMLBuilder()
+            assert.equal(parser.parse(builder.build({root:{value:'ok'}})).root.value,'ok')
+            assert.match(v4(),/^[0-9a-f-]{36}$/)
+            assert.deepEqual(YAML.parse('a: 1\nb:\n  - x\n'),{a:1,b:['x']})
+            assert.deepEqual(qs.parse('a[b]=1'),{a:{b:'1'}})
+            console.log('dependency API smoke passed')
+          })().catch(e=>{console.error(e);process.exit(1)})
+          NODE
+      - name: LayerSentry regression tests
+        run: node --test tests/layersentry/*.test.cjs
+      - name: FireEdge lint
+        run: npm run lint
+      - name: Full FireEdge production build
+        run: npm run build
+      - name: Show candidate diff summary
+        run: git diff --stat && git diff -- package.json src/server/utils/logo.js | head -n 240
