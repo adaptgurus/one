@@ -1,0 +1,64 @@
+name: LayerSentry security audit once
+
+on:
+  push:
+    branches:
+      - feat/self-service-v5-ui-20260911
+    paths:
+      - '.github/workflows/layersentry-security-audit-once.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src/fireedge
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: feat/self-service-v5-ui-20260911
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+      - name: Install exact lock
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Print exact runtime advisory graph
+        run: |
+          npm audit --omit=dev --json > /tmp/audit.json || true
+          node - <<'NODE'
+          const fs=require('fs')
+          const r=JSON.parse(fs.readFileSync('/tmp/audit.json','utf8'))
+          console.log('COUNTS='+JSON.stringify(r.metadata?.vulnerabilities||{}))
+          for (const [name,v] of Object.entries(r.vulnerabilities||{}).sort()) {
+            const via=(v.via||[]).map(x=>typeof x==='string'?x:{source:x.source,name:x.name,title:x.title,severity:x.severity,range:x.range,url:x.url})
+            console.log('VULN='+JSON.stringify({name,severity:v.severity,isDirect:v.isDirect,range:v.range,via,effects:v.effects,fixAvailable:v.fixAvailable,nodes:v.nodes}))
+          }
+          NODE
+      - name: Show npm safe-fix proposal without changing repo
+        run: |
+          cp package-lock.json /tmp/package-lock.before.json
+          npm audit fix --package-lock-only --omit=dev --ignore-scripts --no-audit --no-fund || true
+          node - <<'NODE'
+          const fs=require('fs')
+          const before=JSON.parse(fs.readFileSync('/tmp/package-lock.before.json','utf8'))
+          const after=JSON.parse(fs.readFileSync('package-lock.json','utf8'))
+          const names=new Set([...Object.keys(before.packages||{}),...Object.keys(after.packages||{})])
+          for (const p of [...names].sort()) {
+            const a=before.packages?.[p]?.version
+            const b=after.packages?.[p]?.version
+            if (a!==b) console.log(`LOCK_CHANGE ${p||'<root>'}: ${a||'<none>'} -> ${b||'<none>'}`)
+          }
+          NODE
+          npm audit --omit=dev --json > /tmp/audit-after.json || true
+          node - <<'NODE'
+          const fs=require('fs')
+          const r=JSON.parse(fs.readFileSync('/tmp/audit-after.json','utf8'))
+          console.log('SAFE_FIX_COUNTS='+JSON.stringify(r.metadata?.vulnerabilities||{}))
+          NODE
