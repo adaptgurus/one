@@ -5,6 +5,7 @@ require 'json'
 
 module OneKS
 
+    # Day-2 operations layered onto the native OneKS NodeGroup lifecycle.
     class NodeGroup
 
         SHAPE_KEYS = [:cpu, :vcpu, :memory, :disk_size].freeze
@@ -51,7 +52,7 @@ module OneKS
         end
 
         def configure_autoscaling(enabled:, min:, max:)
-            enabled = !!enabled
+            enabled = enabled == true
             min = Integer(min)
             max = Integer(max)
             if min.negative? || max < min
@@ -77,8 +78,8 @@ module OneKS
 
             @body[:autoscaling] = {
                 :enabled => enabled,
-              :min => min,
-              :max => max
+                :min => min,
+                :max => max
             }
             update
         rescue ArgumentError, TypeError
@@ -142,8 +143,8 @@ module OneKS
             )
             values = {
                 :cluster => cluster_values,
-              :group => group_values,
-              :one_auth => one_auth
+                :group => group_values,
+                :one_auth => one_auth
             }
 
             templates_map = self.class.family_templates(family)
