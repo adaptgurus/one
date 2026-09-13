@@ -51,7 +51,7 @@ jobs:
             src/oneks/test/day2_lifecycle_test.rb
       - name: Validate YAML configuration
         run: |
-          ruby -e "require 'yaml'; %w[src/oneks/etc/oneks-server.yaml src/oneks/specs/controlplanes/layersentry-poc/controlplane.conf src/oneks/specs/nodegroups/layersentry-poc/nodegroup.conf].each { |f| YAML.safe_load_file(f, aliases: true) }"
+          ruby -e "require 'yaml'; %w[src/oneks/etc/oneks-server.yaml src/oneks/specs/controlplanes/layersentry-poc/controlplane.conf src/oneks/specs/nodegroups/layersentry-poc/nodegroup.conf].each { |f| YAML.safe_load_file(f, permitted_classes: [Symbol], aliases: true) }"
       - name: Day-2 regressions
         run: |
           ruby src/oneks/test/day2_lifecycle_test.rb
