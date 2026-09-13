@@ -10,6 +10,7 @@ module OneKS
 
         SHAPE_KEYS = [:cpu, :vcpu, :memory, :disk_size].freeze
         MAX_AUTOSCALING_REPLICAS = 7
+        DISK_RESIZE_RETRY_SECONDS = 120
 
         # Resize workers by updating the group-owned OpenNebula VM template and then
         # changing MachineDeployment template metadata. CAPI performs the rolling
@@ -104,7 +105,6 @@ module OneKS
             )
         end
 
-
         def configure_disk_autoscaling(requested)
             policy = WorkerDiskManager.normalize(requested)
             return policy if OpenNebula.is_error?(policy)
@@ -117,7 +117,13 @@ module OneKS
                 )
             end
 
-            return true if @body[:disk_autoscaling] == policy
+            policy = merge_disk_baselines(policy)
+            return policy if OpenNebula.is_error?(policy)
+
+            revision = Digest::SHA256.hexdigest(JSON.generate(policy))[0, 16]
+            if @body[:disk_autoscaling] == policy && @body[:storage_revision] == revision
+                return true
+            end
 
             @body[:disk_autoscaling] = policy
             rc = update
@@ -135,7 +141,6 @@ module OneKS
             rc = K8s.apply(cluster.client, cluster.leader, spec)
             return rc if OpenNebula.is_error?(rc)
 
-            revision = Digest::SHA256.hexdigest(JSON.generate(policy))[0, 16]
             rc = K8s.rollout_nodegroup_storage(
                 cluster.client, cluster.leader, uuid, revision
             )
@@ -158,6 +163,13 @@ module OneKS
             return cluster if OpenNebula.is_error?(cluster)
 
             history = @body[:disk_resize_history] ||= {}
+            if @body[:disk_resize_inflight]
+                result = reconcile_inflight_disk_resize(
+                    cluster, policy, history, @body[:disk_resize_inflight], now
+                )
+                return result unless result.nil?
+            end
+
             Array(vms).sort.each do |vm_id|
                 status = WorkerDiskManager.vm_status(cluster.client, vm_id, policy)
                 return status if OpenNebula.is_error?(status)
@@ -175,30 +187,26 @@ module OneKS
                     increment_mib = policy[:increment_gib] * 1024
                     target = [disk[:current_size_mib] + increment_mib,
                               disk[:max_size_mib]].min
+                    inflight = {
+                        :key => key,
+                        :vm_id => vm_id.to_i,
+                        :disk_id => disk[:disk_id].to_i,
+                        :name => disk[:name],
+                        :from_mib => disk[:current_size_mib].to_i,
+                        :to_mib => target,
+                        :used_percent => disk[:used_percent].to_i,
+                        :started_at => now
+                    }
+                    @body[:disk_resize_inflight] = inflight
+                    rc = update
+                    return rc if OpenNebula.is_error?(rc)
+
                     rc = WorkerDiskManager.resize(
                         cluster.client, vm_id, disk[:disk_id], target
                     )
                     return rc if OpenNebula.is_error?(rc)
 
-                    history[key] = now
-                    update_disk_baseline(policy, disk[:name], target)
-                    @body[:disk_autoscaling] = policy
-                    @body[:disk_resize_history] = history
-                    rc = update
-                    return rc if OpenNebula.is_error?(rc)
-
-                    rc = update_group_template(cluster)
-                    return rc if OpenNebula.is_error?(rc)
-
-                    return {
-                        :action => 'resized',
-                        :vm_id => vm_id.to_i,
-                        :disk_id => disk[:disk_id],
-                        :name => disk[:name],
-                        :from_mib => disk[:current_size_mib],
-                        :to_mib => target,
-                        :used_percent => disk[:used_percent]
-                    }
+                    return inflight.merge(:action => 'resize-submitted')
                 end
             end
 
@@ -243,6 +251,97 @@ module OneKS
             )
         end
 
+        def merge_disk_baselines(policy)
+            existing = @body[:disk_autoscaling]
+            return policy unless existing.is_a?(Hash)
+
+            existing_disks = Array(existing[:data_disks] || existing['data_disks'])
+            policy[:data_disks].each do |disk|
+                prior = existing_disks.find do |entry|
+                    (entry[:name] || entry['name']).to_s == disk[:name].to_s
+                end
+                next unless prior
+
+                prior_initial = Integer(prior[:initial_gib] || prior['initial_gib'])
+                disk[:initial_gib] = [Integer(disk[:initial_gib]), prior_initial].max
+                if disk[:initial_gib] > Integer(disk[:max_gib])
+                    return OpenNebula::Error.new(
+                        "Managed disk #{disk[:name]} maximum cannot be below its grown baseline",
+                        OpenNebula::Error::EACTION
+                    )
+                end
+            end
+            policy
+        rescue ArgumentError, TypeError => e
+            OpenNebula::Error.new(
+                "Invalid persisted worker disk baseline: #{e.message}",
+                OpenNebula::Error::EACTION
+            )
+        end
+
+        def reconcile_inflight_disk_resize(cluster, policy, history, raw_inflight, now)
+            inflight = raw_inflight.transform_keys(&:to_sym)
+            vm_id = Integer(inflight[:vm_id])
+            unless Array(vms).map(&:to_i).include?(vm_id)
+                @body.delete(:disk_resize_inflight)
+                rc = update
+                return rc if OpenNebula.is_error?(rc)
+                return { :action => 'abandoned-replaced-worker', :vm_id => vm_id }
+            end
+
+            status = WorkerDiskManager.vm_status(cluster.client, vm_id, policy)
+            return status if OpenNebula.is_error?(status)
+
+            disk_id = Integer(inflight[:disk_id])
+            disk = Array(status[:disks]).find do |entry|
+                entry[:disk_id] && entry[:disk_id].to_i == disk_id
+            end
+            return OpenNebula::Error.new(
+                "In-flight worker disk #{vm_id}:#{disk_id} is not observable",
+                OpenNebula::Error::EACTION
+            ) unless disk && disk[:present]
+
+            target = Integer(inflight[:to_mib])
+            if disk[:current_size_mib].to_i >= target
+                unless disk[:guest_caught_up]
+                    return inflight.merge(:action => 'waiting-for-guest-grow')
+                end
+
+                key = inflight[:key].to_s
+                history[key] = now
+                update_disk_baseline(policy, inflight[:name].to_s, target)
+                @body[:disk_autoscaling] = policy
+                @body[:disk_resize_history] = history
+                @body.delete(:disk_resize_inflight)
+                rc = update
+                return rc if OpenNebula.is_error?(rc)
+
+                rc = update_group_template(cluster)
+                return rc if OpenNebula.is_error?(rc)
+
+                return inflight.merge(
+                    :action => 'resized',
+                    :used_percent => disk[:used_percent],
+                    :current_size_mib => disk[:current_size_mib],
+                    :guest_capacity_mib => disk[:guest_capacity_mib]
+                )
+            end
+
+            started_at = Integer(inflight[:started_at] || 0)
+            waiting = started_at.positive? &&
+                      now - started_at < DISK_RESIZE_RETRY_SECONDS
+            return inflight.merge(:action => 'waiting-for-resize') if waiting
+
+            inflight[:started_at] = now
+            @body[:disk_resize_inflight] = inflight
+            rc = update
+            return rc if OpenNebula.is_error?(rc)
+
+            rc = WorkerDiskManager.resize(cluster.client, vm_id, disk_id, target)
+            return rc if OpenNebula.is_error?(rc)
+
+            inflight.merge(:action => 'resize-retried')
+        end
 
         def update_disk_baseline(policy, name, target_mib)
             target_gib = (Integer(target_mib) / 1024.0).ceil
