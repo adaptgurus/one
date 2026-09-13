@@ -145,8 +145,6 @@ module OneKS
                 OpenNebula::Error::EACTION
             ) if target < 1
 
-            return true if target == expected_size
-
             self.expected_size = target
             rc = update
             return rc if OpenNebula.is_error?(rc)
