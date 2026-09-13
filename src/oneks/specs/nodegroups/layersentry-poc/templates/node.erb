@@ -18,7 +18,8 @@ DISK = [
 DISK = [
   TYPE = "fs",
   SIZE = "<%= Integer(disk[:initial_gib]) * 1024 %>",
-  FORMAT = "<%= disk[:filesystem] %>",
+  FORMAT = "raw",
+  FS = "<%= disk[:filesystem] %>",
   TARGET = "<%= disk[:target] %>",
   LAYERSENTRY_DISK = "<%= disk[:name] %>"
 ]

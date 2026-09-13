@@ -14,7 +14,7 @@ class LayerSentryProfileTest < Minitest::Test
     assert_includes File.read(CONFIG), ":kubectl_path: '/usr/local/libexec/oneks/kubectl'"
   end
 
-  def render(type, inputs = {})
+  def render(type, inputs = {}, group_overrides = {})
     cluster = { id: 900, uuid: 'p1-test', kubernetes_version: 'v1.36.4',
                 deployment: { sched_requirements: 'CLUSTER_ID = 0',
                   networks: { public: {name: 'public'}, private: {name: 'private'} } } }
@@ -23,6 +23,7 @@ class LayerSentryProfileTest < Minitest::Test
              user_inputs_values: { count: 1, cpu: 2, vcpu: 2, memory: 4096, disk_size: 16384,
                node_image_id: 7, router_image_id: 8, router_vmgroup_id: 9,
                system_datastore_id: 4 }.merge(inputs)}
+    group.merge!(group_overrides)
     one_auth = 'test:fixture-only'
     one_xmlrpc = 'http://169.254.16.9:2633/RPC2'
     dir = File.join(ROOT, type, 'layersentry-poc')
@@ -60,6 +61,22 @@ class LayerSentryProfileTest < Minitest::Test
     assert_includes templates[:node], 'VMID = "$VMID"'
     assert_includes templates[:node], 'FEATURES = [ GUEST_AGENT = "YES" ]'
     refute_includes docs.to_s, 'cloudProviderName'
+  end
+  def test_worker_local_disk_layout_is_rendered_in_template_and_bootstrap
+    policy = { data_disks: [
+      { name: 'data-a', initial_gib: 30, filesystem: 'xfs', target: 'vdb',
+        mount: '/var/lib/layersentry/disks/data-a' },
+      { name: 'data-b', initial_gib: 30, filesystem: 'xfs', target: 'vdc',
+        mount: '/var/lib/layersentry/disks/data-b' }
+    ] }
+    docs, templates = render('nodegroups', {}, disk_autoscaling: policy)
+    assert_includes templates[:node], 'LAYERSENTRY_DISK = "data-a"'
+    assert_includes templates[:node], 'LAYERSENTRY_DISK = "data-b"'
+    assert_includes templates[:node], 'FORMAT = "raw"'
+    assert_includes templates[:node], 'FS = "xfs"'
+    commands = docs.fetch('RKE2ConfigTemplate').dig('spec', 'template', 'spec', 'preRKE2Commands').join
+    assert_includes commands, 'device=/dev/vdb'
+    assert_includes commands, 'device=/dev/vdc'
   end
   def test_remediation_preserves_the_only_control_plane
     docs, = render('controlplanes', count: 1)

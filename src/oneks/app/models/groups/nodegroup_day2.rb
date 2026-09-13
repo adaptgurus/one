@@ -121,10 +121,6 @@ module OneKS
             return policy if OpenNebula.is_error?(policy)
 
             revision = Digest::SHA256.hexdigest(JSON.generate(policy))[0, 16]
-            if @body[:disk_autoscaling] == policy && @body[:storage_revision] == revision
-                return true
-            end
-
             @body[:disk_autoscaling] = policy
             rc = update
             return rc if OpenNebula.is_error?(rc)
@@ -370,7 +366,8 @@ module OneKS
             )
             group_values = plain_body.merge(
                 :group_image_name => base_shared_name('node'),
-                :group_template_name => base_group_name('node')
+                :group_template_name => base_group_name('node'),
+                :disk_autoscaling => @body[:disk_autoscaling]
             )
             values = {
                 :cluster => cluster_values,
@@ -383,12 +380,12 @@ module OneKS
                 rendered = ERB.new(content, :trim_mode => '-').result_with_hash(values)
                 template = OneHelper::Template.find(@client, base_group_name('node'))
                 return template if OpenNebula.is_error?(template)
-                return OpenNebula::Error.new(
-                    "Worker VM template #{base_group_name('node')} not found",
-                    OpenNebula::Error::EACTION
-                ) if template.nil?
 
-                rc = OneHelper::Template.update(@client, template.id, rendered)
+                rc = if template.nil?
+                         OneHelper::Template.create(@client, rendered)
+                     else
+                         OneHelper::Template.update(@client, template.id, rendered)
+                     end
                 return rc if OpenNebula.is_error?(rc)
             end
 

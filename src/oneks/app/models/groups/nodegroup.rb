@@ -50,7 +50,8 @@ module OneKS
             group_values = plain_body.merge(
                 {
                     :group_image_name    => base_shared_name('node'),
-                    :group_template_name => base_group_name('node')
+                    :group_template_name => base_group_name('node'),
+                    :disk_autoscaling    => @body[:disk_autoscaling]
                 }
             )
 

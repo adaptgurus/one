@@ -14,6 +14,8 @@
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
 
+require 'shellwords'
+
 module OpenNebula
 
     module DocumentServer
@@ -126,14 +128,29 @@ module OpenNebula
                     vm = OpenNebula::VirtualMachine.new_with_id(vm_id, client)
                     return vm if OpenNebula.is_error?(vm)
 
-                    rc = vm.exec(cmd, stdin)
+                    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + timeout
+                    rc = nil
+                    loop do
+                        rc = vm.exec(cmd, stdin)
+                        break unless OpenNebula.is_error?(rc) &&
+                                     rc.message.include?('a command is already being executed') &&
+                                     Process.clock_gettime(Process::CLOCK_MONOTONIC) < deadline
+
+                        sleep 1
+                    end
 
                     return OpenNebula::Error.new(
                         "Command failed on VM #{vm_id}: #{rc.message}",
                         OpenNebula::Error::EACTION
                     ) if OpenNebula.is_error?(rc)
 
-                    wait_exec(vm, cmd, timeout)
+                    remaining = deadline - Process.clock_gettime(Process::CLOCK_MONOTONIC)
+                    return OpenNebula::Error.new(
+                        "Timeout submitting command on VM #{vm_id}",
+                        OpenNebula::Error::EACTION
+                    ) unless remaining.positive?
+
+                    wait_exec(vm, cmd, remaining)
                 rescue StandardError => e
                     OpenNebula::Error.new(
                         "Error executing command on VM #{vm_id}: #{e.message}",
@@ -149,7 +166,11 @@ module OpenNebula
                             return rc if OpenNebula.is_error?(rc)
 
                             qemu_exec = vm.to_hash.dig('VM', 'TEMPLATE', 'QEMU_GA_EXEC') || {}
-                            next sleep(1) unless qemu_exec['COMMAND'] == cmd
+                            observed_cmd = qemu_exec['COMMAND'].to_s
+                            same_command = observed_cmd == cmd ||
+                                           Shellwords.shellsplit(observed_cmd) ==
+                                           Shellwords.shellsplit(cmd)
+                            next sleep(1) unless same_command
 
                             result = exec_result(qemu_exec)
 
