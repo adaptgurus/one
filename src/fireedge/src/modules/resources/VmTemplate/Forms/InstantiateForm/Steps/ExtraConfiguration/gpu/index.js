@@ -7,10 +7,7 @@ import { useEffect, useMemo } from 'react'
 import { FormWithSchema } from '@ComponentsModule'
 import { useGeneralApi } from '@FeaturesModule'
 import { getPublishedGpuProfiles } from '@UtilsModule'
-import {
-  STEP_ID as EXTRA_ID,
-  TabType,
-} from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration'
+import { STEP_ID as EXTRA_ID } from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration'
 import { FIELDS } from './schema'
 
 const Gpu = ({ vmTemplate }) => {
@@ -44,7 +41,7 @@ const Gpu = ({ vmTemplate }) => {
 
 Gpu.propTypes = { vmTemplate: PropTypes.object }
 
-/** @type {TabType} */
+/** Native extra-configuration tab descriptor. */
 export default {
   id: 'gpu',
   name: 'GPU',
