@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This branch converts the OpenNebula FireEdge authenticated `cloud` view into the LayerSentry customer self-service portal while preserving OpenNebula, OneKS and OneFlow as the authoritative lifecycle engines. The portal does not introduce a second VM, Kubernetes, storage, network or backup controller.
+This branch converts the OpenNebula FireEdge authenticated `cloud` view into the LayerSentry customer self-service portal while preserving OpenNebula, OneKS and OneFlow as the authoritative lifecycle engines. It does not introduce a second VM, Kubernetes, storage, network or backup controller.
 
 The `admin`, `groupadmin`, `user`, login and layout-free Guacamole console experiences are not replaced. Provider infrastructure such as Hosts, Datastores, OpenNebula Clusters, Providers, Zones, global ACLs and VDC administration remains outside the ordinary customer view.
 
@@ -12,12 +12,15 @@ Evidence base:
 - parent: `layersentry/p1-rke2-provisioning@6746b9e22d63a0d7ef64154fd22a8161087e7b68`
 - exact parent is one commit above OpenNebula `release-7.4.1`
 - central engineering contract: `adaptgurus/codexagentlogic`
-- PR: `adaptgurus/one#1`, intentionally kept draft until live staging gates are complete
-- final runtime/source head qualified after lint and CI remediation: `32e7749c7ef7163025132a47f47d2200c76c6ae6`
-- final OpenNebula smoke run on that source: GitHub Actions run `34672062913`
-- final exact-source production re-audit: GitHub Actions run `34672189834`
-- Node 22 production job: `103495512827`
-- Node 18 floor job: `103495512685`
+- PR: `adaptgurus/one#1`, intentionally kept draft until live staging and protected-file approval are complete
+- zero-advisory dependency closure: `ec32f66b939ea84c4beef65a6b625103db5e2b77`
+- dependency closure qualification: GitHub Actions run `34729739804`
+- final source qualification: GitHub Actions run `34730278610`
+- permanent FireEdge security qualification: GitHub Actions run `34730280341`
+- feature-branch push smoke: GitHub Actions run `34730278624`
+- PR smoke: GitHub Actions run `34730280290`
+- cross-module import validation: GitHub Actions run `34730280337`
+- supported FireEdge runtime floor: Node `>=22`
 
 ## Implemented source scope
 
@@ -30,7 +33,7 @@ Evidence base:
 | VM disks and disk snapshots | SOURCE_COMPLETE | Native image/volatile attach, detach, resize, save-as and disk snapshots |
 | VM NICs and traffic-rule attachment | SOURCE_COMPLETE | Native VNet/NIC/security-group actions |
 | Dedicated PCI/GPU after creation | SOURCE_COMPLETE | Native PCI inventory/attach/detach; host/device qualification still requires live hardware evidence |
-| GPU selection during VM creation | SOURCE_COMPLETE | Customer selects provider-published `LAYERSENTRY_GPU_PROFILES`; physical PCI addresses are never exposed; the authoritative template is re-resolved into native PCI vectors |
+| GPU selection during VM creation | SOURCE_COMPLETE | Customer selects provider-published `LAYERSENTRY_GPU_PROFILES`; physical PCI addresses are not exposed; the authoritative template is re-resolved into native PCI vectors |
 | VM system snapshots/history/logs | SOURCE_COMPLETE | Native VM tabs |
 | VM backup configure/create/restore | SOURCE_COMPLETE | Native OpenNebula backup operations and backend limitations apply |
 | VM scheduled actions | SOURCE_COMPLETE | Native scheduled actions |
@@ -46,10 +49,10 @@ Evidence base:
 | Customer backups and backup jobs | SOURCE_COMPLETE | Native backup records/jobs/schedules/start/cancel/restore |
 | Account, SSH public key, quotas | SOURCE_COMPLETE | Native user auth/quota pages; private key and auth-driver changes disabled |
 | Accounting/showback | SOURCE_COMPLETE | Native accounting/showback; not presented as invoicing |
-| Zendesk support | SOURCE_COMPLETE in source | Migrated to `node-zendesk` 6 Promise API; real tenant Zendesk configuration still needs staging acceptance |
+| Zendesk support | SOURCE_COMPLETE in source | `node-zendesk` 6 Promise API; real tenant Zendesk configuration still requires staging acceptance |
 | Native monitoring | SOURCE_COMPLETE for OpenNebula VM CPU/memory charts | Existing FireEdge monitoring data |
 | Alerts & attention | SOURCE_COMPLETE read-only observer | Native VM, BackupJob and OneKS state; no fake acknowledgement/recovery state |
-| DC/DR request during VM create | SOURCE_COMPLETE for intent capture | `LAYERSENTRY_PROTECTION` metadata is `REQUESTED_NOT_ACTIVE`; no replication is claimed |
+| DC/DR request during VM creation | SOURCE_COMPLETE for intent capture | `LAYERSENTRY_PROTECTION` metadata remains `REQUESTED_NOT_ACTIVE`; no replication is claimed |
 | DC/DR activation/history/failover/failback | PENDING P3 backend | Requires qualified checkpoint/replication/recovery service and data-safety gates |
 | Per-cluster optional Helm plugins | PENDING P2 backend adapter | Central catalog/compatibility contract exists; runtime install API is not fabricated in FireEdge |
 | Customer Grafana SSO/dashboard integration | PENDING backend adapter | Native charts remain; tenant authorization must be enforced server-side |
@@ -66,7 +69,7 @@ Customer surfaces include images/media, native backups and backup jobs, networks
 
 ## Creation-time GPU profiles
 
-The customer VM instantiate flow no longer exposes the native host PCI picker. Administrators publish bounded `LAYERSENTRY_GPU_PROFILES` on an approved VM template. The portal:
+The customer VM instantiate flow does not expose the native host PCI picker. Administrators publish bounded `LAYERSENTRY_GPU_PROFILES` on an approved VM template. The portal:
 
 1. validates profile IDs and GPU PCI class;
 2. strips physical PCI addresses from customer-visible data;
@@ -79,7 +82,7 @@ Dedicated-device/vGPU migration, snapshot and host-compatibility behavior must s
 
 ## VM Backup & DR request at creation time
 
-The existing VM-template instantiation flow includes a cloud-only **Backup & DR** tab. It can capture requested DC/DR retained points (or Keep all), copy interval, recovery site/network/VLAN, address preservation/change, IPv4/IPv6, subnet/prefix, gateway, DNS and isolated test network.
+The existing VM-template instantiation flow includes a cloud-only **Backup & DR** tab. It captures requested DC/DR retained points (or Keep all), copy interval, recovery site/network/VLAN, address preservation/change, IPv4/IPv6, subnet/prefix, gateway, DNS and isolated test network.
 
 Only a user-modified tab adds a sanitized, versioned `LAYERSENTRY_PROTECTION` vector. It explicitly records `REQUEST_STATE=REQUESTED_NOT_ACTIVE`. It cannot reserve an address/VLAN, activate copying, prune recovery chains, fence a source, fail over/fail back a VM, or prove recoverability. P3 remains responsible for validating and activating supported policies.
 
@@ -97,81 +100,93 @@ Until that adapter exists, native OneKS lifecycle is source-complete but optiona
 
 ## Dependency and security modernization
 
-The inherited FireEdge lock initially reported **6 critical, 29 high, 15 moderate and 9 low** advisories under `npm audit --omit=dev`.
+The inherited FireEdge runtime initially reported **6 critical, 29 high, 15 moderate and 9 low** advisories under `npm audit --omit=dev`.
 
-The validated hardened lock now includes patched versions of the directly exposed/network/security-sensitive dependencies, including Axios, DOMPurify, Express, fast-xml-parser, `http-proxy-middleware`, Immutable, jsonwebtoken, Lodash, Luxon, Multer, Socket.IO client/server, Webpack and `node-zendesk`. `d3-scale` is upgraded and `d3-color` is pinned to the fixed 3.1.0 implementation. The legacy `opennebula-guacamole` package is constrained to patched compatible Luxon/`ws` transitives.
+The runtime dependency set was modernized and the Jimp image path migrated to its v1 API. The hardened set includes patched versions of the directly exposed/network/security-sensitive dependencies and compatibility updates for the Webpack/Babel chain. `d3-color` remains pinned to 3.1.0; legacy `opennebula-guacamole` transitives are constrained to patched compatible Luxon/`ws` versions; and `qs` is constrained to 6.16.0.
 
-The exact hardened lock audit recorded before the final formatting/CI cleanup is:
+Development/build-chain findings were then closed with a separately qualified dependency closure, including:
 
-- **0 critical**
-- **1 high**
-- **12 moderate**
-- **3 low**
-- **16 total**
+- `eslint-import-resolver-webpack` 0.13.11;
+- `webpack-dev-middleware` 5.3.4;
+- `@babel/core` 7.29.7 for `eslint-config-opennebula`; and
+- compatible transitive lock updates including patched `flatted`, `js-yaml` and `bn.js` paths.
 
-The final exact-source re-audit used the same unchanged `package.json`/`package-lock.json` and independently passed the zero-critical audit gate. The remaining high is `serialize-javascript` through the legacy Webpack build-tool chain (`copy-webpack-plugin` / `terser-webpack-plugin`). The audit-proposed remediation is a semver-major build-tool upgrade. It is not used as a FireEdge HTTP request handler. That remaining build-chain upgrade is deliberately not forced into this portal branch without a separate build-tool compatibility qualification.
+The exact dependency tree was accepted only after tests, lint, the complete FireEdge production build and real Chromium passed. Current locked Node 22 audits are:
 
-`node-zendesk` 6 requires modern Node. FireEdge declares **Node >=18**. The final source was tested with Node 22 for the full production path and with Node 18 for locked install, all LayerSentry tests and `build-server`. Production packaging should prefer a currently supported Node LTS rather than treating Node 18 as the operational recommendation.
+- runtime `npm audit --omit=dev`: **0 critical / 0 high / 0 moderate / 0 low / 0 total**;
+- complete `npm audit`: **0 critical / 0 high / 0 moderate / 0 low / 0 total**.
+
+FireEdge declares **Node >=22**. Node 22 is the minimum qualified runtime for this branch.
+
+`src/fireedge/tests/layersentry/dependency-security.test.cjs` pins the qualified dependency and Jimp API contract. The permanent `.github/workflows/layersentry-fireedge-security.yml` workflow performs locked install, runtime and complete audits, LayerSentry regression tests, lint and the complete production build whenever the dependency/security contract changes.
 
 ## Zendesk and Guacamole compatibility hardening
 
-The support API was migrated from the callback-era `node-zendesk` 2.x integration to the v6 Promise API. Focused tests cover authentication, ticket listing/status counts, comments, create/update response envelopes, attachment token ordering, upload failures and session denial. Failed attachment uploads now complete the route with an error instead of leaving a request hanging.
+The support API was migrated from the callback-era `node-zendesk` integration to the v6 Promise API. Focused tests cover authentication, ticket listing/status counts, comments, create/update response envelopes, attachment token ordering, upload failures and session denial. Failed attachment uploads now complete the route with an error instead of leaving a request hanging.
 
-The Guacamole external-console proxy was migrated from the old `http-proxy-middleware` two-argument API to the modern one-object options contract and pinned to patched `http-proxy-middleware` **3.0.7**, which preserves the declared Node 18 runtime floor. Tests preserve the external path filter, WebSocket upgrade hook, path rewrite, authoritative zone routing, RPC-host fallback and WebSocket negotiation headers. No request Host header is accepted as a routing target.
+The Guacamole external-console proxy uses the modern one-object `http-proxy-middleware` API and patched `http-proxy-middleware` **3.0.7** within the declared Node >=22 runtime contract. Tests preserve the external path filter, WebSocket upgrade hook, path rewrite, authoritative zone routing, RPC-host fallback and WebSocket negotiation headers. No request Host header is accepted as a routing target.
 
 ## CI and source-quality remediation
 
-The initial repository-wide smoke failure was not accepted as an unexplained inherited blocker. It had two separate causes, both addressed:
+The original CI failures were investigated rather than suppressed.
 
-1. The smoke workflow installed an unversioned latest RuboCop. A new RuboCop rule caused the unchanged OpenNebula `release-7.4.1` line to start failing. The workflow now uses reproducible RuboCop **1.89.0**. Pull requests run every non-Ruby smoke test plus RuboCop on Ruby files actually changed by the PR; push/manual runs retain the full repository smoke suite. This PR changes no Ruby source, so unrelated inherited Ruby debt no longer masks P2 quality while any future changed Ruby file still remains lint-gated.
-2. Once the smoke suite reached FireEdge, it exposed real LayerSentry ESLint/Prettier/header/JSDoc defects. Those source defects were corrected directly; they were not suppressed by blanket lint exclusions.
+1. RuboCop is pinned to reproducible version **1.89.0** instead of installing an unversioned latest release.
+2. Pull requests run every non-Ruby smoke test plus RuboCop on Ruby files actually changed by the PR.
+3. Feature-branch pushes run every non-Ruby smoke test, so inherited repository-wide Ruby debt cannot make unrelated P2 FireEdge work permanently red.
+4. Stable branches and manual workflow runs retain the full repository RuboCop sweep.
+5. PR #1 changes no Ruby source, so the changed-Ruby gate is correctly empty rather than bypassed.
+6. Real FireEdge ESLint/Prettier/header/JSDoc defects exposed during smoke qualification were fixed directly.
+7. The LayerSentry GPU and Backup-&-DR tabs no longer import `TabType` as a runtime symbol. The two branch-introduced Webpack `export not found` warnings are removed, and the final qualification contains an explicit warning gate for those files.
+8. Cross-module import validation is green.
 
-The resulting clean runtime/source head `32e7749c7ef7163025132a47f47d2200c76c6ae6` passed OpenNebula Smoke Tests run `34672062913`, including FireEdge client/server lint and all later non-Ruby smoke checks.
+The protected-files workflow was repaired rather than bypassed. It validates configuration, handles review state, disallows PR-author self-approval and fails closed when the required human review cannot be obtained.
 
-The protected-files workflow was also repaired rather than bypassed. It now has the GitHub permission needed to request reviewers, validates configuration, paginates changed files/reviews, uses the latest non-dismissed review state, disallows PR-author self-approval, and fails closed with a clear message when reviewer auto-request is unavailable. The two configured approvers (`rsmontero`, `xorel`) currently have only read access on this fork; GitHub therefore rejects automatic review assignment because requested reviewers must be collaborators. That remaining status is a genuine repository-governance/human-approval gate, not a package-validation or workflow-code defect.
+The configured approvers (`rsmontero`, `xorel`) are not currently eligible collaborators on this fork, so GitHub cannot satisfy the protected-file human-approval rule automatically. This remains a repository-governance gate, not a package-validation or workflow-code defect.
 
 ## Final automated validation evidence
 
-Before the hardened manifest/lock was committed, the dependency candidate passed all of the following:
+### Zero-advisory dependency closure
 
-- **117 / 117 LayerSentry integration/regression tests** on Node 22;
-- complete FireEdge production build (`build-client`, `build-server`, all module-federation remotes);
-- security audit gate with zero critical findings and the counts documented above;
-- locked install on Node 18;
-- **117 / 117 LayerSentry tests** on Node 18; and
-- FireEdge `build-server` on Node 18.
+Commit `ec32f66b939ea84c4beef65a6b625103db5e2b77` was qualified in GitHub Actions run `34729739804` before publication:
 
-The generated `package.json` and `package-lock.json` were committed together from the validated working tree so the branch never intentionally carried a mismatched manifest/lock.
+- locked Node 22 install passed;
+- runtime audit: **0 vulnerabilities**;
+- complete audit including development/build dependencies: **0 vulnerabilities**;
+- **117 / 117 LayerSentry integration/regression tests passed** before the two dependency-contract tests were added;
+- FireEdge client/server lint passed;
+- complete FireEdge production build passed (`build-client`, `build-server`, all module-federation remotes); and
+- real Playwright/Chromium acceptance passed.
 
-After all smoke/lint/source cleanup, exact-source production re-audit run `34672189834` requalified `32e7749c7ef7163025132a47f47d2200c76c6ae6`:
+### Final source qualification
 
-### Node 22 production job `103495512827`
+Run `34730278610` validated the source after the durable dependency tests/workflow, feature-push smoke correction, and GPU/Backup-&-DR warning fixes:
 
-- exact locked `npm ci` passed;
-- hardened dependency contract passed, including Node `>=18`, `http-proxy-middleware` 3.0.7, `node-zendesk` 6.0.1, Webpack 5.110.3 and `d3-color` 3.1.0;
-- **117 / 117 LayerSentry integration/regression tests passed**;
-- FireEdge client and server lint passed;
+- runtime audit remained **0 vulnerabilities**;
+- complete audit remained **0 vulnerabilities**;
+- **119 / 119 LayerSentry tests passed**;
+- FireEdge lint passed;
 - complete FireEdge production build passed;
-- runtime audit passed the zero-critical gate on the unchanged hardened lock;
-- Playwright/Chromium was installed without modifying the repository lock;
-- the browser acceptance harness built successfully; and
-- **real Chromium acceptance passed**.
+- the explicit LayerSentry GPU/protection Webpack-warning gate passed; and
+- real Chromium acceptance passed.
 
-### Node 18 floor job `103495512685`
+That one-shot run is red only because its final post-validation evidence Git commit/push step failed. Every product qualification gate above completed successfully; publishing this documentation does not alter the qualified runtime/package tree.
 
-- exact locked install passed;
-- **117 / 117 LayerSentry tests passed**; and
-- FireEdge `build-server` passed.
+### Durable and independent CI evidence
 
-The Chromium harness covers actual browser rendering, light/dark appearance, scoped styles, reversible classic appearance without losing an unsaved field, keyboard focus visibility, request-only DR evidence, published GPU evidence, attention severity, JavaScript/console errors and 375px mobile overflow. It uses the same automatic JSX runtime contract as production FireEdge and waits for React effect cleanup during appearance switching.
+- permanent FireEdge security run `34730280341`: **GREEN** — locked install, both zero-advisory audits, expanded tests, lint and complete production build;
+- feature-branch push smoke run `34730278624`: **GREEN**;
+- PR smoke run `34730280290`: **GREEN**;
+- cross-module import run `34730280337`: **GREEN**.
 
-Temporary qualification/formatter workflows used to obtain the evidence were removed from the deliverable after their runs completed. Their removal does not alter the qualified runtime source/package tree.
+The Chromium harness covers actual browser rendering, light/dark appearance, scoped styles, reversible classic appearance without losing an unsaved field, keyboard focus visibility, request-only DR evidence, published GPU evidence, attention severity, JavaScript/console errors and 375px mobile overflow.
+
+Temporary qualification workflows are not part of the intended deliverable. The permanent `layersentry-fireedge-security.yml` workflow remains as the dependency/audit/build regression gate.
 
 ## Readiness interpretation
 
 ### Native self-service portal source/CI readiness
 
-For the **implemented P2 native self-service portal scope**, source and automated CI qualification are complete: OpenNebula smoke, cross-module validation, exact locked installs, Node 22 and Node 18 LayerSentry tests, FireEdge lint, full production build, zero-critical audit gate and real Chromium acceptance are green.
+For the **implemented P2 native self-service portal scope**, source and automated CI qualification are complete: OpenNebula smoke, cross-module validation, exact locked installs, Node 22 LayerSentry tests, both zero-advisory audit gates, FireEdge lint, the complete production build and real Chromium acceptance are green.
 
 This does not silently include backend products that are explicitly separate workstreams, and it does not convert repository evidence into a live-deployment certificate.
 
@@ -204,4 +219,4 @@ Keep PR #1 draft and production unchanged until these live gates have evidence a
 
 **Use classic appearance** changes presentation only and does not navigate or remount the native Router/ModalHost. `layersentry-ui=classic` is an emergency per-location appearance fallback. Deployment rollback must use a complete prior FireEdge artifact/package; never mix client/remote-module outputs from different builds and never roll back cloud resources merely to roll back UI presentation.
 
-The authorized remote desktop/lab endpoint was rechecked on 2026-09-12 and remains offline (last seen 2026-09-07), so no installed frontend, customer VM, storage object, real console session, Zendesk tenant or DR environment was modified or live-verified during this completion pass.
+The authorized remote desktop/lab endpoint was last rechecked on 2026-09-12 and was offline (last seen 2026-09-07), so no installed frontend, customer VM, storage object, real console session, Zendesk tenant or DR environment was modified or live-verified during this completion pass.
