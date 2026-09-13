@@ -2,6 +2,7 @@
 
 module OneKS
 
+    # Day-2 replay-safe extensions to the native OneKS event manager.
     class EventManager
 
         # Replays a matching in-flight scale intent instead of dropping it. Native
@@ -31,14 +32,16 @@ module OneKS
 
                     Log.info(
                         COMP,
-                        "#{group_type} (ID=#{group_id}) replaying idempotent scale target #{target}",
+                        "#{group_type} (ID=#{group_id}) replaying idempotent " \
+                        "scale target #{target}",
                         cluster_id
                     )
                 else
                     if target == group.expected_size
                         Log.info(
                             COMP,
-                            "#{group_type} (ID=#{group_id}) already has target #{target}, skipping scale",
+                            "#{group_type} (ID=#{group_id}) already has target " \
+                            "#{target}, skipping scale",
                             cluster_id
                         )
                         skipped = true
