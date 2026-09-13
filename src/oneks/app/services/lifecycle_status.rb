@@ -51,6 +51,9 @@ module OneKS
         workers = aggregate(worker_groups)
 
         {
+          :cluster_id => cluster.id,
+          :cluster_name => cluster.name,
+          :kubernetes_version => cluster.kubernetes_version,
           :control_plane => cp_status,
           :workers => workers.merge(:groups => worker_groups),
           :nodes => node_rows,
@@ -72,6 +75,9 @@ module OneKS
         end
 
         {
+          :cluster_id => cluster.id,
+          :cluster_name => cluster.name,
+          :kubernetes_version => cluster.kubernetes_version,
           :control_plane => base_group_status(cp).merge(
             :etcd => { :verified => false, :members => nil }
           ),
@@ -84,7 +90,7 @@ module OneKS
       end
 
       def base_group_status(group)
-        {
+        result = {
           :group_id => group.id,
           :uuid => group.uuid,
           :desired => Integer(group.user_inputs_values[:count] || 0),
@@ -93,10 +99,12 @@ module OneKS
           :ready => 0,
           :vm_ids => Array(group.vms).map(&:to_i),
           :node_names => [],
+          :kubernetes_versions => [],
           :conditions => []
         }
+        enrich_group_config(result, group)
       rescue ArgumentError, TypeError
-        {
+        result = {
           :group_id => group.id,
           :uuid => group.uuid,
           :desired => 0,
@@ -105,8 +113,10 @@ module OneKS
           :ready => 0,
           :vm_ids => Array(group.vms).map(&:to_i),
           :node_names => [],
+          :kubernetes_versions => [],
           :conditions => []
         }
+        enrich_group_config(result, group)
       end
 
       def control_plane(cluster)
@@ -126,8 +136,10 @@ module OneKS
         ready_nodes = joined_nodes.select { |node| node[:ready] }
         status = resource['status'] || {}
         spec = resource['spec'] || {}
+        metadata = resource['metadata'] || {}
+        annotations = metadata['annotations'] || {}
 
-        {
+        result = {
           :group_id => group.id,
           :uuid => group.uuid,
           :desired => Integer(group.user_inputs_values[:count] || spec['replicas'] || 0),
@@ -136,13 +148,36 @@ module OneKS
           :provider_ready => integer_or_nil(status['readyReplicas']),
           :provider_available => integer_or_nil(status['availableReplicas']),
           :provider_updated => integer_or_nil(status['updatedReplicas'] || status['upToDateReplicas']),
+          :provider_generation => integer_or_nil(metadata['generation']),
+          :provider_observed_generation => integer_or_nil(status['observedGeneration']),
           :created => vm_ids.length,
           :joined => joined_nodes.length,
           :ready => ready_nodes.length,
           :vm_ids => vm_ids,
           :node_names => joined_nodes.map { |node| node[:name] },
+          :kubernetes_versions => joined_nodes.map { |node| node[:kubelet_version] }.compact.uniq.sort,
+          :shape_revision => spec.dig('template', 'metadata', 'annotations', K8s::SHAPE_REVISION),
+          :autoscaling_runtime => autoscaling_from_annotations(annotations),
           :conditions => normalized_conditions(status['conditions'])
         }
+        enrich_group_config(result, group)
+      end
+
+      def enrich_group_config(result, group)
+        return result unless group.is_a?(NodeGroup)
+
+        values = group.user_inputs_values || {}
+        result[:shape] = {
+          :cpu => integer_or_nil(values[:cpu]),
+          :vcpu => integer_or_nil(values[:vcpu]),
+          :memory => integer_or_nil(values[:memory]),
+          :disk_size => integer_or_nil(values[:disk_size])
+        }
+        result[:shape_revision_desired] = group.body[:shape_revision]
+        result[:autoscaling] = group.body[:autoscaling] || {
+          :enabled => false
+        }
+        result
       end
 
       def aggregate(groups)
@@ -269,6 +304,18 @@ module OneKS
           "Kubernetes runtime query failed: #{e.message}",
           OpenNebula::Error::EACTION
         )
+      end
+
+      def autoscaling_from_annotations(annotations)
+        min = annotations[K8s::AUTOSCALER_MIN]
+        max = annotations[K8s::AUTOSCALER_MAX]
+        return { :enabled => false } if min.nil? || max.nil?
+
+        {
+          :enabled => true,
+          :min => integer_or_nil(min),
+          :max => integer_or_nil(max)
+        }
       end
 
       def integer_or_nil(value)
