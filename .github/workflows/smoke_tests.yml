@@ -78,12 +78,23 @@ jobs:
             rubocop --force-exclusion -- "${ruby_files[@]}"
           fi
 
-      - name: Run full smoke tests
-        if: github.event_name != 'pull_request'
+      - name: Run feature-branch push smoke tests without inherited RuboCop debt
+        if: github.event_name == 'push' && github.ref_name != 'master' && startsWith(github.ref_name, 'one-') == false
+        shell: bash
+        run: |
+          set -euo pipefail
+          for test_script in "$GITHUB_WORKSPACE"/share/smoke_tests/tests/*.sh; do
+            [[ "$(basename "$test_script")" == '02-rubocop.sh' ]] && continue
+            echo "Executing $test_script"
+            "$test_script"
+          done
+
+      - name: Run full smoke tests on stable or manual runs
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'master' || startsWith(github.ref_name, 'one-')))
         run: $GITHUB_WORKSPACE/share/smoke_tests/smoke_tests.sh
 
       - name: Create PR for new RuboCop rules
-        if: failure() && github.event_name != 'pull_request'
+        if: failure() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'master' || startsWith(github.ref_name, 'one-'))))
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
