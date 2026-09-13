@@ -104,6 +104,112 @@ module OneKS
             )
         end
 
+
+        def configure_disk_autoscaling(requested)
+            policy = WorkerDiskManager.normalize(requested)
+            return policy if OpenNebula.is_error?(policy)
+
+            current_root_gib = (Integer(user_inputs_values[:disk_size]) / 1024.0).ceil
+            if policy[:root_max_gib] < current_root_gib
+                return OpenNebula::Error.new(
+                    'Root disk autoscaling maximum cannot be below the current root size',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
+            return true if @body[:disk_autoscaling] == policy
+
+            @body[:disk_autoscaling] = policy
+            rc = update
+            return rc if OpenNebula.is_error?(rc)
+
+            cluster = parent_cluster
+            return cluster if OpenNebula.is_error?(cluster)
+
+            rc = update_group_template(cluster)
+            return rc if OpenNebula.is_error?(rc)
+
+            spec = render
+            return spec if OpenNebula.is_error?(spec)
+
+            rc = K8s.apply(cluster.client, cluster.leader, spec)
+            return rc if OpenNebula.is_error?(rc)
+
+            revision = Digest::SHA256.hexdigest(JSON.generate(policy))[0, 16]
+            rc = K8s.rollout_nodegroup_storage(
+                cluster.client, cluster.leader, uuid, revision
+            )
+            return rc if OpenNebula.is_error?(rc)
+
+            @body[:storage_revision] = revision
+            update
+        rescue StandardError => e
+            OpenNebula::Error.new(
+                "Worker disk autoscaling configuration failed: #{e.message}",
+                OpenNebula::Error::EACTION
+            )
+        end
+
+        def reconcile_disk_autoscaling(now: Time.now.to_i)
+            policy = @body[:disk_autoscaling]
+            return { :action => 'disabled' } unless policy && policy[:enabled]
+
+            cluster = parent_cluster
+            return cluster if OpenNebula.is_error?(cluster)
+
+            history = @body[:disk_resize_history] ||= {}
+            Array(vms).sort.each do |vm_id|
+                status = WorkerDiskManager.vm_status(cluster.client, vm_id, policy)
+                return status if OpenNebula.is_error?(status)
+
+                Array(status[:disks]).each do |disk|
+                    next unless disk[:present]
+                    next unless disk[:used_percent].to_i > policy[:threshold_percent]
+                    next unless disk[:guest_caught_up]
+                    next if disk[:current_size_mib].to_i >= disk[:max_size_mib].to_i
+
+                    key = "#{vm_id}:#{disk[:disk_id]}"
+                    last = Integer(history[key] || 0)
+                    next if last.positive? && now - last < policy[:cooldown_seconds]
+
+                    increment_mib = policy[:increment_gib] * 1024
+                    target = [disk[:current_size_mib] + increment_mib,
+                              disk[:max_size_mib]].min
+                    rc = WorkerDiskManager.resize(
+                        cluster.client, vm_id, disk[:disk_id], target
+                    )
+                    return rc if OpenNebula.is_error?(rc)
+
+                    history[key] = now
+                    update_disk_baseline(policy, disk[:name], target)
+                    @body[:disk_autoscaling] = policy
+                    @body[:disk_resize_history] = history
+                    rc = update
+                    return rc if OpenNebula.is_error?(rc)
+
+                    rc = update_group_template(cluster)
+                    return rc if OpenNebula.is_error?(rc)
+
+                    return {
+                        :action => 'resized',
+                        :vm_id => vm_id.to_i,
+                        :disk_id => disk[:disk_id],
+                        :name => disk[:name],
+                        :from_mib => disk[:current_size_mib],
+                        :to_mib => target,
+                        :used_percent => disk[:used_percent]
+                    }
+                end
+            end
+
+            { :action => 'none' }
+        rescue ArgumentError, TypeError => e
+            OpenNebula::Error.new(
+                "Worker disk autoscaling reconciliation failed: #{e.message}",
+                OpenNebula::Error::EACTION
+            )
+        end
+
         private
 
         def normalize_shape(requested)
@@ -135,6 +241,21 @@ module OneKS
             OpenNebula::Error.new(
                 'Worker shape values must be integers', OpenNebula::Error::EACTION
             )
+        end
+
+
+        def update_disk_baseline(policy, name, target_mib)
+            target_gib = (Integer(target_mib) / 1024.0).ceil
+            if name == 'root'
+                user_inputs_values[:disk_size] = [Integer(user_inputs_values[:disk_size]),
+                                                  Integer(target_mib)].max
+                return
+            end
+
+            disk = Array(policy[:data_disks]).find {|entry| entry[:name] == name }
+            return unless disk
+
+            disk[:initial_gib] = [Integer(disk[:initial_gib]), target_gib].max
         end
 
         def update_group_template(cluster)

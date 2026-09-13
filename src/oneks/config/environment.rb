@@ -35,6 +35,7 @@ require_relative File.join(APP_ROOT, 'lib', 'helpers', 'appliance_helper')
 require_relative File.join(APP_ROOT, 'lib', 'helpers', 'oneks_helper')
 require_relative File.join(APP_ROOT, 'lib', 'helpers', 'k8s_helper')
 require_relative File.join(APP_ROOT, 'lib', 'helpers', 'k8s_day2_helper')
+require_relative File.join(APP_ROOT, 'lib', 'helpers', 'worker_disk_manager')
 require_relative File.join(APP_ROOT, 'lib', 'fakes', 'k8s_fake')
 
 OneHelper::Image.extend(OneKS::OneHelperExtensions::Image)

@@ -23,6 +23,7 @@ module OneKS
             AUTOSCALER_CPU = 'capacity.cluster-autoscaler.kubernetes.io/cpu'
             AUTOSCALER_MEMORY = 'capacity.cluster-autoscaler.kubernetes.io/memory'
             SHAPE_REVISION = 'layersentry.io/shape-revision'
+            STORAGE_REVISION = 'layersentry.io/storage-revision'
 
             # Keep control-plane remediation policy synchronized with replica count.
             # CAPRKE2 remains the control-plane owner; automatic remediation is only
@@ -80,6 +81,21 @@ module OneKS
                             'template' => {
                                 'metadata' => {
                                     'annotations' => { SHAPE_REVISION => revision.to_s }
+                                }
+                            }
+                        }
+                    }
+                )
+            end
+
+            def rollout_nodegroup_storage(client, leader, group_uuid, revision)
+                patch_machine_deployment(
+                    client, leader, group_uuid,
+                    {
+                        'spec' => {
+                            'template' => {
+                                'metadata' => {
+                                    'annotations' => { STORAGE_REVISION => revision.to_s }
                                 }
                             }
                         }

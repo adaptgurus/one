@@ -260,6 +260,62 @@ module OneKS
             rescue StandardError => e
                 general_error(e)
             end
+
+            app.post '/clusters/:id/nodegroups/:nodegroup_id/disk-autoscaling' do
+                payload = check_body(request)
+                cluster = lifecycle_cluster(params[:id])
+                return internal_error(
+                    cluster.message, one_error_to_http(cluster.errno)
+                ) if OpenNebula.is_error?(cluster)
+
+                group = lifecycle_worker_group(cluster, params[:nodegroup_id])
+                return internal_error(
+                    group.message, one_error_to_http(group.errno)
+                ) if OpenNebula.is_error?(group)
+
+                rc = group.configure_disk_autoscaling(payload)
+                return internal_error(
+                    rc.message, one_error_to_http(rc.errno)
+                ) if OpenNebula.is_error?(rc)
+
+                status 202
+                body process_response(
+                    {
+                        :cluster_id => cluster.id,
+                        :nodegroup_id => group.id,
+                        :disk_autoscaling => group.body[:disk_autoscaling],
+                        :storage_revision => group.body[:storage_revision]
+                    }
+                )
+            rescue ODS::RequestHelper::InvalidRequestError => e
+                internal_error(e.message, ODS::ResponseHelper::VALIDATION_EC)
+            rescue StandardError => e
+                general_error(e)
+            end
+
+            app.post '/clusters/:id/nodegroups/:nodegroup_id/disk-autoscaling/reconcile' do
+                cluster = lifecycle_cluster(params[:id])
+                return internal_error(
+                    cluster.message, one_error_to_http(cluster.errno)
+                ) if OpenNebula.is_error?(cluster)
+
+                group = lifecycle_worker_group(cluster, params[:nodegroup_id])
+                return internal_error(
+                    group.message, one_error_to_http(group.errno)
+                ) if OpenNebula.is_error?(group)
+
+                result = group.reconcile_disk_autoscaling
+                return internal_error(
+                    result.message, one_error_to_http(result.errno)
+                ) if OpenNebula.is_error?(result)
+
+                status 202
+                body process_response(
+                    result.merge(:cluster_id => cluster.id, :nodegroup_id => group.id)
+                )
+            rescue StandardError => e
+                general_error(e)
+            end
         end
 
     end

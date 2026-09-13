@@ -35,6 +35,22 @@ spec:
         test -n "$vmid" &&
         install -d -m 0700 /etc/rancher/rke2/config.yaml.d &&
         printf 'kubelet-arg:\n  - provider-id=one://%s\n' "$vmid" > /etc/rancher/rke2/config.yaml.d/90-opennebula-identity.yaml
+<% Array(group.dig(:disk_autoscaling, :data_disks)).each do |disk| %>
+      - |-
+        device=/dev/<%= disk[:target] %>
+        mountpoint=<%= disk[:mount] %>
+        retry=60
+        while [ ! -b "$device" ] && [ "$retry" -gt 0 ]; do retry=$((retry-1)); sleep 2; done
+        test -b "$device"
+        install -d -m 0755 "$mountpoint"
+        if ! blkid -s TYPE -o value "$device" >/dev/null 2>&1; then
+          mkfs.<%= disk[:filesystem] %> -f "$device"
+        fi
+        uuid=$(blkid -s UUID -o value "$device")
+        test -n "$uuid"
+        grep -q "^UUID=$uuid " /etc/fstab || printf 'UUID=%s %s %s defaults,nofail 0 2\n' "$uuid" "$mountpoint" '<%= disk[:filesystem] %>' >> /etc/fstab
+        mountpoint -q "$mountpoint" || mount "$mountpoint"
+<% end %>
       - (RETRY=60; while ! nslookup get.rke2.io; do ((--RETRY)) || break; sleep 5;
         done)
 ---

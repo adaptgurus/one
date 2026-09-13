@@ -194,6 +194,9 @@ module OneKS
                     :shape_revision => spec.dig(
                         'template', 'metadata', 'annotations', K8s::SHAPE_REVISION
                     ),
+                    :storage_revision => spec.dig(
+                        'template', 'metadata', 'annotations', K8s::STORAGE_REVISION
+                    ),
                     :autoscaling_runtime => autoscaling_from_annotations(annotations),
                     :conditions => normalized_conditions(status['conditions'])
                 }
@@ -214,6 +217,21 @@ module OneKS
                 result[:autoscaling] = group.body[:autoscaling] || {
                     :enabled => false
                 }
+                policy = group.body[:disk_autoscaling] || { :enabled => false }
+                result[:disk_autoscaling] = policy
+                result[:storage_revision_desired] = group.body[:storage_revision]
+                if policy[:enabled]
+                    result[:disk_runtime] = {
+                        :nodes => Array(group.vms).map do |vm_id|
+                            status = WorkerDiskManager.vm_status(group.client, vm_id, policy)
+                            if OpenNebula.is_error?(status)
+                                { :vm_id => vm_id.to_i, :error => status.message }
+                            else
+                                status
+                            end
+                        end
+                    }
+                end
                 result
             end
 
