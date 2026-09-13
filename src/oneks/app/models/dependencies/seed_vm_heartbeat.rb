@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# LayerSentry extensions to OneKS seed bootstrap state observation.
 module OneKS
 
     # Persists bootstrap progress observed through OneGate updates. The seed still
@@ -116,7 +117,7 @@ module OneKS
             @opts[:bootstrap_started_at] ||= now
             @opts[:last_heartbeat_at] = now
             @opts[:last_state] = state.to_s
-            @opts[:timed_out] = !!timed_out
+            @opts[:timed_out] = timed_out == true
             if error.nil? || error.to_s.empty?
                 @opts.delete(:last_error)
             else
