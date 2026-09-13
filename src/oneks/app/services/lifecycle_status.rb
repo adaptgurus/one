@@ -157,7 +157,19 @@ module OneKS
                 resource = kubectl_json(
                     cluster, ['get', kind, resource_name, '-o', 'json']
                 )
-                return resource if OpenNebula.is_error?(resource)
+                if OpenNebula.is_error?(resource)
+                    # A zero-sized NodeGroup is persisted before its disk policy
+                    # is applied. OneKS intentionally has not rendered its
+                    # MachineDeployment yet; report the empty group so the
+                    # policy reconciliation can create the complete template.
+                    if group.is_a?(NodeGroup) &&
+                       Integer(group.user_inputs_values[:count] || 0).zero? &&
+                       Array(group.vms).empty? &&
+                       resource.message.include?('(NotFound)')
+                        return base_group_status(group)
+                    end
+                    return resource
+                end
 
                 vm_ids = Array(group.vms).map(&:to_i)
                 joined_nodes = nodes.select {|node| vm_ids.include?(node[:vm_id]) }
