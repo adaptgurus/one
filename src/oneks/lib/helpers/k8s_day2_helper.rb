@@ -17,8 +17,8 @@ module OneKS
             SHAPE_REVISION = 'layersentry.io/shape-revision'
 
             # Keep control-plane remediation policy synchronized with replica count.
-            # CAPRKE2 remains the control-plane owner; this only applies/removes the
-            # CAPI MachineHealthCheck rendered by the existing OneKS profile.
+            # CAPRKE2 remains the control-plane owner; automatic remediation is only
+            # enabled once the etcd control plane has at least three members.
             def reconcile_control_plane_health(client, leader, spec, cluster_uuid, target)
                 return OpenNebula::Error.new(
                     'Invalid control-plane health reconciliation arguments',
@@ -26,11 +26,11 @@ module OneKS
                 ) if leader.nil? || cluster_uuid.to_s.empty?
 
                 target = Integer(target)
-                if target > 1
+                if target >= 3
                     docs = YAML.load_stream(spec)
                     mhc = docs.find {|doc| doc && doc['kind'] == 'MachineHealthCheck' }
                     return OpenNebula::Error.new(
-                        'Control-plane MachineHealthCheck missing for multi-replica target',
+                        'Control-plane MachineHealthCheck missing for HA target',
                         OpenNebula::Error::EACTION
                     ) unless mhc
 
