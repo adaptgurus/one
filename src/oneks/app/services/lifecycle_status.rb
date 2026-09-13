@@ -13,6 +13,7 @@ module OneKS
         ETCD_NAMESPACE = 'kube-system'
         ETCD_LABEL = 'component=etcd'
         ETCD_CERT_DIR = '/var/lib/rancher/rke2/server/tls/etcd'
+        AUTOSCALER_LABEL = 'app.kubernetes.io/name=cluster-autoscaler'
 
         class << self
 
@@ -32,7 +33,9 @@ module OneKS
                 end
 
                 node_rows = Array(nodes['items']).filter_map {|node| node_status(node) }
-                cp_status = group_status(cluster, cp, node_rows, 'rke2controlplane', cluster.uuid)
+                cp_status = group_status(
+                    cluster, cp, node_rows, 'rke2controlplane', cluster.uuid
+                )
                 return cp_status if OpenNebula.is_error?(cp_status)
 
                 etcd = etcd_membership(cluster)
@@ -45,24 +48,35 @@ module OneKS
                     group = NodeGroup.new_from_id(cluster.client, ref[:id], :raw => true)
                     return group if OpenNebula.is_error?(group)
 
-                    status = group_status(cluster, group, node_rows, 'machinedeployment',
-                                          group.uuid)
+                    status = group_status(
+                        cluster, group, node_rows, 'machinedeployment', group.uuid
+                    )
                     return status if OpenNebula.is_error?(status)
 
                     status
+                end
+
+                autoscaler = cluster_autoscaler_status(cluster)
+                if OpenNebula.is_error?(autoscaler)
+                    autoscaler = {
+                        :observed => false,
+                        :ready => false,
+                        :error => autoscaler.message
+                    }
                 end
 
                 workers = aggregate(worker_groups)
 
                 {
                     :cluster_id => cluster.id,
-                  :cluster_name => cluster.name,
-                  :kubernetes_version => cluster.kubernetes_version,
-                  :control_plane => cp_status,
-                  :workers => workers.merge(:groups => worker_groups),
-                  :nodes => node_rows,
-                  :bootstrap => bootstrap,
-                  :runtime_observable => true
+                    :cluster_name => cluster.name,
+                    :kubernetes_version => cluster.kubernetes_version,
+                    :control_plane => cp_status,
+                    :workers => workers.merge(:groups => worker_groups),
+                    :nodes => node_rows,
+                    :bootstrap => bootstrap,
+                    :autoscaler_controller => autoscaler,
+                    :runtime_observable => true
                 }
             rescue StandardError => e
                 OpenNebula::Error.new(
@@ -81,45 +95,50 @@ module OneKS
 
                 {
                     :cluster_id => cluster.id,
-                  :cluster_name => cluster.name,
-                  :kubernetes_version => cluster.kubernetes_version,
-                  :control_plane => base_group_status(cp).merge(
-                      :etcd => { :verified => false, :members => nil }
-                  ),
-                  :workers => aggregate(worker_groups).merge(:groups => worker_groups),
-                  :nodes => [],
-                  :bootstrap => bootstrap,
-                  :runtime_observable => false,
-                  :runtime_error => error
+                    :cluster_name => cluster.name,
+                    :kubernetes_version => cluster.kubernetes_version,
+                    :control_plane => base_group_status(cp).merge(
+                        :etcd => { :verified => false, :members => nil }
+                    ),
+                    :workers => aggregate(worker_groups).merge(:groups => worker_groups),
+                    :nodes => [],
+                    :bootstrap => bootstrap,
+                    :autoscaler_controller => {
+                        :observed => false,
+                        :ready => false,
+                        :error => 'Kubernetes runtime unavailable'
+                    },
+                    :runtime_observable => false,
+                    :runtime_error => error
                 }
             end
 
             def base_group_status(group)
                 result = {
                     :group_id => group.id,
-                  :uuid => group.uuid,
-                  :desired => Integer(group.user_inputs_values[:count] || 0),
-                  :created => Array(group.vms).length,
-                  :joined => 0,
-                  :ready => 0,
-                  :vm_ids => Array(group.vms).map(&:to_i),
-                  :node_names => [],
-                  :kubernetes_versions => [],
-                  :conditions => []
+                    :uuid => group.uuid,
+                    :desired => Integer(group.user_inputs_values[:count] || 0),
+                    :created => Array(group.vms).length,
+                    :joined => 0,
+                    :ready => 0,
+                    :vm_ids => Array(group.vms).map(&:to_i),
+                    :node_names => [],
+                    :kubernetes_versions => [],
+                    :conditions => []
                 }
                 enrich_group_config(result, group)
             rescue ArgumentError, TypeError
                 result = {
                     :group_id => group.id,
-                  :uuid => group.uuid,
-                  :desired => 0,
-                  :created => Array(group.vms).length,
-                  :joined => 0,
-                  :ready => 0,
-                  :vm_ids => Array(group.vms).map(&:to_i),
-                  :node_names => [],
-                  :kubernetes_versions => [],
-                  :conditions => []
+                    :uuid => group.uuid,
+                    :desired => 0,
+                    :created => Array(group.vms).length,
+                    :joined => 0,
+                    :ready => 0,
+                    :vm_ids => Array(group.vms).map(&:to_i),
+                    :node_names => [],
+                    :kubernetes_versions => [],
+                    :conditions => []
                 }
                 enrich_group_config(result, group)
             end
@@ -129,11 +148,15 @@ module OneKS
                     'Control plane group not found', OpenNebula::Error::EACTION
                 ) unless cluster.control_plane
 
-                ControlPlane.new_from_id(cluster.client, cluster.control_plane[:id], :raw => true)
+                ControlPlane.new_from_id(
+                    cluster.client, cluster.control_plane[:id], :raw => true
+                )
             end
 
             def group_status(cluster, group, nodes, kind, resource_name)
-                resource = kubectl_json(cluster, ['get', kind, resource_name, '-o', 'json'])
+                resource = kubectl_json(
+                    cluster, ['get', kind, resource_name, '-o', 'json']
+                )
                 return resource if OpenNebula.is_error?(resource)
 
                 vm_ids = Array(group.vms).map(&:to_i)
@@ -143,29 +166,36 @@ module OneKS
                 spec = resource['spec'] || {}
                 metadata = resource['metadata'] || {}
                 annotations = metadata['annotations'] || {}
+                provider_updated = status['updatedReplicas'] || status['upToDateReplicas']
 
                 result = {
                     :group_id => group.id,
-                  :uuid => group.uuid,
-                  :desired => Integer(group.user_inputs_values[:count] || spec['replicas'] || 0),
-                  :provider_desired => integer_or_nil(spec['replicas']),
-                  :provider_replicas => integer_or_nil(status['replicas']),
-                  :provider_ready => integer_or_nil(status['readyReplicas']),
-                  :provider_available => integer_or_nil(status['availableReplicas']),
-                  :provider_updated => integer_or_nil(status['updatedReplicas'] || status['upToDateReplicas']),
-                  :provider_generation => integer_or_nil(metadata['generation']),
-                  :provider_observed_generation => integer_or_nil(status['observedGeneration']),
-                  :created => vm_ids.length,
-                  :joined => joined_nodes.length,
-                  :ready => ready_nodes.length,
-                  :vm_ids => vm_ids,
-                  :node_names => joined_nodes.map {|node| node[:name] },
-                  :kubernetes_versions => joined_nodes.map do |node|
-                      node[:kubelet_version]
-                  end.compact.uniq.sort,
-                  :shape_revision => spec.dig('template', 'metadata', 'annotations', K8s::SHAPE_REVISION),
-                  :autoscaling_runtime => autoscaling_from_annotations(annotations),
-                  :conditions => normalized_conditions(status['conditions'])
+                    :uuid => group.uuid,
+                    :desired => Integer(
+                        group.user_inputs_values[:count] || spec['replicas'] || 0
+                    ),
+                    :provider_desired => integer_or_nil(spec['replicas']),
+                    :provider_replicas => integer_or_nil(status['replicas']),
+                    :provider_ready => integer_or_nil(status['readyReplicas']),
+                    :provider_available => integer_or_nil(status['availableReplicas']),
+                    :provider_updated => integer_or_nil(provider_updated),
+                    :provider_generation => integer_or_nil(metadata['generation']),
+                    :provider_observed_generation => integer_or_nil(
+                        status['observedGeneration']
+                    ),
+                    :created => vm_ids.length,
+                    :joined => joined_nodes.length,
+                    :ready => ready_nodes.length,
+                    :vm_ids => vm_ids,
+                    :node_names => joined_nodes.map {|node| node[:name] },
+                    :kubernetes_versions => joined_nodes.map do |node|
+                        node[:kubelet_version]
+                    end.compact.uniq.sort,
+                    :shape_revision => spec.dig(
+                        'template', 'metadata', 'annotations', K8s::SHAPE_REVISION
+                    ),
+                    :autoscaling_runtime => autoscaling_from_annotations(annotations),
+                    :conditions => normalized_conditions(status['conditions'])
                 }
                 enrich_group_config(result, group)
             end
@@ -176,9 +206,9 @@ module OneKS
                 values = group.user_inputs_values || {}
                 result[:shape] = {
                     :cpu => integer_or_nil(values[:cpu]),
-                  :vcpu => integer_or_nil(values[:vcpu]),
-                  :memory => integer_or_nil(values[:memory]),
-                  :disk_size => integer_or_nil(values[:disk_size])
+                    :vcpu => integer_or_nil(values[:vcpu]),
+                    :memory => integer_or_nil(values[:memory]),
+                    :disk_size => integer_or_nil(values[:disk_size])
                 }
                 result[:shape_revision_desired] = group.body[:shape_revision]
                 result[:autoscaling] = group.body[:autoscaling] || {
@@ -189,7 +219,15 @@ module OneKS
 
             def aggregate(groups)
                 keys = [
-                    :desired, :provider_desired, :provider_replicas, :provider_ready, :provider_available, :provider_updated, :created, :joined, :ready
+                    :desired,
+                    :provider_desired,
+                    :provider_replicas,
+                    :provider_ready,
+                    :provider_available,
+                    :provider_updated,
+                    :created,
+                    :joined,
+                    :ready
                 ]
                 keys.to_h do |key|
                     values = groups.map {|group| group[key] }
@@ -212,10 +250,10 @@ module OneKS
 
                 {
                     :state => state || (dep&.ready? ? 'RUNNING' : 'UNKNOWN'),
-                  :started_at => started,
-                  :last_heartbeat_at => heartbeat,
-                  :timed_out => !!timed_out,
-                  :error => error
+                    :started_at => started,
+                    :last_heartbeat_at => heartbeat,
+                    :timed_out => timed_out == true,
+                    :error => error
                 }
             end
 
@@ -230,14 +268,14 @@ module OneKS
 
                 {
                     :vm_id => match[1].to_i,
-                  :name => node.dig('metadata', 'name'),
-                  :provider_id => provider_id,
-                  :ready => ready && ready['status'] == 'True',
-                  :ready_reason => ready && ready['reason'],
-                  :ready_transition_at => ready && ready['lastTransitionTime'],
-                  :kubelet_version => node.dig('status', 'nodeInfo', 'kubeletVersion'),
-                  :control_plane => labels.key?('node-role.kubernetes.io/control-plane'),
-                  :etcd => labels.key?('node-role.kubernetes.io/etcd')
+                    :name => node.dig('metadata', 'name'),
+                    :provider_id => provider_id,
+                    :ready => ready && ready['status'] == 'True',
+                    :ready_reason => ready && ready['reason'],
+                    :ready_transition_at => ready && ready['lastTransitionTime'],
+                    :kubelet_version => node.dig('status', 'nodeInfo', 'kubeletVersion'),
+                    :control_plane => labels.key?('node-role.kubernetes.io/control-plane'),
+                    :etcd => labels.key?('node-role.kubernetes.io/etcd')
                 }
             end
 
@@ -273,9 +311,31 @@ module OneKS
                 members = Array(result['members'])
                 {
                     :verified => true,
-                  :members => members.length,
-                  :names => members.map {|member| member['name'] }.compact.sort,
-                  :learner_members => members.count {|member| member['isLearner'] == true }
+                    :members => members.length,
+                    :names => members.map {|member| member['name'] }.compact.sort,
+                    :learner_members => members.count {|member| member['isLearner'] == true }
+                }
+            end
+
+            def cluster_autoscaler_status(cluster)
+                pods = kubectl_json(
+                    cluster,
+                    ['get', 'pods', '-A', '-l', AUTOSCALER_LABEL, '-o', 'json']
+                )
+                return pods if OpenNebula.is_error?(pods)
+
+                items = Array(pods['items'])
+                ready = items.count do |item|
+                    statuses = Array(item.dig('status', 'containerStatuses'))
+                    item.dig('status', 'phase') == 'Running' &&
+                        !statuses.empty? && statuses.all? {|status| status['ready'] == true }
+                end
+
+                {
+                    :observed => !items.empty?,
+                    :ready => ready.positive?,
+                    :pods => items.length,
+                    :ready_pods => ready
                 }
             end
 
@@ -319,8 +379,8 @@ module OneKS
 
                 {
                     :enabled => true,
-                  :min => integer_or_nil(min),
-                  :max => integer_or_nil(max)
+                    :min => integer_or_nil(min),
+                    :max => integer_or_nil(max)
                 }
             end
 
@@ -336,9 +396,9 @@ module OneKS
                 Array(conditions).map do |condition|
                     {
                         :type => condition['type'],
-                      :status => condition['status'],
-                      :reason => condition['reason'],
-                      :last_transition_at => condition['lastTransitionTime']
+                        :status => condition['status'],
+                        :reason => condition['reason'],
+                        :last_transition_at => condition['lastTransitionTime']
                     }.compact
                 end
             end
