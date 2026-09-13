@@ -49,6 +49,7 @@ require_relative File.join(APP_ROOT, 'app', 'models', 'dependencies', 'seed_vm_h
 require_relative File.join(APP_ROOT, 'app', 'models', 'dependencies', 'cluster_router')
 require_relative File.join(APP_ROOT, 'app', 'models', 'groups', 'controlplane')
 require_relative File.join(APP_ROOT, 'app', 'models', 'groups', 'nodegroup')
+require_relative File.join(APP_ROOT, 'app', 'models', 'groups', 'nodegroup_day2')
 require_relative File.join(APP_ROOT, 'app', 'models', 'cluster')
 require_relative File.join(APP_ROOT, 'app', 'models', 'pools')
 
