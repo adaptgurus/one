@@ -133,14 +133,26 @@ module OneKS
             )
         end
 
+        # Persist the desired target before the MachineDeployment mutation. The
+        # target is declarative, so replay after a crash is safe and idempotent.
         def scale(target)
             cluster = parent_cluster
             return cluster if OpenNebula.is_error?(cluster)
 
-            target             = [target, 0].max
+            target = Integer(target)
+            target = [target, 0].max
+            return true if target == expected_size
+
             self.expected_size = target
+            rc = update
+            return rc if OpenNebula.is_error?(rc)
 
             K8s.scale(cluster.client, cluster.leader, uuid, target)
+        rescue ArgumentError, TypeError
+            OpenNebula::Error.new(
+                'Node group target must be an integer',
+                OpenNebula::Error::EACTION
+            )
         rescue StandardError => e
             OpenNebula::Error.new(
                 "Error scaling #{type}: #{e.message}",
