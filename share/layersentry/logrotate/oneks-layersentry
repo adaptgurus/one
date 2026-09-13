@@ -1,4 +1,4 @@
-/var/log/one/oneks.log /var/log/one/oneks.error {
+/var/log/one/oneks.log /var/log/one/oneks.error /var/lib/one/oneks.log /var/lib/one/oneks.error {
     daily
     size 20M
     rotate 7
