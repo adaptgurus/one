@@ -133,9 +133,38 @@ module OneKS
             ) unless errors.empty?
         end
 
-        def scale(_target)
+        # Scale through CAPRKE2. Persist desired replicas before mutation so a
+        # controller restart can reconcile the same idempotent target safely.
+        def scale(target)
+            cluster = parent_cluster
+            return cluster if OpenNebula.is_error?(cluster)
+
+            target = Integer(target)
             return OpenNebula::Error.new(
-                "#{type} does not support scaling operations",
+                'Control plane target must be at least 1',
+                OpenNebula::Error::EACTION
+            ) if target < 1
+
+            return true if target == expected_size
+
+            self.expected_size = target
+            rc = update
+            return rc if OpenNebula.is_error?(rc)
+
+            spec = render
+            return spec if OpenNebula.is_error?(spec)
+
+            rc = K8s.upgrade(@client, cluster.leader, spec)
+            return rc if OpenNebula.is_error?(rc)
+
+            # Singleton control planes must never be auto-remediated. Once a
+            # control plane has >1 replica, keep its bounded MHC in sync.
+            K8s.reconcile_control_plane_health(
+                @client, cluster.leader, spec, cluster.uuid, target
+            )
+        rescue ArgumentError, TypeError
+            OpenNebula::Error.new(
+                'Control plane target must be an integer',
                 OpenNebula::Error::EACTION
             )
         rescue StandardError => e
