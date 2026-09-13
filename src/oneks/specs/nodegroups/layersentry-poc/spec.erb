@@ -47,6 +47,11 @@ metadata:
 spec:
   clusterName: <%= cluster[:uuid] %>
   replicas: <%= group[:user_inputs_values][:count] %>
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
   selector:
     matchLabels: {}
   template:
@@ -84,7 +89,7 @@ spec:
     matchLabels:
       cluster.x-k8s.io/deployment-name: "<%= group[:uuid] %>"
   nodeStartupTimeout: 60m
-  maxUnhealthy: 100%
+  maxUnhealthy: 1
   unhealthyConditions:
   - type: Ready
     status: "False"
