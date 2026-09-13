@@ -9,32 +9,21 @@ module OneKS
       app.helpers do
         def lifecycle_cluster(id)
           cluster = OneKS::Cluster.new_from_id(@client, id)
-          if OpenNebula.is_error?(cluster)
-            return internal_error(
-              cluster.message, one_error_to_http(cluster.errno)
-            )
-          end
-          unless cluster.control_plane
-            return internal_error(
-              'Control plane group not found', ODS::ResponseHelper::OPERATION_EC
-            )
-          end
+          return cluster if OpenNebula.is_error?(cluster)
+          return OpenNebula::Error.new(
+            'Control plane group not found', OpenNebula::Error::ENO_EXISTS
+          ) unless cluster.control_plane
+
           cluster
         end
 
         def lifecycle_worker_group(cluster, group_id)
           ref = Array(cluster.node_groups).find { |entry| entry[:id].to_i == group_id.to_i }
-          unless ref
-            return internal_error(
-              "Worker group #{group_id} not found",
-              one_error_to_http(OpenNebula::Error::ENO_EXISTS)
-            )
-          end
-          group = OneKS::NodeGroup.new_from_id(@client, ref[:id])
-          if OpenNebula.is_error?(group)
-            return internal_error(group.message, one_error_to_http(group.errno))
-          end
-          group
+          return OpenNebula::Error.new(
+            "Worker group #{group_id} not found", OpenNebula::Error::ENO_EXISTS
+          ) unless ref
+
+          OneKS::NodeGroup.new_from_id(@client, ref[:id])
         end
       end
 
@@ -66,7 +55,9 @@ module OneKS
         end
 
         cluster = lifecycle_cluster(params[:id])
-        return cluster if cluster.is_a?(Array)
+        return internal_error(
+          cluster.message, one_error_to_http(cluster.errno)
+        ) if OpenNebula.is_error?(cluster)
 
         rc = cluster.scale_group(cluster.control_plane[:id], target, :actor => @username)
         return internal_error(
@@ -94,7 +85,9 @@ module OneKS
         target = payload[:kubernetes_version].to_s
 
         cluster = lifecycle_cluster(params[:id])
-        return cluster if cluster.is_a?(Array)
+        return internal_error(
+          cluster.message, one_error_to_http(cluster.errno)
+        ) if OpenNebula.is_error?(cluster)
 
         family = ControlPlane.family_by_name(cluster.control_plane[:family])
         return internal_error(
@@ -138,10 +131,14 @@ module OneKS
       # converged. MachineDeployment rollingUpdate keeps maxUnavailable=0.
       app.post '/clusters/:id/nodegroups/:nodegroup_id/upgrade' do
         cluster = lifecycle_cluster(params[:id])
-        return cluster if cluster.is_a?(Array)
+        return internal_error(
+          cluster.message, one_error_to_http(cluster.errno)
+        ) if OpenNebula.is_error?(cluster)
 
         group = lifecycle_worker_group(cluster, params[:nodegroup_id])
-        return group if group.is_a?(Array)
+        return internal_error(
+          group.message, one_error_to_http(group.errno)
+        ) if OpenNebula.is_error?(group)
 
         rc = cluster.upgrade_group(group.id, :actor => @username)
         return internal_error(
@@ -162,10 +159,14 @@ module OneKS
       app.post '/clusters/:id/nodegroups/:nodegroup_id/resize' do
         payload = check_body(request)
         cluster = lifecycle_cluster(params[:id])
-        return cluster if cluster.is_a?(Array)
+        return internal_error(
+          cluster.message, one_error_to_http(cluster.errno)
+        ) if OpenNebula.is_error?(cluster)
 
         group = lifecycle_worker_group(cluster, params[:nodegroup_id])
-        return group if group.is_a?(Array)
+        return internal_error(
+          group.message, one_error_to_http(group.errno)
+        ) if OpenNebula.is_error?(group)
 
         rc = group.resize_shape(payload)
         return internal_error(
@@ -204,10 +205,14 @@ module OneKS
         end
 
         cluster = lifecycle_cluster(params[:id])
-        return cluster if cluster.is_a?(Array)
+        return internal_error(
+          cluster.message, one_error_to_http(cluster.errno)
+        ) if OpenNebula.is_error?(cluster)
 
         group = lifecycle_worker_group(cluster, params[:nodegroup_id])
-        return group if group.is_a?(Array)
+        return internal_error(
+          group.message, one_error_to_http(group.errno)
+        ) if OpenNebula.is_error?(group)
 
         rc = group.configure_autoscaling(:enabled => enabled, :min => min, :max => max)
         return internal_error(
