@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
+require 'active_support/core_ext/string/indent'
 require 'erb'
-require 'yaml'
 require 'minitest/autorun'
+require 'yaml'
 require_relative '../app/services/lifecycle_status'
 
+# Regression coverage for the LayerSentry RKE2 Day-2 profile and status mapper.
 class Day2LifecycleTest < Minitest::Test
 
     ROOT = File.expand_path('../specs', __dir__)
@@ -12,30 +14,33 @@ class Day2LifecycleTest < Minitest::Test
     def render(type, inputs = {})
         cluster = {
             :id => 900,
-          :uuid => 'day2-test',
-          :kubernetes_version => 'v1.36.4',
-          :deployment => {
-              :sched_requirements => 'CLUSTER_ID = 0',
-            :networks => { :public => { :name => 'public' }, :private => { :name => 'private' } }
-          }
+            :uuid => 'day2-test',
+            :kubernetes_version => 'v1.36.4',
+            :deployment => {
+                :sched_requirements => 'CLUSTER_ID = 0',
+                :networks => {
+                    :public => { :name => 'public' },
+                    :private => { :name => 'private' }
+                }
+            }
         }
         group = {
             :id => 901,
-          :uuid => 'day2-workers',
-          :type => 'CONTROLPLANE',
-          :router_template_name => 'day2-router',
-          :group_template_name => 'day2-node',
-          :user_inputs_values => {
-              :count => 1,
-            :cpu => 2,
-            :vcpu => 2,
-            :memory => 4096,
-            :disk_size => 16_384,
-            :node_image_id => 7,
-            :router_image_id => 8,
-            :router_vmgroup_id => 9,
-            :system_datastore_id => 4
-          }.merge(inputs)
+            :uuid => 'day2-workers',
+            :type => 'CONTROLPLANE',
+            :router_template_name => 'day2-router',
+            :group_template_name => 'day2-node',
+            :user_inputs_values => {
+                :count => 1,
+                :cpu => 2,
+                :vcpu => 2,
+                :memory => 4096,
+                :disk_size => 16_384,
+                :node_image_id => 7,
+                :router_image_id => 8,
+                :router_vmgroup_id => 9,
+                :system_datastore_id => 4
+            }.merge(inputs)
         }
         one_auth = 'test:fixture-only'
         one_xmlrpc = 'http://169.254.16.9:2633/RPC2'
@@ -50,8 +55,9 @@ class Day2LifecycleTest < Minitest::Test
     end
 
     def test_control_plane_flavour_accepts_explicit_replica_count
-        conf = YAML.load_file(File.join(ROOT, 'controlplanes', 'layersentry-poc',
-                                        'controlplane.conf'))
+        conf = YAML.load_file(
+            File.join(ROOT, 'controlplanes', 'layersentry-poc', 'controlplane.conf')
+        )
         flavour = conf.fetch('flavours').fetch('standalone')
         assert_equal true, flavour.fetch('override_defaults')
         assert_equal 1, flavour.fetch('defaults').fetch('count')
@@ -78,16 +84,20 @@ class Day2LifecycleTest < Minitest::Test
         node = {
             'metadata' => {
                 'name' => 'worker-1',
-              'labels' => { 'node-role.kubernetes.io/worker' => '' }
+                'labels' => { 'node-role.kubernetes.io/worker' => '' }
             },
-          'spec' => { 'providerID' => 'one://44' },
-          'status' => {
-              'conditions' => [
-                  { 'type' => 'Ready', 'status' => 'True', 'reason' => 'KubeletReady',
-                    'lastTransitionTime' => '2026-09-13T01:18:28Z' }
-              ],
-            'nodeInfo' => { 'kubeletVersion' => 'v1.36.4+rke2r1' }
-          }
+            'spec' => { 'providerID' => 'one://44' },
+            'status' => {
+                'conditions' => [
+                    {
+                        'type' => 'Ready',
+                        'status' => 'True',
+                        'reason' => 'KubeletReady',
+                        'lastTransitionTime' => '2026-09-13T01:18:28Z'
+                    }
+                ],
+                'nodeInfo' => { 'kubeletVersion' => 'v1.36.4+rke2r1' }
+            }
         }
 
         row = OneKS::LifecycleStatus.node_status(node)
