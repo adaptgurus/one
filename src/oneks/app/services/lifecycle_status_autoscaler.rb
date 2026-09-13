@@ -17,15 +17,21 @@ module OneKS
                 runtime = group[:autoscaling_runtime] || { :enabled => false }
                 next unless runtime[:enabled]
 
-                runtime = runtime.dup
-                runtime[:configured] = true
-                runtime[:controller_observed] = controller[:observed] == true
-                runtime[:controller_ready] = controller[:ready] == true
-                runtime[:controller_error] = controller[:error] if controller[:error]
-                runtime[:enabled] = runtime[:controller_ready]
-                group[:autoscaling_runtime] = runtime
+                group[:autoscaling_runtime] = effective_autoscaling_runtime(
+                    runtime, controller
+                )
             end
 
+            result
+        end
+
+        def effective_autoscaling_runtime(runtime, controller)
+            result = runtime.dup
+            result[:configured] = runtime[:enabled] == true
+            result[:controller_observed] = controller[:observed] == true
+            result[:controller_ready] = controller[:ready] == true
+            result[:controller_error] = controller[:error] if controller[:error]
+            result[:enabled] = result[:configured] && result[:controller_ready]
             result
         end
 
