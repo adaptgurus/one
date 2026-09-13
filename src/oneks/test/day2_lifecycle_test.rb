@@ -4,6 +4,7 @@ require 'active_support/core_ext/string/indent'
 require 'erb'
 require 'minitest/autorun'
 require 'yaml'
+require_relative '../lib/helpers/k8s_day2_helper'
 require_relative '../app/services/lifecycle_status'
 require_relative '../app/services/lifecycle_status_autoscaler'
 
@@ -11,6 +12,11 @@ require_relative '../app/services/lifecycle_status_autoscaler'
 class Day2LifecycleTest < Minitest::Test
 
     ROOT = File.expand_path('../specs', __dir__)
+
+    def test_day2_annotation_constants_are_module_visible
+        assert_equal 'layersentry.io/shape-revision', OneKS::K8s::SHAPE_REVISION
+        assert_equal 'layersentry.io/storage-revision', OneKS::K8s::STORAGE_REVISION
+    end
 
     def render(type, inputs = {})
         cluster = {

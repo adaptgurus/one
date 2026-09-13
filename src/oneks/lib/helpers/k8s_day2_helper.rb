@@ -16,15 +16,14 @@ module OneKS
             :image_tags => { '1.36' => 'v1.36.1' }
         }.freeze
 
+        AUTOSCALER_MIN = 'cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size'
+        AUTOSCALER_MAX = 'cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size'
+        AUTOSCALER_CPU = 'capacity.cluster-autoscaler.kubernetes.io/cpu'
+        AUTOSCALER_MEMORY = 'capacity.cluster-autoscaler.kubernetes.io/memory'
+        SHAPE_REVISION = 'layersentry.io/shape-revision'
+        STORAGE_REVISION = 'layersentry.io/storage-revision'
+
         class << self
-
-            AUTOSCALER_MIN = 'cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size'
-            AUTOSCALER_MAX = 'cluster.x-k8s.io/cluster-api-autoscaler-node-group-max-size'
-            AUTOSCALER_CPU = 'capacity.cluster-autoscaler.kubernetes.io/cpu'
-            AUTOSCALER_MEMORY = 'capacity.cluster-autoscaler.kubernetes.io/memory'
-            SHAPE_REVISION = 'layersentry.io/shape-revision'
-            STORAGE_REVISION = 'layersentry.io/storage-revision'
-
             # Keep control-plane remediation policy synchronized with replica count.
             # CAPRKE2 remains the control-plane owner; automatic remediation is only
             # enabled once the etcd control plane has at least three members.

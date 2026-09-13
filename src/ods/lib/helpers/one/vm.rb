@@ -142,6 +142,7 @@ module OpenNebula
                 end
 
                 def self.wait_exec(vm, cmd, timeout)
+                    settled_terminal = nil
                     Timeout.timeout(timeout) do
                         loop do
                             rc = vm.info(true)
@@ -151,6 +152,19 @@ module OpenNebula
                             next sleep(1) unless qemu_exec['COMMAND'] == cmd
 
                             result = exec_result(qemu_exec)
+
+                            # QEMU_GA_EXEC can become terminal just before the VM
+                            # leaves HOTPLUG. Do not let a caller submit its next
+                            # command during that narrow transition window.
+                            if ['DONE', 'ERROR', 'CANCELLED'].include?(result[:status]) &&
+                               vm.lcm_state_str != 'RUNNING'
+                                next sleep(1)
+                            end
+                            if ['DONE', 'ERROR', 'CANCELLED'].include?(result[:status]) &&
+                               settled_terminal != result[:status]
+                                settled_terminal = result[:status]
+                                next sleep(1)
+                            end
 
                             case result[:status]
                             when 'DONE'
