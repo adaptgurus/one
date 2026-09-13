@@ -135,15 +135,26 @@ module OneKS
 
         # Scale through CAPRKE2. Persist desired replicas before mutation so a
         # controller restart can reconcile the same idempotent target safely.
+        # Scale-down is intentionally not exposed through this generic action;
+        # controller removal requires a quorum-safe maintenance workflow.
         def scale(target)
             cluster = parent_cluster
             return cluster if OpenNebula.is_error?(cluster)
 
             target = Integer(target)
             return OpenNebula::Error.new(
-                'Control plane target must be at least 1',
+                'Control plane target must be between 1 and 99',
                 OpenNebula::Error::EACTION
-            ) if target < 1
+            ) unless (1..99).cover?(target)
+
+            current = Integer(expected_size || 0)
+            if current.positive? && target < current
+                return OpenNebula::Error.new(
+                    'Automatic control-plane scale-down is disabled; use a ' \
+                    'quorum-safe maintenance workflow',
+                    OpenNebula::Error::EACTION
+                )
+            end
 
             self.expected_size = target
             rc = update
