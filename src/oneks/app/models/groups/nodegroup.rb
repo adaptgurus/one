@@ -141,7 +141,6 @@ module OneKS
 
             target = Integer(target)
             target = [target, 0].max
-            return true if target == expected_size
 
             self.expected_size = target
             rc = update
