@@ -5,6 +5,7 @@ require 'shellwords'
 
 module OneKS
 
+    # Day-2 Kubernetes mutations delegated to existing CAPI/CAPRKE2 resources.
     module K8s
 
         class << self
@@ -80,22 +81,27 @@ module OneKS
 
             # Configure a MachineDeployment for the upstream Cluster API cloud
             # provider. This only marks the group as autoscaler-managed; deployment of
-            # the Cluster Autoscaler itself remains an explicit add-on operation.
-            def configure_nodegroup_autoscaling(client, leader, group_uuid, enabled:, min:, max:, cpu:,
-                                                memory:)
+            # Cluster Autoscaler itself remains an explicit add-on operation.
+            def configure_nodegroup_autoscaling(client, leader, group_uuid, **options)
+                enabled = options.fetch(:enabled)
+                min = options.fetch(:min)
+                max = options.fetch(:max)
+                cpu = options.fetch(:cpu)
+                memory = options.fetch(:memory)
+
                 annotations = if enabled
                                   {
                                       AUTOSCALER_MIN => Integer(min).to_s,
-                                    AUTOSCALER_MAX => Integer(max).to_s,
-                                    AUTOSCALER_CPU => Integer(cpu).to_s,
-                                    AUTOSCALER_MEMORY => "#{Integer(memory)}Mi"
+                                      AUTOSCALER_MAX => Integer(max).to_s,
+                                      AUTOSCALER_CPU => Integer(cpu).to_s,
+                                      AUTOSCALER_MEMORY => "#{Integer(memory)}Mi"
                                   }
                               else
                                   {
                                       AUTOSCALER_MIN => nil,
-                                    AUTOSCALER_MAX => nil,
-                                    AUTOSCALER_CPU => nil,
-                                    AUTOSCALER_MEMORY => nil
+                                      AUTOSCALER_MAX => nil,
+                                      AUTOSCALER_CPU => nil,
+                                      AUTOSCALER_MEMORY => nil
                                   }
                               end
 
@@ -105,7 +111,7 @@ module OneKS
                     group_uuid,
                     { 'metadata' => { 'annotations' => annotations } }
                 )
-            rescue ArgumentError, TypeError
+            rescue KeyError, ArgumentError, TypeError
                 OpenNebula::Error.new(
                     'Autoscaling bounds/capacity must be integers', OpenNebula::Error::EACTION
                 )
