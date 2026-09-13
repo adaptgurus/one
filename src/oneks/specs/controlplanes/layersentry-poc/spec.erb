@@ -176,7 +176,7 @@ spec:
   template:
     spec:
       templateName: "<%= group[:group_template_name] %>"
-<% if group[:user_inputs_values][:count].to_i > 1 %>
+<% if group[:user_inputs_values][:count].to_i >= 3 %>
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineHealthCheck
