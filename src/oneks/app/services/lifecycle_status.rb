@@ -258,16 +258,32 @@ module OneKS
             end
 
             def bootstrap_status(cp)
-                dep = K8sGroup.find_dep_by_name(cp, 'SeedVM')
-                opts = dep&.opts || {}
+                dep = Array(cp.dependencies).find do |candidate|
+                    name = if candidate.respond_to?(:name)
+                               candidate.name
+                           else
+                               candidate[:name] || candidate['name']
+                           end
+                    name.to_s == 'SeedVM'
+                end
+                opts = if dep.respond_to?(:opts)
+                           dep.opts || {}
+                       else
+                           dep&.dig(:opts) || dep&.dig('opts') || {}
+                       end
                 state = opts[:last_state] || opts['last_state']
                 heartbeat = opts[:last_heartbeat_at] || opts['last_heartbeat_at']
                 started = opts[:bootstrap_started_at] || opts['bootstrap_started_at']
                 timed_out = opts[:timed_out] || opts['timed_out'] || false
                 error = opts[:last_error] || opts['last_error']
+                ready = if dep.respond_to?(:ready?)
+                            dep.ready?
+                        else
+                            dep && (dep[:ready] || dep['ready']) == true
+                        end
 
                 {
-                    :state => state || (dep&.ready? ? 'RUNNING' : 'UNKNOWN'),
+                    :state => state || (ready ? 'RUNNING' : 'UNKNOWN'),
                     :started_at => started,
                     :last_heartbeat_at => heartbeat,
                     :timed_out => timed_out == true,

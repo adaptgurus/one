@@ -154,4 +154,22 @@ class Day2LifecycleTest < Minitest::Test
         assert_equal 5, effective[:max]
     end
 
+    def test_bootstrap_status_accepts_raw_persisted_dependency_hash
+        cp = Struct.new(:dependencies).new(
+            [
+                {
+                    :name => 'SeedVM', :ready => true,
+                    :opts => {
+                        :last_state => 'RUNNING',
+                        :last_heartbeat_at => 1_789_306_304
+                    }
+                }
+            ]
+        )
+        status = OneKS::LifecycleStatus.bootstrap_status(cp)
+        assert_equal 'RUNNING', status.fetch(:state)
+        assert_equal 1_789_306_304, status.fetch(:last_heartbeat_at)
+        assert_equal false, status.fetch(:timed_out)
+    end
+
 end
