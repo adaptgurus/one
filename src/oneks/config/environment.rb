@@ -60,6 +60,7 @@ require_relative File.join(APP_ROOT, 'app', 'services', 'event_manager', 'event_
 require_relative File.join(APP_ROOT, 'app', 'services', 'event_manager', 'event_manager_day2')
 require_relative File.join(APP_ROOT, 'app', 'services', 'cluster_wd')
 require_relative File.join(APP_ROOT, 'app', 'services', 'lifecycle_status')
+require_relative File.join(APP_ROOT, 'app', 'services', 'lifecycle_status_autoscaler')
 
 # Controllers
 APP_PATHS = [File.join(APP_ROOT, 'app', 'controllers')]
