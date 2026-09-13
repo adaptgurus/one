@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+# OpenNebula Kubernetes service namespace.
 module OneKS
 
     # Tighten autoscaling runtime truth: annotations only make a worker group
