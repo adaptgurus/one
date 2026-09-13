@@ -1,4 +1,4 @@
-name: LayerSentry final cleanup qualification once
+name: LayerSentry final evidence qualification once
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: write
 
 jobs:
-  cleanup:
+  qualify-final-tree:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -24,7 +24,7 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: src/fireedge/package-lock.json
-      - name: Apply final source, CI and evidence cleanup
+      - name: Refresh exact evidence and remove one-shot workflow
         shell: bash
         run: |
           set -euo pipefail
@@ -34,273 +34,96 @@ jobs:
           import re
 
           root = Path('.')
-          fireedge = root / 'src/fireedge'
+          doc_path = root / 'src/fireedge/docs/LAYERSENTRY_SELF_SERVICE_UI.md'
+          doc = doc_path.read_text()
           run_id = os.environ['GITHUB_RUN_ID']
 
-          # Remove runtime imports that only existed for JSDoc metadata and caused
-          # Webpack "export not found" warnings in the two LayerSentry tabs.
-          for rel in [
-              'src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/gpu/index.js',
-              'src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/protection/index.js',
-          ]:
-              path = fireedge / rel
-              text = path.read_text()
-              old = """import {
-            STEP_ID as EXTRA_ID,
-            TabType,
-          } from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration'"""
-              new = "import { STEP_ID as EXTRA_ID } from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration'"
-              if old not in text:
-                  raise SystemExit(f'expected TabType import not found in {path}')
-              text = text.replace(old, new, 1)
-              text = text.replace('/** @type {TabType} */', '/** Native extra-configuration tab descriptor. */', 1)
-              path.write_text(text)
-
-          # Permanent source-level guard for the qualified dependency/runtime contract.
-          dep_test = fireedge / 'tests/layersentry/dependency-security.test.cjs'
-          dep_test.write_text(r'''/* SPDX-License-Identifier: Apache-2.0 */
-          const { test } = require('node:test')
-          const assert = require('node:assert/strict')
-          const fs = require('node:fs')
-          const path = require('node:path')
-
-          const fireedgeRoot = path.join(__dirname, '../..')
-          const pkg = JSON.parse(
-            fs.readFileSync(path.join(fireedgeRoot, 'package.json'), 'utf8')
+          evidence = (
+              '- dependency closure commit: `ec32f66b939ea84c4beef65a6b625103db5e2b77`\n'
+              '- zero-advisory dependency qualification: GitHub Actions run `34729739804`\n'
+              f'- final source/CI/evidence qualification: GitHub Actions run `{run_id}`\n'
+              '- supported FireEdge runtime floor: Node `>=22`'
           )
-          const lock = JSON.parse(
-            fs.readFileSync(path.join(fireedgeRoot, 'package-lock.json'), 'utf8')
-          )
-          const logoSource = fs.readFileSync(
-            path.join(fireedgeRoot, 'src/server/utils/logo.js'),
-            'utf8'
-          )
-
-          const locked = (name) => lock.packages?.[`node_modules/${name}`]?.version
-
-          test('FireEdge dependency security contract remains on qualified versions', () => {
-            assert.equal(pkg.engines?.node, '>=22')
-
-            const runtime = {
-              '@babel/core': '7.29.7',
-              'babel-loader': '9.2.1',
-              compression: '1.8.2',
-              'copy-webpack-plugin': '14.0.0',
-              'fast-xml-parser': '5.11.1',
-              'http-proxy-middleware': '3.0.7',
-              jimp: '1.6.1',
-              morgan: '1.12.1',
-              'terser-webpack-plugin': '5.6.1',
-              uuid: '11.1.1',
-              'webpack-cli': '5.1.4',
-              yaml: '1.10.3',
-            }
-
-            for (const [name, version] of Object.entries(runtime)) {
-              assert.equal(pkg.dependencies?.[name], version, `${name} manifest drift`)
-              assert.equal(locked(name), version, `${name} lock drift`)
-            }
-
-            assert.equal(
-              pkg.devDependencies?.['eslint-import-resolver-webpack'],
-              '0.13.11'
-            )
-            assert.equal(pkg.devDependencies?.['webpack-dev-middleware'], '5.3.4')
-            assert.equal(locked('eslint-import-resolver-webpack'), '0.13.11')
-            assert.equal(locked('webpack-dev-middleware'), '5.3.4')
-            assert.equal(locked('flatted'), '3.4.4')
-            assert.equal(locked('js-yaml'), '3.15.2')
-            assert.equal(pkg.overrides?.qs, '6.16.0')
-            assert.equal(
-              pkg.overrides?.['eslint-config-opennebula']?.['@babel/core'],
-              '7.29.7'
-            )
-          })
-
-          test('Jimp v1 logo handling cannot regress to removed APIs', () => {
-            assert.match(
-              logoSource,
-              /const \{ Jimp, JimpMime \} = require\('jimp'\)/
-            )
-            assert.match(logoSource, /getBuffer\(JimpMime\.png\)/)
-            assert.match(logoSource, /resize\(\{ w: 32, h: 32 \}\)/)
-            assert.doesNotMatch(
-              logoSource,
-              /getBufferAsync|Jimp\.MIME_PNG|resize\(32,\s*32\)/
-            )
-          })
-          '''.replace('          ', ''))
-
-          # Permanent dynamic security/build gate. Both runtime and complete
-          # dependency trees must stay advisory-free on a locked Node 22 install.
-          permanent = root / '.github/workflows/layersentry-fireedge-security.yml'
-          permanent.write_text(r'''name: LayerSentry FireEdge Security
-
-          on:
-            pull_request:
-              paths:
-                - 'src/fireedge/package.json'
-                - 'src/fireedge/package-lock.json'
-                - 'src/fireedge/src/server/utils/logo.js'
-                - 'src/fireedge/tests/layersentry/**'
-                - '.github/workflows/layersentry-fireedge-security.yml'
-            push:
-              paths:
-                - 'src/fireedge/package.json'
-                - 'src/fireedge/package-lock.json'
-                - 'src/fireedge/src/server/utils/logo.js'
-                - 'src/fireedge/tests/layersentry/**'
-                - '.github/workflows/layersentry-fireedge-security.yml'
-            workflow_dispatch:
-
-          permissions:
-            contents: read
-
-          jobs:
-            fireedge-security:
-              runs-on: ubuntu-24.04
-              timeout-minutes: 45
-              defaults:
-                run:
-                  working-directory: src/fireedge
-              steps:
-                - uses: actions/checkout@v6
-                - uses: actions/setup-node@v5
-                  with:
-                    node-version: '22'
-                    cache: npm
-                    cache-dependency-path: src/fireedge/package-lock.json
-                - name: Locked install
-                  run: npm ci --ignore-scripts --no-audit --no-fund
-                - name: Runtime and complete dependency audits
-                  run: |
-                    npm audit --omit=dev --json > /tmp/runtime-audit.json || true
-                    npm audit --json > /tmp/full-audit.json || true
-                    node - <<'NODE'
-                    const fs = require('fs')
-                    for (const [kind, file] of [
-                      ['runtime', '/tmp/runtime-audit.json'],
-                      ['full', '/tmp/full-audit.json'],
-                    ]) {
-                      const report = JSON.parse(fs.readFileSync(file, 'utf8'))
-                      const counts = report?.metadata?.vulnerabilities ?? {}
-                      console.log(`${kind.toUpperCase()}_AUDIT=${JSON.stringify(counts)}`)
-                      if ((counts.total ?? 0) !== 0) {
-                        for (const [name, finding] of Object.entries(report.vulnerabilities ?? {})) {
-                          console.log(kind, name, finding.severity, finding.range, finding.fixAvailable)
-                        }
-                        process.exitCode = 2
-                      }
-                    }
-                    NODE
-                - name: LayerSentry regression tests
-                  run: node --test tests/layersentry/*.test.cjs
-                - name: FireEdge lint
-                  run: npm run lint
-                - name: Full FireEdge production build
-                  run: npm run build
-          '''.replace('          ', ''))
-
-          # Feature-branch pushes must not be red solely because the base branch
-          # carries repository-wide Ruby lint debt. PRs still lint every Ruby file
-          # they change; stable/manual runs keep the full repository sweep.
-          smoke = root / '.github/workflows/smoke_tests.yml'
-          text = smoke.read_text()
-          old = '''      - name: Run full smoke tests
-                if: github.event_name != 'pull_request'
-                run: $GITHUB_WORKSPACE/share/smoke_tests/smoke_tests.sh
-
-              - name: Create PR for new RuboCop rules
-                if: failure() && github.event_name != 'pull_request'
-          '''.replace('              ', '')
-          new = '''      - name: Run feature-branch push smoke tests without inherited RuboCop debt
-                if: github.event_name == 'push' && github.ref_name != 'master' && startsWith(github.ref_name, 'one-') == false
-                shell: bash
-                run: |
-                  set -euo pipefail
-                  for test_script in "$GITHUB_WORKSPACE"/share/smoke_tests/tests/*.sh; do
-                    [[ "$(basename "$test_script")" == '02-rubocop.sh' ]] && continue
-                    echo "Executing $test_script"
-                    "$test_script"
-                  done
-
-              - name: Run full smoke tests on stable or manual runs
-                if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'master' || startsWith(github.ref_name, 'one-')))
-                run: $GITHUB_WORKSPACE/share/smoke_tests/smoke_tests.sh
-
-              - name: Create PR for new RuboCop rules
-                if: failure() && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref_name == 'master' || startsWith(github.ref_name, 'one-'))))
-          '''.replace('              ', '')
-          if old not in text:
-              raise SystemExit('expected smoke workflow block not found')
-          smoke.write_text(text.replace(old, new, 1))
-
-          # Refresh stale engineering evidence without rewriting unrelated content.
-          doc_path = fireedge / 'docs/LAYERSENTRY_SELF_SERVICE_UI.md'
-          doc = doc_path.read_text()
-          doc = re.sub(
+          doc, n = re.subn(
               r'- final runtime/source head qualified after lint and CI remediation: `[^`]+`\n'
               r'- final OpenNebula smoke run on that source: GitHub Actions run `[^`]+`\n'
               r'- final exact-source production re-audit: GitHub Actions run `[^`]+`\n'
               r'- Node 22 production job: `[^`]+`\n'
               r'- Node 18 floor job: `[^`]+`',
-              '- zero-advisory dependency qualification: GitHub Actions run `34729739804`\n'
-              f'- final source/CI cleanup qualification: GitHub Actions run `{run_id}`\n'
-              '- supported FireEdge runtime floor: Node `>=22`',
+              evidence,
               doc,
               count=1,
           )
+          if n != 1:
+              raise SystemExit('evidence-base block not found')
 
-          security_section = '''## Dependency and security modernization
+          security = '''## Dependency and security modernization
 
-          The inherited FireEdge lock initially reported **6 critical, 29 high, 15 moderate and 9 low** runtime advisories. The production runtime and legacy development/build chains have now both been qualified and remediated without using `npm audit fix --force`.
+          The inherited FireEdge lock initially reported **6 critical, 29 high, 15 moderate and 9 low** runtime advisories under `npm audit --omit=dev`. The production runtime and legacy development/build dependency trees have now both been remediated and qualified without using `npm audit fix --force`.
 
-          The hardened runtime includes patched versions of the directly exposed/network/security-sensitive dependencies, including Axios, DOMPurify, Express, fast-xml-parser, `http-proxy-middleware`, Immutable, jsonwebtoken, Lodash, Luxon, Multer, Socket.IO client/server, Webpack and `node-zendesk`. `d3-color` is pinned to 3.1.0; legacy `opennebula-guacamole` transitives are constrained to patched compatible Luxon/`ws` versions; Jimp uses the v1 API; and `qs` is constrained to 6.16.0.
+          The hardened runtime includes patched versions of the directly exposed/network/security-sensitive dependencies, including Axios, DOMPurify, Express, fast-xml-parser, `http-proxy-middleware`, Immutable, jsonwebtoken, Lodash, Luxon, Multer, Socket.IO client/server, Webpack and `node-zendesk`. `d3-color` is pinned to 3.1.0; legacy `opennebula-guacamole` transitives are constrained to patched compatible Luxon/`ws` versions; Jimp uses its v1 API; and `qs` is constrained to 6.16.0.
 
-          The remaining development/build advisories were then removed with a separately qualified build-tool closure: `eslint-import-resolver-webpack` 0.13.11, `webpack-dev-middleware` 5.3.4, a patched nested Babel core for `eslint-config-opennebula`, and non-breaking transitive lock updates. That exact tree passed the full FireEdge production build and real Chromium before it was committed.
+          Development/build-chain findings were removed with a separately qualified closure: `eslint-import-resolver-webpack` 0.13.11, `webpack-dev-middleware` 5.3.4, `@babel/core` 7.29.7 for `eslint-config-opennebula`, and compatible transitive lock updates. The exact tree was accepted only after tests, lint, the complete FireEdge production build and real Chromium passed.
 
-          Current locked audits on Node 22 are:
+          Current locked Node 22 audits are:
 
           - runtime `npm audit --omit=dev`: **0 critical / 0 high / 0 moderate / 0 low / 0 total**;
           - complete `npm audit`: **0 critical / 0 high / 0 moderate / 0 low / 0 total**.
 
-          FireEdge declares **Node >=22**. Node 22 is therefore the minimum supported runtime for this branch; older Node versions are not part of the qualified deployment contract.
+          FireEdge declares **Node >=22**. Node 22 is the minimum qualified runtime for this branch.
 
-          A permanent `LayerSentry FireEdge Security` workflow now performs locked install, both audits, LayerSentry regression tests, lint and the complete production build whenever the dependency/security contract changes. A source-level regression test also pins the qualified dependency/Jimp API contract so accidental downgrade or API regression fails CI.
+          A permanent `LayerSentry FireEdge Security` workflow performs locked install, both audits, LayerSentry regression tests, lint and the complete production build whenever the dependency/security contract changes. `dependency-security.test.cjs` pins the qualified dependency and Jimp API contract so an accidental downgrade or API regression fails CI.
 
           '''.replace('          ', '')
           doc, n = re.subn(
               r'## Dependency and security modernization\n.*?(?=## Zendesk and Guacamole compatibility hardening)',
-              security_section,
+              security,
               doc,
               count=1,
               flags=re.S,
           )
           if n != 1:
-              raise SystemExit('dependency/security documentation section not found')
+              raise SystemExit('dependency/security section not found')
 
           doc = doc.replace(
               'which preserves the declared Node 18 runtime floor.',
-              'which is qualified within the declared Node >=22 runtime floor.'
+              'within the declared Node >=22 runtime contract.'
+          )
+          doc = doc.replace(
+              'Pull requests run every non-Ruby smoke test plus RuboCop on Ruby files actually changed by the PR; push/manual runs retain the full repository smoke suite.',
+              'Pull requests run every non-Ruby smoke test plus RuboCop on Ruby files actually changed by the PR. Feature-branch pushes also run every non-Ruby smoke test, while stable/manual runs retain the full repository-wide RuboCop sweep.'
+          )
+          doc = re.sub(
+              r'The resulting clean runtime/source head `[^`]+` passed OpenNebula Smoke Tests run `[^`]+`, including FireEdge client/server lint and all later non-Ruby smoke checks\.',
+              'The P2 branch is regression-tested independently of inherited base-branch Ruby lint debt: PR and feature-push checks retain every non-Ruby smoke test, and any Ruby changed by a PR remains RuboCop-gated.',
+              doc,
+              count=1,
           )
 
           validation = f'''## Final automated validation evidence
 
-          The dependency closure committed at `ec32f66b939ea84c4beef65a6b625103db5e2b77` was qualified in GitHub Actions run `34729739804` before publication:
+          Dependency closure commit `ec32f66b939ea84c4beef65a6b625103db5e2b77` was qualified in GitHub Actions run `34729739804` before publication:
 
           - locked Node 22 install passed;
           - runtime audit: **0 vulnerabilities**;
-          - complete dependency audit including development/build tooling: **0 vulnerabilities**;
-          - **117 / 117 LayerSentry integration/regression tests passed** before the new dependency-drift tests were added;
+          - complete audit including development/build dependencies: **0 vulnerabilities**;
+          - **117 / 117 LayerSentry integration/regression tests passed** before the two dependency-contract tests were added;
           - FireEdge client/server lint passed;
           - complete FireEdge production build passed (`build-client`, `build-server`, all module-federation remotes); and
           - real Playwright/Chromium acceptance passed.
 
-          Final cleanup qualification run `{run_id}` then adds the permanent dependency-security tests/workflow, removes the two LayerSentry-only Webpack `TabType` warnings, corrects feature-branch smoke classification, refreshes this evidence, and re-runs both audits, the expanded test suite, lint, the complete production build and Chromium acceptance before committing the cleanup.
+          Final qualification run `{run_id}` validates the final tree after the durable dependency tests/workflow, feature-push smoke correction, and GPU/Backup-&-DR `TabType` warning fixes:
 
-          OpenNebula repository smoke remains strict for stable/manual runs. For feature branches, push and PR checks execute all non-Ruby smoke tests while RuboCop is scoped to Ruby files actually changed by the PR. PR #1 changes no Ruby files, so inherited P1/base RuboCop debt cannot masquerade as a P2 FireEdge regression.
+          - runtime and complete audits must both remain **0 vulnerabilities**;
+          - **119 / 119 LayerSentry tests** must pass;
+          - FireEdge lint must pass;
+          - the complete production build must pass;
+          - the LayerSentry GPU/protection `TabType` Webpack warnings must be absent; and
+          - real Chromium acceptance must pass.
 
-          Temporary one-shot qualification workflows are removed from the deliverable after evidence capture. The permanent `layersentry-fireedge-security.yml` workflow remains as the dependency/build regression gate.
+          PR #1 changes no Ruby source. Stable/manual OpenNebula smoke continues the full repository RuboCop sweep; feature-branch push and PR checks retain all non-Ruby smoke coverage, with RuboCop scoped to Ruby actually changed by the PR. This prevents inherited P1/base RuboCop debt from being misreported as a P2 FireEdge regression without weakening changed-code checks.
+
+          The one-shot qualification workflow removes itself before the final commit. The permanent `layersentry-fireedge-security.yml` workflow remains as the dependency/audit/build regression gate.
 
           '''.replace('          ', '')
           doc, n = re.subn(
@@ -311,14 +134,8 @@ jobs:
               flags=re.S,
           )
           if n != 1:
-              raise SystemExit('final automated validation section not found')
+              raise SystemExit('final validation section not found')
 
-          doc = re.sub(
-              r'The resulting clean runtime/source head `[^`]+` passed OpenNebula Smoke Tests run `[^`]+`, including FireEdge client/server lint and all later non-Ruby smoke checks\.',
-              'The P2 source is regression-tested independently of inherited base-branch Ruby lint debt; PR and feature-push smoke checks retain every non-Ruby smoke test and changed-Ruby lint.',
-              doc,
-              count=1,
-          )
           doc = doc.replace(
               'Node 22 and Node 18 LayerSentry tests',
               'Node 22 LayerSentry tests'
@@ -327,19 +144,17 @@ jobs:
           doc = doc.replace('Node `>=18`', 'Node `>=22`')
 
           stale = [
-              '0 critical**\n- **1 high',
               'remaining high is `serialize-javascript`',
-              'Node 18 floor job',
-              'Node 18 locked install',
-              '117 / 117 LayerSentry tests** on Node 18',
+              'Node 18',
+              '0 critical**\n- **1 high',
               '32e7749c7ef7163025132a47f47d2200c76c6ae6',
+              '34672189834',
           ]
           for marker in stale:
               if marker in doc:
-                  raise SystemExit(f'stale documentation marker remains: {marker}')
-          doc_path.write_text(doc)
+                  raise SystemExit(f'stale evidence remains: {marker}')
 
-          # The one-shot workflow removes itself from the final deliverable.
+          doc_path.write_text(doc)
           (root / '.github/workflows/layersentry-security-audit-once.yml').unlink()
           PY
           git diff --check
@@ -399,7 +214,7 @@ jobs:
           done
           curl --fail http://127.0.0.1:4173/ >/dev/null
           node tests/layersentry/browser/smoke.cjs
-      - name: Commit exact final cleanup
+      - name: Commit exact final evidence tree
         shell: bash
         run: |
           set -euo pipefail
@@ -408,5 +223,5 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
           git diff --cached --check
-          git commit -m 'chore(layersentry): close remaining P2 code and CI gaps'
+          git commit -m 'docs(layersentry): publish final zero-advisory qualification evidence'
           git push origin HEAD:feat/self-service-v5-ui-20260911
