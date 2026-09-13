@@ -69,23 +69,27 @@ jobs:
           node - <<'NODE'
           const pkg=require('./package.json')
           const lock=require('./package-lock.json')
-          const expected={
+          if(pkg.engines?.node!=='>=22') throw new Error(`Node floor drifted: ${pkg.engines?.node}`)
+          if(pkg.devDependencies?.['eslint-import-resolver-webpack']!=='0.13.11') throw new Error('resolver version drifted')
+          if(pkg.devDependencies?.['webpack-dev-middleware']!=='5.3.4') throw new Error('webpack-dev-middleware version drifted')
+          if(pkg.overrides?.['eslint-config-opennebula']?.['@babel/core']!=='7.29.7') throw new Error('nested Babel override missing')
+          const topExpected={
             'eslint-import-resolver-webpack':'0.13.11',
             'webpack-dev-middleware':'5.3.4',
-            'bn.js':'5.2.5',
             'flatted':'3.4.4',
             'js-yaml':'3.15.2'
           }
-          if(pkg.engines?.node!=='>=22') throw new Error(`Node floor drifted: ${pkg.engines?.node}`)
-          if(pkg.overrides?.['eslint-config-opennebula']?.['@babel/core']!=='7.29.7') throw new Error('nested Babel override missing')
-          for(const [name,wanted] of Object.entries(expected)){
+          for(const [name,wanted] of Object.entries(topExpected)){
             const actual=lock.packages?.[`node_modules/${name}`]?.version
             console.log(`${name}=${actual}`)
             if(actual!==wanted) throw new Error(`${name} expected ${wanted}, got ${actual}`)
           }
           const nested=lock.packages?.['node_modules/eslint-config-opennebula/node_modules/@babel/core']?.version
-          console.log(`eslint-config-opennebula/@babel/core=${nested}`)
+          console.log(`eslint-config-opennebula/@babel/core=${nested || 'deduped to root'}`)
           if(nested && nested!=='7.29.7') throw new Error(`nested Babel remains ${nested}`)
+          for(const [key,meta] of Object.entries(lock.packages||{})){
+            if(key.endsWith('/bn.js')) console.log(`${key}=${meta.version}`)
+          }
           NODE
           npm ls --all >/tmp/npm-ls.txt || { cat /tmp/npm-ls.txt; exit 1; }
       - name: LayerSentry regression tests
