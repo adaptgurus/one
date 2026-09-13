@@ -14,6 +14,7 @@ on:
       - 'src/oneks/app/models/groups/nodegroup_day2.rb'
       - 'src/oneks/app/services/event_manager/event_manager_day2.rb'
       - 'src/oneks/app/services/lifecycle_status.rb'
+      - 'src/oneks/app/services/lifecycle_status_autoscaler.rb'
       - 'src/oneks/lib/helpers/k8s_day2_helper.rb'
       - 'src/oneks/test/day2_lifecycle_test.rb'
       - 'src/oneks/specs/controlplanes/layersentry-poc/**'
@@ -40,6 +41,7 @@ jobs:
           ruby -c src/oneks/app/models/groups/nodegroup_day2.rb
           ruby -c src/oneks/app/services/event_manager/event_manager_day2.rb
           ruby -c src/oneks/app/services/lifecycle_status.rb
+          ruby -c src/oneks/app/services/lifecycle_status_autoscaler.rb
           ruby -c src/oneks/lib/helpers/k8s_day2_helper.rb
           ruby -c src/oneks/test/day2_lifecycle_test.rb
       - name: RuboCop Day-2 files
@@ -52,6 +54,7 @@ jobs:
             src/oneks/app/models/groups/nodegroup_day2.rb \
             src/oneks/app/services/event_manager/event_manager_day2.rb \
             src/oneks/app/services/lifecycle_status.rb \
+            src/oneks/app/services/lifecycle_status_autoscaler.rb \
             src/oneks/lib/helpers/k8s_day2_helper.rb \
             src/oneks/test/day2_lifecycle_test.rb
       - name: Profile and status regressions
