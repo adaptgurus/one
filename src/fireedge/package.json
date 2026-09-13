@@ -47,11 +47,11 @@
     "eslint": "7.32.0",
     "eslint-config-opennebula": "2.0.5",
     "eslint-import-resolver-alias": "1.1.2",
-    "eslint-import-resolver-webpack": "0.13.0",
+    "eslint-import-resolver-webpack": "0.13.11",
     "opennebula-generatepotfile": "1.0.0",
     "opennebula-potojson": "1.0.0",
     "react-refresh": "0.10.0",
-    "webpack-dev-middleware": "5.2.1",
+    "webpack-dev-middleware": "5.3.4",
     "webpack-hot-middleware": "2.25.1"
   },
   "dependencies": {
@@ -184,6 +184,9 @@
       "luxon": "1.28.1",
       "ws": "5.2.5"
     },
-    "qs": "6.16.0"
+    "qs": "6.16.0",
+    "eslint-config-opennebula": {
+      "@babel/core": "7.29.7"
+    }
   }
 }
