@@ -1,0 +1,75 @@
+name: LayerSentry FireEdge Security
+
+on:
+  pull_request:
+    paths:
+      - 'src/fireedge/package.json'
+      - 'src/fireedge/package-lock.json'
+      - 'src/fireedge/src/server/utils/logo.js'
+      - 'src/fireedge/src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/**'
+      - 'src/fireedge/tests/layersentry/**'
+      - '.github/workflows/layersentry-fireedge-security.yml'
+  push:
+    paths:
+      - 'src/fireedge/package.json'
+      - 'src/fireedge/package-lock.json'
+      - 'src/fireedge/src/server/utils/logo.js'
+      - 'src/fireedge/src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/**'
+      - 'src/fireedge/tests/layersentry/**'
+      - '.github/workflows/layersentry-fireedge-security.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fireedge-security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/fireedge
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+      - name: Locked install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Runtime and complete dependency audits
+        run: |
+          npm audit --omit=dev --json > /tmp/runtime-audit.json || true
+          npm audit --json > /tmp/full-audit.json || true
+          node - <<'NODE'
+          const fs = require('fs')
+          for (const [kind, file] of [
+            ['runtime', '/tmp/runtime-audit.json'],
+            ['full', '/tmp/full-audit.json'],
+          ]) {
+            const report = JSON.parse(fs.readFileSync(file, 'utf8'))
+            const counts = report?.metadata?.vulnerabilities ?? {}
+            console.log(`${kind.toUpperCase()}_AUDIT=${JSON.stringify(counts)}`)
+            if ((counts.total ?? 0) !== 0) {
+              for (const [name, finding] of Object.entries(
+                report.vulnerabilities ?? {}
+              )) {
+                console.log(
+                  kind,
+                  name,
+                  finding.severity,
+                  finding.range,
+                  finding.fixAvailable
+                )
+              }
+              process.exitCode = 2
+            }
+          }
+          NODE
+      - name: LayerSentry regression tests
+        run: node --test tests/layersentry/*.test.cjs
+      - name: FireEdge lint
+        run: npm run lint
+      - name: Full FireEdge production build
+        run: npm run build
