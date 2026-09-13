@@ -8,6 +8,12 @@ require 'active_support/core_ext/string/indent'
 
 class LayerSentryProfileTest < Minitest::Test
   ROOT = File.expand_path('../specs', __dir__)
+  CONFIG = File.expand_path('../etc/oneks-server.conf', __dir__)
+
+  def test_server_uses_selinux_labeled_kubectl_wrapper
+    assert_includes File.read(CONFIG), ":kubectl_path: '/usr/local/libexec/oneks/kubectl'"
+  end
+
   def render(type, inputs = {})
     cluster = { id: 900, uuid: 'p1-test', kubernetes_version: 'v1.36.4',
                 deployment: { sched_requirements: 'CLUSTER_ID = 0',
