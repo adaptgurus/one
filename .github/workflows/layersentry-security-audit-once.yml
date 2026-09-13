@@ -1,4 +1,4 @@
-name: LayerSentry dev dependency audit once
+name: LayerSentry dev dependency qualification once
 
 on:
   push:
@@ -8,12 +8,12 @@ on:
       - '.github/workflows/layersentry-security-audit-once.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  qualify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 55
     defaults:
       run:
         working-directory: src/fireedge
@@ -21,51 +21,102 @@ jobs:
       - uses: actions/checkout@v6
         with:
           ref: feat/self-service-v5-ui-20260911
-          persist-credentials: false
+          persist-credentials: true
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: src/fireedge/package-lock.json
-      - name: Locked install
+      - name: Build zero-advisory dev candidate
+        run: |
+          node - <<'NODE'
+          const fs=require('fs')
+          const p='package.json'
+          const pkg=JSON.parse(fs.readFileSync(p,'utf8'))
+          pkg.devDependencies['eslint-import-resolver-webpack']='0.13.11'
+          pkg.devDependencies['webpack-dev-middleware']='5.3.4'
+          pkg.overrides={
+            ...(pkg.overrides||{}),
+            'eslint-config-opennebula': {
+              ...((pkg.overrides||{})['eslint-config-opennebula']||{}),
+              '@babel/core':'7.29.7'
+            }
+          }
+          fs.writeFileSync(p,JSON.stringify(pkg,null,2)+'\n')
+          NODE
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          npm audit fix --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Install exact candidate
         run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Print exact full audit findings
+      - name: Verify zero full and runtime advisories
         run: |
-          npm audit --json > /tmp/audit.json || true
+          npm audit --json > /tmp/full.json || true
+          npm audit --omit=dev --json > /tmp/runtime.json || true
           node - <<'NODE'
           const fs=require('fs')
-          const report=JSON.parse(fs.readFileSync('/tmp/audit.json','utf8'))
-          console.log('FULL_AUDIT='+JSON.stringify(report?.metadata?.vulnerabilities ?? {}))
-          for (const [name,v] of Object.entries(report.vulnerabilities||{}).sort(([a],[b])=>a.localeCompare(b))) {
-            console.log(JSON.stringify({
-              name,
-              severity:v.severity,
-              isDirect:v.isDirect,
-              range:v.range,
-              via:(v.via||[]).map(x=>typeof x==='string'?x:{source:x.source,name:x.name,severity:x.severity,title:x.title,range:x.range}),
-              effects:v.effects,
-              fixAvailable:v.fixAvailable
-            }))
+          for(const [kind,file] of [['FULL','/tmp/full.json'],['RUNTIME','/tmp/runtime.json']]){
+            const r=JSON.parse(fs.readFileSync(file,'utf8'))
+            const counts=r?.metadata?.vulnerabilities||{}
+            console.log(`${kind}_AUDIT=${JSON.stringify(counts)}`)
+            if((counts.total||0)!==0){
+              for(const [name,v] of Object.entries(r.vulnerabilities||{})) console.log(kind,'REMAINING',name,v.severity,v.range,v.fixAvailable)
+              process.exitCode=2
+            }
           }
           NODE
-      - name: Print npm non-breaking fix proposal
+      - name: Verify resolved dependency contract
         run: |
-          cp package.json /tmp/package.before.json
-          cp package-lock.json /tmp/package-lock.before.json
-          npm audit fix --package-lock-only --ignore-scripts --no-audit --no-fund || true
-          echo '--- package.json diff ---'
-          diff -u /tmp/package.before.json package.json || true
-          echo '--- lock top-level versions changed ---'
           node - <<'NODE'
-          const fs=require('fs')
-          const before=JSON.parse(fs.readFileSync('/tmp/package-lock.before.json','utf8'))
-          const after=require('./package-lock.json')
-          const names=new Set()
-          for(const key of Object.keys(before.packages||{})) if(key.startsWith('node_modules/')&&!key.slice(13).includes('/node_modules/')) names.add(key.slice(13))
-          for(const key of Object.keys(after.packages||{})) if(key.startsWith('node_modules/')&&!key.slice(13).includes('/node_modules/')) names.add(key.slice(13))
-          for(const name of [...names].sort()){
-            const a=before.packages?.[`node_modules/${name}`]?.version
-            const b=after.packages?.[`node_modules/${name}`]?.version
-            if(a!==b) console.log(`${name}: ${a} -> ${b}`)
+          const pkg=require('./package.json')
+          const lock=require('./package-lock.json')
+          const expected={
+            'eslint-import-resolver-webpack':'0.13.11',
+            'webpack-dev-middleware':'5.3.4',
+            'bn.js':'5.2.5',
+            'flatted':'3.4.4',
+            'js-yaml':'3.15.2'
           }
+          if(pkg.engines?.node!=='>=22') throw new Error(`Node floor drifted: ${pkg.engines?.node}`)
+          if(pkg.overrides?.['eslint-config-opennebula']?.['@babel/core']!=='7.29.7') throw new Error('nested Babel override missing')
+          for(const [name,wanted] of Object.entries(expected)){
+            const actual=lock.packages?.[`node_modules/${name}`]?.version
+            console.log(`${name}=${actual}`)
+            if(actual!==wanted) throw new Error(`${name} expected ${wanted}, got ${actual}`)
+          }
+          const nested=lock.packages?.['node_modules/eslint-config-opennebula/node_modules/@babel/core']?.version
+          console.log(`eslint-config-opennebula/@babel/core=${nested}`)
+          if(nested && nested!=='7.29.7') throw new Error(`nested Babel remains ${nested}`)
           NODE
+          npm ls --all >/tmp/npm-ls.txt || { cat /tmp/npm-ls.txt; exit 1; }
+      - name: LayerSentry regression tests
+        run: node --test tests/layersentry/*.test.cjs
+      - name: FireEdge lint
+        run: npm run lint
+      - name: Full FireEdge production build
+        run: npm run build
+      - name: Install Chromium runner without changing lock
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Build browser acceptance harness
+        run: npx webpack --config tests/layersentry/browser/webpack.config.cjs
+      - name: Real Chromium acceptance
+        run: |
+          python3 -m http.server 4173 --directory tests/layersentry/browser/dist >/tmp/layersentry-browser.log 2>&1 &
+          trap 'kill $! 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            curl --fail --silent http://127.0.0.1:4173/ >/dev/null && break
+            sleep 1
+          done
+          curl --fail http://127.0.0.1:4173/ >/dev/null
+          node tests/layersentry/browser/smoke.cjs
+      - name: Commit exact qualified dependency closure
+        working-directory: .
+        run: |
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src/fireedge/package.json src/fireedge/package-lock.json
+          git diff --cached --check
+          git commit -m 'security(fireedge): clear development dependency advisories'
+          git push origin HEAD:feat/self-service-v5-ui-20260911
