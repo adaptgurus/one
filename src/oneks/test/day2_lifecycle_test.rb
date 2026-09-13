@@ -5,6 +5,7 @@ require 'erb'
 require 'minitest/autorun'
 require 'yaml'
 require_relative '../app/services/lifecycle_status'
+require_relative '../app/services/lifecycle_status_autoscaler'
 
 # Regression coverage for the LayerSentry RKE2 Day-2 profile and status mapper.
 class Day2LifecycleTest < Minitest::Test
@@ -109,6 +110,32 @@ class Day2LifecycleTest < Minitest::Test
     def test_non_opennebula_provider_id_is_not_attributed_to_a_vm
         node = { 'spec' => { 'providerID' => 'aws:///i-123' } }
         assert_nil OneKS::LifecycleStatus.node_status(node)
+    end
+
+    def test_autoscaling_annotations_do_not_imply_operational_autoscaling
+        runtime = { :enabled => true, :min => 1, :max => 5 }
+        controller = { :observed => false, :ready => false }
+
+        effective = OneKS::LifecycleStatus.effective_autoscaling_runtime(
+            runtime, controller
+        )
+        assert_equal true, effective[:configured]
+        assert_equal false, effective[:enabled]
+        assert_equal false, effective[:controller_ready]
+    end
+
+    def test_autoscaling_is_enabled_only_with_ready_controller
+        runtime = { :enabled => true, :min => 1, :max => 5 }
+        controller = { :observed => true, :ready => true }
+
+        effective = OneKS::LifecycleStatus.effective_autoscaling_runtime(
+            runtime, controller
+        )
+        assert_equal true, effective[:configured]
+        assert_equal true, effective[:enabled]
+        assert_equal true, effective[:controller_ready]
+        assert_equal 1, effective[:min]
+        assert_equal 5, effective[:max]
     end
 
 end
