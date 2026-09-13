@@ -5,10 +5,7 @@ import { useEffect } from 'react'
 
 import { FormWithSchema } from '@ComponentsModule'
 import { useGeneralApi } from '@FeaturesModule'
-import {
-  STEP_ID as EXTRA_ID,
-  TabType,
-} from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration'
+import { STEP_ID as EXTRA_ID } from '@modules/resources/VmTemplate/Forms/CreateForm/Steps/ExtraConfiguration'
 import { FIELDS } from './schema'
 
 const Protection = () => {
@@ -37,7 +34,7 @@ const Protection = () => {
   )
 }
 
-/** @type {TabType} */
+/** Native extra-configuration tab descriptor. */
 export default {
   id: 'protection',
   name: 'Backup & DR',
