@@ -43,6 +43,7 @@ class LayerSentryProfileTest < Minitest::Test
     assert_includes templates[:router], 'VMGROUP_ID = "9"'
     assert_includes templates[:router], 'ROLE = "endpoints"'
     assert_includes templates[:controlplane], 'IMAGE_ID = "7"'
+    assert_includes templates[:controlplane], 'FEATURES = [ GUEST_AGENT = "YES" ]'
     templates.each_value { |t| assert_includes t, 'SCHED_DS_REQUIREMENTS = "ID = 4"' }
   end
   def test_worker_identity_and_version
@@ -51,6 +52,7 @@ class LayerSentryProfileTest < Minitest::Test
     assert_includes cmds.join, 'provider-id=one://%s'
     assert_equal 'v1.36.4+rke2r1', docs.fetch('MachineDeployment').dig('spec', 'template', 'spec', 'version')
     assert_includes templates[:node], 'VMID = "$VMID"'
+    assert_includes templates[:node], 'FEATURES = [ GUEST_AGENT = "YES" ]'
     refute_includes docs.to_s, 'cloudProviderName'
   end
   def test_remediation_preserves_the_only_control_plane

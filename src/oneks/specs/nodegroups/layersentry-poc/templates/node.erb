@@ -28,6 +28,7 @@ GRAPHICS = [
   TYPE   = "vnc"
 ]
 HYPERVISOR = "kvm"
+FEATURES = [ GUEST_AGENT = "YES" ]
 LXD_SECURITY_PRIVILEGED = "true"
 MEMORY     = "<%= group[:user_inputs_values][:memory] %>"
 SCHED_REQUIREMENTS = "<%= cluster[:deployment][:sched_requirements] %>"
