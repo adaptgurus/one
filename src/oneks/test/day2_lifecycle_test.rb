@@ -64,7 +64,11 @@ class Day2LifecycleTest < Minitest::Test
         assert_equal 1, flavour.fetch('defaults').fetch('count')
     end
 
-    def test_multi_replica_control_plane_renders_native_replicas_and_bounded_mhc
+    def test_control_plane_remediation_starts_only_after_three_members
+        docs, = render('controlplanes', :count => 2)
+        refute docs.key?('MachineHealthCheck'),
+               'transient two-member etcd must not be auto-remediated'
+
         docs, = render('controlplanes', :count => 3)
         assert_equal 3, docs.fetch('RKE2ControlPlane').dig('spec', 'replicas')
         mhc = docs.fetch('MachineHealthCheck').fetch('spec')
