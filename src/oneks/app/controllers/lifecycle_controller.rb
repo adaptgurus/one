@@ -6,6 +6,38 @@ module OneKS
   # OneKS LCM and CAPI/CAPRKE2 resources.
   module LifecycleController
     def self.registered(app)
+      app.helpers do
+        def lifecycle_cluster(id)
+          cluster = OneKS::Cluster.new_from_id(@client, id)
+          if OpenNebula.is_error?(cluster)
+            return internal_error(
+              cluster.message, one_error_to_http(cluster.errno)
+            )
+          end
+          unless cluster.control_plane
+            return internal_error(
+              'Control plane group not found', ODS::ResponseHelper::OPERATION_EC
+            )
+          end
+          cluster
+        end
+
+        def lifecycle_worker_group(cluster, group_id)
+          ref = Array(cluster.node_groups).find { |entry| entry[:id].to_i == group_id.to_i }
+          unless ref
+            return internal_error(
+              "Worker group #{group_id} not found",
+              one_error_to_http(OpenNebula::Error::ENO_EXISTS)
+            )
+          end
+          group = OneKS::NodeGroup.new_from_id(@client, ref[:id])
+          if OpenNebula.is_error?(group)
+            return internal_error(group.message, one_error_to_http(group.errno))
+          end
+          group
+        end
+      end
+
       app.get '/clusters/:id/runtime-status' do
         cluster = OneKS::Cluster.new_from_id(@client, params[:id], :raw => true)
         return internal_error(
@@ -33,7 +65,7 @@ module OneKS
           )
         end
 
-        cluster = fetch_cluster(params[:id])
+        cluster = lifecycle_cluster(params[:id])
         return cluster if cluster.is_a?(Array)
 
         rc = cluster.scale_group(cluster.control_plane[:id], target, :actor => @username)
@@ -61,7 +93,7 @@ module OneKS
         payload = check_body(request)
         target = payload[:kubernetes_version].to_s
 
-        cluster = fetch_cluster(params[:id])
+        cluster = lifecycle_cluster(params[:id])
         return cluster if cluster.is_a?(Array)
 
         family = ControlPlane.family_by_name(cluster.control_plane[:family])
@@ -105,10 +137,10 @@ module OneKS
       # Stage 2 is invoked per worker group after the control plane has fully
       # converged. MachineDeployment rollingUpdate keeps maxUnavailable=0.
       app.post '/clusters/:id/nodegroups/:nodegroup_id/upgrade' do
-        cluster = fetch_cluster(params[:id])
+        cluster = lifecycle_cluster(params[:id])
         return cluster if cluster.is_a?(Array)
 
-        group = fetch_worker_group(cluster, params[:nodegroup_id])
+        group = lifecycle_worker_group(cluster, params[:nodegroup_id])
         return group if group.is_a?(Array)
 
         rc = cluster.upgrade_group(group.id, :actor => @username)
@@ -129,10 +161,10 @@ module OneKS
 
       app.post '/clusters/:id/nodegroups/:nodegroup_id/resize' do
         payload = check_body(request)
-        cluster = fetch_cluster(params[:id])
+        cluster = lifecycle_cluster(params[:id])
         return cluster if cluster.is_a?(Array)
 
-        group = fetch_worker_group(cluster, params[:nodegroup_id])
+        group = lifecycle_worker_group(cluster, params[:nodegroup_id])
         return group if group.is_a?(Array)
 
         rc = group.resize_shape(payload)
@@ -171,10 +203,10 @@ module OneKS
           )
         end
 
-        cluster = fetch_cluster(params[:id])
+        cluster = lifecycle_cluster(params[:id])
         return cluster if cluster.is_a?(Array)
 
-        group = fetch_worker_group(cluster, params[:nodegroup_id])
+        group = lifecycle_worker_group(cluster, params[:nodegroup_id])
         return group if group.is_a?(Array)
 
         rc = group.configure_autoscaling(:enabled => enabled, :min => min, :max => max)
@@ -193,51 +225,6 @@ module OneKS
       rescue StandardError => e
         general_error(e)
       end
-    end
-
-    class << self
-      private
-
-      # Helpers are installed as instance methods on the Sinatra application by
-      # the registered extension. They return an error response tuple so route
-      # handlers can return it directly without mutating native resources.
-      def registered_helpers
-        Module.new do
-          def fetch_cluster(id)
-            cluster = OneKS::Cluster.new_from_id(@client, id)
-            if OpenNebula.is_error?(cluster)
-              return internal_error(
-                cluster.message, one_error_to_http(cluster.errno)
-              )
-            end
-            unless cluster.control_plane
-              return internal_error(
-                'Control plane group not found', ODS::ResponseHelper::OPERATION_EC
-              )
-            end
-            cluster
-          end
-
-          def fetch_worker_group(cluster, group_id)
-            ref = Array(cluster.node_groups).find { |entry| entry[:id].to_i == group_id.to_i }
-            unless ref
-              return internal_error(
-                "Worker group #{group_id} not found",
-                one_error_to_http(OpenNebula::Error::ENO_EXISTS)
-              )
-            end
-            group = OneKS::NodeGroup.new_from_id(@client, ref[:id])
-            if OpenNebula.is_error?(group)
-              return internal_error(group.message, one_error_to_http(group.errno))
-            end
-            group
-          end
-        end
-      end
-    end
-
-    def self.extended(app)
-      app.helpers registered_helpers
     end
   end
 end
