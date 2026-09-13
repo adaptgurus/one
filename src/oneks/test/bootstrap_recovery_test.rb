@@ -1,7 +1,21 @@
 # frozen_string_literal: true
 require 'minitest/autorun'
 require 'ostruct'
-SERVER_CONF = {appliance_auto_import: false}.freeze
+require 'yaml'
+SERVER_CONF = {
+  appliance_auto_import: false,
+  kubectl_path: '/fixture/kubectl',
+  kubeconfig_path: '/fixture/kubeconfig',
+  k8s_timeout: 15,
+  cluster_autoscaler: {
+    chart: 'cluster-autoscaler',
+    chart_repo: 'https://kubernetes.github.io/autoscaler',
+    chart_version: '9.59.0',
+    image_repository: 'registry.k8s.io/autoscaling/cluster-autoscaler',
+    image_tags: {'1.36' => 'v1.36.1'}
+  }
+}.freeze
+ONEKS_SPEC_DIR = File.expand_path('../specs', __dir__) unless defined?(ONEKS_SPEC_DIR)
 
 # Isolate the lifecycle methods from the document store and event transport.
 module ODS
@@ -43,8 +57,13 @@ module OneKS
     def self.info(*); end
   end
 end
+require_relative '../lib/helpers/k8s_helper'
+require_relative '../lib/helpers/k8s_day2_helper'
 require_relative '../app/models/k8s_dependency'
 require_relative '../app/models/k8s_group'
+require_relative '../app/models/groups/controlplane'
+require_relative '../app/models/groups/nodegroup'
+require_relative '../app/models/groups/nodegroup_day2'
 require_relative '../app/models/dependencies/seed_vm'
 require_relative '../app/models/dependencies/cluster_router'
 
@@ -74,6 +93,47 @@ class BootstrapRecoveryTest < Minitest::Test
   def with_vm(&block)
     OpenNebula::VirtualMachine.stub(:new_with_id, @vm, &block)
   end
+
+  def test_cluster_autoscaler_manifest_is_pinned_and_cluster_scoped
+    manifest = OneKS::K8s.cluster_autoscaler_manifest('cluster-uuid', 'v1.36.4')
+    refute OpenNebula.is_error?(manifest), manifest.to_s
+
+    chart = YAML.safe_load(manifest)
+    assert_equal 'HelmChart', chart['kind']
+    assert_equal '9.59.0', chart.dig('spec', 'version')
+    values = YAML.safe_load(chart.dig('spec', 'valuesContent'))
+    assert_equal 'clusterapi', values['cloudProvider']
+    assert_equal 'incluster-incluster', values['clusterAPIMode']
+    assert_equal 'cluster-uuid', values.dig('autoDiscovery', 'clusterName')
+    assert_equal 'v1.36.1', values.dig('image', 'tag')
+    assert_equal 1, values['replicaCount']
+  end
+
+  def test_cluster_autoscaler_manifest_rejects_unpinned_minor
+    error = OneKS::K8s.cluster_autoscaler_manifest('cluster-uuid', 'v1.37.0')
+    assert_instance_of OpenNebula::Error, error
+    assert_match(/No pinned Cluster Autoscaler release/, error.message)
+  end
+
+  def test_control_plane_scale_limit_rejects_above_seven_before_mutation
+    control_plane = OneKS::ControlPlane.allocate
+    control_plane.define_singleton_method(:parent_cluster) { OpenStruct.new }
+
+    error = control_plane.scale(8)
+    assert_instance_of OpenNebula::Error, error
+    assert_match(/between 1 and 7/, error.message)
+    assert_equal 7, OneKS::ControlPlane::MAX_REPLICAS
+  end
+
+  def test_worker_autoscaling_limit_rejects_above_seven_before_mutation
+    node_group = OneKS::NodeGroup.allocate
+
+    error = node_group.configure_autoscaling(enabled: true, min: 1, max: 8)
+    assert_instance_of OpenNebula::Error, error
+    assert_match(/max <= 7/, error.message)
+    assert_equal 7, OneKS::NodeGroup::MAX_AUTOSCALING_REPLICAS
+  end
+
   def test_timeout_recovery_preserves_seed_and_existing_control_plane
     @seed.define_singleton_method(:recover) {|*| flunk 'seed must not be destroyed' }
     @router.define_singleton_method(:recover) {|*| flunk 'router must not be destroyed' }

@@ -56,9 +56,10 @@ module OneKS
             app.post '/clusters/:id/control-plane/scale' do
                 payload = check_body(request)
                 target = payload[:target]
-                unless target.is_a?(Integer) && target >= 1
+                unless target.is_a?(Integer) && target >= 1 &&
+                       target <= ControlPlane::MAX_REPLICAS
                     return internal_error(
-                        'Field target must be an integer greater than or equal to 1',
+                        'Field target must be an integer from 1 through 7',
                         ODS::ResponseHelper::VALIDATION_EC
                     )
                 end

@@ -9,6 +9,7 @@ module OneKS
     class NodeGroup
 
         SHAPE_KEYS = [:cpu, :vcpu, :memory, :disk_size].freeze
+        MAX_AUTOSCALING_REPLICAS = 7
 
         # Resize workers by updating the group-owned OpenNebula VM template and then
         # changing MachineDeployment template metadata. CAPI performs the rolling
@@ -55,18 +56,28 @@ module OneKS
             enabled = enabled == true
             min = Integer(min)
             max = Integer(max)
-            if min.negative? || max < min
+            if min.negative? || max < min || max > MAX_AUTOSCALING_REPLICAS
                 return OpenNebula::Error.new(
-                    'Autoscaling requires 0 <= min <= max', OpenNebula::Error::EACTION
+                    'Autoscaling requires 0 <= min <= max <= 7', OpenNebula::Error::EACTION
                 )
             end
 
             cluster = parent_cluster
             return cluster if OpenNebula.is_error?(cluster)
 
+            leader = cluster.leader
+            return leader if OpenNebula.is_error?(leader)
+
+            if enabled
+                rc = K8s.ensure_cluster_autoscaler(
+                    cluster.client, leader, cluster.uuid, cluster.kubernetes_version
+                )
+                return rc if OpenNebula.is_error?(rc)
+            end
+
             rc = K8s.configure_nodegroup_autoscaling(
                 cluster.client,
-                cluster.leader,
+                leader,
                 uuid,
                 :enabled => enabled,
                 :min => min,

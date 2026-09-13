@@ -62,6 +62,18 @@ class Day2LifecycleTest < Minitest::Test
         flavour = conf.fetch('flavours').fetch('standalone')
         assert_equal true, flavour.fetch('override_defaults')
         assert_equal 1, flavour.fetch('defaults').fetch('count')
+        count = conf.fetch('user_inputs').find { |input| input.fetch('name') == 'count' }
+        assert_equal 1, count.dig('match', 'values', 'min')
+        assert_equal 7, count.dig('match', 'values', 'max')
+
+        workers = YAML.load_file(
+            File.join(ROOT, 'nodegroups', 'layersentry-poc', 'nodegroup.conf')
+        )
+        worker_count = workers.fetch('user_inputs').find do |input|
+            input.fetch('name') == 'count'
+        end
+        assert_equal 0, worker_count.dig('match', 'values', 'min')
+        assert_equal 7, worker_count.dig('match', 'values', 'max')
     end
 
     def test_control_plane_remediation_starts_only_after_three_members

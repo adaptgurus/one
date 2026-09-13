@@ -8,6 +8,14 @@ module OneKS
     # Day-2 Kubernetes mutations delegated to existing CAPI/CAPRKE2 resources.
     module K8s
 
+        CLUSTER_AUTOSCALER_DEFAULTS = {
+            :chart => 'cluster-autoscaler',
+            :chart_repo => 'https://kubernetes.github.io/autoscaler',
+            :chart_version => '9.59.0',
+            :image_repository => 'registry.k8s.io/autoscaling/cluster-autoscaler',
+            :image_tags => { '1.36' => 'v1.36.1' }
+        }.freeze
+
         class << self
 
             AUTOSCALER_MIN = 'cluster.x-k8s.io/cluster-api-autoscaler-node-group-min-size'
@@ -79,9 +87,94 @@ module OneKS
                 )
             end
 
-            # Configure a MachineDeployment for the upstream Cluster API cloud
-            # provider. This only marks the group as autoscaler-managed; deployment of
-            # Cluster Autoscaler itself remains an explicit add-on operation.
+            # Render the pinned RKE2 HelmChart used for the Cluster API autoscaler.
+            # Each workload cluster gets its own controller and discovery selector,
+            # keeping multi-cluster scaling decisions isolated by Cluster name.
+            def cluster_autoscaler_manifest(cluster_uuid, kubernetes_version)
+                uuid = cluster_uuid.to_s
+                match = /\Av([0-9]+)\.([0-9]+)\.[0-9]+\z/.match(kubernetes_version.to_s)
+                return OpenNebula::Error.new(
+                    'Invalid Cluster Autoscaler cluster/version', OpenNebula::Error::EACTION
+                ) if uuid.empty? || match.nil?
+
+                override = SERVER_CONF[:cluster_autoscaler]
+                override = {} unless override.is_a?(Hash)
+                config = CLUSTER_AUTOSCALER_DEFAULTS.merge(override)
+                config[:image_tags] = CLUSTER_AUTOSCALER_DEFAULTS[:image_tags].merge(
+                    override[:image_tags].is_a?(Hash) ? override[:image_tags] : {}
+                )
+
+                minor = "#{match[1]}.#{match[2]}"
+                tags = config[:image_tags]
+                image_tag = tags[minor] || tags[minor.to_sym]
+                required = [:chart, :chart_repo, :chart_version, :image_repository]
+                return OpenNebula::Error.new(
+                    "No pinned Cluster Autoscaler release for Kubernetes #{minor}",
+                    OpenNebula::Error::EACTION
+                ) if image_tag.to_s.empty? || required.any? {|key| config[key].to_s.empty? }
+
+                values = {
+                    'cloudProvider' => 'clusterapi',
+                    'clusterAPIMode' => 'incluster-incluster',
+                    'autoDiscovery' => { 'clusterName' => uuid },
+                    'image' => {
+                        'repository' => config[:image_repository].to_s,
+                        'tag' => image_tag.to_s,
+                        'pullPolicy' => 'IfNotPresent'
+                    },
+                    'rbac' => { 'create' => true, 'clusterScoped' => true },
+                    'replicaCount' => 1,
+                    'affinity' => {
+                        'nodeAffinity' => {
+                            'requiredDuringSchedulingIgnoredDuringExecution' => {
+                                'nodeSelectorTerms' => [{
+                                    'matchExpressions' => [{
+                                        'key' => 'node-role.kubernetes.io/control-plane',
+                                        'operator' => 'Exists'
+                                    }]
+                                }]
+                            }
+                        }
+                    },
+                    'tolerations' => [{
+                        'key' => 'node-role.kubernetes.io/control-plane',
+                        'operator' => 'Exists',
+                        'effect' => 'NoSchedule'
+                    }]
+                }
+
+                {
+                    'apiVersion' => 'helm.cattle.io/v1',
+                    'kind' => 'HelmChart',
+                    'metadata' => {
+                        'name' => 'layersentry-cluster-autoscaler',
+                        'namespace' => 'kube-system'
+                    },
+                    'spec' => {
+                        'chart' => config[:chart].to_s,
+                        'repo' => config[:chart_repo].to_s,
+                        'version' => config[:chart_version].to_s,
+                        'targetNamespace' => 'kube-system',
+                        'valuesContent' => values.to_yaml
+                    }
+                }.to_yaml
+            rescue StandardError => e
+                OpenNebula::Error.new(
+                    "Cluster Autoscaler manifest generation failed: #{e.message}",
+                    OpenNebula::Error::EACTION
+                )
+            end
+
+            def ensure_cluster_autoscaler(client, leader, cluster_uuid, kubernetes_version)
+                manifest = cluster_autoscaler_manifest(cluster_uuid, kubernetes_version)
+                return manifest if OpenNebula.is_error?(manifest)
+
+                apply(client, leader, manifest)
+            end
+
+            # Configure a MachineDeployment for the upstream Cluster API provider.
+            # The controller itself is installed separately through the native OneKS
+            # Helm add-on lifecycle before these bounds are published.
             def configure_nodegroup_autoscaling(client, leader, group_uuid, **options)
                 enabled = options.fetch(:enabled)
                 min = options.fetch(:min)

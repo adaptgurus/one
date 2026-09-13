@@ -24,12 +24,26 @@ module OneKS
         DOCUMENT_ATTRS = K8sGroup::DOCUMENT_ATTRS + [:kubeconfig, :endpoint]
         FAMILIES_DIR   = File.join(ONEKS_SPEC_DIR, 'controlplanes')
         COMPONENT_NAME = name.split('::').last
+        MAX_REPLICAS   = 7
 
         def self.validate_spec(spec)
             template = super(spec)
             return template if OpenNebula.is_error?(template)
 
+            count = Integer(template.dig(:user_inputs_values, :count))
+            unless count == 1 || (count.between?(3, MAX_REPLICAS) && count.odd?)
+                return OpenNebula::Error.new(
+                    'LayerSentry control-plane replicas must be 1, 3, 5 or 7',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
             template.merge({ :kubeconfig => nil, :endpoint => nil })
+        rescue ArgumentError, TypeError
+            OpenNebula::Error.new(
+                'LayerSentry control-plane replicas must be an integer',
+                OpenNebula::Error::EACTION
+            )
         end
 
         #------------------------------------------------------
@@ -143,9 +157,9 @@ module OneKS
 
             target = Integer(target)
             return OpenNebula::Error.new(
-                'Control plane target must be between 1 and 99',
+                'Control plane target must be between 1 and 7',
                 OpenNebula::Error::EACTION
-            ) unless (1..99).cover?(target)
+            ) unless (1..MAX_REPLICAS).cover?(target)
 
             current = Integer(expected_size || 0)
             if current.positive? && target < current
