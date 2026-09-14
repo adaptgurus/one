@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and       *
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
-import { BaseSchema } from 'yup'
+import { BaseSchema, string } from 'yup'
 
 import { FIELDS as CAPACITY_FIELDS } from './capacitySchema'
 import { FIELDS as INFORMATION_FIELDS } from './informationSchema'
@@ -54,6 +54,19 @@ const SECTIONS = (
   const informationFields = selfService
     ? INFORMATION_FIELDS.filter(({ name }) =>
         ['name', 'instances'].includes(name)
+      ).map((field) =>
+        field.name === 'name'
+          ? {
+              ...field,
+              dependOf: undefined,
+              validation: string()
+                .trim()
+                .min(1, 'Enter a VM name')
+                .max(128, 'VM name must be 128 characters or fewer')
+                .required('Enter a VM name')
+                .default(''),
+            }
+          : field
       )
     : INFORMATION_FIELDS
 
@@ -73,7 +86,11 @@ const SECTIONS = (
       legend: <CapacityMemoryLabel data={vmTemplate} />,
       fields: disableFields(
         filterFieldsByHypervisor(
-          CAPACITY_FIELDS(vmTemplate, features),
+          CAPACITY_FIELDS(vmTemplate, features).map((field) =>
+            selfService && field.name === 'VCPU'
+              ? { ...field, label: 'vCPU' }
+              : field
+          ),
           hypervisor
         ),
         '',

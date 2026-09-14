@@ -177,6 +177,84 @@ const isIpv4 = (value) => {
 }
 
 /**
+ * Infer the customer guest OS family. Provider metadata wins over name-based
+ * fallback so production templates can make this deterministic.
+ *
+ * @param {object} sourceTemplate - OpenNebula VM template resource or body
+ * @returns {'LINUX'|'WINDOWS'} Guest OS family
+ */
+export const getLayerSentryGuestOsFamily = (sourceTemplate = {}) => {
+  const body = sourceTemplate?.TEMPLATE ?? sourceTemplate
+  const explicit = normalized(body?.LAYERSENTRY_OS_FAMILY).toUpperCase()
+  if (explicit === 'WINDOWS' || explicit === 'LINUX') return explicit
+
+  const identity = [
+    sourceTemplate?.NAME,
+    body?.NAME,
+    body?.DESCRIPTION,
+    body?.OS?.TYPE,
+  ]
+    .map(normalized)
+    .join(' ')
+    .toLowerCase()
+
+  return /windows|winserver|win(?:dows)?\s*server/.test(identity)
+    ? 'WINDOWS'
+    : 'LINUX'
+}
+
+/**
+ * Resolve provider-hidden data-disk defaults. OpenNebula formats volatile
+ * disks only when FS is supplied; Windows disks remain unformatted so the
+ * Windows guest can initialize them as NTFS instead of requiring host ntfs
+ * tooling. Linux defaults to ext4, which is part of the supported host FS set
+ * in the qualified lab and is the documented OpenNebula example.
+ *
+ * @param {object} sourceTemplate - OpenNebula VM template resource or body
+ * @returns {object} Hidden disk policy
+ */
+export const getLayerSentryDataDiskPolicy = (sourceTemplate = {}) => {
+  const body = sourceTemplate?.TEMPLATE ?? sourceTemplate
+  const osFamily = getLayerSentryGuestOsFamily(sourceTemplate)
+  const requestedFormat = normalized(
+    body?.LAYERSENTRY_DATA_DISK_FORMAT
+  ).toLowerCase()
+  const format = ['raw', 'qcow2'].includes(requestedFormat)
+    ? requestedFormat
+    : 'qcow2'
+  const requestedFs = normalized(body?.LAYERSENTRY_DATA_DISK_FS).toLowerCase()
+  const fs = osFamily === 'WINDOWS' ? undefined : requestedFs || 'ext4'
+  const devPrefix =
+    normalized(body?.LAYERSENTRY_DATA_DISK_DEV_PREFIX).toLowerCase() || 'vd'
+
+  return { osFamily, format, fs, devPrefix }
+}
+
+const networkTemplate = (network = {}) => network?.TEMPLATE ?? {}
+
+const networkMode = (network = {}) => {
+  const mode = normalized(
+    networkTemplate(network)?.LAYERSENTRY_NETWORK_MODE
+  ).toUpperCase()
+
+  return ['SRIOV', 'PCI', 'PCI_PASSTHROUGH', 'ACCELERATED'].includes(mode)
+    ? 'ACCELERATED'
+    : 'STANDARD'
+}
+
+const networkQosSupported = (network = {}) => {
+  const template = networkTemplate(network)
+  const explicit = normalized(template?.LAYERSENTRY_NETWORK_QOS).toUpperCase()
+  if (explicit === 'YES') return true
+  if (explicit === 'NO') return false
+  if (networkMode(network) === 'ACCELERATED') return false
+
+  // OpenNebula supports symmetric per-NIC QoS for the qualified bridge/fw,
+  // 802.1Q and VXLAN paths. OVS outbound QoS uses a different mechanism.
+  return normalized(template?.VN_MAD).toLowerCase() !== 'ovswitch'
+}
+
+/**
  * Applies the intentionally small LayerSentry cloud resource request to a
  * native OpenNebula VM template. Provider details stay server controlled.
  *
@@ -184,12 +262,14 @@ const isIpv4 = (value) => {
  * @param {object} resources - LayerSentry cloud resource fields
  * @param {object} capabilities - Provider capabilities
  * @param {boolean} capabilities.storageIopsSupported - IOPS policy gate
+ * @param {object} capabilities.sourceTemplate - Selected source template
+ * @param {object} capabilities.network - Authoritative selected VNet
  * @returns {object} Native OpenNebula template
  */
 export const applyLayerSentryCloudResources = (
   template = {},
   resources = {},
-  { storageIopsSupported = false } = {}
+  { storageIopsSupported = false, sourceTemplate = {}, network = {} } = {}
 ) => {
   const result = { ...template }
 
@@ -200,12 +280,15 @@ export const applyLayerSentryCloudResources = (
       16384,
       'Data disk size'
     )
+    const diskPolicy = getLayerSentryDataDiskPolicy(sourceTemplate)
     const dataDisk = {
       TYPE: 'fs',
       SIZE: String(sizeGb * 1024),
-      FORMAT: 'qcow2',
-      FS: 'ext4',
+      FORMAT: diskPolicy.format,
+      DEV_PREFIX: diskPolicy.devPrefix,
     }
+
+    if (diskPolicy.fs) dataDisk.FS = diskPolicy.fs
 
     if (storageIopsSupported && resources.storageIopsEnabled) {
       dataDisk.TOTAL_IOPS_SEC = String(
@@ -216,37 +299,72 @@ export const applyLayerSentryCloudResources = (
     result.DISK = [...asArray(template.DISK), dataDisk]
   }
 
-  const networkId = normalized(resources.networkId)
-  if (!/^\d+$/.test(networkId)) {
+  const requestedNetworkId = normalized(resources.networkId)
+  if (!/^\d+$/.test(requestedNetworkId)) {
     throw new Error('Select a valid LayerSentry network')
   }
 
-  const nic = {
-    NETWORK_ID: networkId,
-    MODEL: 'virtio',
+  const authoritativeNetworkId = normalized(network?.ID)
+  if (authoritativeNetworkId && requestedNetworkId !== authoritativeNetworkId) {
+    throw new Error('Selected network no longer matches the provider network')
   }
 
-  if (resources.ipAssignment === 'STATIC') {
-    const staticIp = normalized(resources.staticIp)
-    if (!isIpv4(staticIp)) throw new Error('Enter a valid static IPv4 address')
-    nic.IP = staticIp
+  const staticIp =
+    resources.ipAssignment === 'STATIC' ? normalized(resources.staticIp) : ''
+  if (staticIp && !isIpv4(staticIp)) {
+    throw new Error('Enter a valid static IPv4 address')
   }
 
-  if (resources.networkQosEnabled) {
-    const speedMbps = positiveInteger(
-      resources.networkSpeedMbps,
-      1,
-      100000,
-      'Network speed'
-    )
-    const kilobytesPerSecond = Math.round(speedMbps * 125)
-    nic.INBOUND_AVG_BW = String(kilobytesPerSecond)
-    nic.OUTBOUND_AVG_BW = String(kilobytesPerSecond)
-  }
+  if (networkMode(network) === 'ACCELERATED') {
+    if (resources.networkQosEnabled) {
+      throw new Error(
+        'Custom bandwidth QoS is not available on this accelerated network'
+      )
+    }
 
-  // The selected VNet remains authoritative for standard vs SR-IOV/PCI NIC
-  // implementation. Customer requests never include host PCI addresses.
-  result.NIC = [nic]
+    const networkName = normalized(network?.NAME)
+    if (!networkName)
+      throw new Error('Accelerated network has no provider name')
+
+    const metadata = networkTemplate(network)
+    const pci = {
+      TYPE: 'NIC',
+      NETWORK: networkName,
+    }
+    if (staticIp) pci.IP = staticIp
+    ;['CLASS', 'VENDOR', 'DEVICE', 'PROFILE'].forEach((key) => {
+      const value = normalized(metadata?.[`LAYERSENTRY_PCI_${key}`])
+      if (value) pci[key] = value
+    })
+
+    result.PCI = [...asArray(template.PCI), pci]
+    delete result.NIC
+  } else {
+    const nic = {
+      NETWORK_ID: requestedNetworkId,
+      MODEL:
+        normalized(networkTemplate(network)?.LAYERSENTRY_NIC_MODEL) || 'virtio',
+    }
+    if (staticIp) nic.IP = staticIp
+
+    if (resources.networkQosEnabled) {
+      if (!networkQosSupported(network)) {
+        throw new Error('Custom bandwidth QoS is not supported by this network')
+      }
+
+      const speedMbps = positiveInteger(
+        resources.networkSpeedMbps,
+        1,
+        100000,
+        'Network speed'
+      )
+      const kilobytesPerSecond = Math.round(speedMbps * 125)
+      nic.INBOUND_AVG_BW = String(kilobytesPerSecond)
+      nic.OUTBOUND_AVG_BW = String(kilobytesPerSecond)
+    }
+
+    result.NIC = [nic]
+  }
 
   return result
 }

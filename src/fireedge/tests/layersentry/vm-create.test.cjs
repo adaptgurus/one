@@ -1,4 +1,18 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* ------------------------------------------------------------------------- *
+ * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
+ * ------------------------------------------------------------------------- */
 const { test, before } = require('node:test')
 const assert = require('node:assert/strict')
 const { readFileSync } = require('node:fs')
@@ -45,7 +59,10 @@ test('customer template filter keeps only qcow2 KVM/x86_64 OS templates', () => 
   assert.equal(api.isLayerSentryCustomerTemplate(template(0, 0), images), true)
   assert.equal(api.isLayerSentryCustomerTemplate(template(1, 1), images), true)
   assert.equal(api.isLayerSentryCustomerTemplate(template(2, 2), images), false)
-  assert.equal(api.isLayerSentryCustomerTemplate(template(3, 99), images), false)
+  assert.equal(
+    api.isLayerSentryCustomerTemplate(template(3, 99), images),
+    false
+  )
   assert.equal(
     api.isLayerSentryCustomerTemplate(
       template(4, 0, { HYPERVISOR: 'vcenter' }),
@@ -64,11 +81,17 @@ test('customer template filter keeps only qcow2 KVM/x86_64 OS templates', () => 
 
 test('provider managed OneKS and virtual-router templates never enter VM create', () => {
   assert.equal(
-    api.isLayerSentryCustomerTemplate(template(10, 0, { ONEKS: { TYPE: 'NodeGroup' } }), images),
+    api.isLayerSentryCustomerTemplate(
+      template(10, 0, { ONEKS: { TYPE: 'NodeGroup' } }),
+      images
+    ),
     false
   )
   assert.equal(
-    api.isLayerSentryCustomerTemplate(template(11, 0, { VROUTER: 'YES' }), images),
+    api.isLayerSentryCustomerTemplate(
+      template(11, 0, { VROUTER: 'YES' }),
+      images
+    ),
     false
   )
   assert.equal(
@@ -138,9 +161,15 @@ test('LayerSentry VM defaults force virtio networking without deleting template 
 })
 
 test('clone source filter excludes OneKS and virtual-router VMs', () => {
-  assert.equal(api.isLayerSentryCloneSource({ ID: 54, USER_TEMPLATE: {} }), true)
   assert.equal(
-    api.isLayerSentryCloneSource({ ID: 48, USER_TEMPLATE: { ONEKS: { TYPE: 'NodeGroup' } } }),
+    api.isLayerSentryCloneSource({ ID: 54, USER_TEMPLATE: {} }),
+    true
+  )
+  assert.equal(
+    api.isLayerSentryCloneSource({
+      ID: 48,
+      USER_TEMPLATE: { ONEKS: { TYPE: 'NodeGroup' } },
+    }),
     false
   )
   assert.equal(api.isLayerSentryCloneSource({ ID: 42, VROUTER_ID: 3 }), false)
@@ -154,14 +183,20 @@ test('full native VM clone is allowed only in POWEROFF state', () => {
 
 test('save-as-template response parser accepts common API message shapes', () => {
   assert.equal(api.parseSavedTemplateId('Template ID: 71'), 71)
-  assert.equal(api.parseSavedTemplateId({ message: 'VM saved as template 72' }), 72)
+  assert.equal(
+    api.parseSavedTemplateId({ message: 'VM saved as template 72' }),
+    72
+  )
   assert.equal(api.parseSavedTemplateId({ id: 73 }), 73)
   assert.equal(api.parseSavedTemplateId({ ok: true }), undefined)
 })
 
 test('instantiate source uses explicit ID guard and strips access secrets from request', () => {
   const source = readFileSync(
-    resolve(__dirname, '../../src/modules/containers/VmTemplates/Instantiate.js'),
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VmTemplates/Instantiate.js'
+    ),
     'utf8'
   )
 
@@ -175,7 +210,10 @@ test('instantiate source uses explicit ID guard and strips access secrets from r
 
 test('VM create selector is separated into approved templates and VM clone tabs', () => {
   const source = readFileSync(
-    resolve(__dirname, '../../src/modules/containers/VirtualMachines/Create.js'),
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VirtualMachines/Create.js'
+    ),
     'utf8'
   )
 
@@ -205,9 +243,64 @@ test('cloud resource request creates only a simple data disk and selected networ
     TYPE: 'fs',
     SIZE: '102400',
     FORMAT: 'qcow2',
+    DEV_PREFIX: 'vd',
     FS: 'ext4',
   })
   assert.deepEqual(result.NIC, [{ NETWORK_ID: '0', MODEL: 'virtio' }])
+})
+
+test('data-disk policy is OS-aware while hiding format and filesystem from customers', () => {
+  const linux = api.getLayerSentryDataDiskPolicy({ NAME: 'Rocky Linux 9' })
+  assert.equal(linux.osFamily, 'LINUX')
+  assert.equal(linux.format, 'qcow2')
+  assert.equal(linux.fs, 'ext4')
+  assert.equal(linux.devPrefix, 'vd')
+
+  const windows = api.getLayerSentryDataDiskPolicy({
+    NAME: 'Windows Server 2025',
+  })
+  assert.equal(windows.osFamily, 'WINDOWS')
+  assert.equal(windows.format, 'qcow2')
+  assert.equal(windows.fs, undefined)
+
+  const result = api.applyLayerSentryCloudResources(
+    {},
+    { dataDiskEnabled: true, dataDiskSizeGb: 20, networkId: '0' },
+    { sourceTemplate: { NAME: 'Windows Server 2025' } }
+  )
+  assert.equal(result.DISK[0].FS, undefined)
+  assert.equal(result.DISK[0].SIZE, '20480')
+})
+
+test('accelerated provider network becomes an automatic PCI NIC without raw PCI input', () => {
+  const network = {
+    ID: '9',
+    NAME: 'LowLatency-LAN',
+    TEMPLATE: {
+      LAYERSENTRY_NETWORK_MODE: 'SRIOV',
+      LAYERSENTRY_PCI_CLASS: '0200',
+      LAYERSENTRY_PCI_VENDOR: '15b3',
+    },
+  }
+  const result = api.applyLayerSentryCloudResources(
+    {},
+    { networkId: '9', ipAssignment: 'AUTO', networkQosEnabled: false },
+    { network }
+  )
+
+  assert.equal(result.NIC, undefined)
+  assert.deepEqual(result.PCI, [
+    { TYPE: 'NIC', NETWORK: 'LowLatency-LAN', CLASS: '0200', VENDOR: '15b3' },
+  ])
+  assert.throws(
+    () =>
+      api.applyLayerSentryCloudResources(
+        {},
+        { networkId: '9', networkQosEnabled: true, networkSpeedMbps: 500 },
+        { network }
+      ),
+    /not available on this accelerated network/
+  )
 })
 
 test('storage IOPS is accepted only for provider-approved storage', () => {
@@ -286,7 +379,7 @@ test('cloud view hides provider-only VM controls and derives CPU at two-to-one',
   assert.match(vmView, /sched_actions:\n\s+enabled: false/)
 })
 
-test('cloud instantiate flow includes Access and Resources and strips helper data', () => {
+test('cloud instantiate flow is customer-only and strips helper data', () => {
   const steps = readFileSync(
     resolve(
       __dirname,
@@ -302,13 +395,21 @@ test('cloud instantiate flow includes Access and Resources and strips helper dat
     'utf8'
   )
   const instantiate = readFileSync(
-    resolve(__dirname, '../../src/modules/containers/VmTemplates/Instantiate.js'),
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VmTemplates/Instantiate.js'
+    ),
     'utf8'
   )
 
-  assert.match(steps, /view === 'cloud'.*AccessConfiguration/s)
-  assert.match(steps, /view === 'cloud'.*CloudResources/s)
-  assert.match(basic, /\['name', 'instances'\]\.includes\(name\)/)
+  assert.match(steps, /selfService.*AccessConfiguration/s)
+  assert.match(steps, /selfService.*CloudResources/s)
+  assert.match(steps, /selfService.*CloudOptionalServices/s)
+  assert.match(steps, /!selfService.*ExtraConfiguration/s)
+  assert.match(basic, /'name', 'instances'/)
+  assert.match(basic, /required\('Enter a VM name'\)/)
   assert.match(instantiate, /applyLayerSentryCloudResources/)
+  assert.match(instantiate, /useLazyGetVNetworkQuery/)
   assert.match(instantiate, /delete requestTemplate\.resources/)
+  assert.match(instantiate, /delete requestTemplate\.services/)
 })

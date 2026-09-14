@@ -30,6 +30,7 @@ import ExtraConfiguration, {
 import UserInputs from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/UserInputs'
 import AccessConfiguration from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/AccessConfiguration'
 import CloudResources from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources'
+import CloudOptionalServices from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudOptionalServices'
 
 const Steps = createSteps(
   ({ dataTemplateExtended = {}, view, ...rest }) => {
@@ -55,6 +56,8 @@ const Steps = createSteps(
       userInputsMetadata
     )
 
+    const selfService = view === 'cloud'
+
     return [
       () =>
         BasicConfiguration({
@@ -62,17 +65,21 @@ const Steps = createSteps(
           view,
           ...rest,
         }),
-      view === 'cloud' && (() => AccessConfiguration()),
-      view === 'cloud' &&
+      selfService && (() => AccessConfiguration()),
+      selfService &&
         (() => CloudResources({ vmTemplate: dataTemplateExtended })),
-      userInputs?.length > 0 &&
+      selfService &&
+        (() => CloudOptionalServices({ vmTemplate: dataTemplateExtended })),
+      !selfService &&
+        userInputs?.length > 0 &&
         (() => UserInputs(userInputs, userInputsLayout)),
-      (props) =>
-        ExtraConfiguration({
-          vmTemplate: dataTemplateExtended,
-          view,
-          ...props,
-        }),
+      !selfService &&
+        ((props) =>
+          ExtraConfiguration({
+            vmTemplate: dataTemplateExtended,
+            view,
+            ...props,
+          })),
     ].filter(Boolean)
   },
   {
@@ -105,45 +112,45 @@ const Steps = createSteps(
 
       const objectSchema = {
         [BASIC_ID]: { ...vmTemplate },
-        [EXTRA_ID]: {
-          ...vmTemplate?.TEMPLATE,
-        },
       }
 
-      // Init placement
-      const schedRequirements = vmTemplate?.TEMPLATE?.SCHED_REQUIREMENTS
-      if (schedRequirements) {
-        objectSchema[EXTRA_ID].SCHED_REQUIREMENTS = schedRequirements
-        const parts = schedRequirements
-          ?.split('&')
-          ?.flatMap((part) => part.split('|'))
-          ?.map((part) => part?.trim())
+      // Provider-only placement state exists only in the native admin/user form.
+      if (schema?.fields?.[EXTRA_ID]) {
+        objectSchema[EXTRA_ID] = { ...vmTemplate?.TEMPLATE }
+        const schedRequirements = vmTemplate?.TEMPLATE?.SCHED_REQUIREMENTS
 
-        const tableIds = parts?.reduce((ids, part) => {
-          if (part?.includes('ID')) {
-            const isCluster = part
-              .toUpperCase()
-              .includes(T.Cluster.toUpperCase())
-            const tableId = isCluster ? T.Cluster : T.Host
-            const partId = [].concat(part?.match(/\d+/g))?.flat()?.pop()
-            if (!partId) return ids
-            ;(ids[tableId] ??= []).push(partId)
+        if (schedRequirements) {
+          objectSchema[EXTRA_ID].SCHED_REQUIREMENTS = schedRequirements
+          const parts = schedRequirements
+            ?.split('&')
+            ?.flatMap((part) => part.split('|'))
+            ?.map((part) => part?.trim())
+
+          const tableIds = parts?.reduce((ids, part) => {
+            if (part?.includes('ID')) {
+              const isCluster = part
+                .toUpperCase()
+                .includes(T.Cluster.toUpperCase())
+              const tableId = isCluster ? T.Cluster : T.Host
+              const partId = [].concat(part?.match(/\d+/g))?.flat()?.pop()
+              if (!partId) return ids
+              ;(ids[tableId] ??= []).push(partId)
+            }
+
+            return ids
+          }, {})
+
+          if (tableIds?.[T.Cluster]) {
+            objectSchema[EXTRA_ID].PLACEMENT_CLUSTER_TABLE = tableIds[T.Cluster]
           }
 
-          return ids
-        }, {})
-
-        if (tableIds?.[T.Cluster]) {
-          objectSchema[EXTRA_ID].PLACEMENT_CLUSTER_TABLE = tableIds[T.Cluster]
+          if (tableIds?.[T.Host]) {
+            objectSchema[EXTRA_ID].PLACEMENT_HOST_TABLE = tableIds[T.Host]
+          }
         }
 
-        if (tableIds?.[T.Host]) {
-          objectSchema[EXTRA_ID].PLACEMENT_HOST_TABLE = tableIds[T.Host]
-        }
+        objectSchema[EXTRA_ID].CLUSTER_HOST_TYPE = T.SelectCluster
       }
-
-      const defaultType = T.SelectCluster
-      objectSchema[EXTRA_ID].CLUSTER_HOST_TYPE = defaultType
 
       const knownTemplate = schema.cast(
         objectSchema,

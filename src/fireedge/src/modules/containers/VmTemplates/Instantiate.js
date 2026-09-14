@@ -25,6 +25,7 @@ import {
   useSystemData,
   useViews,
   VmTemplateAPI,
+  VnAPI,
 } from '@FeaturesModule'
 
 import { DefaultFormStepper, SkeletonStepsForm } from '@ComponentsModule'
@@ -69,6 +70,7 @@ export function InstantiateVmTemplate() {
   const { enqueueError, enqueueInfo, resetFieldPath, resetModifiedFields } =
     useGeneralApi()
   const [instantiate] = VmTemplateAPI.useInstantiateTemplateMutation()
+  const [getVNetwork] = VnAPI.useLazyGetVNetworkQuery()
   const { adminGroup, oneConfig } = useSystemData()
 
   const { data: apiTemplateDataExtended, isError } =
@@ -97,7 +99,7 @@ export function InstantiateVmTemplate() {
       const modifiedFields = currentState.general?.modifiedFields
 
       await Promise.all(
-        templates.map((rawTemplate) => {
+        templates.map(async (rawTemplate) => {
           const existingTemplate = {
             ...apiTemplateData?.TEMPLATE,
           }
@@ -118,6 +120,9 @@ export function InstantiateVmTemplate() {
               rawTemplate?.access
             )
 
+            const selectedNetwork = await getVNetwork({
+              id: rawTemplate?.resources?.networkId,
+            }).unwrap()
             const storageIopsSupported =
               String(
                 apiTemplateData?.TEMPLATE?.LAYERSENTRY_STORAGE_IOPS_QOS ?? ''
@@ -128,7 +133,11 @@ export function InstantiateVmTemplate() {
             filteredTemplate = applyLayerSentryCloudResources(
               filteredTemplate,
               rawTemplate?.resources,
-              { storageIopsSupported }
+              {
+                storageIopsSupported,
+                sourceTemplate: apiTemplateData,
+                network: selectedNetwork,
+              }
             )
 
             // Catalog metadata belongs to the source VM template, not the
@@ -137,40 +146,41 @@ export function InstantiateVmTemplate() {
             delete filteredTemplate.LAYERSENTRY_GPU_PROFILES
             delete filteredTemplate.LAYERSENTRY_GPU_REQUEST
 
-            if (modifiedFields?.extra?.LayerSentryGpu) {
-              const gpuRequest = resolvePublishedGpuRequest(
-                rawTemplate?.extra?.LAYERSENTRY_GPU_REQUEST,
-                apiTemplateData?.TEMPLATE
-              )
+            const services = rawTemplate?.services ?? {}
+            const gpuRequest = resolvePublishedGpuRequest(
+              services?.LAYERSENTRY_GPU_REQUEST,
+              apiTemplateData?.TEMPLATE
+            )
 
-              if (!gpuRequest.valid) {
-                throw new Error(GPU_REQUEST_ERROR)
-              }
+            if (!gpuRequest.valid) throw new Error(GPU_REQUEST_ERROR)
+            if (gpuRequest.requested) {
+              const existingPci = filteredTemplate.PCI
+                ? [].concat(filteredTemplate.PCI)
+                : []
 
-              if (gpuRequest.requested) {
-                const existingPci = filteredTemplate.PCI
-                  ? [].concat(filteredTemplate.PCI)
-                  : []
-
-                filteredTemplate.PCI = [...existingPci, ...gpuRequest.pci]
-                filteredTemplate.LAYERSENTRY_GPU_REQUEST = {
-                  PROFILE_ID: gpuRequest.profileId,
-                  COUNT: String(gpuRequest.count),
-                  SOURCE: 'PUBLISHED_TEMPLATE_PROFILE',
-                }
+              filteredTemplate.PCI = [...existingPci, ...gpuRequest.pci]
+              filteredTemplate.LAYERSENTRY_GPU_REQUEST = {
+                PROFILE_ID: gpuRequest.profileId,
+                COUNT: String(gpuRequest.count),
+                SOURCE: 'PUBLISHED_TEMPLATE_PROFILE',
               }
             }
-          }
 
-          if (
-            view === 'cloud' &&
-            modifiedFields?.extra?.LayerSentryProtection
-          ) {
-            const protection = normalizeProtectionRequest(
-              rawTemplate?.extra?.LAYERSENTRY_PROTECTION
-            )
-            if (protection) {
+            const protection = normalizeProtectionRequest({
+              ENABLED: services.backupEnabled || services.drEnabled,
+              DC_RETENTION_MODE: 'COUNT',
+              DC_RETENTION_POINTS: services.restorePoints ?? 7,
+              COPY_INTERVAL_MINUTES: 60,
+              DR_ENABLED: services.drEnabled,
+              DR_RETENTION_MODE: 'COUNT',
+              DR_RETENTION_POINTS: 30,
+              DR_IP_MODE: 'KEEP',
+            })
+
+            if (protection?.ENABLED === 'YES') {
               filteredTemplate.LAYERSENTRY_PROTECTION = protection
+            } else {
+              delete filteredTemplate.LAYERSENTRY_PROTECTION
             }
           }
 
@@ -184,6 +194,7 @@ export function InstantiateVmTemplate() {
           const requestTemplate = { ...rawTemplate, template: xmlFinal }
           delete requestTemplate.access
           delete requestTemplate.resources
+          delete requestTemplate.services
 
           return instantiate(requestTemplate).unwrap()
         })
