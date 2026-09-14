@@ -51,7 +51,8 @@ jobs:
               r'(?m)^(?P<i>\s*)raise ArgumentError,\s*\n\s*"at most #\{MAX_DATA_DISKS\} managed data disks are supported" if disks\.length > MAX_DATA_DISKS$',
               lambda m: (
                   f'{m.group("i")}if disks.length > MAX_DATA_DISKS\n'
-                  f'{m.group("i")}    raise ArgumentError, "at most #{{MAX_DATA_DISKS}} managed data disks are supported"\n'
+                  f'{m.group("i")}    raise ArgumentError,\n'
+                  f'{m.group("i")}          "at most #{{MAX_DATA_DISKS}} managed data disks are supported"\n'
                   f'{m.group("i")}end'
               ),
               text,
@@ -97,7 +98,7 @@ jobs:
               '        def initialize(body)\n',
               '        # The production superclass requires live OpenNebula state; this isolated\n'
               '        # harness intentionally supplies only the collaborators under test.\n'
-              '        # rubocop:disable-next-line Lint/MissingSuper\n'
+              '        # rubocop:disable-next Lint/MissingSuper\n'
               '        def initialize(body)\n',
               1,
           )
