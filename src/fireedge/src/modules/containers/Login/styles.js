@@ -47,33 +47,76 @@ export const styles = (theme) => ({
     alignItems: 'start',
     paddingInline: theme.spacing(3),
     minHeight: '100vh',
+    background:
+      theme.palette.mode === 'dark'
+        ? 'radial-gradient(circle at 50% -10%, rgba(48, 79, 218, 0.22), transparent 40%), #101827'
+        : 'radial-gradient(circle at 50% -10%, rgba(48, 79, 218, 0.14), transparent 40%), #f6f8fc',
+    '& [data-cy="layersentry-brand-grid"]::before': {
+      backgroundImage:
+        'linear-gradient(to right, rgba(48, 79, 218, 0.13) 1px, transparent 1px), linear-gradient(to bottom, rgba(48, 79, 218, 0.13) 1px, transparent 1px)',
+    },
+    '& [data-cy="layersentry-brand-grid"]::after': {
+      backgroundImage:
+        'linear-gradient(to right, rgba(48, 79, 218, 0.72) 1px, transparent 1px), linear-gradient(to bottom, rgba(48, 79, 218, 0.72) 1px, transparent 1px)',
+    },
+    [theme.breakpoints.down('sm')]: {
+      gridTemplateColumns: '1fr',
+      paddingInline: theme.spacing(2),
+    },
   }),
 
   login: css({
     display: 'flex',
     flexDirection: 'column',
-    gap: theme.spacing(4),
-    backgroundColor: 'transparent',
+    gap: theme.spacing(3),
+    backgroundColor: theme.palette.background.paper,
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: 18,
+    boxShadow:
+      theme.palette.mode === 'dark'
+        ? '0 24px 72px rgba(0, 0, 0, 0.36)'
+        : '0 24px 72px rgba(23, 37, 63, 0.14)',
+    justifySelf: 'center',
     overflow: 'visible',
-    marginTop: theme.spacing(34),
+    marginTop: theme.spacing(28),
+    maxWidth: 460,
+    padding: theme.spacing(4),
     width: '100%',
+    [theme.breakpoints.down('sm')]: {
+      marginTop: theme.spacing(24),
+      maxWidth: 'calc(100vw - 32px)',
+      padding: theme.spacing(3),
+    },
   }),
 
   loginUser: css({
     gridColumn: '5 / span 4',
+    [theme.breakpoints.down('sm')]: { gridColumn: '1 / -1' },
   }),
 
   loginQr: css({
     gridColumn: '3 / span 9',
+    [theme.breakpoints.down('sm')]: { gridColumn: '1 / -1' },
   }),
 
   login2fa: css({
     gridColumn: '5 / span 4',
+    [theme.breakpoints.down('sm')]: { gridColumn: '1 / -1' },
+  }),
+
+  loginEyebrow: css({
+    color: '#304fda',
+    fontSize: 11,
+    fontWeight: 800,
+    letterSpacing: '0.14em',
+    textAlign: 'center',
+    ...fadeRiseAnimation(100),
   }),
 
   loginTitle: css({
     width: '100%',
     color: theme.palette.text.headings,
+    fontWeight: 800,
     textAlign: 'center',
     lineHeight: {
       xs: theme.lineHeight.heading.h5.mobile,
@@ -81,6 +124,14 @@ export const styles = (theme) => ({
       md: theme.lineHeight.heading.h5.desktop,
     },
     ...fadeRiseAnimation(140),
+  }),
+
+  loginSubtitle: css({
+    color: theme.palette.text.secondary,
+    lineHeight: 1.6,
+    maxWidth: 360,
+    textAlign: 'center',
+    ...fadeRiseAnimation(180),
   }),
 
   loginFields: css({
@@ -95,5 +146,13 @@ export const styles = (theme) => ({
     },
   }),
 
-  loginSubmit: css(fadeRiseAnimation(460)),
+  loginSubmit: css({
+    ...fadeRiseAnimation(460),
+    '& .MuiButton-root': {
+      backgroundColor: '#304fda',
+      borderRadius: 9,
+      minHeight: 44,
+      '&:hover': { backgroundColor: '#2440bc' },
+    },
+  }),
 })

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and       *
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
-const upcast = require('upcast')
+const upcast = require('server/utils/upcast')
 const {
   defaults,
   httpCodes,

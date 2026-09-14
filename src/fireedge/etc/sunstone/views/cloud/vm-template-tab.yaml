@@ -1,32 +1,20 @@
 ---
-# This file describes the information and actions available in the VM Template tab
-
-# Resource
-
+# LayerSentry customer VM-template view. Provider templates are read-only.
 resource_name: "VM-TEMPLATE"
 
-# Features
-
 features:
-  # True to hide the CPU setting in the dialogs
+  # Customer chooses vCPU only. OpenNebula CPU scheduling weight is derived.
   hide_cpu: true
-
-  # False to not scale the CPU.
-  # An integer value would be used as a multiplier as follows:
-  #     CPU = cpu_factor * VCPU
-  # Set it to 1 to tie CPU and vCPU.
-  cpu_factor: 1
-
-# Actions - Which buttons are visible to operate over the resources
+  cpu_factor: 0.5
 
 actions:
   create_dialog: false
   import_dialog: false
   update_dialog: false
   instantiate_dialog: true
-  create_app_dialog: false # reference to create_dialog in marketplace-app-tab.yaml
+  create_app_dialog: false
   clone: false
-  delete: true
+  delete: false
   chown: false
   chgrp: false
   lock: false
@@ -35,16 +23,11 @@ actions:
   unshare: false
   edit_labels: false
 
-# Filters - List of criteria to filter the resources
-
 filters:
-  owner: true
-  group: true
-  locked: true
-  vrouter: true
-
-
-# Info Tabs - Which info tabs are used to show extended information
+  owner: false
+  group: false
+  locked: false
+  vrouter: false
 
 info-tabs:
   info:
@@ -54,45 +37,45 @@ info-tabs:
       actions:
         rename: false
     permissions_panel:
-      enabled: true
+      enabled: false
       actions:
         chmod: false
     ownership_panel:
-      enabled: true
+      enabled: false
       actions:
         chown: false
         chgrp: false
-
   template:
-    enabled: true
-
-# Dialogs
+    enabled: false
 
 dialogs:
   instantiate_dialog:
     information: true
-    ownership: true
     capacity: true
-    vm_group: true
-    network: true
-    storage: true
-    placement: true
-    sched_action: true
-    booting: true
+    ownership: false
+    vm_group: false
+    # LayerSentry cloud resources replace the native storage/network dialogs.
+    network: false
+    storage: false
+    pci: false
+    placement: false
+    sched_action: false
+    booting: false
+    # Safe LayerSentry request-only options remain available.
+    gpu: true
+    protection: true
   create_dialog:
-    ownership: true
-    capacity: true
-    showback: true
-    vm_group: true
-    network: true
-    storage: true
-    placement: true
-    input_output: true
-    sched_action: true
-    context: true
-    booting: true
-    numa:
-      enabled: true
-      not_on:
-        - lxc
-    backup: true
+    ownership: false
+    capacity: false
+    showback: false
+    vm_group: false
+    network: false
+    storage: false
+    pci: false
+    placement: false
+    input_output: false
+    sched_action: false
+    context: false
+    booting: false
+    numa: false
+    backup: false

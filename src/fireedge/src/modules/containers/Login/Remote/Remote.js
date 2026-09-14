@@ -68,6 +68,7 @@ export function Remote({ data = {} }) {
   return (
     <Container
       component="main"
+      data-layersentry-login="true"
       disableGutters={isMobile}
       maxWidth={isMobile ? 'lg' : 'xs'}
       sx={{
@@ -78,12 +79,18 @@ export function Remote({ data = {} }) {
       }}
     >
       <Box className={classes.login}>
-        <InteractiveGrid data-cy="opennebula-brand-grid">
+        <InteractiveGrid data-cy="layersentry-brand-grid">
           <OpenNebulaLogo withText width={100} height={40} />
         </InteractiveGrid>
 
-        <Typography variant="h6" align="center">
+        <Typography className={classes.loginEyebrow} variant="overline">
+          PRIVATE CLOUD PLATFORM
+        </Typography>
+        <Typography className={classes.loginTitle} variant="h6" align="center">
           {translate(T.LogIn)}
+        </Typography>
+        <Typography className={classes.loginSubtitle} variant="body2">
+          Compute, Kubernetes and data services in one secure workspace.
         </Typography>
 
         <SubmitButton

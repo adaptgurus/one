@@ -43,11 +43,12 @@ const getZoneUrl = (req) => {
     if (zone) {
       const dataZone = getZone(zone)
       if (dataZone?.fireedge) {
-        zoneURL = dataZone?.fireedge
-      } else {
-        const URL = dataZone.rpc
-        const zoneDataURL = parse(URL)
-        zoneURL = `${protocol}://${zoneDataURL.hostname}:${defaultPort}`
+        zoneURL = dataZone.fireedge
+      } else if (dataZone?.rpc) {
+        const zoneDataURL = parse(dataZone.rpc)
+        if (zoneDataURL.hostname) {
+          zoneURL = `${protocol}://${zoneDataURL.hostname}:${defaultPort}`
+        }
       }
     }
   }
@@ -56,7 +57,7 @@ const getZoneUrl = (req) => {
 }
 
 const setHeaders = (proxyReq, req) => {
-  Object.keys(req.headers).forEach((header) => {
+  Object.keys(req?.headers || {}).forEach((header) => {
     if (header.toLowerCase().startsWith('sec-websocket-')) {
       proxyReq.setHeader(header, req.headers[header])
     }
@@ -65,14 +66,25 @@ const setHeaders = (proxyReq, req) => {
   externalURL && proxyReq.setHeader('Origin', externalURL)
 }
 
-const guacamoleProxy = createProxyMiddleware(endpointExternalGuacamole, {
+/*
+ * http-proxy-middleware v3+ accepts a single options object. Keeping the
+ * external Guacamole endpoint in pathFilter preserves the old context match,
+ * while `on.proxyReq` / `on.proxyReqWs` replace the legacy event options.
+ * The router returns an empty value when no zone override exists, causing the
+ * library to keep the local FireEdge target instead of accepting Host-driven
+ * routing data from the request.
+ */
+const guacamoleProxy = createProxyMiddleware({
+  pathFilter: endpointExternalGuacamole,
   target: url,
   changeOrigin: true,
   ws: true,
   secure: /^(https):\/\/[^ "]+$/.test(url),
   pathRewrite: (path) => path.replace('/external-guacamole', '/guacamole'),
-  onProxyReqWs: setHeaders,
-  onProxyReq: setHeaders,
+  on: {
+    proxyReqWs: setHeaders,
+    proxyReq: setHeaders,
+  },
   router: (req) => getZoneUrl(req),
 })
 

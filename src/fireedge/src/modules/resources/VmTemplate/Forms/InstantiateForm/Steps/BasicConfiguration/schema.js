@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and       *
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
-import { BaseSchema } from 'yup'
+import { BaseSchema, string } from 'yup'
 
 import { FIELDS as CAPACITY_FIELDS } from './capacitySchema'
 import { FIELDS as INFORMATION_FIELDS } from './informationSchema'
@@ -40,17 +40,42 @@ import {
  * @param {VmTemplateFeatures} [features] - Features
  * @param {object} oneConfig - Config of oned.conf
  * @param {boolean} adminGroup - User is admin or not
+ * @param {boolean} selfService - Whether LayerSentry cloud UX is active
  * @returns {Section[]} Sections
  */
-const SECTIONS = (vmTemplate, features, oneConfig, adminGroup) => {
+const SECTIONS = (
+  vmTemplate,
+  features,
+  oneConfig,
+  adminGroup,
+  selfService = false
+) => {
   const hypervisor = vmTemplate?.TEMPLATE?.HYPERVISOR
+  const informationFields = selfService
+    ? INFORMATION_FIELDS.filter(({ name }) =>
+        ['name', 'instances'].includes(name)
+      ).map((field) =>
+        field.name === 'name'
+          ? {
+              ...field,
+              dependOf: undefined,
+              validation: string()
+                .trim()
+                .min(1, 'Enter a VM name')
+                .max(128, 'VM name must be 128 characters or fewer')
+                .required('Enter a VM name')
+                .default(''),
+            }
+          : field
+      )
+    : INFORMATION_FIELDS
 
   return [
     {
       id: 'information',
       legend: T.Information,
       fields: disableFields(
-        filterFieldsByHypervisor(INFORMATION_FIELDS, hypervisor),
+        filterFieldsByHypervisor(informationFields, hypervisor),
         '',
         oneConfig,
         adminGroup
@@ -61,7 +86,11 @@ const SECTIONS = (vmTemplate, features, oneConfig, adminGroup) => {
       legend: <CapacityMemoryLabel data={vmTemplate} />,
       fields: disableFields(
         filterFieldsByHypervisor(
-          CAPACITY_FIELDS(vmTemplate, features),
+          CAPACITY_FIELDS(vmTemplate, features).map((field) =>
+            selfService && field.name === 'VCPU'
+              ? { ...field, label: 'vCPU' }
+              : field
+          ),
           hypervisor
         ),
         '',
@@ -69,7 +98,7 @@ const SECTIONS = (vmTemplate, features, oneConfig, adminGroup) => {
         adminGroup
       ),
     },
-    {
+    !selfService && {
       id: 'ownership',
       legend: T.Ownership,
       fields: disableFields(
@@ -79,7 +108,7 @@ const SECTIONS = (vmTemplate, features, oneConfig, adminGroup) => {
         adminGroup
       ),
     },
-    {
+    !selfService && {
       id: 'vm_group',
       legend: T.VMGroup,
       fields: disableFields(
@@ -89,25 +118,45 @@ const SECTIONS = (vmTemplate, features, oneConfig, adminGroup) => {
         adminGroup
       ),
     },
-  ]
+  ].filter(Boolean)
 }
 
 /**
  * @param {VmTemplate} [vmTemplate] - VM Template
- * @param {boolean} [hideCpu] - If `true`, the CPU fields is hidden
+ * @param {VmTemplateFeatures} [features] - View capacity features
+ * @param {object} oneConfig - OpenNebula configuration
+ * @param {boolean} adminGroup - Whether user belongs to admin group
+ * @param {boolean} selfService - Whether LayerSentry cloud UX is active
  * @returns {Field[]} Basic configuration fields
  */
-const FIELDS = (vmTemplate, hideCpu) =>
-  SECTIONS(vmTemplate, hideCpu)
+const FIELDS = (
+  vmTemplate,
+  features,
+  oneConfig,
+  adminGroup,
+  selfService = false
+) =>
+  SECTIONS(vmTemplate, features, oneConfig, adminGroup, selfService)
     .map(({ fields }) => fields)
     .flat()
 
 /**
  * @param {VmTemplate} [vmTemplate] - VM Template
- * @param {boolean} [hideCpu] - If `true`, the CPU fields is hidden
+ * @param {VmTemplateFeatures} [features] - View capacity features
+ * @param {object} oneConfig - OpenNebula configuration
+ * @param {boolean} adminGroup - Whether user belongs to admin group
+ * @param {boolean} selfService - Whether LayerSentry cloud UX is active
  * @returns {BaseSchema} Step schema
  */
-const SCHEMA = (vmTemplate, hideCpu) =>
-  getObjectSchemaFromFields(FIELDS(vmTemplate, hideCpu))
+const SCHEMA = (
+  vmTemplate,
+  features,
+  oneConfig,
+  adminGroup,
+  selfService = false
+) =>
+  getObjectSchemaFromFields(
+    FIELDS(vmTemplate, features, oneConfig, adminGroup, selfService)
+  )
 
 export { FIELDS, SCHEMA, SECTIONS }

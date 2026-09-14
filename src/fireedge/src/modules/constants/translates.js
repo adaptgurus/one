@@ -577,7 +577,7 @@ module.exports = {
   SelectRoleConcept: 'Select a role to manage the associated VMs',
 
   /* login */
-  LogIn: 'Log in to your OpenNebula Account',
+  LogIn: 'Sign in to LayerSentry',
   Continue: 'Continue',
   EnforceTFAConcept:
     'Two-factor authentication is being enforced. Please add a mobile authenticator in order to sign in.',
@@ -759,7 +759,7 @@ module.exports = {
   EndpointGRPC: 'Endpoint gRPC',
   LinkOtherConfigurationsUser: 'More user configurations',
   MessageLoginToken:
-    'A login token acts as a password and can be used to authenticate with OpenNebula through  CLI, or the API',
+    'A login token acts as a password for compatible LayerSentry CLI or API access.',
   Expiration: 'Expiration, in seconds',
   LoginToken: 'Login Token',
   DisableDashboardAnimations: 'Disable dashboard animations',

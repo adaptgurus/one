@@ -234,17 +234,32 @@ export function OpenNebulaLoginHandler({ data = {} }) {
     <Container
       className={classes.container}
       component="main"
+      data-layersentry-login="true"
       disableGutters={isMobile}
     >
-      <InteractiveGrid data-cy="opennebula-brand-grid">
+      <InteractiveGrid data-cy="layersentry-brand-grid">
         <OpenNebulaLogo withText width={100} height={40} />
       </InteractiveGrid>
 
       <Box className={`${classes.login} ${loginStepClass}`}>
         {![STEPS.FA2_FORM, STEPS.REGISTER_2FA]?.includes(step) && (
-          <Box data-login-title display="flex" overflow="visible" width="100%">
+          <Box
+            data-login-title
+            alignItems="center"
+            display="flex"
+            flexDirection="column"
+            gap={1}
+            overflow="visible"
+            width="100%"
+          >
+            <Typography className={classes.loginEyebrow} variant="overline">
+              PRIVATE CLOUD PLATFORM
+            </Typography>
             <Typography className={classes.loginTitle} variant="h6">
               {translate(T.LogIn)}
+            </Typography>
+            <Typography className={classes.loginSubtitle} variant="body2">
+              Compute, Kubernetes and data services in one secure workspace.
             </Typography>
           </Box>
         )}

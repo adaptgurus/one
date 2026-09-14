@@ -37,7 +37,7 @@ const SIDEBAR_FIXED_STORAGE_KEY = 'fireedge.sidebar.fixed'
  * Sidebar input component .
  */
 export const Sidebar = forwardRef(
-  ({ isOpen = false, endpoints = [], ...opts }, ref) => {
+  ({ isOpen = false, endpoints = [], logoComponent: Logo = OpenNebulaLogo, footerContent, ...opts }, ref) => {
     const { translate } = useTranslation()
     const [hovered, setHovered] = useState(false)
     const [fixedMenu, setFixedMenu] = useState(() => {
@@ -151,7 +151,7 @@ export const Sidebar = forwardRef(
               to={`/${RESOURCE_NAMES.DASHBOARD}`}
               aria-label={T.Dashboard}
             >
-              <OpenNebulaLogo withText={open} />
+              <Logo withText={open} />
             </Box>
             {open && (
               <Box className="sidebar-fixed-toggle-container">
@@ -186,6 +186,7 @@ export const Sidebar = forwardRef(
             </Box>
           </Box>
           <Box className="sidebar-footer">
+            {footerContent?.({ expanded: open })}
             <SidebarUserMenu isExpanded={open} />
           </Box>
         </Drawer>
@@ -195,6 +196,8 @@ export const Sidebar = forwardRef(
 )
 
 Sidebar.propTypes = {
+  logoComponent: PropTypes.elementType,
+  footerContent: PropTypes.func,
   isOpen: PropTypes.bool,
   endpoints: PropTypes.arrayOf(PropTypes.object),
 }

@@ -1,0 +1,54 @@
+---
+# Native backup policy/jobs for customer-owned VMs. Backend support still
+# determines whether a selected backup mode/retention combination is valid.
+resource_name: "BACKUPJOBS"
+actions:
+  create_dialog: true
+  update_dialog: true
+  delete: true
+  chown: false
+  chgrp: false
+  lock: true
+  unlock: true
+  start: true
+  cancel: true
+  edit_labels: true
+filters:
+info-tabs:
+  info:
+    enabled: true
+    information_panel:
+      enabled: true
+      actions:
+        rename: true
+        priority: true
+    permissions_panel:
+      enabled: true
+      actions:
+        chmod: true
+    ownership_panel:
+      enabled: true
+      actions:
+        chown: false
+        chgrp: false
+    attributes_panel:
+      enabled: true
+      actions:
+        copy: true
+        add: false
+        edit: false
+        delete: false
+  vms:
+    enabled: true
+  sched_actions:
+    enabled: true
+    actions:
+      sched_action_create: true
+      sched_action_update: true
+      sched_action_delete: true
+dialogs:
+  create_dialog:
+    general: true
+    vms: true
+    datastores: true
+    sched_actions: true

@@ -1,18 +1,15 @@
 ---
-# This file describes the information and actions available in the VM tab
-
-# Resource
-
+# LayerSentry customer VM view. Native lifecycle remains authoritative while
+# provider-only hardware, placement and raw device controls stay hidden.
 resource_name: "VM"
-
-# Actions - Which buttons are visible to operate over the resources
 
 actions:
   create_dialog: true
-  create_app_dialog: true # reference to create_dialog in marketplace-app-tab.yaml
+  create_app_dialog: true
   deploy: false
   migrate: false
   migrate_live: false
+  live-migrate: false
   hold: false
   release: false
   suspend: false
@@ -38,73 +35,90 @@ actions:
   ssh: true
   rdp: true
   edit_labels: false
-  backup: false  
-
-# Filters - List of criteria to filter the resources
+  backup: true
+  restore: false
 
 filters:
   state: true
-  owner: true
-  group: true
-  type: true
-  locked: true
+  owner: false
+  group: false
+  type: false
+  locked: false
   ips: true
   hostname: true
 
-
-# Info Tabs - Which info tabs are used to show extended information
-
 info-tabs:
-
   info:
     enabled: true
     information_panel:
       enabled: true
       actions:
-        rename: false
+        rename: true
     permissions_panel:
-      enabled: true
+      enabled: false
       actions:
         chmod: false
     ownership_panel:
-      enabled: true
+      enabled: false
       actions:
         chown: false
         chgrp: false
     capacity_panel:
       enabled: true
       actions:
-        resize: true
+        resize: false
     monitoring_panel:
       enabled: true
       actions:
-        copy: true
+        copy: false
     attributes_panel:
       enabled: false
       actions:
-        copy: true
+        copy: false
         add: false
         edit: false
         delete: false
 
+  vm_group:
+    enabled: false
+    actions:
+      vmgroup-add: false
+      vmgroup-del: false
+
+  # Display disks but do not expose native bus/cache/driver attach forms.
   storage:
     enabled: true
     actions:
       disk-attach:
-        enabled: true
-      disk-detach: true
-      disk-resize: true
+        enabled: false
+      disk-attach-image: false
+      disk-attach-volatile: false
+      disk-detach: false
+      disk-resize: false
       disk_saveas:
-        enabled: true
+        enabled: false
+      disk-saveas: false
+      disk-snapshot-create: false
+      disk-snapshot-delete: false
+      disk-snapshot-rename: false
+      disk-snapshot-revert: false
 
+  # Display NICs but inherit network implementation from the provider VNet.
   network:
     enabled: true
     actions:
-      nic-attach: true
-      nic-detach: true
-      nic-update: true
-      sg-attach: true
-      sg-detach: true
+      nic-attach: false
+      nic-attach-alias: false
+      nic-detach: false
+      nic-update: false
+      sg-attach: false
+      sg-detach: false
+
+  pci:
+    enabled: false
+    actions:
+      pci-attach: false
+      pci-detach: false
 
   snapshot:
     enabled: true
@@ -114,18 +128,29 @@ info-tabs:
       snapshot-delete: true
 
   backup:
-    enabled: false
-
-  history:
-    enabled: false
-
-  sched_actions:
     enabled: true
     actions:
-      sched-add: true
-      sched-update: true
-      sched-delete: true
-      charter_create: true
+      backup-configure: true
+      backup-create: true
+      backup-restore: true
+
+  history:
+    enabled: true
+
+  sched_actions:
+    enabled: false
+    actions:
+      sched-add: false
+      sched-update: false
+      sched-delete: false
+      charter_create: false
+
+  exec:
+    enabled: true
+    actions:
+      exec: true
+      exec-retry: true
+      exec-cancel: true
 
   configuration:
     enabled: false
@@ -134,3 +159,6 @@ info-tabs:
 
   template:
     enabled: false
+
+  logs:
+    enabled: true

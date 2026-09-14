@@ -1,10 +1,19 @@
 name: Check Protected Files
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Pull request number to validate
+        required: true
+        type: number
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   pull_request_review:
     types: [submitted, edited, dismissed]
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
   run:
@@ -12,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
       - name: Install dependencies
@@ -30,9 +39,8 @@ jobs:
 
             const configPath = '.github/config/protected_files.yml'
 
-            if(!fs.existsSync(configPath)) {
+            if (!fs.existsSync(configPath)) {
               core.setFailed(`Protected config file missing at: ${configPath}. This file is required.`)
-
               return
             }
 
@@ -40,17 +48,19 @@ jobs:
               const raw = fs.readFileSync(configPath, 'utf8')
               const config = yaml.load(raw)
 
-              if (!config || !config.approval_team || !config.protected_files){
+              if (!config || !Array.isArray(config.approval_team) || !Array.isArray(config.protected_files)) {
                 core.setFailed(`Protected config file missing or malformed at: ${configPath}. This file is required.`)
-
                 return
               }
 
+              if (config.approval_team.length === 0 || config.protected_files.length === 0) {
+                core.setFailed('Protected-file policy must contain at least one approver and one protected path.')
+                return
+              }
 
               return config
-
             } catch (err) {
-                core.setFailed(`Failed to load protected config: ${err}`)
+              core.setFailed(`Failed to load protected config: ${err.message || err}`)
             }
 
       - name: Get changed files
@@ -59,15 +69,20 @@ jobs:
         with:
           result-encoding: json
           script: |
-            const { data: files } = await github.rest.pulls.listFiles({
+            const pull_number = context.issue.number || Number(context.payload.inputs?.pr_number)
+            if (!Number.isInteger(pull_number) || pull_number <= 0) {
+              core.setFailed('A valid pull request number is required.')
+              return []
+            }
+
+            const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.number,
+              pull_number,
+              per_page: 100,
             })
 
-            const changed = [].concat(files ?? [])?.flatMap(f => f?.filename)?.filter(Boolean)
-
-            return changed
+            return files.map(file => file.filename).filter(Boolean)
 
       - name: Check protected files and approvals
         id: reviewers
@@ -80,68 +95,85 @@ jobs:
             const config = ${{ steps.config.outputs.result }}
 
             const protectedFiles = config.protected_files
-            const approvalTeam = config.approval_team
-
-
-            const affected = changed
-            ?.filter(f =>
-              protectedFiles.some(pattern => minimatch(f, pattern))
+            const approvalTeam = [...new Set(config.approval_team.filter(Boolean))]
+            const affected = changed.filter(file =>
+              protectedFiles.some(pattern => minimatch(file, pattern))
             )
 
-
-            if (affected?.length <= 0) {
-              core.info("No protected files modified!")
-
+            if (affected.length === 0) {
+              core.info('No protected files modified!')
               return
             }
 
             const owner = context.repo.owner
             const repo = context.repo.repo
-            const pull_number = context.issue.number
-            const pr_author = context.payload.pull_request.user.login
+            const pull_number = context.issue.number || Number(context.payload.inputs?.pr_number)
+            const pr = context.payload.pull_request || (await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number,
+            })).data
+            const pr_author = pr.user.login
 
             const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner,
               repo,
               pull_number,
+              per_page: 100,
             })
 
-            const requestedReviews = await github.paginate(github.rest.pulls.listRequestedReviewers, { 
-              owner, 
-              repo, 
-              pull_number
+            const requested = await github.rest.pulls.listRequestedReviewers({
+              owner,
+              repo,
+              pull_number,
             })
 
-            const usersApproved = reviews
-              .filter(r => r.state === 'APPROVED')
-              .map(r => r?.user?.login)
-              .filter(Boolean)
-
-            const usersRequested = requestedReviews.flatMap(r => r.users.map(u => u.login)).filter(Boolean)
-
-
-            const missingApprovals = approvalTeam.filter(u => !usersApproved.includes(u) && u !== pr_author)
-            const teamApprovals = approvalTeam.filter(u => usersApproved.includes(u) && u !== pr_author)
-
-            const reviewersToRequest = missingApprovals.filter(u => !usersRequested.includes(u))
-
-            if (reviewersToRequest?.length > 0) {
-              await github.rest.pulls.requestReviewers({
-                owner,
-                repo,
-                pull_number,
-                reviewers: reviewersToRequest
-              })
+            // Only the latest non-dismissed review from each user determines state.
+            const latestReviewByUser = new Map()
+            for (const review of reviews) {
+              const login = review.user?.login
+              if (!login || review.state === 'DISMISSED') continue
+              const previous = latestReviewByUser.get(login)
+              if (!previous || new Date(review.submitted_at || 0) >= new Date(previous.submitted_at || 0)) {
+                latestReviewByUser.set(login, review)
+              }
             }
 
-            const isApproved = approvalTeam.some(u => usersApproved.includes(u))
+            const usersApproved = [...latestReviewByUser.entries()]
+              .filter(([, review]) => review.state === 'APPROVED')
+              .map(([login]) => login)
+            const eligibleApprovers = approvalTeam.filter(login => login !== pr_author)
+            const teamApprovals = eligibleApprovers.filter(login => usersApproved.includes(login))
 
-            if (isApproved) {
-              core.info(`Required approvals are present!\nApproved by: ${teamApprovals?.join(', ')}`)
-
+            if (teamApprovals.length > 0) {
+              core.info(`Required protected-file approval is present from: ${teamApprovals.join(', ')}`)
               return
-            } else {
-              core.setFailed(`Some protected files have been changed but not all required approvals are present. Missing approvals from one of: ${missingApprovals
-              ?.filter(u => !usersApproved?.includes(u))
-              ?.join(', ')}`)
             }
+
+            const usersRequested = (requested.data.users || []).map(user => user.login)
+            const reviewersToRequest = eligibleApprovers.filter(login => !usersRequested.includes(login))
+
+            if (reviewersToRequest.length > 0) {
+              try {
+                await github.rest.pulls.requestReviewers({
+                  owner,
+                  repo,
+                  pull_number,
+                  reviewers: reviewersToRequest,
+                })
+                core.info(`Requested protected-file review from: ${reviewersToRequest.join(', ')}`)
+              } catch (error) {
+                // Do not bypass the policy merely because the fork cannot auto-request
+                // an upstream reviewer. Keep the gate failed and explain the remedy.
+                core.warning(
+                  `Could not auto-request protected-file reviewers (${error.status || 'unknown status'}): ` +
+                  `${error.message}. Approval from an eligible configured reviewer is still required.`
+                )
+              }
+            }
+
+            core.setFailed(
+              `Protected files changed: ${affected.join(', ')}. ` +
+              `Approval is required from one of: ${eligibleApprovers.join(', ')}. ` +
+              'The PR author cannot satisfy this gate.'
+            )

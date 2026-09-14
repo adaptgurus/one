@@ -1,0 +1,43 @@
+---
+# Published multi-VM application templates. Authoring/ownership remains outside
+# the ordinary customer view; customers instantiate approved templates.
+resource_name: "SERVICE-TEMPLATE"
+actions:
+  create_dialog: false
+  instantiate_dialog: true
+  update_dialog: false
+  deploy_dialog: false
+  create_app_dialog: false
+  clone: false
+  delete: false
+  chown: false
+  recover: false
+  chgrp: false
+  share: false
+  unshare: false
+  edit_labels: false
+filters:
+  owner: true
+  group: true
+info-tabs:
+  info:
+    enabled: true
+    information_panel:
+      enabled: true
+      actions:
+        rename: false
+    permissions_panel:
+      enabled: true
+      actions:
+        chmod: false
+    ownership_panel:
+      enabled: true
+      actions:
+        chown: false
+        chgrp: false
+  roles:
+    enabled: true
+  networks:
+    enabled: true
+  template:
+    enabled: true
