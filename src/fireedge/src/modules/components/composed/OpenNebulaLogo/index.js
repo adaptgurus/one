@@ -19,21 +19,21 @@ import PropTypes from 'prop-types'
 import { Box } from '@mui/material'
 
 import { LogoAPI } from '@FeaturesModule'
-import { OpenNebulaIcon } from '@modules/components/primitives/Icons'
+import { LayerSentryIcon } from '@modules/components/primitives/Icons'
 
 const LOGO_DIMENSIONS = {
   collapsed: {
-    width: 15.863,
-    height: 19.966,
+    width: 18,
+    height: 22,
   },
   open: {
-    width: 58.469,
-    height: 19.957,
+    width: 108,
+    height: 40,
   },
 }
 
 /**
- * Displays the configured OpenNebula logo, falling back to the default icon.
+ * Displays the configured product logo, falling back to the LayerSentry brand.
  *
  * @param {object} root0 - Props
  * @param {boolean} root0.withText - Whether the fallback icon includes text
@@ -41,10 +41,10 @@ const LOGO_DIMENSIONS = {
  * @param {number|string} root0.height - Logo height
  * @param {string} root0.alt - Custom logo alt text
  * @param {object} root0.sx - Custom image styles
- * @returns {ReactElement} OpenNebula logo
+ * @returns {ReactElement} Product logo
  */
 export const OpenNebulaLogo = memo(
-  ({ withText = false, width, height, alt = 'Custom Logo', sx, ...props }) => {
+  ({ withText = false, width, height, alt = 'LayerSentry', sx, ...props }) => {
     const dimensions = withText
       ? LOGO_DIMENSIONS.open
       : LOGO_DIMENSIONS.collapsed
@@ -82,7 +82,7 @@ export const OpenNebulaLogo = memo(
     }
 
     return (
-      <OpenNebulaIcon
+      <LayerSentryIcon
         withText={withText}
         width={resolvedWidth}
         height={resolvedHeight}

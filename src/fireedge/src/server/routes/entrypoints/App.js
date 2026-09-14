@@ -30,10 +30,10 @@ const {
 
 const APP_NAMES = Object.keys(defaultApps)
 const APP_URL = '/fireedge'
-const STATIC_FILES_URL = `${APP_URL}/client/assets`
-
-const upperCaseFirst = (input) =>
-  input?.charAt(0)?.toUpperCase() + input.substring(1)
+const PRODUCT_TITLE = 'LayerSentry'
+const PRODUCT_DESCRIPTION = 'Secure private cloud, Kubernetes and data services'
+const PRODUCT_FAVICON =
+  "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23304fda'/%3E%3Cpath d='M16 21 32 13l16 8-16 8-16-8Zm0 11 16 8 16-8v8l-16 8-16-8v-8Z' fill='white'/%3E%3C/svg%3E"
 
 const ensuredScriptValue = (value) =>
   JSON.stringify(value).replace(/</g, '\\u003c')
@@ -88,12 +88,7 @@ router.get('*', async (req, res) => {
   const faviconLink =
     encodedFavIcon && encodedFavIcon?.b64 !== null
       ? `<link rel="icon" href="${encodedFavIcon.b64}">`
-      : `
-      <link rel="icon" type="image/png" href="${STATIC_FILES_URL}/images/favicon/${appName}/favicon.ico">
-      <link rel="apple-touch-icon" sizes="180x180" href="${STATIC_FILES_URL}/images/favicon/${appName}/apple-touch-icon.png">
-      <link rel="icon" type="image/png" sizes="32x32" href="${STATIC_FILES_URL}/images/favicon/${appName}/favicon-32x32.png">
-      <link rel="icon" type="image/png" sizes="16x16" href="${STATIC_FILES_URL}/images/favicon/${appName}/favicon-16x16.png">
-    `
+      : `<link rel="icon" type="image/svg+xml" href="${PRODUCT_FAVICON}">`
 
   const remoteModules = `
     <script id="preload-remotes-config">
@@ -125,7 +120,8 @@ router.get('*', async (req, res) => {
     <!DOCTYPE html>
     <html lang="en">
     <head>
-      <title>${upperCaseFirst(appName ?? 'FireEdge')} by OpenNebula</title>
+      <title>${PRODUCT_TITLE} | Private Cloud</title>
+      <meta name="description" content="${PRODUCT_DESCRIPTION}">
       ${faviconLink}
       <meta name="theme-color" content="#ffffff">
       <meta name="viewport" content="minimum-scale=1, initial-scale=1, width=device-width">

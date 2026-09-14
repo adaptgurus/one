@@ -15,3 +15,4 @@
  * ------------------------------------------------------------------------- */
 
 export * from '@modules/components/primitives/Icons/OpenNebulaIcon'
+export * from '@modules/components/primitives/Icons/LayerSentryIcon'

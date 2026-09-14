@@ -16,9 +16,9 @@
 import { Fragment, useEffect } from 'react'
 import PropTypes from 'prop-types'
 import { GlobalStyles, useTheme } from '@mui/material'
+import { LayerSentryIcon } from '@ComponentsModule'
 import { installScope } from './presentation'
 import { appearanceCss } from './styles'
-import { symbolPath } from './symbol'
 
 /**
  * Add LayerSentry presentation without replacing the native page tree.
@@ -59,39 +59,12 @@ SelfServiceAppearance.propTypes = {
  * @returns {object} React element
  */
 export const LayerSentryLogo = ({ withText }) => (
-  <span
-    style={{
-      display: 'inline-flex',
-      alignItems: 'center',
-      gap: 8,
-      color: 'var(--ls-logo, #000f42)',
-    }}
-  >
-    <svg
-      width="29"
-      height="34"
-      viewBox="0 0 460 536"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d={symbolPath} fill="currentColor" fillRule="evenodd" />
-    </svg>
-    {withText && (
-      <span
-        style={{
-          fontFamily: 'Inter, "Segoe UI", sans-serif',
-          fontSize: 17,
-          fontWeight: 800,
-          lineHeight: 1.05,
-          letterSpacing: '-0.5px',
-        }}
-      >
-        LAYER
-        <br />
-        SENTRY
-      </span>
-    )}
-  </span>
+  <LayerSentryIcon
+    color="var(--ls-logo, #000f42)"
+    height={withText ? 40 : 22}
+    width={withText ? 108 : 18}
+    withText={withText}
+  />
 )
 
 LayerSentryLogo.propTypes = { withText: PropTypes.bool }
