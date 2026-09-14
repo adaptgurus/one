@@ -108,3 +108,14 @@ test('empty request is valid and does not invent a GPU', () => {
     pci: [],
   })
 })
+
+test('GPU count schema depends on the nested sibling profile key', () => {
+  const source = readFileSync(
+    resolve(__dirname, '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/gpu/schema.js'),
+    'utf8'
+  )
+
+  assert.match(source, /const PROFILE_ID_FIELD = 'PROFILE_ID'/)
+  assert.match(source, /\.when\(PROFILE_ID_FIELD, /)
+  assert.doesNotMatch(source, /\.when\(PROFILE_ID, /)
+})

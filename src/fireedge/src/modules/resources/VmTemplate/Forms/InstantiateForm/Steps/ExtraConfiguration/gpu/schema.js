@@ -8,7 +8,8 @@ import {
 } from '@UtilsModule'
 
 const ROOT = 'LAYERSENTRY_GPU_REQUEST'
-const PROFILE_ID = `${ROOT}.PROFILE_ID`
+const PROFILE_ID_FIELD = 'PROFILE_ID'
+const PROFILE_ID = `${ROOT}.${PROFILE_ID_FIELD}`
 const COUNT = `${ROOT}.COUNT`
 
 /**
@@ -51,7 +52,7 @@ export const FIELDS = (profiles = []) => {
         .min(1)
         .max(MAX_SELF_SERVICE_GPU_COUNT)
         .default(1)
-        .when(PROFILE_ID, (profileId, schema) => {
+        .when(PROFILE_ID_FIELD, (profileId, schema) => {
           const profile = profiles.find(({ id }) => id === profileId)
 
           return profile ? schema.max(profile.maxCount) : schema
