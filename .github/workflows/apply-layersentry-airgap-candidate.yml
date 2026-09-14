@@ -12,22 +12,62 @@ jobs:
   apply:
     if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Apply reviewed candidate payload
+      - name: Decode reviewed source payload
         shell: bash
         run: |
           set -euo pipefail
           base64 -d .github/layersentry-airgap-candidate.b64 | tar -xzf - -C "$GITHUB_WORKSPACE"
-          git rm --ignore-unmatch \
-            .github/workflows/apply-layersentry-airgap-candidate.yml \
-            .github/layersentry-airgap-candidate.b64
+          git checkout -- .github/workflows/layersentry-day2-ci.yml
+          git diff --check
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Install scoped test dependencies
+        run: |
+          gem install rubocop -v 1.91.0 --no-document
+          gem install activesupport minitest --no-document
+      - name: Ruby syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -c src/oneks/app/models/groups/nodegroup_day2.rb
+          ruby -c src/oneks/lib/helpers/worker_disk_manager.rb
+          ruby -c src/oneks/specs/controlplanes/layersentry-poc/spec.erb
+          ruby -c src/oneks/specs/nodegroups/layersentry-poc/spec.erb
+          ruby -c src/oneks/test/disk_reconciliation_test.rb
+          ruby -c src/oneks/test/layersentry_profile_test.rb
+          ruby -c src/oneks/test/worker_disk_manager_test.rb
+      - name: RuboCop scoped files
+        shell: bash
+        run: |
+          set -euo pipefail
+          ln -sf "$GITHUB_WORKSPACE/share/linters/.rubocop.yml" "$HOME/.rubocop.yml"
+          rubocop \
+            src/oneks/app/models/groups/nodegroup_day2.rb \
+            src/oneks/lib/helpers/worker_disk_manager.rb \
+            src/oneks/test/disk_reconciliation_test.rb \
+            src/oneks/test/worker_disk_manager_test.rb
+      - name: OneKS regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby src/oneks/test/day2_lifecycle_test.rb
+          ruby src/oneks/test/disk_reconciliation_test.rb
+          ruby src/oneks/test/bootstrap_recovery_test.rb
+          ruby src/oneks/test/layersentry_profile_test.rb
+          ruby src/oneks/test/worker_disk_manager_test.rb
+      - name: Commit source candidate
+        shell: bash
+        run: |
+          set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add .github/workflows/layersentry-day2-ci.yml \
+          git add \
             src/oneks/app/models/groups/nodegroup_day2.rb \
             src/oneks/lib/helpers/worker_disk_manager.rb \
             src/oneks/specs/controlplanes/layersentry-poc/spec.erb \
