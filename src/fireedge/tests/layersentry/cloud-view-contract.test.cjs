@@ -32,6 +32,16 @@ for (const [file, resource] of Object.entries(expectedNewResources)) {
   })
 }
 
+test('cloud shell hides provider group and zone selectors', () => {
+  const source = readFileSync(
+    resolve(__dirname, '../../src/client/router/InternalLayout/index.js'),
+    'utf8'
+  )
+
+  assert.match(source, /view === 'cloud' \? \[\] : undefined/)
+  assert.match(source, /<Header slots=\{headerSlots\}/)
+})
+
 test('cloud view never exposes provider infrastructure resources', () => {
   const forbidden = new Set([
     'DATASTORE',

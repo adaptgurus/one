@@ -19,6 +19,7 @@ import PropTypes from 'prop-types'
 import { useMemo, useRef } from 'react'
 import { CSSTransition } from 'react-transition-group'
 import { Header } from '@ComponentsModule'
+import { useViews } from '@FeaturesModule'
 import internalStyles from 'client/router/InternalLayout/styles'
 import { footer } from '@StylesModule'
 
@@ -26,6 +27,8 @@ const InternalLayout = ({ children, ...route }) => {
   const theme = useTheme()
   const classes = useMemo(() => internalStyles(theme), [theme])
   const container = useRef()
+  const { view } = useViews()
+  const headerSlots = view === 'cloud' ? [] : undefined
 
   if (route.disableLayout) {
     return (
@@ -73,7 +76,7 @@ const InternalLayout = ({ children, ...route }) => {
             }
             maxWidth={route.removeStyles ? false : 'xl'}
           >
-            <Header />
+            <Header slots={headerSlots} />
             {children}
           </Container>
         </CSSTransition>
