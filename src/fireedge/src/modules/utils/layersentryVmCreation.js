@@ -82,7 +82,9 @@ export const isLayerSentryCustomerTemplate = (vmTemplate = {}, images = []) => {
  * @returns {boolean} Whether the identifier is usable
  */
 export const hasTemplateId = (templateId) =>
-  templateId !== undefined && templateId !== null && normalized(templateId) !== ''
+  templateId !== undefined &&
+  templateId !== null &&
+  normalized(templateId) !== ''
 
 const encodeBase64Utf8 = (value) => {
   const bytes = new TextEncoder().encode(value)
@@ -151,6 +153,104 @@ export const applyLayerSentryVmDefaults = (template = {}, access = {}) => ({
   },
 })
 
+const positiveInteger = (value, minimum, maximum, name) => {
+  const parsed = Number(value)
+  if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {
+    throw new Error(`${name} must be between ${minimum} and ${maximum}`)
+  }
+
+  return parsed
+}
+
+const isIpv4 = (value) => {
+  const parts = String(value ?? '')
+    .trim()
+    .split('.')
+
+  return (
+    parts.length === 4 &&
+    parts.every(
+      (part) =>
+        /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255
+    )
+  )
+}
+
+/**
+ * Applies the intentionally small LayerSentry cloud resource request to a
+ * native OpenNebula VM template. Provider details stay server controlled.
+ *
+ * @param {object} template - Filtered native OpenNebula template
+ * @param {object} resources - LayerSentry cloud resource fields
+ * @param {object} capabilities - Provider capabilities
+ * @param {boolean} capabilities.storageIopsSupported - IOPS policy gate
+ * @returns {object} Native OpenNebula template
+ */
+export const applyLayerSentryCloudResources = (
+  template = {},
+  resources = {},
+  { storageIopsSupported = false } = {}
+) => {
+  const result = { ...template }
+
+  if (resources.dataDiskEnabled) {
+    const sizeGb = positiveInteger(
+      resources.dataDiskSizeGb,
+      1,
+      16384,
+      'Data disk size'
+    )
+    const dataDisk = {
+      TYPE: 'fs',
+      SIZE: String(sizeGb * 1024),
+      FORMAT: 'qcow2',
+      FS: 'ext4',
+    }
+
+    if (storageIopsSupported && resources.storageIopsEnabled) {
+      dataDisk.TOTAL_IOPS_SEC = String(
+        positiveInteger(resources.storageIops, 100, 1000000, 'IOPS limit')
+      )
+    }
+
+    result.DISK = [...asArray(template.DISK), dataDisk]
+  }
+
+  const networkId = normalized(resources.networkId)
+  if (!/^\d+$/.test(networkId)) {
+    throw new Error('Select a valid LayerSentry network')
+  }
+
+  const nic = {
+    NETWORK_ID: networkId,
+    MODEL: 'virtio',
+  }
+
+  if (resources.ipAssignment === 'STATIC') {
+    const staticIp = normalized(resources.staticIp)
+    if (!isIpv4(staticIp)) throw new Error('Enter a valid static IPv4 address')
+    nic.IP = staticIp
+  }
+
+  if (resources.networkQosEnabled) {
+    const speedMbps = positiveInteger(
+      resources.networkSpeedMbps,
+      1,
+      100000,
+      'Network speed'
+    )
+    const kilobytesPerSecond = Math.round(speedMbps * 125)
+    nic.INBOUND_AVG_BW = String(kilobytesPerSecond)
+    nic.OUTBOUND_AVG_BW = String(kilobytesPerSecond)
+  }
+
+  // The selected VNet remains authoritative for standard vs SR-IOV/PCI NIC
+  // implementation. Customer requests never include host PCI addresses.
+  result.NIC = [nic]
+
+  return result
+}
+
 /**
  * Hide provider-managed OneKS/VRouter VMs from the customer clone workflow.
  *
@@ -184,7 +284,8 @@ export const canCloneVm = (vm = {}) => Number(vm?.STATE) === 8
 export const parseSavedTemplateId = (response) => {
   let text = ''
   if (response?.message !== undefined) text = String(response.message)
-  else if (['string', 'number'].includes(typeof response)) text = String(response)
+  else if (['string', 'number'].includes(typeof response))
+    text = String(response)
   else {
     try {
       text = JSON.stringify(response ?? '')

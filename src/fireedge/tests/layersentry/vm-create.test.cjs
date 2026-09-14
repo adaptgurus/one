@@ -186,3 +186,129 @@ test('VM create selector is separated into approved templates and VM clone tabs'
   assert.match(source, /\?template=\$\{encodeURIComponent\(template\.ID\)\}/)
   assert.doesNotMatch(source, /columns=\{vmtemplateTable\.columns\(\)\}/)
 })
+
+test('cloud resource request creates only a simple data disk and selected network', () => {
+  const result = api.applyLayerSentryCloudResources(
+    { DISK: { IMAGE_ID: '0' } },
+    {
+      dataDiskEnabled: true,
+      dataDiskSizeGb: 100,
+      networkId: '0',
+      ipAssignment: 'AUTO',
+      networkQosEnabled: false,
+    },
+    { storageIopsSupported: false }
+  )
+
+  assert.equal(result.DISK.length, 2)
+  assert.deepEqual(result.DISK[1], {
+    TYPE: 'fs',
+    SIZE: '102400',
+    FORMAT: 'qcow2',
+    FS: 'ext4',
+  })
+  assert.deepEqual(result.NIC, [{ NETWORK_ID: '0', MODEL: 'virtio' }])
+})
+
+test('storage IOPS is accepted only for provider-approved storage', () => {
+  const request = {
+    dataDiskEnabled: true,
+    dataDiskSizeGb: 50,
+    storageIopsEnabled: true,
+    storageIops: 7000,
+    networkId: '0',
+  }
+
+  const blocked = api.applyLayerSentryCloudResources({}, request, {
+    storageIopsSupported: false,
+  })
+  assert.equal(blocked.DISK[0].TOTAL_IOPS_SEC, undefined)
+
+  const allowed = api.applyLayerSentryCloudResources({}, request, {
+    storageIopsSupported: true,
+  })
+  assert.equal(allowed.DISK[0].TOTAL_IOPS_SEC, '7000')
+})
+
+test('network speed is translated to symmetric OpenNebula bandwidth QoS', () => {
+  const result = api.applyLayerSentryCloudResources(
+    {},
+    {
+      networkId: '0',
+      ipAssignment: 'STATIC',
+      staticIp: '10.10.10.141',
+      networkQosEnabled: true,
+      networkSpeedMbps: 500,
+    }
+  )
+
+  assert.equal(result.NIC[0].IP, '10.10.10.141')
+  assert.equal(result.NIC[0].INBOUND_AVG_BW, '62500')
+  assert.equal(result.NIC[0].OUTBOUND_AVG_BW, '62500')
+  assert.equal(result.NIC[0].PCI, undefined)
+})
+
+test('cloud resource request rejects invalid network and static IP values', () => {
+  assert.throws(
+    () => api.applyLayerSentryCloudResources({}, { networkId: 'not-an-id' }),
+    /valid LayerSentry network/
+  )
+  assert.throws(
+    () =>
+      api.applyLayerSentryCloudResources(
+        {},
+        { networkId: '0', ipAssignment: 'STATIC', staticIp: '999.1.1.1' }
+      ),
+    /valid static IPv4/
+  )
+})
+
+test('cloud view hides provider-only VM controls and derives CPU at two-to-one', () => {
+  const templateView = readFileSync(
+    resolve(__dirname, '../../etc/sunstone/views/cloud/vm-template-tab.yaml'),
+    'utf8'
+  )
+  const vmView = readFileSync(
+    resolve(__dirname, '../../etc/sunstone/views/cloud/vm-tab.yaml'),
+    'utf8'
+  )
+
+  assert.match(templateView, /hide_cpu: true/)
+  assert.match(templateView, /cpu_factor: 0\.5/)
+  assert.match(templateView, /ownership: false/)
+  assert.match(templateView, /vm_group: false/)
+  assert.match(templateView, /network: false/)
+  assert.match(templateView, /storage: false/)
+  assert.match(templateView, /placement: false/)
+  assert.match(templateView, /sched_action: false/)
+  assert.match(templateView, /booting: false/)
+  assert.match(vmView, /pci:\n\s+enabled: false/)
+  assert.match(vmView, /sched_actions:\n\s+enabled: false/)
+})
+
+test('cloud instantiate flow includes Access and Resources and strips helper data', () => {
+  const steps = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/index.js'
+    ),
+    'utf8'
+  )
+  const basic = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/BasicConfiguration/schema.js'
+    ),
+    'utf8'
+  )
+  const instantiate = readFileSync(
+    resolve(__dirname, '../../src/modules/containers/VmTemplates/Instantiate.js'),
+    'utf8'
+  )
+
+  assert.match(steps, /view === 'cloud'.*AccessConfiguration/s)
+  assert.match(steps, /view === 'cloud'.*CloudResources/s)
+  assert.match(basic, /\['name', 'instances'\]\.includes\(name\)/)
+  assert.match(instantiate, /applyLayerSentryCloudResources/)
+  assert.match(instantiate, /delete requestTemplate\.resources/)
+})

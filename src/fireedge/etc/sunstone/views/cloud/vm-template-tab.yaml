@@ -1,10 +1,11 @@
 ---
-# This file describes the information and actions available in the VM Template tab
+# LayerSentry customer VM-template view. Provider templates are read-only.
 resource_name: "VM-TEMPLATE"
 
 features:
+  # Customer chooses vCPU only. OpenNebula CPU scheduling weight is derived.
   hide_cpu: true
-  cpu_factor: 1
+  cpu_factor: 0.5
 
 actions:
   create_dialog: false
@@ -13,7 +14,7 @@ actions:
   instantiate_dialog: true
   create_app_dialog: false
   clone: false
-  delete: true
+  delete: false
   chown: false
   chgrp: false
   lock: false
@@ -23,10 +24,10 @@ actions:
   edit_labels: false
 
 filters:
-  owner: true
-  group: true
-  locked: true
-  vrouter: true
+  owner: false
+  group: false
+  locked: false
+  vrouter: false
 
 info-tabs:
   info:
@@ -36,44 +37,45 @@ info-tabs:
       actions:
         rename: false
     permissions_panel:
-      enabled: true
+      enabled: false
       actions:
         chmod: false
     ownership_panel:
-      enabled: true
+      enabled: false
       actions:
         chown: false
         chgrp: false
   template:
-    enabled: true
+    enabled: false
 
 dialogs:
   instantiate_dialog:
     information: true
-    ownership: true
     capacity: true
-    vm_group: true
-    network: true
-    storage: true
+    ownership: false
+    vm_group: false
+    # LayerSentry cloud resources replace the native storage/network dialogs.
+    network: false
+    storage: false
+    pci: false
+    placement: false
+    sched_action: false
+    booting: false
+    # Safe LayerSentry request-only options remain available.
     gpu: true
     protection: true
-    placement: true
-    sched_action: true
-    booting: true
   create_dialog:
-    ownership: true
-    capacity: true
-    showback: true
-    vm_group: true
-    network: true
-    storage: true
-    placement: true
-    input_output: true
-    sched_action: true
-    context: true
-    booting: true
-    numa:
-      enabled: true
-      not_on:
-        - lxc
-    backup: true
+    ownership: false
+    capacity: false
+    showback: false
+    vm_group: false
+    network: false
+    storage: false
+    pci: false
+    placement: false
+    input_output: false
+    sched_action: false
+    context: false
+    booting: false
+    numa: false
+    backup: false

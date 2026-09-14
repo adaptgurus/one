@@ -40,17 +40,29 @@ import {
  * @param {VmTemplateFeatures} [features] - Features
  * @param {object} oneConfig - Config of oned.conf
  * @param {boolean} adminGroup - User is admin or not
+ * @param {boolean} selfService - Whether LayerSentry cloud UX is active
  * @returns {Section[]} Sections
  */
-const SECTIONS = (vmTemplate, features, oneConfig, adminGroup) => {
+const SECTIONS = (
+  vmTemplate,
+  features,
+  oneConfig,
+  adminGroup,
+  selfService = false
+) => {
   const hypervisor = vmTemplate?.TEMPLATE?.HYPERVISOR
+  const informationFields = selfService
+    ? INFORMATION_FIELDS.filter(({ name }) =>
+        ['name', 'instances'].includes(name)
+      )
+    : INFORMATION_FIELDS
 
   return [
     {
       id: 'information',
       legend: T.Information,
       fields: disableFields(
-        filterFieldsByHypervisor(INFORMATION_FIELDS, hypervisor),
+        filterFieldsByHypervisor(informationFields, hypervisor),
         '',
         oneConfig,
         adminGroup
@@ -69,7 +81,7 @@ const SECTIONS = (vmTemplate, features, oneConfig, adminGroup) => {
         adminGroup
       ),
     },
-    {
+    !selfService && {
       id: 'ownership',
       legend: T.Ownership,
       fields: disableFields(
@@ -79,7 +91,7 @@ const SECTIONS = (vmTemplate, features, oneConfig, adminGroup) => {
         adminGroup
       ),
     },
-    {
+    !selfService && {
       id: 'vm_group',
       legend: T.VMGroup,
       fields: disableFields(
@@ -89,25 +101,45 @@ const SECTIONS = (vmTemplate, features, oneConfig, adminGroup) => {
         adminGroup
       ),
     },
-  ]
+  ].filter(Boolean)
 }
 
 /**
  * @param {VmTemplate} [vmTemplate] - VM Template
- * @param {boolean} [hideCpu] - If `true`, the CPU fields is hidden
+ * @param {VmTemplateFeatures} [features] - View capacity features
+ * @param {object} oneConfig - OpenNebula configuration
+ * @param {boolean} adminGroup - Whether user belongs to admin group
+ * @param {boolean} selfService - Whether LayerSentry cloud UX is active
  * @returns {Field[]} Basic configuration fields
  */
-const FIELDS = (vmTemplate, hideCpu) =>
-  SECTIONS(vmTemplate, hideCpu)
+const FIELDS = (
+  vmTemplate,
+  features,
+  oneConfig,
+  adminGroup,
+  selfService = false
+) =>
+  SECTIONS(vmTemplate, features, oneConfig, adminGroup, selfService)
     .map(({ fields }) => fields)
     .flat()
 
 /**
  * @param {VmTemplate} [vmTemplate] - VM Template
- * @param {boolean} [hideCpu] - If `true`, the CPU fields is hidden
+ * @param {VmTemplateFeatures} [features] - View capacity features
+ * @param {object} oneConfig - OpenNebula configuration
+ * @param {boolean} adminGroup - Whether user belongs to admin group
+ * @param {boolean} selfService - Whether LayerSentry cloud UX is active
  * @returns {BaseSchema} Step schema
  */
-const SCHEMA = (vmTemplate, hideCpu) =>
-  getObjectSchemaFromFields(FIELDS(vmTemplate, hideCpu))
+const SCHEMA = (
+  vmTemplate,
+  features,
+  oneConfig,
+  adminGroup,
+  selfService = false
+) =>
+  getObjectSchemaFromFields(
+    FIELDS(vmTemplate, features, oneConfig, adminGroup, selfService)
+  )
 
 export { FIELDS, SCHEMA, SECTIONS }

@@ -33,6 +33,7 @@ import { VmTemplate } from '@ResourcesModule'
 import {
   jsonToXml,
   filterTemplateData,
+  applyLayerSentryCloudResources,
   applyLayerSentryVmDefaults,
   hasTemplateId,
   normalizeProtectionRequest,
@@ -65,12 +66,8 @@ export function InstantiateVmTemplate() {
     ? stateTemplateId
     : queryTemplateId
   const templateName = stateTemplateName
-  const {
-    enqueueError,
-    enqueueInfo,
-    resetFieldPath,
-    resetModifiedFields,
-  } = useGeneralApi()
+  const { enqueueError, enqueueInfo, resetFieldPath, resetModifiedFields } =
+    useGeneralApi()
   const [instantiate] = VmTemplateAPI.useInstantiateTemplateMutation()
   const { adminGroup, oneConfig } = useSystemData()
 
@@ -119,6 +116,19 @@ export function InstantiateVmTemplate() {
             filteredTemplate = applyLayerSentryVmDefaults(
               filteredTemplate,
               rawTemplate?.access
+            )
+
+            const storageIopsSupported =
+              String(
+                apiTemplateData?.TEMPLATE?.LAYERSENTRY_STORAGE_IOPS_QOS ?? ''
+              )
+                .trim()
+                .toUpperCase() === 'YES'
+
+            filteredTemplate = applyLayerSentryCloudResources(
+              filteredTemplate,
+              rawTemplate?.resources,
+              { storageIopsSupported }
             )
 
             // Catalog metadata belongs to the source VM template, not the
@@ -173,6 +183,7 @@ export function InstantiateVmTemplate() {
           const xmlFinal = jsonToXml(filteredTemplate)
           const requestTemplate = { ...rawTemplate, template: xmlFinal }
           delete requestTemplate.access
+          delete requestTemplate.resources
 
           return instantiate(requestTemplate).unwrap()
         })
@@ -191,6 +202,12 @@ export function InstantiateVmTemplate() {
       if (error?.message === GPU_REQUEST_ERROR) {
         enqueueError(
           'The selected GPU profile is no longer available or the requested count exceeds its published limit.'
+        )
+      } else {
+        enqueueError(
+          error?.data?.message ??
+            error?.message ??
+            'LayerSentry could not create the virtual machine.'
         )
       }
     }
@@ -211,6 +228,7 @@ export function InstantiateVmTemplate() {
             dataTemplateExtended,
             oneConfig,
             adminGroup,
+            features,
             view,
           }}
           onSubmit={debounce(onSubmit, 500)}

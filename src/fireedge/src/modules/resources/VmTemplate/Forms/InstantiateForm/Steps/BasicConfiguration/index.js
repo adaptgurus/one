@@ -27,29 +27,48 @@ import { RESOURCE_NAMES, T, VmTemplate } from '@ConstantsModule'
 import { useViews } from '@FeaturesModule'
 import { getActionsAvailable as getSectionsAvailable } from '@UtilsModule'
 
-let generalFeatures
-
 export const STEP_ID = 'general'
 
-const Content = ({ vmTemplate, oneConfig, adminGroup }) => {
+const Content = ({
+  vmTemplate,
+  oneConfig,
+  adminGroup,
+  features,
+  view: requestedView,
+}) => {
   const theme = useTheme()
   const classes = useMemo(() => useStyles(theme), [theme])
   const { view, getResourceView } = useViews()
 
   const resource = RESOURCE_NAMES.VM_TEMPLATE
-  const { features, dialogs } = getResourceView(resource)
+  const resourceView = getResourceView(resource) ?? {}
+  const dialogs = resourceView.dialogs
+  const resolvedFeatures = features ?? resourceView.features ?? {}
+  const resolvedView = requestedView ?? view
+  const selfService = resolvedView === 'cloud'
 
   const sections = useMemo(() => {
     const hypervisor = vmTemplate?.TEMPLATE?.HYPERVISOR
     const dialog = dialogs?.instantiate_dialog
     const sectionsAvailable = getSectionsAvailable(dialog, hypervisor)
 
-    generalFeatures = features
-
-    return SECTIONS(vmTemplate, features, oneConfig, adminGroup).filter(
-      ({ id, required }) => required || sectionsAvailable.includes(id)
-    )
-  }, [view])
+    return SECTIONS(
+      vmTemplate,
+      resolvedFeatures,
+      oneConfig,
+      adminGroup,
+      selfService
+    ).filter(({ id, required }) => required || sectionsAvailable.includes(id))
+  }, [
+    view,
+    resolvedView,
+    resolvedFeatures,
+    dialogs,
+    vmTemplate,
+    oneConfig,
+    adminGroup,
+    selfService,
+  ])
 
   return (
     <div className={classes.root}>
@@ -72,6 +91,8 @@ Content.propTypes = {
   vmTemplate: PropTypes.object,
   oneConfig: PropTypes.object,
   adminGroup: PropTypes.bool,
+  features: PropTypes.object,
+  view: PropTypes.string,
 }
 
 /**
@@ -80,12 +101,27 @@ Content.propTypes = {
  * @param {VmTemplate} vmTemplate - VM Template
  * @returns {object} Basic configuration step
  */
-const BasicConfiguration = ({ vmTemplate, oneConfig, adminGroup }) => ({
+const BasicConfiguration = ({
+  vmTemplate,
+  oneConfig,
+  adminGroup,
+  features,
+  view,
+}) => ({
   id: STEP_ID,
   label: T.Configuration,
-  resolver: () => SCHEMA(vmTemplate, generalFeatures),
+  resolver: () =>
+    SCHEMA(vmTemplate, features, oneConfig, adminGroup, view === 'cloud'),
   optionsValidate: { abortEarly: false },
-  content: (props) => Content({ ...props, vmTemplate, oneConfig, adminGroup }),
+  content: (props) =>
+    Content({
+      ...props,
+      vmTemplate,
+      oneConfig,
+      adminGroup,
+      features,
+      view,
+    }),
 })
 
 export default BasicConfiguration

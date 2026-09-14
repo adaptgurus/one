@@ -109,7 +109,14 @@ const Content = ({
           sectionsAvailable.includes(id) &&
           (typeof isVisible !== 'function' || isVisible({ vmTemplate, view }))
       ).map(
-        ({ Content: TabContent, name, getError, icon, isVisible, ...section }) => ({
+        ({
+          Content: TabContent,
+          name,
+          getError,
+          icon,
+          isVisible,
+          ...section
+        }) => ({
           ...section,
           name,
           title: translate(name),
@@ -183,12 +190,12 @@ const Content = ({
  * @param {VmTemplate} vmTemplate - VM Template
  * @returns {object} Optional configuration step
  */
-const ExtraConfiguration = ({ vmTemplate, oneConfig, adminGroup }) => {
+const ExtraConfiguration = ({ vmTemplate, oneConfig, adminGroup, view }) => {
   const hypervisor = vmTemplate?.TEMPLATE?.HYPERVISOR
 
   return {
     id: STEP_ID,
-    label: T.AdvancedOptions,
+    label: view === 'cloud' ? 'Optional services' : T.AdvancedOptions,
     resolver: () => SCHEMA(vmTemplate),
     optionsValidate: { abortEarly: false },
     content: (props) =>

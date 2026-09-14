@@ -29,6 +29,7 @@ import ExtraConfiguration, {
 } from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration'
 import UserInputs from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/UserInputs'
 import AccessConfiguration from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/AccessConfiguration'
+import CloudResources from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources'
 
 const Steps = createSteps(
   ({ dataTemplateExtended = {}, view, ...rest }) => {
@@ -55,12 +56,23 @@ const Steps = createSteps(
     )
 
     return [
-      () => BasicConfiguration({ vmTemplate: dataTemplateExtended, ...rest }),
+      () =>
+        BasicConfiguration({
+          vmTemplate: dataTemplateExtended,
+          view,
+          ...rest,
+        }),
       view === 'cloud' && (() => AccessConfiguration()),
+      view === 'cloud' &&
+        (() => CloudResources({ vmTemplate: dataTemplateExtended })),
       userInputs?.length > 0 &&
         (() => UserInputs(userInputs, userInputsLayout)),
       (props) =>
-        ExtraConfiguration({ vmTemplate: dataTemplateExtended, ...props }),
+        ExtraConfiguration({
+          vmTemplate: dataTemplateExtended,
+          view,
+          ...props,
+        }),
     ].filter(Boolean)
   },
   {
