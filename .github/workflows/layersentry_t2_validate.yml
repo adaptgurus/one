@@ -1,0 +1,64 @@
+name: LayerSentry T2 Source Validation
+
+on:
+  push:
+    branches: ['layersentry/t2-source-validation-20260915']
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact LayerSentry T2 source
+        uses: actions/checkout@v5
+        with:
+          repository: adaptgurus/layersentry-platform
+          ref: feat/production-deployer-gui-hyperv-20260914
+          path: layersentry-platform
+          persist-credentials: false
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.24.11'
+          cache: false
+
+      - name: Python compile and tests
+        shell: pwsh
+        working-directory: layersentry-platform
+        run: |
+          python -m compileall -q deploy tests
+          python -m unittest discover -s tests -p 'test_*.py' -v
+
+      - name: Render complete constrained HCI lab
+        shell: pwsh
+        working-directory: layersentry-platform
+        run: |
+          python deploy/layersentry.py lab-validate --manifest deploy/lab.hyperv.example.json
+          python deploy/layersentry.py lab-render --manifest deploy/lab.hyperv.example.json --out "$env:RUNNER_TEMP\layersentry-t2-render"
+          node --check deploy/gui/app.js
+
+      - name: Host agent source verification
+        shell: pwsh
+        working-directory: layersentry-platform/deploy/host-agent
+        run: |
+          gofmt -w .
+          if ((git diff --name-only -- '*.go').Count -ne 0) { git diff -- '*.go'; throw 'gofmt drift detected' }
+          go test ./...
+          go vet ./...
+          $env:CGO_ENABLED='0'; $env:GOOS='linux'; $env:GOARCH='amd64'
+          go build -trimpath -ldflags='-s -w -X main.Version=0.2.0-t2-ci' -o "$env:RUNNER_TEMP\layersentry-host-agent" ./cmd/layersentry-host-agent
+
+      - name: Build Windows GUI installer EXE
+        shell: pwsh
+        working-directory: layersentry-platform/deploy
+        run: |
+          .\packaging\build-windows-exe.ps1 -Python python -OutputDir dist-windows
+          Get-FileHash -Algorithm SHA256 .\dist-windows\LayerSentryInstaller.exe
