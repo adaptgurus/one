@@ -43,6 +43,38 @@ jobs:
             src/oneks/test/worker_disk_manager_test.rb || true
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
+          path = Path('src/oneks/lib/helpers/worker_disk_manager.rb')
+          text = path.read_text()
+          text = re.sub(
+              r'(?m)^(?P<i>\s*)raise ArgumentError,\s*\n\s*"at most #\{MAX_DATA_DISKS\} managed data disks are supported" if disks\.length > MAX_DATA_DISKS$',
+              lambda m: (
+                  f'{m.group("i")}if disks.length > MAX_DATA_DISKS\n'
+                  f'{m.group("i")}    raise ArgumentError, "at most #{{MAX_DATA_DISKS}} managed data disks are supported"\n'
+                  f'{m.group("i")}end'
+              ),
+              text,
+          )
+          text = re.sub(
+              r'(?m)^(?P<i>\s*)raise ArgumentError,\s*\n\s*"invalid managed disk name #\{name\.inspect\}" unless NAME_PATTERN\.match\?\(name\)$',
+              lambda m: (
+                  f'{m.group("i")}unless NAME_PATTERN.match?(name)\n'
+                  f'{m.group("i")}    raise ArgumentError, "invalid managed disk name #{{name.inspect}}"\n'
+                  f'{m.group("i")}end'
+              ),
+              text,
+          )
+          text = re.sub(
+              r'(?m)^(?P<i>\s*)raise ArgumentError,\s*\n\s*"unsupported managed disk filesystem #\{filesystem\}" unless FILESYSTEMS\.include\?\(filesystem\)$',
+              lambda m: (
+                  f'{m.group("i")}unless FILESYSTEMS.include?(filesystem)\n'
+                  f'{m.group("i")}    raise ArgumentError, "unsupported managed disk filesystem #{{filesystem}}"\n'
+                  f'{m.group("i")}end'
+              ),
+              text,
+          )
+          path.write_text(text)
 
           path = Path('src/oneks/test/disk_reconciliation_test.rb')
           text = path.read_text()
@@ -65,14 +97,8 @@ jobs:
               '        def initialize(body)\n',
               '        # The production superclass requires live OpenNebula state; this isolated\n'
               '        # harness intentionally supplies only the collaborators under test.\n'
-              '        # rubocop:disable Lint/MissingSuper\n'
+              '        # rubocop:disable-next-line Lint/MissingSuper\n'
               '        def initialize(body)\n',
-              1,
-          )
-          text = text.replace(
-              '            @client = Object.new\n        end\n\n        def parent_cluster',
-              '            @client = Object.new\n        end\n'
-              '        # rubocop:enable Lint/MissingSuper\n\n        def parent_cluster',
               1,
           )
           path.write_text(text)
