@@ -37,8 +37,6 @@ jobs:
           set -euo pipefail
           ruby -c src/oneks/app/models/groups/nodegroup_day2.rb
           ruby -c src/oneks/lib/helpers/worker_disk_manager.rb
-          ruby -c src/oneks/specs/controlplanes/layersentry-poc/spec.erb
-          ruby -c src/oneks/specs/nodegroups/layersentry-poc/spec.erb
           ruby -c src/oneks/test/disk_reconciliation_test.rb
           ruby -c src/oneks/test/layersentry_profile_test.rb
           ruby -c src/oneks/test/worker_disk_manager_test.rb
