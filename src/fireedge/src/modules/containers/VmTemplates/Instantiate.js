@@ -33,6 +33,8 @@ import { VmTemplate } from '@ResourcesModule'
 import {
   jsonToXml,
   filterTemplateData,
+  applyLayerSentryVmDefaults,
+  hasTemplateId,
   normalizeProtectionRequest,
   resolvePublishedGpuRequest,
   transformActionsInstantiate,
@@ -56,7 +58,13 @@ export function InstantiateVmTemplate() {
 
   const store = useStore()
   const history = useHistory()
-  const { state: { ID: templateId, NAME: templateName } = {} } = useLocation()
+  const location = useLocation()
+  const { ID: stateTemplateId, NAME: stateTemplateName } = location.state ?? {}
+  const queryTemplateId = new URLSearchParams(location.search).get('template')
+  const templateId = hasTemplateId(stateTemplateId)
+    ? stateTemplateId
+    : queryTemplateId
+  const templateName = stateTemplateName
   const {
     enqueueError,
     enqueueInfo,
@@ -69,12 +77,12 @@ export function InstantiateVmTemplate() {
   const { data: apiTemplateDataExtended, isError } =
     VmTemplateAPI.useGetTemplateQuery(
       { id: templateId, extended: true },
-      { skip: templateId === undefined }
+      { skip: !hasTemplateId(templateId) }
     )
 
   const { data: apiTemplateData } = VmTemplateAPI.useGetTemplateQuery(
     { id: templateId, extended: false },
-    { skip: templateId === undefined }
+    { skip: !hasTemplateId(templateId) }
   )
 
   const dataTemplateExtended = _.cloneDeep(apiTemplateDataExtended)
@@ -97,7 +105,7 @@ export function InstantiateVmTemplate() {
             ...apiTemplateData?.TEMPLATE,
           }
 
-          const filteredTemplate = filterTemplateData(
+          let filteredTemplate = filterTemplateData(
             rawTemplate,
             modifiedFields,
             existingTemplate,
@@ -108,6 +116,11 @@ export function InstantiateVmTemplate() {
           )
 
           if (view === 'cloud') {
+            filteredTemplate = applyLayerSentryVmDefaults(
+              filteredTemplate,
+              rawTemplate?.access
+            )
+
             // Catalog metadata belongs to the source VM template, not the
             // resulting VM instance. Never carry physical-address-like data
             // from a browser request into PCI constraints.
@@ -158,9 +171,10 @@ export function InstantiateVmTemplate() {
           )
 
           const xmlFinal = jsonToXml(filteredTemplate)
-          rawTemplate.template = xmlFinal
+          const requestTemplate = { ...rawTemplate, template: xmlFinal }
+          delete requestTemplate.access
 
-          return instantiate(rawTemplate).unwrap()
+          return instantiate(requestTemplate).unwrap()
         })
       )
 
@@ -170,7 +184,8 @@ export function InstantiateVmTemplate() {
       history.push(PATH.INSTANCE.VMS.LIST)
 
       const total = templates.length
-      const templateInfo = `#${templateId} ${templateName}`
+      const resolvedTemplateName = templateName ?? apiTemplateData?.NAME ?? ''
+      const templateInfo = `#${templateId} ${resolvedTemplateName}`.trim()
       enqueueInfo(T.InfoVMTemplateInstantiated, [total, templateInfo])
     } catch (error) {
       if (error?.message === GPU_REQUEST_ERROR) {
@@ -181,7 +196,7 @@ export function InstantiateVmTemplate() {
     }
   }
 
-  if (!templateId || isError) {
+  if (!hasTemplateId(templateId) || isError) {
     return <Redirect to={PATH.TEMPLATE.VMS.LIST} />
   }
 
@@ -196,6 +211,7 @@ export function InstantiateVmTemplate() {
             dataTemplateExtended,
             oneConfig,
             adminGroup,
+            view,
           }}
           onSubmit={debounce(onSubmit, 500)}
           fallback={<SkeletonStepsForm />}

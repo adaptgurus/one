@@ -28,9 +28,10 @@ import ExtraConfiguration, {
   STEP_ID as EXTRA_ID,
 } from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration'
 import UserInputs from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/UserInputs'
+import AccessConfiguration from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/AccessConfiguration'
 
 const Steps = createSteps(
-  ({ dataTemplateExtended = {}, ...rest }) => {
+  ({ dataTemplateExtended = {}, view, ...rest }) => {
     // Get and order user inputs
     const userInputs = userInputsToArray(
       dataTemplateExtended?.TEMPLATE?.USER_INPUTS,
@@ -55,6 +56,7 @@ const Steps = createSteps(
 
     return [
       () => BasicConfiguration({ vmTemplate: dataTemplateExtended, ...rest }),
+      view === 'cloud' && (() => AccessConfiguration()),
       userInputs?.length > 0 &&
         (() => UserInputs(userInputs, userInputsLayout)),
       (props) =>
