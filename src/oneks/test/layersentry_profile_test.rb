@@ -39,6 +39,14 @@ class LayerSentryProfileTest < Minitest::Test
     assert_equal 2, router.fetch('replicas')
     assert_equal [6443, 9345], router.fetch('listenerPorts')
     cp = docs.fetch('RKE2ControlPlane').fetch('spec')
+    assert_equal true, cp.dig('agentConfig', 'airGapped')
+    cp_commands = cp.fetch('preRKE2Commands').join("\n")
+    assert_includes cp_commands, '/opt/install.sh'
+    assert_includes cp_commands, '7bcbd3167d6947e1d79cdf722acdc740b28021fefb50dd5b974a1980776d4079'
+    refute_includes cp_commands, 'curl '
+    refute_includes cp_commands, 'wget '
+    refute_includes cp_commands, 'get.rke2.io'
+    refute_includes cp_commands, 'github.com/rancher/rke2/releases'
     assert_equal 'control-plane-endpoint', cp.fetch('registrationMethod')
     assert_equal 'v1.36.4+rke2r1', cp.fetch('version')
     assert_includes cp.fetch('preRKE2Commands').join, 'provider-id=one://%s'
@@ -56,6 +64,15 @@ class LayerSentryProfileTest < Minitest::Test
   def test_worker_identity_and_version
     docs, templates = render('nodegroups')
     cmds = docs.fetch('RKE2ConfigTemplate').dig('spec', 'template', 'spec', 'preRKE2Commands')
+    assert_equal true, docs.fetch('RKE2ConfigTemplate').dig('spec', 'template', 'spec', 'agentConfig', 'airGapped')
+    joined = cmds.join("\n")
+    assert_includes joined, '/opt/rke2-artifacts/rke2.linux-amd64.tar.gz'
+    assert_includes joined, '/usr/local/libexec/oneks/worker-disk'
+    assert_includes joined, '8e12805c4bda79bec2fd20c89f705af3cb2ed11ea8854dc4937fca41b124b57a'
+    refute_includes joined, 'curl '
+    refute_includes joined, 'wget '
+    refute_includes joined, 'get.rke2.io'
+    refute_includes joined, 'github.com/rancher/rke2/releases'
     assert_includes cmds.join, 'provider-id=one://%s'
     assert_equal 'v1.36.4+rke2r1', docs.fetch('MachineDeployment').dig('spec', 'template', 'spec', 'version')
     assert_includes templates[:node], 'VMID = "$VMID"'
@@ -72,8 +89,8 @@ class LayerSentryProfileTest < Minitest::Test
     docs, templates = render('nodegroups', {}, disk_autoscaling: policy)
     assert_includes templates[:node], 'LAYERSENTRY_DISK = "data-a"'
     assert_includes templates[:node], 'LAYERSENTRY_DISK = "data-b"'
-    assert_includes templates[:node], 'FORMAT = "raw"'
-    assert_includes templates[:node], 'FS = "xfs"'
+    assert_equal 2, templates[:node].scan('FORMAT = "raw"').length
+    assert_equal 2, templates[:node].scan('FS = "xfs"').length
     commands = docs.fetch('RKE2ConfigTemplate').dig('spec', 'template', 'spec', 'preRKE2Commands').join
     assert_includes commands, 'device=/dev/vdb'
     assert_includes commands, 'device=/dev/vdc'

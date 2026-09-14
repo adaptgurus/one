@@ -33,6 +33,7 @@ jobs:
           ruby -c src/oneks/app/services/lifecycle_status.rb
           ruby -c src/oneks/app/services/lifecycle_status_autoscaler.rb
           ruby -c src/oneks/lib/helpers/k8s_day2_helper.rb
+          ruby -c src/oneks/lib/helpers/worker_disk_manager.rb
           ruby -c src/oneks/test/day2_lifecycle_test.rb
           ruby -c src/oneks/test/disk_reconciliation_test.rb
           ruby -c src/oneks/test/bootstrap_recovery_test.rb

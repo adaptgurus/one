@@ -300,7 +300,10 @@ module OneKS
             target = Integer(inflight[:to_mib])
             if disk[:current_size_mib].to_i >= target
                 unless disk[:guest_caught_up]
-                    return inflight.merge(:action => 'waiting-for-guest-grow')
+                    rc = WorkerDiskManager.grow(cluster.client, vm_id, disk[:mount])
+                    return rc if OpenNebula.is_error?(rc)
+
+                    return inflight.merge(:action => 'guest-grow-submitted')
                 end
 
                 key = inflight[:key].to_s

@@ -22,7 +22,7 @@ module OneKS
 
         class << self
 
-            attr_accessor :status, :resize_calls, :resize_result
+            attr_accessor :status, :resize_calls, :resize_result, :grow_calls
 
             def vm_status(_client, vm_id, _policy)
                 status.merge(:vm_id => vm_id)
@@ -32,6 +32,12 @@ module OneKS
                 self.resize_calls ||= []
                 resize_calls << [vm_id, disk_id, target]
                 resize_result
+            end
+
+            def grow(_client, vm_id, mount)
+                self.grow_calls ||= []
+                grow_calls << [vm_id, mount]
+                true
             end
 
         end
@@ -86,6 +92,7 @@ class DiskReconciliationTest < Minitest::Test
             :disks => [disk, runtime_disk('data-b', 2, 10)]
         }
         OneKS::WorkerDiskManager.resize_calls = []
+        OneKS::WorkerDiskManager.grow_calls = []
         OneKS::WorkerDiskManager.resize_result = OpenNebula::Error.new
 
         group = NodeGroupHarness.new(:disk_autoscaling => policy)
@@ -110,10 +117,20 @@ class DiskReconciliationTest < Minitest::Test
 
         OneKS::WorkerDiskManager.status = {
             :disks => [disk.merge(:current_size_mib => 60 * 1024,
-                                  :guest_capacity_mib => 60 * 1024),
+                                  :guest_caught_up => false),
                        runtime_disk('data-b', 2, 10)]
         }
         result = restarted.reconcile_disk_autoscaling(:now => 1_130)
+        assert_equal 'guest-grow-submitted', result.fetch(:action)
+        assert_equal [[501, '/var/lib/layersentry/disks/data-a']],
+                     OneKS::WorkerDiskManager.grow_calls
+
+        OneKS::WorkerDiskManager.status = {
+            :disks => [disk.merge(:current_size_mib => 60 * 1024,
+                                  :guest_capacity_mib => 60 * 1024),
+                       runtime_disk('data-b', 2, 10)]
+        }
+        result = restarted.reconcile_disk_autoscaling(:now => 1_131)
         assert_equal 'resized', result.fetch(:action)
         refute restarted.body.key?(:disk_resize_inflight)
         assert_equal 60, restarted.body.dig(:disk_autoscaling, :data_disks, 0,
@@ -140,6 +157,7 @@ class DiskReconciliationTest < Minitest::Test
     def runtime_disk(name, disk_id, used_percent)
         {
             :name => name, :disk_id => disk_id, :present => true,
+            :mount => "/var/lib/layersentry/disks/#{name}",
             :used_percent => used_percent, :current_size_mib => 30 * 1024,
             :guest_capacity_mib => 30 * 1024, :guest_caught_up => true,
             :max_size_mib => 120 * 1024

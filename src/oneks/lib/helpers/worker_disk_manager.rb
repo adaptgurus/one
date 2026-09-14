@@ -17,6 +17,7 @@ module OneKS
         NAME_PATTERN = /\A[a-z][a-z0-9-]{0,30}\z/
         FILESYSTEMS = %w[xfs ext4].freeze
         MOUNT_BASE = '/var/lib/layersentry/disks'
+        GUEST_DISK_HELPER = '/usr/local/libexec/oneks/worker-disk'
 
         class << self
 
@@ -126,6 +127,19 @@ module OneKS
                 )
             end
 
+            def grow(client, vm_id, mount)
+                command = Shellwords.join([GUEST_DISK_HELPER, 'grow', mount.to_s])
+                rc = OneHelper::VirtualMachine.exec(client, vm_id, command, :timeout => 60)
+                return rc if OpenNebula.is_error?(rc)
+
+                true
+            rescue StandardError => e
+                OpenNebula::Error.new(
+                    "Worker disk guest grow failed for VM #{vm_id}: #{e.message}",
+                    OpenNebula::Error::EACTION
+                )
+            end
+
             def managed_mounts(policy)
                 [{ :name => 'root', :mount => '/', :disk_id => 0,
                    :max_gib => policy[:root_max_gib] }] + Array(policy[:data_disks])
@@ -141,7 +155,7 @@ module OneKS
             end
 
             def guest_usage(client, vm_id, mounts)
-                command = "LC_ALL=C df -Pk #{mounts.map {|mount| Shellwords.escape(mount) }.join(' ')}"
+                command = Shellwords.join([GUEST_DISK_HELPER, 'status', *mounts])
                 rc = OneHelper::VirtualMachine.exec(client, vm_id, command, :timeout => 30)
                 return rc if OpenNebula.is_error?(rc)
 
