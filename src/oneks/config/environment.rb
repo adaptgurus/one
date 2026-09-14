@@ -34,6 +34,8 @@ require 'uri'
 require_relative File.join(APP_ROOT, 'lib', 'helpers', 'appliance_helper')
 require_relative File.join(APP_ROOT, 'lib', 'helpers', 'oneks_helper')
 require_relative File.join(APP_ROOT, 'lib', 'helpers', 'k8s_helper')
+require_relative File.join(APP_ROOT, 'lib', 'helpers', 'k8s_day2_helper')
+require_relative File.join(APP_ROOT, 'lib', 'helpers', 'worker_disk_manager')
 require_relative File.join(APP_ROOT, 'lib', 'fakes', 'k8s_fake')
 
 OneHelper::Image.extend(OneKS::OneHelperExtensions::Image)
@@ -44,9 +46,11 @@ require_relative File.join(APP_ROOT, 'app', 'models', 'deployment')
 require_relative File.join(APP_ROOT, 'app', 'models', 'k8s_dependency')
 require_relative File.join(APP_ROOT, 'app', 'models', 'k8s_group')
 require_relative File.join(APP_ROOT, 'app', 'models', 'dependencies', 'seed_vm')
+require_relative File.join(APP_ROOT, 'app', 'models', 'dependencies', 'seed_vm_heartbeat')
 require_relative File.join(APP_ROOT, 'app', 'models', 'dependencies', 'cluster_router')
 require_relative File.join(APP_ROOT, 'app', 'models', 'groups', 'controlplane')
 require_relative File.join(APP_ROOT, 'app', 'models', 'groups', 'nodegroup')
+require_relative File.join(APP_ROOT, 'app', 'models', 'groups', 'nodegroup_day2')
 require_relative File.join(APP_ROOT, 'app', 'models', 'cluster')
 require_relative File.join(APP_ROOT, 'app', 'models', 'pools')
 
@@ -54,7 +58,10 @@ require_relative File.join(APP_ROOT, 'app', 'models', 'pools')
 require_relative File.join(APP_ROOT, 'app', 'services', 'cluster_readiness')
 require_relative File.join(APP_ROOT, 'app', 'services', 'cluster_lcm')
 require_relative File.join(APP_ROOT, 'app', 'services', 'event_manager', 'event_manager')
+require_relative File.join(APP_ROOT, 'app', 'services', 'event_manager', 'event_manager_day2')
 require_relative File.join(APP_ROOT, 'app', 'services', 'cluster_wd')
+require_relative File.join(APP_ROOT, 'app', 'services', 'lifecycle_status')
+require_relative File.join(APP_ROOT, 'app', 'services', 'lifecycle_status_autoscaler')
 
 # Controllers
 APP_PATHS = [File.join(APP_ROOT, 'app', 'controllers')]

@@ -24,12 +24,26 @@ module OneKS
         DOCUMENT_ATTRS = K8sGroup::DOCUMENT_ATTRS + [:kubeconfig, :endpoint]
         FAMILIES_DIR   = File.join(ONEKS_SPEC_DIR, 'controlplanes')
         COMPONENT_NAME = name.split('::').last
+        MAX_REPLICAS   = 7
 
         def self.validate_spec(spec)
             template = super(spec)
             return template if OpenNebula.is_error?(template)
 
+            count = Integer(template.dig(:user_inputs_values, :count))
+            unless count == 1 || (count.between?(3, MAX_REPLICAS) && count.odd?)
+                return OpenNebula::Error.new(
+                    'LayerSentry control-plane replicas must be 1, 3, 5 or 7',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
             template.merge({ :kubeconfig => nil, :endpoint => nil })
+        rescue ArgumentError, TypeError
+            OpenNebula::Error.new(
+                'LayerSentry control-plane replicas must be an integer',
+                OpenNebula::Error::EACTION
+            )
         end
 
         #------------------------------------------------------
@@ -133,9 +147,47 @@ module OneKS
             ) unless errors.empty?
         end
 
-        def scale(_target)
+        # Scale through CAPRKE2. Persist desired replicas before mutation so a
+        # controller restart can reconcile the same idempotent target safely.
+        # Scale-down is intentionally not exposed through this generic action;
+        # controller removal requires a quorum-safe maintenance workflow.
+        def scale(target)
+            cluster = parent_cluster
+            return cluster if OpenNebula.is_error?(cluster)
+
+            target = Integer(target)
             return OpenNebula::Error.new(
-                "#{type} does not support scaling operations",
+                'Control plane target must be between 1 and 7',
+                OpenNebula::Error::EACTION
+            ) unless (1..MAX_REPLICAS).cover?(target)
+
+            current = Integer(expected_size || 0)
+            if current.positive? && target < current
+                return OpenNebula::Error.new(
+                    'Automatic control-plane scale-down is disabled; use a ' \
+                    'quorum-safe maintenance workflow',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
+            self.expected_size = target
+            rc = update
+            return rc if OpenNebula.is_error?(rc)
+
+            spec = render
+            return spec if OpenNebula.is_error?(spec)
+
+            rc = K8s.upgrade(@client, cluster.leader, spec)
+            return rc if OpenNebula.is_error?(rc)
+
+            # Singleton control planes must never be auto-remediated. Once a
+            # control plane has >1 replica, keep its bounded MHC in sync.
+            K8s.reconcile_control_plane_health(
+                @client, cluster.leader, spec, cluster.uuid, target
+            )
+        rescue ArgumentError, TypeError
+            OpenNebula::Error.new(
+                'Control plane target must be an integer',
                 OpenNebula::Error::EACTION
             )
         rescue StandardError => e

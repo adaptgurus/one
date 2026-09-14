@@ -39,6 +39,8 @@ metadata:
     cluster.x-k8s.io/cluster-name: <%= cluster[:uuid] %>
   name: <%= cluster[:uuid] %>
 spec:
+  agentConfig:
+    airGapped: true
   machineTemplate:
     infrastructureRef:
       apiVersion: infrastructure.cluster.x-k8s.io/v1beta1
@@ -47,15 +49,16 @@ spec:
   preRKE2Commands:
   - |-
     set -eu
-    install -d -m 0755 /usr/local/libexec/oneks
-    printf '#!/bin/sh\nexec /var/lib/rancher/rke2/bin/kubectl "$@"\n' > /usr/local/libexec/oneks/kubectl
-    chmod 0700 /usr/local/libexec/oneks/kubectl
-    if selinuxenabled; then
-      semanage fcontext -a -t virt_qemu_ga_unconfined_exec_t /usr/local/libexec/oneks/kubectl ||
-        semanage fcontext -m -t virt_qemu_ga_unconfined_exec_t /usr/local/libexec/oneks/kubectl
-      restorecon /usr/local/libexec/oneks/kubectl
-      setsebool -P virt_qemu_ga_run_unconfined on
-    fi
+    cat <<'SHA256' | sha256sum -c -
+    42983c86d1da64a92061d83afb57630cedd69241989f1b0673f3db6c3d92ee6b  /opt/install.sh
+    8e12805c4bda79bec2fd20c89f705af3cb2ed11ea8854dc4937fca41b124b57a  /opt/rke2-artifacts/sha256sum-amd64.txt
+    7bcbd3167d6947e1d79cdf722acdc740b28021fefb50dd5b974a1980776d4079  /opt/rke2-artifacts/rke2.linux-amd64.tar.gz
+    8988a2eff587dd88b8eab86fe719703e9541a1f08d22771a94cbec446a13db86  /var/lib/rancher/rke2/agent/images/rke2-images-core.linux-amd64.tar.zst
+    4359b651bfdec8f3bcc01b351b33a55ff21f06b18a767366db6f3800d5750871  /var/lib/rancher/rke2/agent/images/rke2-images-canal.linux-amd64.tar.zst
+    SHA256
+    test -x /usr/local/libexec/oneks/kubectl
+    test -x /usr/local/libexec/oneks/worker-disk
+    systemctl is-enabled --quiet qemu-guest-agent
   - |-
     install -d -m 0700 /etc/rancher/rke2/config.yaml.d
     cat > /etc/rancher/rke2/config.yaml.d/95-poc-leader-grace.yaml <<'LEADER'
@@ -100,23 +103,8 @@ spec:
     install -d /var/lib/rancher/rke2/agent/etc/kubelet.conf.d &&
     printf 'apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nruntimeRequestTimeout: 30m\n' > /var/lib/rancher/rke2/agent/etc/kubelet.conf.d/90-layersentry-poc.conf
   - >-
-    install -d /var/lib/rancher/rke2/agent/images &&
-    curl -fsSL --retry 2 --max-time 600 https://github.com/rancher/rke2/releases/download/v1.36.4%2Brke2r1/rke2-images-core.linux-amd64.tar.zst -o /var/tmp/rke2-images-core.linux-amd64.tar.zst.part &&
-    printf '%s  %s\n' '8988a2eff587dd88b8eab86fe719703e9541a1f08d22771a94cbec446a13db86' '/var/tmp/rke2-images-core.linux-amd64.tar.zst.part' | sha256sum -c - &&
-    mv /var/tmp/rke2-images-core.linux-amd64.tar.zst.part /var/lib/rancher/rke2/agent/images/00-rke2-images-core.linux-amd64.tar.zst
-  - >-
-    install -d /var/lib/rancher/rke2/agent/images &&
-    curl -fsSL --retry 2 --max-time 600 https://github.com/rancher/rke2/releases/download/v1.36.4%2Brke2r1/rke2-images-canal.linux-amd64.tar.zst -o /var/tmp/rke2-images-canal.linux-amd64.tar.zst.part &&
-    printf '%s  %s\n' '4359b651bfdec8f3bcc01b351b33a55ff21f06b18a767366db6f3800d5750871' '/var/tmp/rke2-images-canal.linux-amd64.tar.zst.part' | sha256sum -c - &&
-    mv /var/tmp/rke2-images-canal.linux-amd64.tar.zst.part /var/lib/rancher/rke2/agent/images/rke2-images-canal.linux-amd64.tar.zst
-  - >-
     for archive in /var/lib/rancher/rke2/agent/images/*.tar.zst; do
     touch -m -d "@$(stat -c %Y "$archive")" "$archive"; done
-  - >-
-    if test -f /etc/sysconfig/qemu-ga; then
-    sed -i '/^FILTER_RPC_ARGS="--allow-rpcs=/ { /guest-exec/! s/"$/,guest-exec,guest-exec-status"/; }' /etc/sysconfig/qemu-ga;
-    systemctl restart qemu-guest-agent; fi
-  - (RETRY=60; while ! nslookup get.rke2.io; do ((--RETRY)) || break; sleep 5; done)
   - >-
     vmid=$(sed -n 's/^export VMID="\([0-9][0-9]*\)"$/\1/p' /var/run/one-context/one_env | sort -u);
     case "$vmid" in ''|*[!0-9]*) exit 1;; esac;
@@ -176,7 +164,7 @@ spec:
   template:
     spec:
       templateName: "<%= group[:group_template_name] %>"
-<% if group[:user_inputs_values][:count].to_i > 1 %>
+<% if group[:user_inputs_values][:count].to_i >= 3 %>
 ---
 apiVersion: cluster.x-k8s.io/v1beta1
 kind: MachineHealthCheck

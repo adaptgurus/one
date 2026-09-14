@@ -30,6 +30,7 @@ module OneKS
                 register ODS::LogController
                 register ClusterController
                 register NodeGroupController
+                register LifecycleController
             end
         end
 

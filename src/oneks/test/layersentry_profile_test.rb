@@ -8,7 +8,13 @@ require 'active_support/core_ext/string/indent'
 
 class LayerSentryProfileTest < Minitest::Test
   ROOT = File.expand_path('../specs', __dir__)
-  def render(type, inputs = {})
+  CONFIG = File.expand_path('../etc/oneks-server.conf', __dir__)
+
+  def test_server_uses_selinux_labeled_kubectl_wrapper
+    assert_includes File.read(CONFIG), ":kubectl_path: '/usr/local/libexec/oneks/kubectl'"
+  end
+
+  def render(type, inputs = {}, group_overrides = {})
     cluster = { id: 900, uuid: 'p1-test', kubernetes_version: 'v1.36.4',
                 deployment: { sched_requirements: 'CLUSTER_ID = 0',
                   networks: { public: {name: 'public'}, private: {name: 'private'} } } }
@@ -17,6 +23,7 @@ class LayerSentryProfileTest < Minitest::Test
              user_inputs_values: { count: 1, cpu: 2, vcpu: 2, memory: 4096, disk_size: 16384,
                node_image_id: 7, router_image_id: 8, router_vmgroup_id: 9,
                system_datastore_id: 4 }.merge(inputs)}
+    group.merge!(group_overrides)
     one_auth = 'test:fixture-only'
     one_xmlrpc = 'http://169.254.16.9:2633/RPC2'
     dir = File.join(ROOT, type, 'layersentry-poc')
@@ -32,6 +39,14 @@ class LayerSentryProfileTest < Minitest::Test
     assert_equal 2, router.fetch('replicas')
     assert_equal [6443, 9345], router.fetch('listenerPorts')
     cp = docs.fetch('RKE2ControlPlane').fetch('spec')
+    assert_equal true, cp.dig('agentConfig', 'airGapped')
+    cp_commands = cp.fetch('preRKE2Commands').join("\n")
+    assert_includes cp_commands, '/opt/install.sh'
+    assert_includes cp_commands, '7bcbd3167d6947e1d79cdf722acdc740b28021fefb50dd5b974a1980776d4079'
+    refute_includes cp_commands, 'curl '
+    refute_includes cp_commands, 'wget '
+    refute_includes cp_commands, 'get.rke2.io'
+    refute_includes cp_commands, 'github.com/rancher/rke2/releases'
     assert_equal 'control-plane-endpoint', cp.fetch('registrationMethod')
     assert_equal 'v1.36.4+rke2r1', cp.fetch('version')
     assert_includes cp.fetch('preRKE2Commands').join, 'provider-id=one://%s'
@@ -43,15 +58,42 @@ class LayerSentryProfileTest < Minitest::Test
     assert_includes templates[:router], 'VMGROUP_ID = "9"'
     assert_includes templates[:router], 'ROLE = "endpoints"'
     assert_includes templates[:controlplane], 'IMAGE_ID = "7"'
+    assert_includes templates[:controlplane], 'FEATURES = [ GUEST_AGENT = "YES" ]'
     templates.each_value { |t| assert_includes t, 'SCHED_DS_REQUIREMENTS = "ID = 4"' }
   end
   def test_worker_identity_and_version
     docs, templates = render('nodegroups')
     cmds = docs.fetch('RKE2ConfigTemplate').dig('spec', 'template', 'spec', 'preRKE2Commands')
+    assert_equal true, docs.fetch('RKE2ConfigTemplate').dig('spec', 'template', 'spec', 'agentConfig', 'airGapped')
+    joined = cmds.join("\n")
+    assert_includes joined, '/opt/rke2-artifacts/rke2.linux-amd64.tar.gz'
+    assert_includes joined, '/usr/local/libexec/oneks/worker-disk'
+    assert_includes joined, '8e12805c4bda79bec2fd20c89f705af3cb2ed11ea8854dc4937fca41b124b57a'
+    refute_includes joined, 'curl '
+    refute_includes joined, 'wget '
+    refute_includes joined, 'get.rke2.io'
+    refute_includes joined, 'github.com/rancher/rke2/releases'
     assert_includes cmds.join, 'provider-id=one://%s'
     assert_equal 'v1.36.4+rke2r1', docs.fetch('MachineDeployment').dig('spec', 'template', 'spec', 'version')
     assert_includes templates[:node], 'VMID = "$VMID"'
+    assert_includes templates[:node], 'FEATURES = [ GUEST_AGENT = "YES" ]'
     refute_includes docs.to_s, 'cloudProviderName'
+  end
+  def test_worker_local_disk_layout_is_rendered_in_template_and_bootstrap
+    policy = { data_disks: [
+      { name: 'data-a', initial_gib: 30, filesystem: 'xfs', target: 'vdb',
+        mount: '/var/lib/layersentry/disks/data-a' },
+      { name: 'data-b', initial_gib: 30, filesystem: 'xfs', target: 'vdc',
+        mount: '/var/lib/layersentry/disks/data-b' }
+    ] }
+    docs, templates = render('nodegroups', {}, disk_autoscaling: policy)
+    assert_includes templates[:node], 'LAYERSENTRY_DISK = "data-a"'
+    assert_includes templates[:node], 'LAYERSENTRY_DISK = "data-b"'
+    assert_equal 2, templates[:node].scan('FORMAT = "raw"').length
+    assert_equal 2, templates[:node].scan('FS = "xfs"').length
+    commands = docs.fetch('RKE2ConfigTemplate').dig('spec', 'template', 'spec', 'preRKE2Commands').join
+    assert_includes commands, 'device=/dev/vdb'
+    assert_includes commands, 'device=/dev/vdc'
   end
   def test_remediation_preserves_the_only_control_plane
     docs, = render('controlplanes', count: 1)

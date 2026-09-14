@@ -14,11 +14,22 @@ DISK = [
   IMAGE_ID = "<%= Integer(group[:user_inputs_values][:node_image_id]) %>",
   SIZE  = "<%= group[:user_inputs_values][:disk_size] %>"
 ]
+<% Array(group.dig(:disk_autoscaling, :data_disks)).each do |disk| %>
+DISK = [
+  TYPE = "fs",
+  SIZE = "<%= Integer(disk[:initial_gib]) * 1024 %>",
+  FORMAT = "raw",
+  FS = "<%= disk[:filesystem] %>",
+  TARGET = "<%= disk[:target] %>",
+  LAYERSENTRY_DISK = "<%= disk[:name] %>"
+]
+<% end %>
 GRAPHICS = [
   LISTEN = "127.0.0.1",
   TYPE   = "vnc"
 ]
 HYPERVISOR = "kvm"
+FEATURES = [ GUEST_AGENT = "YES" ]
 LXD_SECURITY_PRIVILEGED = "true"
 MEMORY     = "<%= group[:user_inputs_values][:memory] %>"
 SCHED_REQUIREMENTS = "<%= cluster[:deployment][:sched_requirements] %>"

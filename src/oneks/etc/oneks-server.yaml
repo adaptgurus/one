@@ -48,6 +48,28 @@
   :required: true
   :type: integer
 
+:cluster_autoscaler:
+  :required: false
+  :type: object
+  :allow_extra: false
+  :keys:
+    :chart:
+      :required: true
+      :type: string
+    :chart_repo:
+      :required: true
+      :type: string
+    :chart_version:
+      :required: true
+      :type: string
+    :image_repository:
+      :required: true
+      :type: string
+    :image_tags:
+      :required: true
+      :type: object
+      :allow_extra: true
+
 :appliance_auto_import:
   :required: false
   :type: boolean

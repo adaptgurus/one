@@ -1,0 +1,64 @@
+name: LayerSentry Day2 CI
+
+on:
+  push:
+    branches:
+      - layersentry/p1-rke2-day2-production-20260913
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  day2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+      - name: Install scoped test dependencies
+        run: |
+          gem install rubocop -v 1.91.0 --no-document
+          gem install minitest -v 5.26.1 --no-document
+          gem install activesupport -v 7.0.8.7 --no-document
+      - name: Ruby syntax
+        run: |
+          set -euo pipefail
+          ruby -c src/oneks/app/controllers/lifecycle_controller.rb
+          ruby -c src/oneks/app/models/dependencies/seed_vm_heartbeat.rb
+          ruby -c src/oneks/app/models/groups/controlplane.rb
+          ruby -c src/oneks/app/models/groups/nodegroup_day2.rb
+          ruby -c src/oneks/app/services/event_manager/event_manager_day2.rb
+          ruby -c src/oneks/app/services/lifecycle_status.rb
+          ruby -c src/oneks/app/services/lifecycle_status_autoscaler.rb
+          ruby -c src/oneks/lib/helpers/k8s_day2_helper.rb
+          ruby -c src/oneks/lib/helpers/worker_disk_manager.rb
+          ruby -c src/oneks/test/day2_lifecycle_test.rb
+          ruby -c src/oneks/test/disk_reconciliation_test.rb
+          ruby -c src/oneks/test/bootstrap_recovery_test.rb
+          ruby -c src/oneks/test/layersentry_profile_test.rb
+      - name: RuboCop Day-2 files
+        run: |
+          ln -sf "$GITHUB_WORKSPACE/share/linters/.rubocop.yml" "$HOME/.rubocop.yml"
+          rubocop \
+            src/oneks/app/controllers/lifecycle_controller.rb \
+            src/oneks/app/models/dependencies/seed_vm_heartbeat.rb \
+            src/oneks/app/models/groups/controlplane.rb \
+            src/oneks/app/models/groups/nodegroup_day2.rb \
+            src/oneks/app/services/event_manager/event_manager_day2.rb \
+            src/oneks/app/services/lifecycle_status.rb \
+            src/oneks/app/services/lifecycle_status_autoscaler.rb \
+            src/oneks/lib/helpers/k8s_day2_helper.rb \
+            src/oneks/test/day2_lifecycle_test.rb \
+            src/oneks/test/disk_reconciliation_test.rb
+      - name: Validate YAML configuration
+        run: |
+          ruby -e "require 'yaml'; %w[src/oneks/etc/oneks-server.yaml src/oneks/specs/controlplanes/layersentry-poc/controlplane.conf src/oneks/specs/nodegroups/layersentry-poc/nodegroup.conf].each { |f| YAML.safe_load_file(f, permitted_classes: [Symbol], aliases: true) }"
+      - name: Day-2 regressions
+        run: |
+          ruby src/oneks/test/day2_lifecycle_test.rb
+          ruby src/oneks/test/disk_reconciliation_test.rb
+          ruby src/oneks/test/bootstrap_recovery_test.rb
+          ruby src/oneks/test/layersentry_profile_test.rb

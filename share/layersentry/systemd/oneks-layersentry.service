@@ -1,0 +1,26 @@
+[Unit]
+Description=LayerSentry OpenNebula OneKS API
+Documentation=https://github.com/adaptgurus/one
+After=network-online.target opennebula.service opennebula-gate.service
+Wants=network-online.target
+Requires=opennebula.service
+
+[Service]
+Type=forking
+User=oneadmin
+Group=oneadmin
+PIDFile=/run/one/oneks.pid
+ExecStart=/usr/bin/oneks-server start
+ExecStop=/usr/bin/oneks-server stop
+Restart=on-failure
+RestartSec=5s
+TimeoutStartSec=60s
+TimeoutStopSec=30s
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/var/lib/one /var/log/one /run/one /var/lock/one
+
+[Install]
+WantedBy=multi-user.target

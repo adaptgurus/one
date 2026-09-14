@@ -31,8 +31,7 @@ require 'shellwords'
 
 begin
     vm_id, _dst_host, esc_cmd, cmd_stdin = ARGV
-    cmd_str = Shellwords.shellsplit(esc_cmd).join(' ')
-    cmd, *args = Shellwords.shellsplit(cmd_str)
+    cmd, *args = Shellwords.shellsplit(esc_cmd)
 
     VirshWrapper.lock_exec do
         pid = VirshWrapper.guest_exec(
