@@ -168,6 +168,7 @@ module OneKS
                        resource.message.include?('(NotFound)')
                         return base_group_status(group)
                     end
+
                     return resource
                 end
 

@@ -2,6 +2,7 @@
 
 require 'minitest/autorun'
 
+# Minimal OpenNebula error stub used by the isolated reconciliation tests.
 module OpenNebula
 
     class Error
@@ -18,6 +19,7 @@ end
 
 module OneKS
 
+    # Test double that records worker disk reconciliation side effects.
     module WorkerDiskManager
 
         class << self
@@ -51,10 +53,14 @@ require_relative '../app/models/groups/nodegroup_day2'
 # Regression coverage for persisted absolute disk targets and multiple disks.
 class DiskReconciliationTest < Minitest::Test
 
+    # Isolated node-group harness; it deliberately avoids live OpenNebula state.
     class NodeGroupHarness < OneKS::NodeGroup
 
         attr_reader :body, :persisted
 
+        # The production initializer requires live OneKS resources; this harness
+        # initializes only the fields exercised by these unit tests.
+        # rubocop:disable-next Lint/MissingSuper
         def initialize(body)
             @body = Marshal.load(Marshal.dump(body))
             @persisted = []

@@ -282,6 +282,7 @@ module OneKS
                 @body.delete(:disk_resize_inflight)
                 rc = update
                 return rc if OpenNebula.is_error?(rc)
+
                 return { :action => 'abandoned-replaced-worker', :vm_id => vm_id }
             end
 

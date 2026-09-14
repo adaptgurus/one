@@ -24,6 +24,7 @@ module OneKS
         STORAGE_REVISION = 'layersentry.io/storage-revision'
 
         class << self
+
             # Keep control-plane remediation policy synchronized with replica count.
             # CAPRKE2 remains the control-plane owner; automatic remediation is only
             # enabled once the etcd control plane has at least three members.
