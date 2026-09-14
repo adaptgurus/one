@@ -1,0 +1,24 @@
+== src/oneks/app/models/groups/nodegroup_day2.rb ==
+C:284: 17: [Correctable] Layout/EmptyLineAfterGuardClause: Add empty line after guard clause.
+== src/oneks/lib/helpers/worker_disk_manager.rb ==
+C: 16: 24: [Correctable] Style/WordArray: Use ['vdb', 'vdc', 'vdd', 'vde', 'vdf', 'vdg', 'vdh', 'vdi'] for an array of words.
+C: 18: 23: [Correctable] Style/WordArray: Use ['xfs', 'ext4'] for an array of words.
+C: 33:101: [Correctable] Layout/LineLength: Line is too long. [108/100]
+C: 34:101: [Correctable] Layout/LineLength: Line is too long. [108/100]
+C: 35:101: [Correctable] Layout/LineLength: Line is too long. [115/100]
+C: 37:101: [Correctable] Layout/LineLength: Line is too long. [130/100]
+C: 43:101: [Correctable] Layout/LineLength: Line is too long. [117/100]
+C: 51:101: [Correctable] Layout/LineLength: Line is too long. [108/100]
+C: 52:101: [Correctable] Layout/LineLength: Line is too long. [132/100]
+== src/oneks/test/disk_reconciliation_test.rb ==
+C:  5:  1: Style/Documentation: Missing top-level documentation comment for module OpenNebula.
+C: 21:  5: Style/Documentation: Missing top-level documentation comment for module OneKS::WorkerDiskManager.
+C: 55:  5: Style/Documentation: Missing top-level documentation comment for class DiskReconciliationTest::NodeGroupHarness.
+W: 59:  9: Lint/MissingSuper: Call super to initialize state of the parent class.
+== src/oneks/test/worker_disk_manager_test.rb ==
+C:  5:  1: Style/Documentation: Missing top-level documentation comment for module OpenNebula.
+C:  7:  5: Style/Documentation: Missing top-level documentation comment for class OpenNebula::Error.
+C: 27:  5: Style/Documentation: Missing top-level documentation comment for module OneHelper::VirtualMachine.
+C: 50:  1: Style/Documentation: Missing top-level documentation comment for class WorkerDiskManagerTest.
+
+4 files inspected, 18 offenses detected, 10 offenses autocorrectable
