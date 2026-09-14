@@ -21,7 +21,8 @@ jobs:
       - name: Install scoped test dependencies
         run: |
           gem install rubocop -v 1.91.0 --no-document
-          gem install activesupport minitest --no-document
+          gem install minitest -v 5.26.1 --no-document
+          gem install activesupport -v 7.0.8.7 --no-document
       - name: Ruby syntax
         run: |
           set -euo pipefail
