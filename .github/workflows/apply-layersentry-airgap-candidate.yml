@@ -45,11 +45,24 @@ jobs:
         run: |
           set -euo pipefail
           ln -sf "$GITHUB_WORKSPACE/share/linters/.rubocop.yml" "$HOME/.rubocop.yml"
+          set +e
           rubocop \
             src/oneks/app/models/groups/nodegroup_day2.rb \
             src/oneks/lib/helpers/worker_disk_manager.rb \
             src/oneks/test/disk_reconciliation_test.rb \
-            src/oneks/test/worker_disk_manager_test.rb
+            src/oneks/test/worker_disk_manager_test.rb \
+            --format simple > /tmp/rubocop.txt 2>&1
+          rc=$?
+          set -e
+          if [ "$rc" -ne 0 ]; then
+            cp /tmp/rubocop.txt .github/layersentry-rubocop-diagnostics.txt
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add .github/layersentry-rubocop-diagnostics.txt
+            git commit -m 'ci: capture LayerSentry RuboCop diagnostics'
+            git push origin HEAD:layersentry/p1-rke2-day2-airgap-candidate-20260914
+            exit "$rc"
+          fi
       - name: OneKS regressions
         shell: bash
         run: |
