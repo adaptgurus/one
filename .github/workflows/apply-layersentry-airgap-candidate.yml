@@ -23,6 +23,43 @@ jobs:
           set -euo pipefail
           base64 -d .github/layersentry-airgap-candidate.b64 | tar -xzf - -C "$GITHUB_WORKSPACE"
           git checkout -- .github/workflows/layersentry-day2-ci.yml
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/layersentry-day2-ci.yml')
+          text = path.read_text()
+          text = text.replace(
+              '          gem install activesupport minitest --no-document\n',
+              '          gem install activesupport --no-document\n'
+              "          gem install minitest -v '~> 5.25' --no-document\n",
+          )
+          text = text.replace(
+              '          ruby -c src/oneks/lib/helpers/k8s_day2_helper.rb\n',
+              '          ruby -c src/oneks/lib/helpers/k8s_day2_helper.rb\n'
+              '          ruby -c src/oneks/lib/helpers/worker_disk_manager.rb\n',
+          )
+          text = text.replace(
+              '          ruby -c src/oneks/test/layersentry_profile_test.rb\n',
+              '          ruby -c src/oneks/test/layersentry_profile_test.rb\n'
+              '          ruby -c src/oneks/test/worker_disk_manager_test.rb\n',
+          )
+          text = text.replace(
+              '            src/oneks/lib/helpers/k8s_day2_helper.rb \\\n',
+              '            src/oneks/lib/helpers/k8s_day2_helper.rb \\\n'
+              '            src/oneks/lib/helpers/worker_disk_manager.rb \\\n',
+          )
+          text = text.replace(
+              '            src/oneks/test/disk_reconciliation_test.rb\n',
+              '            src/oneks/test/disk_reconciliation_test.rb \\\n'
+              '            src/oneks/test/worker_disk_manager_test.rb\n',
+          )
+          text = text.replace(
+              '          ruby src/oneks/test/layersentry_profile_test.rb\n',
+              '          ruby src/oneks/test/layersentry_profile_test.rb\n'
+              '          ruby src/oneks/test/worker_disk_manager_test.rb\n',
+          )
+          path.write_text(text)
+          PY
           git diff --check
       - uses: ruby/setup-ruby@v1
         with:
@@ -30,7 +67,8 @@ jobs:
       - name: Install scoped test dependencies
         run: |
           gem install rubocop -v 1.91.0 --no-document
-          gem install activesupport minitest --no-document
+          gem install activesupport --no-document
+          gem install minitest -v '~> 5.25' --no-document
       - name: Normalize scoped style
         shell: bash
         run: |
@@ -164,6 +202,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add \
+            .github/workflows/layersentry-day2-ci.yml \
             src/oneks/app/models/groups/nodegroup_day2.rb \
             src/oneks/lib/helpers/worker_disk_manager.rb \
             src/oneks/specs/controlplanes/layersentry-poc/spec.erb \
