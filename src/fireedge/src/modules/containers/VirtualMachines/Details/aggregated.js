@@ -24,7 +24,7 @@ import {
   TabSlot,
   ToggleGroup,
 } from '@ComponentsModule'
-import { useModalsApi, VmAPI } from '@FeaturesModule'
+import { useModalsApi, useViews, VmAPI } from '@FeaturesModule'
 import { Box, useTheme } from '@mui/material'
 import { Component, useCallback, useMemo } from 'react'
 import PropTypes from 'prop-types'
@@ -54,6 +54,24 @@ const disableOptions = (options, isDisabled) =>
       : { ...option, isDisabled: isDisabled || option?.isDisabled }
   )
 
+const filterCloudActionOptions = (options, viewConfig, isCloud) => {
+  if (!isCloud) return options
+
+  return (options ?? [])
+    .map((option) =>
+      Array.isArray(option)
+        ? option.filter(({ eACTION }) =>
+            Boolean(viewConfig?.actions?.[VM_ACTIONS?.[eACTION]])
+          )
+        : option
+    )
+    .filter((option) =>
+      Array.isArray(option)
+        ? option.length > 0
+        : Boolean(viewConfig?.actions?.[VM_ACTIONS?.[option?.eACTION]])
+    )
+}
+
 /**
  * @param {object} root0 - Params
  * @param {boolean} root0.isOpen - Is open
@@ -72,6 +90,8 @@ export const AggregatedView = ({
   handleDeselect,
   viewConfig = {},
 }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { palette } = useTheme()
   const { showModal } = useModalsApi()
 
@@ -131,26 +151,34 @@ export const AggregatedView = ({
   const isActionsDisabled =
     selectedVms?.length === 0 || isRefreshingVm || isPerformingAction
 
-  const generalOptions = disableOptions(
-    VirtualMachine.Actions.Utils.generateMenuOptions({
-      keys: VirtualMachine.Actions.Groups.General,
-      actions,
-      vm: selectedVms,
-      viewConfig,
-      showModal,
-    }),
-    isActionsDisabled
+  const generalOptions = filterCloudActionOptions(
+    disableOptions(
+      VirtualMachine.Actions.Utils.generateMenuOptions({
+        keys: VirtualMachine.Actions.Groups.General,
+        actions,
+        vm: selectedVms,
+        viewConfig,
+        showModal,
+      }),
+      isActionsDisabled
+    ),
+    viewConfig,
+    isCloud
   )
 
-  const stateOptions = disableOptions(
-    VirtualMachine.Actions.Utils.generateMenuOptions({
-      keys: VirtualMachine.Actions.Groups.State,
-      actions,
-      vm: selectedVms,
-      viewConfig,
-      showModal,
-    }),
-    isActionsDisabled
+  const stateOptions = filterCloudActionOptions(
+    disableOptions(
+      VirtualMachine.Actions.Utils.generateMenuOptions({
+        keys: VirtualMachine.Actions.Groups.State,
+        actions,
+        vm: selectedVms,
+        viewConfig,
+        showModal,
+      }),
+      isActionsDisabled
+    ),
+    viewConfig,
+    isCloud
   )
 
   const [
@@ -251,36 +279,40 @@ export const AggregatedView = ({
                   compactable
                 />
 
-                <ButtonGroup
-                  selected={allLocked ? ['lock'] : noneLocked ? ['unlock'] : []}
-                  buttons={[
-                    {
-                      value: 'lock',
-                      startIcon: <Lock width="16px" height="16px" />,
-                      ...lockAction,
-                      tooltip: T.Lock,
-                    },
-                    {
-                      value: 'unlock',
-                      startIcon: <NoLock width="16px" height="16px" />,
-                      ...unlockAction,
-                      tooltip: T.Unlock,
-                    },
-                  ]}
-                />
+                {!isCloud && (
+                  <ButtonGroup
+                    selected={
+                      allLocked ? ['lock'] : noneLocked ? ['unlock'] : []
+                    }
+                    buttons={[
+                      {
+                        value: 'lock',
+                        startIcon: <Lock width="16px" height="16px" />,
+                        ...lockAction,
+                        tooltip: T.Lock,
+                      },
+                      {
+                        value: 'unlock',
+                        startIcon: <NoLock width="16px" height="16px" />,
+                        ...unlockAction,
+                        tooltip: T.Unlock,
+                      },
+                    ]}
+                  />
+                )}
 
                 <ToggleGroup
                   size="medium"
                   options={[
                     [
-                      {
+                      !isCloud && {
                         ...getLabelMenuButtonProps({
                           selectedRows: selectedVms,
                           resourceType: RESOURCE_NAMES.VM,
                           isDisabled: isActionsDisabled,
                         }),
                       },
-                    ],
+                    ].filter(Boolean),
                     [
                       {
                         value: 'delete',
@@ -333,11 +365,13 @@ export const AggregatedView = ({
           {
             labels: [
               [summary.state, T.State],
-              [summary.host, T.Hostname],
+              !isCloud && [summary.host, T.Hostname],
               [summary.cpu, T.CPU],
               [summary.memory, T.Memory],
               [summary.disk, `${T.Disk} ${T.Total}`],
-            ]?.filter(([value]) => value !== undefined),
+            ]
+              .filter(Boolean)
+              .filter(([value]) => value !== undefined),
           },
         ],
         [

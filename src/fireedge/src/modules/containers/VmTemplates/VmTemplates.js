@@ -46,7 +46,23 @@ export function VmTemplates() {
     selectedItems,
     containerView,
   } = useFunctionality()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = vmtemplateTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['hypervisor', 'owner', 'group'])
+
+    return columns
+      .filter(({ id, accessorKey }) => !hidden.has(id ?? accessorKey))
+      .map((column) =>
+        column.id === 'name'
+          ? { ...column, cell: ({ row }) => row.original?.NAME }
+          : column
+      )
+  }, [isCloud])
   const resourceView = getResourceView(RESOURCE_NAMES.VM_TEMPLATE)
 
   const availableActions = useMemo(
@@ -72,7 +88,7 @@ export function VmTemplates() {
       vmtemplateTable.filterOptions(
         vmTemplateData,
         resourceView?.filters,
-        undefined,
+        tableColumns,
         [
           {
             id: 'locked',
@@ -87,7 +103,7 @@ export function VmTemplates() {
           },
         ]
       ),
-    [vmTemplateData, resourceView?.filters]
+    [vmTemplateData, resourceView?.filters, tableColumns]
   )
 
   const items = useMemo(() => {
@@ -101,8 +117,8 @@ export function VmTemplates() {
         ID,
         NAME,
         REGTIME && timeFromMilliseconds(+REGTIME).toRelative(),
-        UNAME,
-        GNAME,
+        !isCloud && UNAME,
+        !isCloud && GNAME,
       ]
         .filter((value) => value || value === 0)
         .some((value) => String(value).toLowerCase().includes(search))
@@ -114,13 +130,20 @@ export function VmTemplates() {
       filterOptions
     )
 
-    return vmtemplateTable.sortData(filteredByFilters, sortExpression)
+    return vmtemplateTable.sortData(
+      filteredByFilters,
+      sortExpression,
+      tableColumns
+    )
   }, [
     vmTemplateData,
     searchExpression,
     sortExpression,
     filterExpression,
     filterOptions,
+    ,
+    isCloud,
+    tableColumns,
   ])
 
   const selectedTemplates = useMemo(
@@ -156,7 +179,7 @@ export function VmTemplates() {
       resourceName={T.Templates}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={vmtemplateTable.sortOptions()}
+      sortOptions={vmtemplateTable.sortOptions(tableColumns)}
       filterOptions={filterOptions}
       searchPlaceholder={T.SearchTemplates}
       count={items?.length}
@@ -171,7 +194,7 @@ export function VmTemplates() {
             return (
               <Table
                 dataCy={vmtemplateTable.dataCy}
-                columns={vmtemplateTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

@@ -40,7 +40,19 @@ export function ServiceTemplates() {
     selectedItems,
     containerView,
   } = useFunctionality()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = servicetemplateTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['owner', 'group'])
+
+    return columns.filter(
+      ({ id, accessorKey }) => !hidden.has(id ?? accessorKey)
+    )
+  }, [isCloud])
   const resourceView = getResourceView(RESOURCE_NAMES.SERVICE_TEMPLATE)
 
   const availableActions = useMemo(
@@ -59,8 +71,13 @@ export function ServiceTemplates() {
   } = servicetemplateTable.useData()
 
   const filterOptions = useMemo(
-    () => servicetemplateTable.filterOptions(data, resourceView?.filters),
-    [data, resourceView?.filters]
+    () =>
+      servicetemplateTable.filterOptions(
+        data,
+        resourceView?.filters,
+        tableColumns
+      ),
+    [data, resourceView?.filters, tableColumns]
   )
 
   const items = useMemo(() => {
@@ -79,8 +96,8 @@ export function ServiceTemplates() {
             ID,
             NAME,
             REGTIME && timeFromMilliseconds(+REGTIME).toRelative(),
-            UNAME,
-            GNAME,
+            !isCloud && UNAME,
+            !isCloud && GNAME,
           ]
             .filter((value) => value || value === 0)
             .some((value) => String(value).toLowerCase().includes(search))
@@ -93,8 +110,20 @@ export function ServiceTemplates() {
       filterOptions
     )
 
-    return servicetemplateTable.sortData(filteredByFilters, sortExpression)
-  }, [data, searchExpression, sortExpression, filterExpression, filterOptions])
+    return servicetemplateTable.sortData(
+      filteredByFilters,
+      sortExpression,
+      tableColumns
+    )
+  }, [
+    data,
+    searchExpression,
+    sortExpression,
+    filterExpression,
+    filterOptions,
+    isCloud,
+    tableColumns,
+  ])
 
   const selectedTemplates = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(ID)) ?? [],
@@ -128,7 +157,7 @@ export function ServiceTemplates() {
       resourceName={T.Templates}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={servicetemplateTable.sortOptions()}
+      sortOptions={servicetemplateTable.sortOptions(tableColumns)}
       filterOptions={filterOptions}
       searchPlaceholder={T.SearchTemplates}
       count={items?.length}
@@ -145,7 +174,7 @@ export function ServiceTemplates() {
           case TABLE_VIEW_MODE.LIST:
             return (
               <Table
-                columns={servicetemplateTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

@@ -49,7 +49,19 @@ export function Services() {
     selectedItems = [],
     containerView,
   } = useFunctionality()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = serviceTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['owner', 'group'])
+
+    return columns.filter(
+      ({ id, accessorKey }) => !hidden.has(id ?? accessorKey)
+    )
+  }, [isCloud])
   const { setSelectedItems } = useFunctionalityApi()
 
   const viewConfig = useMemo(
@@ -70,8 +82,8 @@ export function Services() {
   } = serviceTable.useData()
 
   const filterOptions = useMemo(
-    () => serviceTable.filterOptions(data, viewConfig?.filters),
-    [data, viewConfig?.filters]
+    () => serviceTable.filterOptions(data, viewConfig?.filters, tableColumns),
+    [data, viewConfig?.filters, tableColumns]
   )
 
   const items = useMemo(() => {
@@ -97,8 +109,8 @@ export function Services() {
           return [
             ID,
             NAME,
-            UNAME,
-            GNAME,
+            !isCloud && UNAME,
+            !isCloud && GNAME,
             state?.displayName,
             getServiceTotalRoles(service),
             getServiceTotalVms(service),
@@ -118,8 +130,20 @@ export function Services() {
       filterOptions
     )
 
-    return serviceTable.sortData(filteredByFilters, sortExpression)
-  }, [data, searchExpression, sortExpression, filterExpression, filterOptions])
+    return serviceTable.sortData(
+      filteredByFilters,
+      sortExpression,
+      tableColumns
+    )
+  }, [
+    data,
+    searchExpression,
+    sortExpression,
+    filterExpression,
+    filterOptions,
+    isCloud,
+    tableColumns,
+  ])
 
   const selectedServices = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(String(ID))) ?? [],
@@ -162,7 +186,7 @@ export function Services() {
       resourceName={T.Services}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={serviceTable.sortOptions()}
+      sortOptions={serviceTable.sortOptions(tableColumns)}
       filterOptions={filterOptions}
       count={items?.length}
       selectedCount={selectedItems?.length}
@@ -178,7 +202,7 @@ export function Services() {
           case TABLE_VIEW_MODE.LIST:
             return (
               <Table
-                columns={serviceTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

@@ -128,3 +128,24 @@ This pass revalidated the customer-facing cloud view page by page against the La
 8. Do not mark P3 failover/failback or backup-retention lineage production-ready from GUI/source evidence.
 
 Statuses used here distinguish source/UI audit from live qualification; this document does not claim `LIVE_VERIFIED` or `PRODUCTION_CERTIFIED`.
+
+## Third-pass provider-boundary completion — 2026-09-15
+
+This pass closes provider-information leakage that remained in cloud cards, lists, search-facing data, detail headers/summaries and other shared presentation surfaces. The source base before this uncommitted pass was `1124882b67e85d28d4e0dc9aa71badaef82c8bd3` on `layersentry/p2-native-storage-gui-20260915`.
+
+### Third-pass qualification evidence
+
+- Focused cloud/storage contracts: **48/48 PASS**.
+- Complete LayerSentry regression suite: **169/169 PASS**.
+- Changed-file ESLint: **PASS**.
+- Full FireEdge client/server lint: **PASS**.
+- `git diff --check`: **PASS**.
+- Full FireEdge production build, including client, server and all module-federation remotes: **PASS**.
+- Chromium acceptance harness: **PASS** with exit code 0.
+- `package.json` and `package-lock.json`: **unchanged**.
+- Browser-generated `dist/` and screenshot artifacts were removed after acceptance and are not part of the source change.
+- Existing upstream Webpack export and bundle-size warnings remain non-fatal; this pass introduced no build error.
+
+### Status boundary
+
+This establishes the third-pass P2 source/UI state as `CI_VERIFIED` on TESTSER-equivalent local qualification. It does **not** establish `LIVE_VERIFIED` or `PRODUCTION_CERTIFIED`; live deployment, real OpenNebula resource mutation and backend state/log verification remain separate gates.

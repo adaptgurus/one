@@ -16,6 +16,7 @@
 
 import { Component, forwardRef } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import {
   Card,
   IconSlot,
@@ -47,6 +48,8 @@ import {
  * @returns {Component} VmGroupCard component
  */
 export const VmGroupCard = forwardRef((data = {}, ref) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     NAME,
     ID,
@@ -72,7 +75,7 @@ export const VmGroupCard = forwardRef((data = {}, ref) => {
           {
             title: (
               <>
-                {NAME} {getLockIcon(data)}
+                {NAME} {!isCloud && getLockIcon(data)}
               </>
             ),
           },
@@ -82,9 +85,9 @@ export const VmGroupCard = forwardRef((data = {}, ref) => {
           {
             labels: [
               ['ID', ID],
-              ['Owner', UNAME],
-              ['Group', GNAME],
-            ],
+              !isCloud && ['Owner', UNAME],
+              !isCloud && ['Group', GNAME],
+            ].filter(Boolean),
           },
         ],
         [

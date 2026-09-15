@@ -43,7 +43,19 @@ export function BackupJobs() {
   const { searchExpression, sortExpression, selectedItems, containerView } =
     useFunctionality()
 
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = backupJobTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['owner', 'group'])
+
+    return columns.filter(
+      ({ id, accessorKey }) => !hidden.has(id ?? accessorKey)
+    )
+  }, [isCloud])
   const availableActions = useMemo(
     () => getResourceView(RESOURCE_NAMES.BACKUPJOBS)?.actions ?? {},
     [getResourceView]
@@ -72,16 +84,16 @@ export function BackupJobs() {
             PRIORITY,
             getBackupJobLastBackupTime(LAST_BACKUP_TIME),
             getBackupJobRelativeLastBackupTime(LAST_BACKUP_TIME),
-            UNAME,
-            GNAME,
+            !isCloud && UNAME,
+            !isCloud && GNAME,
           ]
             .filter((value) => value || value === 0)
             .some((value) => String(value).toLowerCase().includes(search))
         })
       : data
 
-    return backupJobTable.sortData(filteredData, sortExpression)
-  }, [data, searchExpression, sortExpression])
+    return backupJobTable.sortData(filteredData, sortExpression, tableColumns)
+  }, [data, searchExpression, sortExpression, isCloud, tableColumns])
 
   const selectedData = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(ID)) ?? [],
@@ -115,7 +127,7 @@ export function BackupJobs() {
       resourceName={T.BackupJobs}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={backupJobTable.sortOptions()}
+      sortOptions={backupJobTable.sortOptions(tableColumns)}
       count={items?.length}
       selectedCount={selectedItems?.length}
       onSelectAll={(checked) =>
@@ -128,7 +140,7 @@ export function BackupJobs() {
             return (
               <Table
                 dataCy={backupJobTable.dataCy}
-                columns={backupJobTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

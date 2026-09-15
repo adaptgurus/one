@@ -49,7 +49,23 @@ export function Backups() {
     containerView,
   } = useFunctionality()
 
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = imageTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['type', 'datastore', 'owner', 'group'])
+
+    return columns
+      .filter(({ id, accessorKey }) => !hidden.has(id ?? accessorKey))
+      .map((column) =>
+        column.id === 'name'
+          ? { ...column, cell: ({ row }) => row.original?.NAME }
+          : column
+      )
+  }, [isCloud])
   const resourceView = getResourceView(RESOURCE_NAMES.BACKUP)
   const availableActions = useMemo(
     () => resourceView?.actions ?? {},
@@ -65,8 +81,8 @@ export function Backups() {
   } = ImageAPI.useGetBackupsQuery({ zone })
 
   const filterOptions = useMemo(
-    () => imageTable.filterOptions(data, resourceView?.filters),
-    [data, resourceView?.filters]
+    () => imageTable.filterOptions(data, resourceView?.filters, tableColumns),
+    [data, resourceView?.filters, tableColumns]
   )
 
   const items = useMemo(() => {
@@ -89,11 +105,11 @@ export function Backups() {
           return [
             ID,
             NAME,
-            DATASTORE,
-            type,
+            !isCloud && DATASTORE,
+            !isCloud && type,
             state?.name,
-            UNAME,
-            GNAME,
+            !isCloud && UNAME,
+            !isCloud && GNAME,
             +PERSISTENT ? T.Persistent : T.NonPersistent,
             getBackupRunningVms(backup),
             prettyBytes(+SIZE || 0, 'MB'),
@@ -110,8 +126,16 @@ export function Backups() {
       filterOptions
     )
 
-    return imageTable.sortData(filteredByFilters, sortExpression)
-  }, [data, searchExpression, sortExpression, filterExpression, filterOptions])
+    return imageTable.sortData(filteredByFilters, sortExpression, tableColumns)
+  }, [
+    data,
+    searchExpression,
+    sortExpression,
+    filterExpression,
+    filterOptions,
+    isCloud,
+    tableColumns,
+  ])
 
   const selectedData = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(ID)) ?? [],
@@ -144,7 +168,7 @@ export function Backups() {
       resourceName={T.Backups}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={imageTable.sortOptions()}
+      sortOptions={imageTable.sortOptions(tableColumns)}
       filterOptions={filterOptions}
       searchPlaceholder={T.SearchBackups ?? T.Search}
       count={items?.length}
@@ -158,7 +182,7 @@ export function Backups() {
           case TABLE_VIEW_MODE.LIST:
             return (
               <Table
-                columns={imageTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

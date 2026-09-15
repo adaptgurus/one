@@ -17,6 +17,7 @@
 import { T } from '@ConstantsModule'
 import { Component, forwardRef } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import {
   Card,
   LabelSlot,
@@ -41,6 +42,8 @@ import { getLockIcon } from '@UtilsModule'
  */
 export const VnTemplatesCard = forwardRef(
   ({ vnTemplate = {}, dataCy, isSelected, onCheck, onClick }, ref) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const {
       ID,
       NAME,
@@ -64,7 +67,7 @@ export const VnTemplatesCard = forwardRef(
             {
               title: (
                 <>
-                  {NAME} {getLockIcon(vnTemplate)}
+                  {NAME} {!isCloud && getLockIcon(vnTemplate)}
                 </>
               ),
             },
@@ -74,15 +77,19 @@ export const VnTemplatesCard = forwardRef(
             {
               labels: [
                 [T.ID, String(ID)],
-                [T.Owner, UNAME],
-                [T.Group, GNAME],
-              ].filter(([, value]) => value),
+                !isCloud && [T.Owner, UNAME],
+                !isCloud && [T.Group, GNAME],
+              ]
+                .filter(Boolean)
+                .filter(([, value]) => value),
             },
           ],
-          (VN_MAD || labelTags.length > 0) && [
+          ((!isCloud && VN_MAD) || labelTags.length > 0) && [
             LabelSlot,
             {
-              labels: [VN_MAD && [VN_MAD, 'default']].filter(Boolean),
+              labels: [!isCloud && VN_MAD && [VN_MAD, 'default']].filter(
+                Boolean
+              ),
               tags: labelTags,
               max: 3,
             },

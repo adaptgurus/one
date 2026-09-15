@@ -17,6 +17,7 @@
 import { T } from '@ConstantsModule'
 import { Component, forwardRef, useMemo } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import {
   Card,
   IconSlot,
@@ -47,6 +48,8 @@ import { getImageTypeLabel, getLockIcon, prettyBytes } from '@UtilsModule'
  */
 export const ImageCard = forwardRef(
   ({ data, dataCy, isSelected, onCheck, onClick }, ref) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const { ID, NAME, UNAME, GNAME, REGTIME, PERSISTENT, DATASTORE, SIZE } =
       data || {}
     const { color: stateColor, name: stateName } = useMemo(
@@ -82,10 +85,10 @@ export const ImageCard = forwardRef(
             {
               labels: [
                 ['ID', ID],
-                ['Owner', UNAME],
-                ['Group', GNAME],
-                [T.Datastore, DATASTORE ?? '-'],
-              ],
+                !isCloud && ['Owner', UNAME],
+                !isCloud && ['Group', GNAME],
+                !isCloud && [T.Datastore, DATASTORE ?? '-'],
+              ].filter(Boolean),
             },
           ],
           [
@@ -95,11 +98,11 @@ export const ImageCard = forwardRef(
               size: prettyBytes(+SIZE || 0, 'MB'),
             },
           ],
-          (type || +PERSISTENT || labelTags.length > 0) && [
+          ((!isCloud && type) || +PERSISTENT || labelTags.length > 0) && [
             LabelSlot,
             {
               labels: [
-                type && [type, 'default'],
+                !isCloud && type && [type, 'default'],
                 +PERSISTENT && [T.Persistent, 'information'],
               ].filter(Boolean),
               tags: labelTags,

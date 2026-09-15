@@ -15,6 +15,7 @@
  * ------------------------------------------------------------------------- */
 
 import {
+  useViews,
   DetailsDrawer,
   getLabelMenuButtonProps,
   InfoSlot,
@@ -72,6 +73,8 @@ export const SingleView = ({
   handleClose,
   actions,
 }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { palette } = useTheme()
   const history = useHistory()
   const { showModal } = useModalsApi()
@@ -244,14 +247,14 @@ export const SingleView = ({
             id: selectedTemplate?.ID,
             tags: getLabelTags(selectedTemplate?.LABELS),
             labels: [
-              [T.Owner, selectedTemplate?.UNAME],
-              [T.Group, selectedTemplate?.GNAME],
+              !isCloud && [T.Owner, selectedTemplate?.UNAME],
+              !isCloud && [T.Group, selectedTemplate?.GNAME],
               [
                 `${T.Registered} ${timeFromMilliseconds(
                   +selectedTemplate?.REGTIME
                 ).toRelative()}`,
               ],
-            ],
+            ].filter(Boolean),
             Toolbar: () => (
               <Box
                 sx={(theme) => ({
@@ -393,7 +396,7 @@ export const SingleView = ({
               ],
               [getVmTemplateImageCount(selectedTemplate), T.Images],
               [getVmTemplateNetworkCount(selectedTemplate), T.Networks],
-              [
+              !isCloud && [
                 selectedTemplate?.TEMPLATE?.HYPERVISOR ? (
                   <Tag
                     title={selectedTemplate.TEMPLATE.HYPERVISOR}
@@ -415,7 +418,9 @@ export const SingleView = ({
                 ),
                 T.Architecture,
               ],
-            ]?.filter(([value]) => value !== undefined),
+            ]
+              .filter(Boolean)
+              .filter(([value]) => value !== undefined),
           },
         ],
         [

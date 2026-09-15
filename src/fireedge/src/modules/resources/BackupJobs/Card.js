@@ -17,6 +17,7 @@
 import { T } from '@ConstantsModule'
 import { Component, forwardRef, useMemo } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import {
   Card,
   IconSlot,
@@ -43,6 +44,8 @@ import { getLockIcon } from '@UtilsModule'
  */
 export const BackupJobCard = forwardRef(
   ({ data, dataCy, isSelected, onCheck, onClick }, ref) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const { ID, NAME, UNAME, GNAME, PRIORITY, LAST_BACKUP_TIME } = data || {}
     const { color: stateColor, name: stateName } = useMemo(
       () => getBackupJobStatus(data ?? {}),
@@ -75,9 +78,9 @@ export const BackupJobCard = forwardRef(
             {
               labels: [
                 ['ID', ID],
-                [T.Owner, UNAME],
-                [T.Group, GNAME],
-              ],
+                !isCloud && [T.Owner, UNAME],
+                !isCloud && [T.Group, GNAME],
+              ].filter(Boolean),
             },
           ],
           [

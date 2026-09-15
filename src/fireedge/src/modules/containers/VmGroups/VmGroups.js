@@ -40,7 +40,23 @@ export function VmGroups() {
     selectedItems,
     containerView,
   } = useFunctionality()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = vmgroupTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['UNAME', 'GNAME', 'owner', 'group'])
+
+    return columns
+      .filter(({ id, accessorKey }) => !hidden.has(id ?? accessorKey))
+      .map((column) =>
+        column.id === 'name'
+          ? { ...column, cell: ({ row }) => row.original?.NAME }
+          : column
+      )
+  }, [isCloud])
   const resourceView = getResourceView(RESOURCE_NAMES.VM_GROUP)
 
   const availableActions = useMemo(
@@ -58,21 +74,21 @@ export function VmGroups() {
 
   const filterOptions = useMemo(
     () =>
-      vmgroupTable.filterOptions(data, resourceView?.filters, undefined, [
+      vmgroupTable.filterOptions(data, resourceView?.filters, tableColumns, [
         {
           id: 'state',
           header: T.State,
           accessorFn: (vmgroup) => getVmGroupState(vmgroup?.LOCK)?.name,
         },
       ]),
-    [data, resourceView?.filters]
+    [data, resourceView?.filters, tableColumns]
   )
 
   const items = useMemo(() => {
     const search = String(searchExpression ?? '').toLowerCase()
     const filteredData = search
       ? data?.filter(({ ID, NAME, UNAME, GNAME } = {}) =>
-          [ID, NAME, UNAME, GNAME]
+          [ID, NAME, !isCloud && UNAME, !isCloud && GNAME]
             .filter((value) => value || value === 0)
             .some((value) => String(value).toLowerCase().includes(search))
         )
@@ -84,8 +100,20 @@ export function VmGroups() {
       filterOptions
     )
 
-    return vmgroupTable.sortData(filteredByFilters, sortExpression)
-  }, [data, searchExpression, sortExpression, filterExpression, filterOptions])
+    return vmgroupTable.sortData(
+      filteredByFilters,
+      sortExpression,
+      tableColumns
+    )
+  }, [
+    data,
+    searchExpression,
+    sortExpression,
+    filterExpression,
+    filterOptions,
+    isCloud,
+    tableColumns,
+  ])
 
   const selectedVmGroups = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(ID)) ?? [],
@@ -119,7 +147,7 @@ export function VmGroups() {
       resourceName={T.VMGroups}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={vmgroupTable.sortOptions()}
+      sortOptions={vmgroupTable.sortOptions(tableColumns)}
       filterOptions={filterOptions}
       searchPlaceholder={`${T.Search} ${T.VMGroups}`}
       count={items?.length}
@@ -133,7 +161,7 @@ export function VmGroups() {
           case TABLE_VIEW_MODE.LIST:
             return (
               <Table
-                columns={vmgroupTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

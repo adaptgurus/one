@@ -16,6 +16,7 @@
 
 import { Component, forwardRef } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import { T } from '@ConstantsModule'
 import {
   IconSlot,
@@ -44,6 +45,8 @@ import { getLockIcon } from '@UtilsModule'
  */
 export const VirtualRouterCard = forwardRef(
   ({ vrouter = {}, isSelected, onCheck, onClick }, ref) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const { NAME, UNAME, GNAME, LABELS } = vrouter
     const labelTags = getLabelTags(LABELS)
 
@@ -68,9 +71,11 @@ export const VirtualRouterCard = forwardRef(
             MetadataSlot,
             {
               labels: [
-                [T.Owner, UNAME],
-                [T.Group, GNAME],
-              ].filter(([, value]) => value !== undefined && value !== null),
+                !isCloud && [T.Owner, UNAME],
+                !isCloud && [T.Group, GNAME],
+              ]
+                .filter(Boolean)
+                .filter(([, value]) => value !== undefined && value !== null),
             },
           ],
           [

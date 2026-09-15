@@ -16,6 +16,7 @@
 
 import { Component, forwardRef } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import { T } from '@ConstantsModule'
 import {
   Card,
@@ -46,6 +47,8 @@ import {
  */
 export const ServiceCard = forwardRef(
   ({ service = {}, isSelected, onCheck, onClick }, ref) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const {
       ID,
       NAME,
@@ -79,8 +82,8 @@ export const ServiceCard = forwardRef(
             {
               labels: [
                 [T.ID, String(ID)],
-                [T.Owner, UNAME],
-                [T.Group, GNAME],
+                !isCloud && [T.Owner, UNAME],
+                !isCloud && [T.Group, GNAME],
               ].filter(Boolean),
             },
           ],

@@ -51,12 +51,28 @@ export function VirtualMachines() {
     selectedItems,
     containerView,
   } = useFunctionality()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
 
   const viewConfig = useMemo(
     () => getResourceView(VirtualMachine.RID),
     [getResourceView]
   )
+
+  const tableColumns = useMemo(() => {
+    const columns = vmsTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['hostname', 'cluster', 'owner', 'group'])
+
+    return columns
+      .filter(({ id, accessorKey }) => !hidden.has(id ?? accessorKey))
+      .map((column) =>
+        column.id === 'name'
+          ? { ...column, cell: ({ row }) => row.original?.NAME }
+          : column
+      )
+  }, [isCloud])
 
   const { setSelectedItems } = useFunctionalityApi()
   const [visibleVmIds, setVisibleVmIds] = useState([])
@@ -70,7 +86,9 @@ export function VirtualMachines() {
     pageSize: VM_POOL_PAGINATION_SIZE,
   })
 
-  const { data: clusters = [] } = ClusterAPI.useGetClustersQuery()
+  const { data: clusters = [] } = ClusterAPI.useGetClustersQuery(undefined, {
+    skip: isCloud,
+  })
 
   const clusterNamesById = useMemo(
     () =>
@@ -90,8 +108,13 @@ export function VirtualMachines() {
   )
 
   const filterOptions = useMemo(
-    () => vmsTable.filterOptions(dataWithClusterNames, viewConfig?.filters),
-    [dataWithClusterNames, viewConfig?.filters]
+    () =>
+      vmsTable.filterOptions(
+        dataWithClusterNames,
+        viewConfig?.filters,
+        tableColumns
+      ),
+    [dataWithClusterNames, tableColumns, viewConfig?.filters]
   )
 
   const items = useMemo(() => {
@@ -110,24 +133,31 @@ export function VirtualMachines() {
           const { CPU = 1, MEMORY = 0, VCPU = 1 } = TEMPLATE
           const state = getVirtualMachineState(vm)
 
-          return [
+          const customerValues = [
             ID,
             NAME,
             state?.name,
             `${CPU}/${VCPU || CPU}`,
             prettyBytes(MEMORY, 'MB'),
-            UNAME,
-            GNAME,
             STIME && timeFromMilliseconds(+STIME).toRelative(),
-            getVMLocked(vm),
-            getVMLocked(vm) && T.Locked,
-            getVirtualMachineType(vm),
             getIps(vm).join(),
-            getLastHistory(vm)?.HOSTNAME,
-            CLUSTER_NAME,
-            getVmClusterId(vm),
-            getHypervisor(vm),
           ]
+          const providerValues = isCloud
+            ? []
+            : [
+                UNAME,
+                GNAME,
+                getVMLocked(vm),
+                getVMLocked(vm) && T.Locked,
+                getVirtualMachineType(vm),
+                getLastHistory(vm)?.HOSTNAME,
+                CLUSTER_NAME,
+                getVmClusterId(vm),
+                getHypervisor(vm),
+              ]
+
+          return customerValues
+            .concat(providerValues)
             .filter((value) => value || value === 0)
             .some((value) => String(value).toLowerCase().includes(search))
         })
@@ -139,13 +169,15 @@ export function VirtualMachines() {
       filterOptions
     )
 
-    return vmsTable.sortData(filteredByFilters, sortExpression)
+    return vmsTable.sortData(filteredByFilters, sortExpression, tableColumns)
   }, [
     dataWithClusterNames,
     searchExpression,
     sortExpression,
     filterExpression,
     filterOptions,
+    isCloud,
+    tableColumns,
   ])
 
   const selectedVms = useMemo(
@@ -208,7 +240,7 @@ export function VirtualMachines() {
       resourceName={T.VirtualMachines}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={vmsTable.sortOptions()}
+      sortOptions={vmsTable.sortOptions(tableColumns)}
       filterOptions={filterOptions}
       searchPlaceholder={`${T.Search} ${T.VirtualMachines}`}
       count={items?.length}
@@ -222,7 +254,7 @@ export function VirtualMachines() {
           case TABLE_VIEW_MODE.LIST:
             return (
               <Table
-                columns={vmsTable.columns()}
+                columns={tableColumns}
                 data={visibleItems}
                 isLoading={isRefreshing}
                 isRowsSelectable

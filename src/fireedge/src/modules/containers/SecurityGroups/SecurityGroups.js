@@ -36,7 +36,19 @@ import { ReactElement, useMemo, useCallback } from 'react'
 export function SecurityGroups() {
   const { searchExpression, sortExpression, selectedItems, containerView } =
     useFunctionality()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = securitygroupTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['UNAME', 'GNAME', 'owner', 'group'])
+
+    return columns.filter(
+      ({ id, accessorKey }) => !hidden.has(id ?? accessorKey)
+    )
+  }, [isCloud])
 
   const availableActions = useMemo(
     () => getActionsAvailable(getResourceView(RESOURCE_NAMES.SEC_GROUP)),
@@ -72,8 +84,8 @@ export function SecurityGroups() {
           return [
             ID,
             NAME,
-            UNAME,
-            GNAME,
+            !isCloud && UNAME,
+            !isCloud && GNAME,
             getTotalOfResources(UPDATED_VMS),
             getTotalOfResources(OUTDATED_VMS),
             getTotalOfResources(ERROR_VMS),
@@ -85,8 +97,12 @@ export function SecurityGroups() {
         })
       : data
 
-    return securitygroupTable.sortData(filteredData, sortExpression)
-  }, [data, searchExpression, sortExpression])
+    return securitygroupTable.sortData(
+      filteredData,
+      sortExpression,
+      tableColumns
+    )
+  }, [data, searchExpression, sortExpression, isCloud, tableColumns])
 
   const selectedSecurityGroups = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(ID)) ?? [],
@@ -121,7 +137,7 @@ export function SecurityGroups() {
       resourceName={T.SecurityGroups}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={securitygroupTable.sortOptions()}
+      sortOptions={securitygroupTable.sortOptions(tableColumns)}
       searchPlaceholder={T.SearchSecurityGroups}
       count={items?.length}
       selectedCount={selectedItems?.length}
@@ -135,7 +151,7 @@ export function SecurityGroups() {
             return (
               <Table
                 dataCy={securitygroupTable.dataCy}
-                columns={securitygroupTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

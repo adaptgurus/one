@@ -15,6 +15,7 @@
  * ------------------------------------------------------------------------- */
 
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import { Component, forwardRef } from 'react'
 import {
   Card,
@@ -42,6 +43,8 @@ import { Hexagon, PcCheck, PcNoEntry, PcWarning } from 'iconoir-react'
  */
 export const SecurityGroupCard = forwardRef(
   ({ securityGroup = {}, dataCy, isSelected, onCheck, onClick }, ref) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const {
       ID,
       NAME,
@@ -70,7 +73,7 @@ export const SecurityGroupCard = forwardRef(
             {
               title: (
                 <>
-                  {NAME} {getLockIcon(securityGroup)}
+                  {NAME} {!isCloud && getLockIcon(securityGroup)}
                 </>
               ),
             },
@@ -80,9 +83,11 @@ export const SecurityGroupCard = forwardRef(
             {
               labels: [
                 [T.ID, id],
-                [T.Owner, UNAME],
-                [T.Group, GNAME],
-              ].filter(([, value]) => value),
+                !isCloud && [T.Owner, UNAME],
+                !isCloud && [T.Group, GNAME],
+              ]
+                .filter(Boolean)
+                .filter(([, value]) => value),
             },
           ],
           [

@@ -39,7 +39,23 @@ export function VnTemplates() {
     selectedItems = [],
     containerView,
   } = useFunctionality()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = vntemplateTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['driver', 'cluster', 'owner', 'group'])
+
+    return columns
+      .filter(({ id, accessorKey }) => !hidden.has(id ?? accessorKey))
+      .map((column) =>
+        column.id === 'name'
+          ? { ...column, cell: ({ row }) => row.original?.NAME }
+          : column
+      )
+  }, [isCloud])
 
   const availableActions = useMemo(
     () =>
@@ -72,10 +88,10 @@ export function VnTemplates() {
           return [
             ID,
             NAME,
-            UNAME,
-            GNAME,
-            TEMPLATE?.VN_MAD,
-            LOCK && T.Locked,
+            !isCloud && UNAME,
+            !isCloud && GNAME,
+            !isCloud && TEMPLATE?.VN_MAD,
+            !isCloud && LOCK && T.Locked,
             REGTIME && timeFromMilliseconds(+REGTIME).toRelative(),
           ]
             .filter((value) => value || value === 0)
@@ -83,8 +99,8 @@ export function VnTemplates() {
         })
       : data
 
-    return vntemplateTable.sortData(filteredData, sortExpression)
-  }, [data, searchExpression, sortExpression])
+    return vntemplateTable.sortData(filteredData, sortExpression, tableColumns)
+  }, [data, searchExpression, sortExpression, isCloud, tableColumns])
 
   const selectedVnTemplates = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(String(ID))) ?? [],
@@ -126,7 +142,7 @@ export function VnTemplates() {
       resourceName={T.NetworkTemplates}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={vntemplateTable.sortOptions()}
+      sortOptions={vntemplateTable.sortOptions(tableColumns)}
       searchPlaceholder={T.SearchTemplates}
       count={items?.length}
       selectedCount={selectedItems?.length}
@@ -140,7 +156,7 @@ export function VnTemplates() {
             return (
               <Table
                 dataCy={vntemplateTable.dataCy}
-                columns={vntemplateTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

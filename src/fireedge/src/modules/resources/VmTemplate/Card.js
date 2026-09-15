@@ -22,6 +22,7 @@ import {
 } from '@ConstantsModule'
 import { Component, forwardRef } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import {
   Card,
   IconSlot,
@@ -54,6 +55,8 @@ import {
  * @returns {Component} VmTemplateCard component
  */
 export const VmTemplateCard = forwardRef((data = {}, ref) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     NAME,
     ID,
@@ -84,7 +87,7 @@ export const VmTemplateCard = forwardRef((data = {}, ref) => {
           {
             title: (
               <>
-                {NAME} {lockIcon}
+                {NAME} {!isCloud && lockIcon}
               </>
             ),
           },
@@ -94,9 +97,9 @@ export const VmTemplateCard = forwardRef((data = {}, ref) => {
           {
             labels: [
               ['ID', ID],
-              ['Owner', UNAME],
-              ['Group', GNAME],
-            ],
+              !isCloud && ['Owner', UNAME],
+              !isCloud && ['Group', GNAME],
+            ].filter(Boolean),
           },
         ],
         [
@@ -108,13 +111,14 @@ export const VmTemplateCard = forwardRef((data = {}, ref) => {
             networks: getVmTemplateNetworkCount(data),
           },
         ],
-        (TEMPLATE?.HYPERVISOR ||
+        ((!isCloud && TEMPLATE?.HYPERVISOR) ||
           TEMPLATE?.OS?.ARCH ||
           labelTags.length > 0) && [
           LabelSlot,
           {
             labels: [
-              TEMPLATE?.HYPERVISOR && [TEMPLATE.HYPERVISOR, 'miscellaneous'],
+              !isCloud &&
+                TEMPLATE?.HYPERVISOR && [TEMPLATE.HYPERVISOR, 'miscellaneous'],
               TEMPLATE?.OS?.ARCH && [TEMPLATE.OS.ARCH, 'miscellaneous2'],
             ].filter(Boolean),
             tags: labelTags,

@@ -75,7 +75,8 @@ export const SingleView = ({
   actions = [],
 }) => {
   const { palette } = useTheme()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
   const { showModal } = useModalsApi()
   const history = useHistory()
 
@@ -303,13 +304,13 @@ export const SingleView = ({
             id: vnTemplate?.ID,
             tags: getLabelTags(vnTemplate?.LABELS),
             labels: [
-              [T.Owner, vnTemplate?.UNAME],
-              [T.Group, vnTemplate?.GNAME],
+              !isCloud && [T.Owner, vnTemplate?.UNAME],
+              !isCloud && [T.Group, vnTemplate?.GNAME],
               [
                 T.Registered,
                 timeFromMilliseconds(+vnTemplate?.REGTIME).toRelative(),
               ],
-            ],
+            ].filter(Boolean),
             Toolbar: () => (
               <Box
                 sx={(theme) => ({
@@ -415,7 +416,7 @@ export const SingleView = ({
           SummarySlot,
           {
             labels: [
-              [
+              !isCloud && [
                 vnTemplate?.TEMPLATE?.VN_MAD ? (
                   <Tag
                     key="driver"
@@ -429,7 +430,7 @@ export const SingleView = ({
               ],
               [addressRangeCount, T.AddressRange],
               [addressRangeSize, T.TotalIPs],
-            ],
+            ].filter(Boolean),
           },
         ],
         [

@@ -649,3 +649,206 @@ test('second-pass image backup file and datastore selectors hide provider storag
   for (const source of [imageInfo, fileInfo, backupInfo])
     assert.match(source, /!isCloud[\s\S]*DATASTORE_ID/)
 })
+
+test('third-pass card and drawer surfaces hide provider metadata in cloud', () => {
+  const cardFiles = [
+    'VirtualMachine/Card.js',
+    'VirtualNetwork/Card.js',
+    'VnTemplate/Card.js',
+    'Image/Card.js',
+    'Files/Card.js',
+    'Backups/Card.js',
+    'BackupJobs/Card.js',
+    'VmGroup/Card.js',
+    'VmTemplate/Card.js',
+    'VirtualRouter/Card.js',
+    'SecurityGroups/Card.js',
+    'Service/Card.js',
+    'ServiceTemplate/Card.js',
+    'OneKs/Card.js',
+  ]
+  for (const file of cardFiles) {
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/resources', file),
+      'utf8'
+    )
+    assert.match(source, /const isCloud = view === ['"]cloud['"]/, file)
+    if (/\b(?:UNAME|GNAME)\b/.test(source)) {
+      assert.match(
+        source,
+        /!isCloud && \[(?:T\.)?Owner|!isCloud && \['Owner'/,
+        `${file}: owner`
+      )
+      assert.match(
+        source,
+        /!isCloud && \[(?:T\.)?Group|!isCloud && \['Group'/,
+        `${file}: group`
+      )
+    }
+  }
+
+  const vmCard = readFileSync(
+    resolve(__dirname, '../../src/modules/resources/VirtualMachine/Card.js'),
+    'utf8'
+  )
+  assert.match(vmCard, /!isCloud && \[T\.Host, HOSTNAME\]/)
+
+  for (const file of ['Image/Card.js', 'Files/Card.js', 'Backups/Card.js']) {
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/resources', file),
+      'utf8'
+    )
+    assert.match(source, /!isCloud && \[T\.Datastore, DATASTORE/)
+    assert.match(source, /!isCloud && type && \[type, ['"]default['"]\]/)
+  }
+
+  const vnetCard = readFileSync(
+    resolve(__dirname, '../../src/modules/resources/VirtualNetwork/Card.js'),
+    'utf8'
+  )
+  assert.match(vnetCard, /!isCloud && \[T\.Cluster, cluster\]/)
+  assert.match(vnetCard, /!isCloud && VN_MAD/)
+})
+
+test('third-pass list surfaces remove cloud provider columns and VM provider lookup', () => {
+  const listFiles = [
+    'VirtualMachines/VirtualMachines.js',
+    'VirtualNetworks/VirtualNetworks.js',
+    'VnTemplates/VnTemplates.js',
+    'Images/Images.js',
+    'Files/Files.js',
+    'Backups/Backups.js',
+    'BackupJobs/BackupJobs.js',
+    'VmTemplates/VmTemplates.js',
+    'VirtualRouters/VirtualRouters.js',
+    'SecurityGroups/SecurityGroups.js',
+    'VmGroups/VmGroups.js',
+    'Services/Services.js',
+    'ServiceTemplates/ServiceTemplates.js',
+  ]
+  for (const file of listFiles) {
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/containers', file),
+      'utf8'
+    )
+    assert.match(source, /const isCloud = view === ['"]cloud['"]/, file)
+    assert.match(
+      source,
+      /const tableColumns = useMemo/,
+      `${file}: tableColumns`
+    )
+    assert.match(source, /columns=\{tableColumns\}/, `${file}: list columns`)
+  }
+
+  const vmList = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VirtualMachines/VirtualMachines.js'
+    ),
+    'utf8'
+  )
+  assert.match(
+    vmList,
+    /['"]hostname['"], ['"]cluster['"], ['"]owner['"], ['"]group['"]/
+  )
+  assert.match(vmList, /useGetClustersQuery\([^;]*skip: isCloud/s)
+
+  const oneKsList = readFileSync(
+    resolve(__dirname, '../../src/modules/containers/OneKs/OneKs.js'),
+    'utf8'
+  )
+  assert.match(oneKsList, /const isCloud = view === ['"]cloud['"]/)
+  assert.match(oneKsList, /const tableColumns = useMemo[\s\S]*isCloud/)
+  assert.match(oneKsList, /columns=\{tableColumns\}/)
+
+  assert.equal(read('vm-tab.yaml').filters?.hostname, false)
+})
+
+test('third-pass detail shells hide cloud provider headers summaries and Marketplace escape', () => {
+  const detailFiles = [
+    'VirtualMachines/Details/single.js',
+    'VirtualNetworks/Details/single.js',
+    'VnTemplates/Details/single.js',
+    'Images/Details/single.js',
+    'Files/Details/single.js',
+    'Backups/Details/single.js',
+    'BackupJobs/Details/single.js',
+    'OneKs/Details/single.js',
+    'VmTemplates/Details/single.js',
+    'VirtualRouters/Details/single.js',
+    'SecurityGroups/Details/single.js',
+    'VmGroups/Details/single.js',
+    'Services/Details/single.js',
+    'ServiceTemplates/Details/single.js',
+  ]
+  for (const file of detailFiles) {
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/containers', file),
+      'utf8'
+    )
+    assert.match(source, /const isCloud = view === ['"]cloud['"]/, file)
+    if (/T\.Owner/.test(source)) assert.match(source, /!isCloud && \[T\.Owner/)
+    if (/T\.Group/.test(source)) assert.match(source, /!isCloud && \[T\.Group/)
+  }
+
+  const vm = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VirtualMachines/Details/single.js'
+    ),
+    'utf8'
+  )
+  assert.match(vm, /!isCloud && \[T\.Host, hostName\]/)
+  assert.match(vm, /!isCloud && \[hostName \?\? T\.Unknown, T\.Hostname\]/)
+  assert.match(vm, /!isCloud && \[[\s\S]*value: ['"]create-app['"]/)
+
+  const vmAggregated = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VirtualMachines/Details/aggregated.js'
+    ),
+    'utf8'
+  )
+  assert.match(vmAggregated, /!isCloud && \[summary\.host, T\.Hostname\]/)
+
+  for (const file of [
+    'Images/Details/single.js',
+    'Files/Details/single.js',
+    'Backups/Details/single.js',
+  ]) {
+    const source = readFileSync(
+      resolve(__dirname, '../../src/modules/containers', file),
+      'utf8'
+    )
+    assert.match(source, /!isCloud && \[T\.Datastore, DATASTORE\]/)
+    assert.match(
+      source,
+      /!isCloud && \[DATASTORE \?\? ['"]-['"], T\.Datastore\]/
+    )
+  }
+
+  const vnet = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VirtualNetworks/Details/single.js'
+    ),
+    'utf8'
+  )
+  const vnetTemplate = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VnTemplates/Details/single.js'
+    ),
+    'utf8'
+  )
+  const vmTemplate = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VmTemplates/Details/single.js'
+    ),
+    'utf8'
+  )
+  assert.match(vnet, /!isCloud && \[[\s\S]*T\.Driver/)
+  assert.match(vnetTemplate, /!isCloud && \[[\s\S]*T\.Driver/)
+  assert.match(vmTemplate, /!isCloud && \[[\s\S]*T\.Hypervisor/)
+})

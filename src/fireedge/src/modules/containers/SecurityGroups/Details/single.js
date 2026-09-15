@@ -15,6 +15,7 @@
  * ------------------------------------------------------------------------- */
 
 import {
+  useViews,
   DetailsDrawer,
   getLabelMenuButtonProps,
   InfoSlot,
@@ -64,6 +65,8 @@ export const SingleView = ({
   handleClose,
   actions,
 }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { palette } = useTheme()
   const history = useHistory()
   const { showModal } = useModalsApi()
@@ -252,9 +255,9 @@ export const SingleView = ({
             tags: getLabelTags(selectedSecurityGroup?.LABELS),
             dataCy: 'security-group',
             labels: [
-              [T.Owner, selectedSecurityGroup?.UNAME],
-              [T.Group, selectedSecurityGroup?.GNAME],
-            ],
+              !isCloud && [T.Owner, selectedSecurityGroup?.UNAME],
+              !isCloud && [T.Group, selectedSecurityGroup?.GNAME],
+            ].filter(Boolean),
             Toolbar: () => (
               <Box
                 sx={(theme) => ({

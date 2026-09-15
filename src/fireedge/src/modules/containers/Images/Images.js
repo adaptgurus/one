@@ -44,7 +44,19 @@ export function Images() {
     containerView,
   } = useFunctionality()
 
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = imageTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['type', 'datastore', 'owner', 'group'])
+
+    return columns.filter(
+      ({ id, accessorKey }) => !hidden.has(id ?? accessorKey)
+    )
+  }, [isCloud])
   const resourceView = getResourceView(RESOURCE_NAMES.IMAGE)
   const availableActions = useMemo(
     () => resourceView?.actions ?? {},
@@ -61,14 +73,14 @@ export function Images() {
 
   const filterOptions = useMemo(
     () =>
-      imageTable.filterOptions(data, resourceView?.filters, undefined, [
+      imageTable.filterOptions(data, resourceView?.filters, tableColumns, [
         {
           id: 'locked',
           header: T.Locked,
           accessorFn: (image) => (image?.LOCK ? T.Locked : T.Unlocked),
         },
       ]),
-    [data, resourceView?.filters]
+    [data, resourceView?.filters, tableColumns]
   )
 
   const items = useMemo(() => {
@@ -92,12 +104,12 @@ export function Images() {
           return [
             ID,
             NAME,
-            DATASTORE,
-            type,
+            !isCloud && DATASTORE,
+            !isCloud && type,
             state?.name,
             RUNNING_VMS,
-            UNAME,
-            GNAME,
+            !isCloud && UNAME,
+            !isCloud && GNAME,
             +PERSISTENT ? T.Persistent : T.NonPersistent,
             prettyBytes(+SIZE || 0, 'MB'),
             REGTIME && timeFromMilliseconds(+REGTIME).toRelative(),
@@ -113,8 +125,16 @@ export function Images() {
       filterOptions
     )
 
-    return imageTable.sortData(filteredByFilters, sortExpression)
-  }, [data, searchExpression, sortExpression, filterExpression, filterOptions])
+    return imageTable.sortData(filteredByFilters, sortExpression, tableColumns)
+  }, [
+    data,
+    searchExpression,
+    sortExpression,
+    filterExpression,
+    filterOptions,
+    isCloud,
+    tableColumns,
+  ])
 
   const selectedData = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(ID)) ?? [],
@@ -148,7 +168,7 @@ export function Images() {
       resourceName={T.Images}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={imageTable.sortOptions()}
+      sortOptions={imageTable.sortOptions(tableColumns)}
       filterOptions={filterOptions}
       searchPlaceholder={T.SearchImages}
       count={items?.length}
@@ -163,7 +183,7 @@ export function Images() {
             return (
               <Table
                 dataCy={imageTable.dataCy}
-                columns={imageTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

@@ -44,7 +44,19 @@ export function VirtualRouters() {
     selectedItems,
     containerView,
   } = useFunctionality()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = vrTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['owner', 'group'])
+
+    return columns.filter(
+      ({ id, accessorKey }) => !hidden.has(id ?? accessorKey)
+    )
+  }, [isCloud])
   const resourceView = getResourceView(RESOURCE_NAMES.VROUTER)
 
   const availableActions = useMemo(
@@ -61,8 +73,8 @@ export function VirtualRouters() {
   } = vrTable.useData()
 
   const filterOptions = useMemo(
-    () => vrTable.filterOptions(data, resourceView?.filters),
-    [data, resourceView?.filters]
+    () => vrTable.filterOptions(data, resourceView?.filters, tableColumns),
+    [data, resourceView?.filters, tableColumns]
   )
 
   const items = useMemo(() => {
@@ -74,9 +86,9 @@ export function VirtualRouters() {
           return [
             ID,
             NAME,
-            UNAME,
-            GNAME,
-            TEMPLATE_ID,
+            !isCloud && UNAME,
+            !isCloud && GNAME,
+            !isCloud && TEMPLATE_ID,
             getVirtualRouterTotalVms(vrouter),
             getVirtualRouterTotalNics(vrouter),
             LOCK && T.Locked,
@@ -92,8 +104,16 @@ export function VirtualRouters() {
       filterOptions
     )
 
-    return vrTable.sortData(filteredByFilters, sortExpression)
-  }, [data, searchExpression, sortExpression, filterExpression, filterOptions])
+    return vrTable.sortData(filteredByFilters, sortExpression, tableColumns)
+  }, [
+    data,
+    searchExpression,
+    sortExpression,
+    filterExpression,
+    filterOptions,
+    isCloud,
+    tableColumns,
+  ])
 
   const selectedResources = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(String(ID))) ?? [],
@@ -136,7 +156,7 @@ export function VirtualRouters() {
       resourceName={T.VirtualRouters}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={vrTable.sortOptions()}
+      sortOptions={vrTable.sortOptions(tableColumns)}
       filterOptions={filterOptions}
       count={items?.length}
       selectedCount={selectedItems?.length}
@@ -149,7 +169,7 @@ export function VirtualRouters() {
           case TABLE_VIEW_MODE.LIST:
             return (
               <Table
-                columns={vrTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

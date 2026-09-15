@@ -16,6 +16,7 @@
 
 import { Component, forwardRef } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import { T } from '@ConstantsModule'
 import {
   Card,
@@ -62,6 +63,8 @@ export const ServiceTemplateCard = forwardRef(
     },
     ref
   ) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const labelSlotLabels = getLabelSlotLabels(LABELS)
     const registrationTime = TEMPLATE?.BODY?.registration_time ?? REGTIME
     const serviceTemplate = { TEMPLATE }
@@ -79,8 +82,8 @@ export const ServiceTemplateCard = forwardRef(
             {
               labels: [
                 [T.ID, String(ID)],
-                [T.Owner, UNAME],
-                [T.Group, GNAME],
+                !isCloud && [T.Owner, UNAME],
+                !isCloud && [T.Group, GNAME],
               ].filter(Boolean),
             },
           ],

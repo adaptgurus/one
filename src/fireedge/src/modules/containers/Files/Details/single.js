@@ -15,6 +15,7 @@
  * ------------------------------------------------------------------------- */
 
 import {
+  useViews,
   ButtonGroup,
   DetailsDrawer,
   InfoSlot,
@@ -65,6 +66,8 @@ export const SingleView = ({
   handleClose,
   availableActions = {},
 }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { palette } = useTheme()
   const { showModal } = useModalsApi()
 
@@ -400,10 +403,10 @@ export const SingleView = ({
             title: data?.NAME,
             id: ID,
             labels: [
-              [T.Owner, UNAME],
-              [T.Group, GNAME],
-              [T.Datastore, DATASTORE],
-            ],
+              !isCloud && [T.Owner, UNAME],
+              !isCloud && [T.Group, GNAME],
+              !isCloud && [T.Datastore, DATASTORE],
+            ].filter(Boolean),
             tags: getLabelTags(data?.LABELS),
             dataCy: 'file',
             Toolbar: () => (
@@ -449,13 +452,13 @@ export const SingleView = ({
                 />,
                 T.State,
               ],
-              [
+              !isCloud && [
                 type ? <Tag key="type" title={type} status="default" /> : '-',
                 T.Type,
               ],
-              [DATASTORE ?? '-', T.Datastore],
+              !isCloud && [DATASTORE ?? '-', T.Datastore],
               [+PERSISTENT ? T.Yes : T.No, T.Persistent],
-            ],
+            ].filter(Boolean),
           },
         ],
         [

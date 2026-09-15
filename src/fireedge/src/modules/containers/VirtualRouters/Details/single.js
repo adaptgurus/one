@@ -64,7 +64,8 @@ export const SingleView = ({
 }) => {
   const { palette } = useTheme()
   const { showModal } = useModalsApi()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
 
   // API
   const { data: fetchedVRouter = {}, isFetching: isLoadingVRouter } =
@@ -259,9 +260,9 @@ export const SingleView = ({
             id: vrouter?.ID,
             tags: getLabelTags(vrouter?.LABELS),
             labels: [
-              [T.Owner, vrouter?.UNAME],
-              [T.Group, vrouter?.GNAME],
-            ],
+              !isCloud && [T.Owner, vrouter?.UNAME],
+              !isCloud && [T.Group, vrouter?.GNAME],
+            ].filter(Boolean),
             Toolbar: () => (
               <Box
                 sx={(theme) => ({

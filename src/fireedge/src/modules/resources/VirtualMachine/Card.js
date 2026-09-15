@@ -16,6 +16,7 @@
 
 import { Component, forwardRef } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import {
   Card,
   IconSlot,
@@ -55,6 +56,8 @@ import { getLockIcon, prettyBytes } from '@UtilsModule'
  * @returns {Component} VirtualMachineCard component
  */
 export const VirtualMachineCard = forwardRef((data = {}, ref) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     NAME,
     ID,
@@ -96,7 +99,7 @@ export const VirtualMachineCard = forwardRef((data = {}, ref) => {
           {
             title: (
               <>
-                {NAME} {lockIcon}
+                {NAME} {!isCloud && lockIcon}
               </>
             ),
             statusName,
@@ -108,13 +111,15 @@ export const VirtualMachineCard = forwardRef((data = {}, ref) => {
           {
             labels: [
               [T.ID, ID],
-              [T.Owner, UNAME],
-              [T.Group, GNAME],
-              [T.Host, HOSTNAME],
-            ].filter(
-              ([, value]) =>
-                value !== undefined && value !== null && value !== ''
-            ),
+              !isCloud && [T.Owner, UNAME],
+              !isCloud && [T.Group, GNAME],
+              !isCloud && [T.Host, HOSTNAME],
+            ]
+              .filter(Boolean)
+              .filter(
+                ([, value]) =>
+                  value !== undefined && value !== null && value !== ''
+              ),
           },
         ],
 

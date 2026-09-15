@@ -45,7 +45,7 @@ filters:
   type: false
   locked: false
   ips: true
-  hostname: true
+  hostname: false
 
 info-tabs:
   info:

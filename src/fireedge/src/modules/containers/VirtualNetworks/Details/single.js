@@ -83,7 +83,8 @@ export const SingleView = ({
   actions = [],
 }) => {
   const { palette } = useTheme()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
   const { showModal } = useModalsApi()
   const openReserveForm = VirtualNetwork.Forms.useReserveFormModal()
   const history = useHistory()
@@ -302,9 +303,9 @@ export const SingleView = ({
             tags: getLabelTags(vnet?.LABELS),
             dataCy: 'vnet-info',
             labels: [
-              [T.Owner, vnet?.UNAME],
-              [T.Group, vnet?.GNAME],
-            ],
+              !isCloud && [T.Owner, vnet?.UNAME],
+              !isCloud && [T.Group, vnet?.GNAME],
+            ].filter(Boolean),
             Toolbar: () => (
               <Box
                 sx={(theme) => ({
@@ -420,7 +421,7 @@ export const SingleView = ({
                 />,
                 T.State,
               ],
-              [
+              !isCloud && [
                 vnet?.VN_MAD ? (
                   <Tag key="driver" title={vnet.VN_MAD} status="default" />
                 ) : (
@@ -431,7 +432,7 @@ export const SingleView = ({
               [addressRanges, T.AddressRanges],
               [percentLabel, T.Leases],
               [securityGroups, T.SecurityGroups],
-            ],
+            ].filter(Boolean),
           },
         ],
         [

@@ -115,7 +115,21 @@ export function OneKs() {
   const { searchExpression, sortExpression, selectedItems, containerView } =
     useFunctionality()
 
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(
+    () =>
+      isCloud
+        ? columns.filter(
+            ({ id, accessorKey }) =>
+              !new Set(['owner', 'group', 'UNAME', 'GNAME']).has(
+                id ?? accessorKey
+              )
+          )
+        : columns,
+    [isCloud]
+  )
   const availableActions = useMemo(
     () => getResourceView(RESOURCE_NAMES.ONEKS)?.actions ?? {},
     [getResourceView]
@@ -158,16 +172,16 @@ export function OneKs() {
             registrationTime && formatTime(registrationTime),
             registrationTime &&
               timeFromMilliseconds(+registrationTime).toRelative(),
-            UNAME,
-            GNAME,
+            !isCloud && UNAME,
+            !isCloud && GNAME,
           ]
             .filter((value) => value || value === 0)
             .some((value) => String(value).toLowerCase().includes(search))
         })
       : data
 
-    return sortTableData(filteredData, sortExpression, columns)
-  }, [data, searchExpression, sortExpression])
+    return sortTableData(filteredData, sortExpression, tableColumns)
+  }, [data, isCloud, searchExpression, sortExpression, tableColumns])
 
   const selectedData = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(toId(ID))) ?? [],
@@ -204,7 +218,7 @@ export function OneKs() {
       resourceName="Kubernetes"
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={getTableSortOptions(columns)}
+      sortOptions={getTableSortOptions(tableColumns)}
       count={items?.length}
       selectedCount={selectedItems?.length}
       unavailableMessage={
@@ -219,7 +233,7 @@ export function OneKs() {
           case TABLE_VIEW_MODE.LIST:
             return (
               <Table
-                columns={columns}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable

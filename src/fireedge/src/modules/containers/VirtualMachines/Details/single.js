@@ -15,6 +15,7 @@
  * ------------------------------------------------------------------------- */
 
 import {
+  useViews,
   DetailsDrawer,
   InfoSlot,
   SummarySlot,
@@ -38,6 +39,7 @@ import {
   STATIC_FILES_URL,
   DEFAULT_TEMPLATE_LOGO,
   VM_ACTION_ENUM,
+  VM_ACTIONS,
 } from '@ConstantsModule'
 import { useHistory } from 'react-router-dom'
 import { Box, useTheme } from '@mui/material'
@@ -84,6 +86,24 @@ VmErrorAlert.propTypes = {
   onDismiss: PropTypes.func,
 }
 
+const filterCloudActionOptions = (options, viewConfig, isCloud) => {
+  if (!isCloud) return options
+
+  return (options ?? [])
+    .map((option) =>
+      Array.isArray(option)
+        ? option.filter(({ eACTION }) =>
+            Boolean(viewConfig?.actions?.[VM_ACTIONS?.[eACTION]])
+          )
+        : option
+    )
+    .filter((option) =>
+      Array.isArray(option)
+        ? option.length > 0
+        : Boolean(viewConfig?.actions?.[VM_ACTIONS?.[option?.eACTION]])
+    )
+}
+
 /**
  * @param {object} root0 - Params
  * @param {boolean} root0.isOpen - Is isOpen
@@ -98,6 +118,8 @@ export const SingleView = ({
   handleClose,
   viewConfig = {},
 }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { zone, defaultZone } = useGeneral()
   const { copy, isCopied } = useClipboard()
   const history = useHistory()
@@ -150,22 +172,30 @@ export const SingleView = ({
           fn?.({ id: vmId, ...params }),
     })
 
-  const generalOptions = VirtualMachine.Actions.Utils.generateMenuOptions({
-    keys: VirtualMachine.Actions.Groups.General,
-    actions,
-    vm: selectedVm,
-    formContext: vmData,
+  const generalOptions = filterCloudActionOptions(
+    VirtualMachine.Actions.Utils.generateMenuOptions({
+      keys: VirtualMachine.Actions.Groups.General,
+      actions,
+      vm: selectedVm,
+      formContext: vmData,
+      viewConfig,
+      showModal,
+    }),
     viewConfig,
-    showModal,
-  })
+    isCloud
+  )
 
-  const stateOptions = VirtualMachine.Actions.Utils.generateMenuOptions({
-    keys: VirtualMachine.Actions.Groups.State,
-    actions,
-    vm: selectedVm,
+  const stateOptions = filterCloudActionOptions(
+    VirtualMachine.Actions.Utils.generateMenuOptions({
+      keys: VirtualMachine.Actions.Groups.State,
+      actions,
+      vm: selectedVm,
+      viewConfig,
+      showModal,
+    }),
     viewConfig,
-    showModal,
-  })
+    isCloud
+  )
 
   const [saveAsTemplateAction, createAppAction] =
     VirtualMachine.Actions.Utils.generateMenuOptions({
@@ -336,10 +366,10 @@ export const SingleView = ({
             title: selectedVm?.NAME,
             id: vmId,
             labels: [
-              [T.Owner, selectedVm?.UNAME],
-              [T.Group, selectedVm?.GNAME],
-              [T.Host, hostName],
-            ],
+              !isCloud && [T.Owner, selectedVm?.UNAME],
+              !isCloud && [T.Group, selectedVm?.GNAME],
+              !isCloud && [T.Host, hostName],
+            ].filter(Boolean),
             tags: vmLabelTags,
             Toolbar: () => (
               <Box
@@ -367,25 +397,27 @@ export const SingleView = ({
                   compactable
                 />
 
-                <ButtonGroup
-                  selected={[vmIsLocked ? 'lock' : 'unlock']}
-                  buttons={[
-                    {
-                      value: 'lock',
-                      startIcon: <Lock width="16px" height="16px" />,
-                      isDisabled: isActionsDisabled,
-                      ...lockAction,
-                      tooltip: T.Lock,
-                    },
-                    {
-                      value: 'unlock',
-                      startIcon: <NoLock width="16px" height="16px" />,
-                      isDisabled: isActionsDisabled,
-                      ...unlockAction,
-                      tooltip: T.Unlock,
-                    },
-                  ]}
-                />
+                {!isCloud && (
+                  <ButtonGroup
+                    selected={[vmIsLocked ? 'lock' : 'unlock']}
+                    buttons={[
+                      {
+                        value: 'lock',
+                        startIcon: <Lock width="16px" height="16px" />,
+                        isDisabled: isActionsDisabled,
+                        ...lockAction,
+                        tooltip: T.Lock,
+                      },
+                      {
+                        value: 'unlock',
+                        startIcon: <NoLock width="16px" height="16px" />,
+                        isDisabled: isActionsDisabled,
+                        ...unlockAction,
+                        tooltip: T.Unlock,
+                      },
+                    ]}
+                  />
+                )}
                 <ToggleGroup
                   size="medium"
                   options={[
@@ -401,7 +433,7 @@ export const SingleView = ({
                           isActionsDisabled || saveAsTemplateAction?.isDisabled,
                         compactable: true,
                       },
-                      {
+                      !isCloud && {
                         startIcon: <Cart width="16px" height="16px" />,
                         onClick: handleCreateApp,
                         value: 'create-app',
@@ -410,9 +442,9 @@ export const SingleView = ({
                           isActionsDisabled || createAppAction?.isDisabled,
                         compactable: true,
                       },
-                    ],
+                    ].filter(Boolean),
                     [
-                      {
+                      !isCloud && {
                         ...getLabelMenuButtonProps({
                           selectedRows: [selectedVm],
                           resourceType: RESOURCE_NAMES.VM,
@@ -428,7 +460,7 @@ export const SingleView = ({
                         isDisabled: isActionsDisabled,
                         compactable: true,
                       },
-                    ],
+                    ].filter(Boolean),
                     [
                       {
                         value: 'delete',
@@ -478,7 +510,7 @@ export const SingleView = ({
                 />,
                 T.State,
               ],
-              [hostName ?? T.Unknown, T.Hostname],
+              !isCloud && [hostName ?? T.Unknown, T.Hostname],
               [
                 `${selectedVm?.TEMPLATE?.CPU || '-'}/${
                   selectedVm?.TEMPLATE?.VCPU || selectedVm?.TEMPLATE?.CPU || '-'
@@ -512,7 +544,9 @@ export const SingleView = ({
                 ),
                 T.ip,
               ],
-            ]?.filter(([value]) => value != null),
+            ]
+              .filter(Boolean)
+              .filter(([value]) => value != null),
           },
         ],
         ...(vmError

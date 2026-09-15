@@ -15,6 +15,7 @@
  * ------------------------------------------------------------------------- */
 
 import {
+  useViews,
   ButtonGroup,
   DetailsDrawer,
   getLabelMenuButtonProps,
@@ -61,6 +62,8 @@ export const SingleView = ({
   handleClose,
   availableActions = {},
 }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { palette } = useTheme()
   const { showModal } = useModalsApi()
 
@@ -373,9 +376,9 @@ export const SingleView = ({
             title: data?.NAME,
             id: ID,
             labels: [
-              [T.Owner, data?.UNAME],
-              [T.Group, data?.GNAME],
-            ],
+              !isCloud && [T.Owner, data?.UNAME],
+              !isCloud && [T.Group, data?.GNAME],
+            ].filter(Boolean),
             tags: getLabelTags(data?.LABELS),
             Toolbar: () => (
               <Box

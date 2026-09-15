@@ -17,6 +17,7 @@
 import { T, VNET_THRESHOLD } from '@ConstantsModule'
 import { Component, forwardRef } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import {
   Card,
   LabelSlot,
@@ -45,6 +46,8 @@ import { getLockIcon } from '@UtilsModule'
  */
 export const VirtualNetworkCard = forwardRef(
   ({ vnet = {}, dataCy, isSelected, onCheck, onClick }, ref) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const { ID, NAME, UNAME, GNAME, VN_MAD, CLUSTERS } = vnet
 
     const { color: stateColor, name: stateName } =
@@ -78,10 +81,12 @@ export const VirtualNetworkCard = forwardRef(
             {
               labels: [
                 [T.ID, String(ID)],
-                [T.Owner, UNAME],
-                [T.Group, GNAME],
-                [T.Cluster, cluster],
-              ].filter(([, value]) => value),
+                !isCloud && [T.Owner, UNAME],
+                !isCloud && [T.Group, GNAME],
+                !isCloud && [T.Cluster, cluster],
+              ]
+                .filter(Boolean)
+                .filter(([, value]) => value),
             },
           ],
           [
@@ -100,10 +105,12 @@ export const VirtualNetworkCard = forwardRef(
               ],
             },
           ],
-          (VN_MAD || labelTags.length > 0) && [
+          ((!isCloud && VN_MAD) || labelTags.length > 0) && [
             LabelSlot,
             {
-              labels: [VN_MAD && [VN_MAD, 'default']].filter(Boolean),
+              labels: [!isCloud && VN_MAD && [VN_MAD, 'default']].filter(
+                Boolean
+              ),
               tags: labelTags,
               max: 3,
             },

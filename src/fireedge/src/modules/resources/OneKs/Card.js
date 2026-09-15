@@ -17,6 +17,7 @@
 import { T } from '@ConstantsModule'
 import { Component, forwardRef } from 'react'
 import PropTypes from 'prop-types'
+import { useViews } from '@FeaturesModule'
 import { BoxIso, ServerConnection } from 'iconoir-react'
 import {
   Card,
@@ -39,6 +40,8 @@ import { getLabelTags, getVirtualOneKsState } from '@ModelsModule'
  */
 export const OneKsCard = forwardRef(
   ({ data, isSelected, onCheck, onClick }, ref) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const { ID, NAME, UNAME, GNAME, LABELS, TEMPLATE = {} } = data || {}
     const { CLUSTER_BODY = {} } = TEMPLATE
     const controlPlanes = []
@@ -73,12 +76,14 @@ export const OneKsCard = forwardRef(
             {
               labels: [
                 [T.ID, ID],
-                [T.Owner, UNAME],
-                [T.Group, GNAME],
-              ].filter(
-                ([, value]) =>
-                  value !== undefined && value !== null && value !== ''
-              ),
+                !isCloud && [T.Owner, UNAME],
+                !isCloud && [T.Group, GNAME],
+              ]
+                .filter(Boolean)
+                .filter(
+                  ([, value]) =>
+                    value !== undefined && value !== null && value !== ''
+                ),
             },
           ],
           [

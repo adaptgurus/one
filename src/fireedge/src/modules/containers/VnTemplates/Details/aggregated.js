@@ -34,7 +34,7 @@ import {
   T,
   VN_TEMPLATE_ACTIONS,
 } from '@ConstantsModule'
-import { VnTemplateAPI, useModalsApi } from '@FeaturesModule'
+import { VnTemplateAPI, useModalsApi, useViews } from '@FeaturesModule'
 import { VnTemplate as Resource } from '@ResourcesModule'
 import { aggregateLockState } from '@UtilsModule'
 
@@ -59,6 +59,8 @@ export const AggregatedView = ({
   handleDeselect,
   actions = [],
 }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { showModal } = useModalsApi()
 
   // API
@@ -293,10 +295,10 @@ export const AggregatedView = ({
           {
             labels: [
               [selectedVnTemplates?.length, T.Selected],
-              [driverCount || '-', T.Driver],
+              !isCloud && [driverCount || '-', T.Driver],
               [addressRangeCount, T.AddressRange],
               [addressRangeSize, T.TotalIPs],
-            ],
+            ].filter(Boolean),
           },
         ],
         [

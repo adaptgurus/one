@@ -45,7 +45,19 @@ export function VirtualNetworks() {
     selectedItems,
     containerView,
   } = useFunctionality()
-  const { getResourceView } = useViews()
+  const { getResourceView, view } = useViews()
+  const isCloud = view === 'cloud'
+
+  const tableColumns = useMemo(() => {
+    const columns = vnTable.columns()
+    if (!isCloud) return columns
+
+    const hidden = new Set(['vn_mad', 'cluster', 'owner', 'group'])
+
+    return columns.filter(
+      ({ id, accessorKey }) => !hidden.has(id ?? accessorKey)
+    )
+  }, [isCloud])
   const resourceView = getResourceView(RESOURCE_NAMES.VNET)
 
   const availableActions = useMemo(
@@ -62,8 +74,8 @@ export function VirtualNetworks() {
   } = vnTable.useData()
 
   const filterOptions = useMemo(
-    () => vnTable.filterOptions(data, resourceView?.filters),
-    [data, resourceView?.filters]
+    () => vnTable.filterOptions(data, resourceView?.filters, tableColumns),
+    [data, resourceView?.filters, tableColumns]
   )
 
   const items = useMemo(() => {
@@ -78,11 +90,11 @@ export function VirtualNetworks() {
           return [
             ID,
             NAME,
-            UNAME,
-            GNAME,
-            getVNManager(vnet),
+            !isCloud && UNAME,
+            !isCloud && GNAME,
+            !isCloud && getVNManager(vnet),
             state?.name,
-            cluster,
+            !isCloud && cluster,
             leases?.percentLabel,
             LOCK && T.Locked,
             TEMPLATE?.LABELS,
@@ -98,8 +110,16 @@ export function VirtualNetworks() {
       filterOptions
     )
 
-    return vnTable.sortData(filteredByFilters, sortExpression)
-  }, [data, searchExpression, sortExpression, filterExpression, filterOptions])
+    return vnTable.sortData(filteredByFilters, sortExpression, tableColumns)
+  }, [
+    data,
+    searchExpression,
+    sortExpression,
+    filterExpression,
+    filterOptions,
+    isCloud,
+    tableColumns,
+  ])
 
   const selectedResources = useMemo(
     () => items?.filter(({ ID }) => selectedItems?.includes(String(ID))) ?? [],
@@ -141,7 +161,7 @@ export function VirtualNetworks() {
       resourceName={T.VirtualNetworks}
       onRefresh={refresh}
       isRefreshing={isRefreshing}
-      sortOptions={vnTable.sortOptions()}
+      sortOptions={vnTable.sortOptions(tableColumns)}
       filterOptions={filterOptions}
       count={items?.length}
       selectedCount={selectedItems?.length}
@@ -155,7 +175,7 @@ export function VirtualNetworks() {
             return (
               <Table
                 dataCy={vnTable.dataCy}
-                columns={vnTable.columns()}
+                columns={tableColumns}
                 data={items}
                 isLoading={isRefreshing}
                 isRowsSelectable
