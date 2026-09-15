@@ -85,15 +85,18 @@ Package/version availability, LINBIT repository/subscription rights, DRBD kernel
 - Real Chromium browser acceptance with the historically qualified Playwright 1.55.0 runner: passed.
 - Browser evidence covered light/dark presentation, classic fallback, keyboard focus, GPU/protection evidence, mobile width, and zero browser-console errors.
 - Existing upstream/donor Webpack type-export and asset-size warnings remain; no audited P2 compile error was introduced.
+- Final source commit `f5f16be4bde3472f8119739a6879f45bb8d186b3` was pushed with `[skip ci]`; GitHub reported zero workflow runs for that SHA.
+- `Manoj-Test-Inst` can reach TCP/22 on all five lab nodes (`ls-fe1/2/3`, `ls-kvm1/2`), but key-only guest SSH authentication is not configured, so no live guest mutation was attempted.
 
 ## Remaining gates
 
-1. Verify any GitHub workflow used by this branch resolves only to the authorized `TESTSER` runner before push/dispatch.
-4. Bind the current authorized OpenNebula lab hostnames, IDs, datastores, networks and disposable resources before live mutation.
-5. Smoke-test native Sunstone/FireEdge admin and layout-free console after deployment.
-6. Execute VM, OneKS, VRouter, network and native backup flows against the real backend; record operation/resource IDs and cleanup.
-7. Bind a disposable SAN LUN before any iSCSI login, multipath/LVM initialization or failure test.
-8. Bind dedicated LINSTOR/DRBD storage devices and qualified package repositories before installing or creating SDS pools.
-9. Do not mark P3 failover/failback or backup-retention lineage production-ready from GUI/source evidence.
+1. Register or authorize a `TESTSER` self-hosted runner for `adaptgurus/one` before any future GitHub Actions dispatch; the current TESTSER runner is registered to `adaptgurus/cozystack`.
+2. Establish authorized key-based access to the five OpenNebula lab guests before deployment/live API qualification.
+3. Bind the current OpenNebula host IDs, datastores, networks and disposable resources before live mutation.
+4. Smoke-test native Sunstone/FireEdge admin and layout-free console after deployment.
+5. Execute VM, OneKS, VRouter, network and native backup flows against the real backend; record resource IDs and cleanup.
+6. Bind a disposable SAN LUN before iSCSI login, multipath/LVM initialization or failure testing.
+7. Bind dedicated LINSTOR/DRBD storage devices and qualified package repositories before installing or creating SDS pools.
+8. Do not mark P3 failover/failback or backup-retention lineage production-ready from GUI/source evidence.
 
 Statuses used here distinguish source/UI audit from live qualification; this document does not claim `LIVE_VERIFIED` or `PRODUCTION_CERTIFIED`.
