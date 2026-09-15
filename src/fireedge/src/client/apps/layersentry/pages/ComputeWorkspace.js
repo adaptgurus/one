@@ -16,7 +16,7 @@
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
 import { Box, Button, Typography } from '@mui/material'
-import { Plus, Server } from 'iconoir-react'
+import { HardDrive, NetworkAlt, Packages, Plus, Server } from 'iconoir-react'
 import { useHistory } from 'react-router-dom'
 import { VmAPI } from '@FeaturesModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
@@ -30,6 +30,27 @@ import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import { colors } from 'client/apps/layersentry/theme/tokens'
 
 const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
+
+const COMPUTE_QUICK_ACTIONS = [
+  {
+    label: 'Create VM',
+    path: PRODUCT_PATHS.COMPUTE_CREATE,
+    icon: Plus,
+    primary: true,
+  },
+  {
+    label: 'VM Blueprints',
+    path: PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
+    icon: Packages,
+  },
+  {
+    label: 'Affinity Groups',
+    path: PRODUCT_PATHS.COMPUTE_AFFINITY,
+    icon: Server,
+  },
+  { label: 'Disk Images', path: PRODUCT_PATHS.STORAGE_IMAGES, icon: HardDrive },
+  { label: 'Networks', path: PRODUCT_PATHS.NETWORK, icon: NetworkAlt },
+]
 
 const ComputeWorkspace = ({ endpoints }) => {
   const history = useHistory()
@@ -104,6 +125,41 @@ const ComputeWorkspace = ({ endpoints }) => {
           accent={colors.brand.accent}
         />
       </Box>
+
+      <Surface sx={{ mt: 2, p: 2 }}>
+        <SectionHeader
+          title="Compute actions"
+          description="Common VM tasks are always visible here. Select a virtual machine below for power, console, resize, disk, network, snapshot, backup and delete operations."
+        />
+        <Box
+          data-layersentry-compute-actions
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, 1fr)',
+              lg: 'repeat(5, minmax(0, 1fr))',
+            },
+            gap: 1,
+          }}
+        >
+          {COMPUTE_QUICK_ACTIONS.map(({ label, path, icon: Icon, primary }) => (
+            <Button
+              key={path}
+              variant={primary ? 'contained' : 'outlined'}
+              startIcon={<Icon width={17} height={17} />}
+              onClick={() => history.push(path)}
+              sx={{
+                justifyContent: 'flex-start',
+                textTransform: 'none',
+                minHeight: 42,
+              }}
+            >
+              {label}
+            </Button>
+          ))}
+        </Box>
+      </Surface>
 
       <Surface sx={{ mt: 2, p: 2 }}>
         <SectionHeader
