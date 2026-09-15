@@ -101,6 +101,7 @@ const NetworkWorkspace = ({ endpoints }) => {
         <Tab label="Networks" />
         <Tab label="Firewall Rules" />
         <Tab label="Network Blueprints" />
+        <Tab label="Virtual Routers" />
       </Tabs>
       <Surface sx={{ mt: 2, p: 2 }}>
         {tab === 0 && (
@@ -114,6 +115,9 @@ const NetworkWorkspace = ({ endpoints }) => {
             endpoints={endpoints}
             legacyPath="/network-template"
           />
+        )}
+        {tab === 3 && (
+          <ResourceBridge endpoints={endpoints} legacyPath="/vrouter" />
         )}
       </Surface>
     </PageFrame>

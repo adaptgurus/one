@@ -34,6 +34,7 @@ import OperationsWorkspace from 'client/apps/layersentry/pages/OperationsWorkspa
 import ProtectionWorkspace from 'client/apps/layersentry/pages/ProtectionWorkspace'
 import ComputeWorkspace from 'client/apps/layersentry/pages/ComputeWorkspace'
 import ApplicationsWorkspace from 'client/apps/layersentry/pages/ApplicationsWorkspace'
+import SiteRecoveryWorkspace from 'client/apps/layersentry/pages/SiteRecoveryWorkspace'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 
 const area = (props) => <AreaPage {...props} />
@@ -43,14 +44,19 @@ const LEGACY_REDIRECTS = Object.freeze({
   '/dashboard': PRODUCT_PATHS.OVERVIEW,
   '/vm': PRODUCT_PATHS.COMPUTE,
   '/vm/create': PRODUCT_PATHS.COMPUTE_CREATE,
+  '/vm-group': PRODUCT_PATHS.COMPUTE_AFFINITY,
   '/virtual-network': PRODUCT_PATHS.NETWORK,
   '/virtual-network/create': '/network/create',
+  '/network-template': PRODUCT_PATHS.NETWORK_TEMPLATES,
+  '/vrouter': PRODUCT_PATHS.NETWORK_ROUTERS,
   '/security-group': PRODUCT_PATHS.SECURITY,
   '/security-group/create': '/security/create',
-  '/backupjobs': PRODUCT_PATHS.PROTECTION,
+  '/backupjobs': PRODUCT_PATHS.PROTECTION_BACKUP_PLANS,
   '/backupjobs/create': '/protection/create',
-  '/backup': PRODUCT_PATHS.PROTECTION,
+  '/backup': PRODUCT_PATHS.PROTECTION_RECOVERY_POINTS,
   '/service': PRODUCT_PATHS.APPLICATIONS,
+  '/service-template': PRODUCT_PATHS.APPLICATIONS,
+  '/file': PRODUCT_PATHS.STORAGE_FILES,
   '/attention': PRODUCT_PATHS.OPERATIONS,
 })
 
@@ -99,6 +105,21 @@ const Portal = ({ endpoints }) => {
           exact
           path={PRODUCT_PATHS.COMPUTE}
           render={() => <ComputeWorkspace endpoints={endpoints} />}
+        />
+        <Route
+          exact
+          path={PRODUCT_PATHS.COMPUTE_AFFINITY}
+          render={() =>
+            area({
+              endpoints,
+              title: 'Affinity Groups',
+              description:
+                'Group virtual machines with backend-enforced placement affinity and anti-affinity rules.',
+              resources: [{ label: 'VM Groups', legacyPath: '/vm-group' }],
+              createTo: '/vm-group/create',
+              createLabel: 'Create Affinity Group',
+            })
+          }
         />
 
         <Route
@@ -150,6 +171,41 @@ const Portal = ({ endpoints }) => {
           path={PRODUCT_PATHS.NETWORK}
           render={() => <NetworkWorkspace endpoints={endpoints} />}
         />
+        <Route
+          exact
+          path={PRODUCT_PATHS.NETWORK_TEMPLATES}
+          render={() =>
+            area({
+              endpoints,
+              title: 'Network Blueprints',
+              description:
+                'Reusable OpenNebula network templates for repeatable private-cloud network creation.',
+              resources: [
+                {
+                  label: 'Network Blueprints',
+                  legacyPath: '/network-template',
+                },
+              ],
+              createTo: '/network-template/create',
+              createLabel: 'Create Network Blueprint',
+            })
+          }
+        />
+        <Route
+          exact
+          path={PRODUCT_PATHS.NETWORK_ROUTERS}
+          render={() =>
+            area({
+              endpoints,
+              title: 'Virtual Routers',
+              description:
+                'Operate OpenNebula Virtual Routers for routed networks and highly available endpoint patterns.',
+              resources: [{ label: 'Virtual Routers', legacyPath: '/vrouter' }],
+              createTo: '/vrouter/instantiate',
+              createLabel: 'Deploy Virtual Router',
+            })
+          }
+        />
 
         <Route
           exact
@@ -183,6 +239,21 @@ const Portal = ({ endpoints }) => {
           path={PRODUCT_PATHS.STORAGE}
           render={() => <StorageWorkspace endpoints={endpoints} />}
         />
+        <Route
+          exact
+          path={PRODUCT_PATHS.STORAGE_FILES}
+          render={() =>
+            area({
+              endpoints,
+              title: 'Files',
+              description:
+                'Context files, kernels and other OpenNebula file-datastore objects available to this role.',
+              resources: [{ label: 'Files', legacyPath: '/file' }],
+              createTo: '/file/create',
+              createLabel: 'Upload File',
+            })
+          }
+        />
 
         <Route
           exact
@@ -194,7 +265,7 @@ const Portal = ({ endpoints }) => {
               description:
                 'Choose resources, schedule, retention and storage before enabling protection.',
               legacyPath: '/backupjobs/create',
-              returnTo: PRODUCT_PATHS.PROTECTION,
+              returnTo: PRODUCT_PATHS.PROTECTION_BACKUP_PLANS,
               steps: [
                 'Resources',
                 'Schedule',
@@ -209,6 +280,25 @@ const Portal = ({ endpoints }) => {
           exact
           path={PRODUCT_PATHS.PROTECTION}
           render={() => <ProtectionWorkspace endpoints={endpoints} />}
+        />
+        <Route
+          exact
+          path={PRODUCT_PATHS.PROTECTION_BACKUP_PLANS}
+          render={() => (
+            <ProtectionWorkspace endpoints={endpoints} initialTab={0} />
+          )}
+        />
+        <Route
+          exact
+          path={PRODUCT_PATHS.PROTECTION_RECOVERY_POINTS}
+          render={() => (
+            <ProtectionWorkspace endpoints={endpoints} initialTab={1} />
+          )}
+        />
+        <Route
+          exact
+          path={PRODUCT_PATHS.PROTECTION_SITE_RECOVERY}
+          component={SiteRecoveryWorkspace}
         />
 
         <Route
@@ -326,6 +416,23 @@ const Portal = ({ endpoints }) => {
                   'Validation',
                   'Review',
                 ],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/infrastructure/backup-storage/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Create Backup Storage',
+                description:
+                  'Create an OpenNebula Backup Datastore using a qualified Restic, Rsync or custom backup backend.',
+                legacyPath: '/datastore/create',
+                returnTo: PRODUCT_PATHS.INFRA_BACKUP_STORAGE,
+                steps: ['Type', 'Backend', 'Capacity', 'Validation', 'Review'],
               })
             }
           />
@@ -520,6 +627,40 @@ const Portal = ({ endpoints }) => {
         {isAdmin && (
           <Route
             exact
+            path={PRODUCT_PATHS.INFRA_BACKUP_STORAGE}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Backup Storage',
+                description:
+                  'OpenNebula Backup Datastores used by Backup Plans and restore operations.',
+                resources: [
+                  { label: 'Backup Datastores', legacyPath: '/datastore' },
+                ],
+                createTo: '/infrastructure/backup-storage/create',
+                createLabel: 'Create Backup Storage',
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.INFRA_DRIVERS}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Drivers',
+                description:
+                  'Installed OpenNebula infrastructure drivers and integration status.',
+                resources: [{ label: 'Drivers', legacyPath: '/driver' }],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
             path={PRODUCT_PATHS.INFRA_ZONES}
             render={() =>
               area({
@@ -698,6 +839,86 @@ const Portal = ({ endpoints }) => {
                 resources: [{ label: 'Applications', legacyPath: '/service' }],
                 createTo: '/platform/applications/create',
                 createLabel: 'Create Application Definition',
+              })
+            }
+          />
+        )}
+
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.PLATFORM_SERVICE_TEMPLATES}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Service Templates',
+                description:
+                  'Reusable OneFlow service definitions used by the Applications catalog.',
+                resources: [
+                  {
+                    label: 'Service Templates',
+                    legacyPath: '/service-template',
+                  },
+                ],
+                createTo: '/platform/applications/create',
+                createLabel: 'Create Service Template',
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.PLATFORM_ROUTER_TEMPLATES}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Router Templates',
+                description: 'Reusable OpenNebula Virtual Router definitions.',
+                resources: [
+                  {
+                    label: 'Router Templates',
+                    legacyPath: '/vrouter-template',
+                  },
+                ],
+                createTo: '/vrouter-template/create',
+                createLabel: 'Create Router Template',
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.PLATFORM_MARKETPLACES}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Marketplaces',
+                description:
+                  'Administrative OpenNebula public and private Marketplace connections.',
+                resources: [
+                  { label: 'Marketplaces', legacyPath: '/marketplace' },
+                ],
+                createTo: '/marketplace/create',
+                createLabel: 'Create Marketplace',
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Marketplace Apps',
+                description:
+                  'Administrative appliance catalog imported from configured OpenNebula Marketplaces.',
+                resources: [
+                  { label: 'Marketplace Apps', legacyPath: '/marketplace-app' },
+                ],
               })
             }
           />

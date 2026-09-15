@@ -35,13 +35,20 @@ export const PRODUCT_PATHS = Object.freeze({
   OVERVIEW: '/overview',
   COMPUTE: '/compute',
   COMPUTE_CREATE: '/compute/create',
+  COMPUTE_AFFINITY: '/compute/affinity',
   KUBERNETES: '/kubernetes',
   KUBERNETES_CREATE: '/kubernetes/create',
   APPLICATIONS: '/applications',
   APPLICATIONS_DEPLOY: '/applications/deploy',
   STORAGE: '/storage',
+  STORAGE_FILES: '/storage/files',
   NETWORK: '/network',
+  NETWORK_TEMPLATES: '/network/templates',
+  NETWORK_ROUTERS: '/network/routers',
   PROTECTION: '/protection',
+  PROTECTION_BACKUP_PLANS: '/protection/backup-plans',
+  PROTECTION_RECOVERY_POINTS: '/protection/recovery-points',
+  PROTECTION_SITE_RECOVERY: '/protection/site-recovery',
   SECURITY: '/security',
   OPERATIONS: '/operations',
   SUPPORT: '/support',
@@ -50,6 +57,8 @@ export const PRODUCT_PATHS = Object.freeze({
   INFRA_HOSTS: '/infrastructure/hosts',
   INFRA_CLUSTERS: '/infrastructure/clusters',
   INFRA_STORAGE: '/infrastructure/storage',
+  INFRA_BACKUP_STORAGE: '/infrastructure/backup-storage',
+  INFRA_DRIVERS: '/infrastructure/drivers',
   INFRA_ZONES: '/infrastructure/zones',
   INFRA_PROVIDERS: '/infrastructure/providers',
   ACCESS: '/access',
@@ -63,17 +72,64 @@ export const PRODUCT_PATHS = Object.freeze({
   PLATFORM_IMAGES: '/platform/images',
   PLATFORM_TEMPLATES: '/platform/templates',
   PLATFORM_APPS: '/platform/applications',
+  PLATFORM_SERVICE_TEMPLATES: '/platform/service-templates',
+  PLATFORM_ROUTER_TEMPLATES: '/platform/router-templates',
+  PLATFORM_MARKETPLACES: '/platform/marketplaces',
+  PLATFORM_MARKETPLACE_APPS: '/platform/marketplace-apps',
 })
 
-const common = [
+const cloudWorkloads = [
   { label: 'Overview', path: PRODUCT_PATHS.OVERVIEW, icon: DashboardDots },
   { label: 'Compute', path: PRODUCT_PATHS.COMPUTE, icon: Server },
+  {
+    label: 'Affinity Groups',
+    path: PRODUCT_PATHS.COMPUTE_AFFINITY,
+    icon: Group,
+  },
   { label: 'Kubernetes', path: PRODUCT_PATHS.KUBERNETES, icon: XrayView },
   { label: 'Applications', path: PRODUCT_PATHS.APPLICATIONS, icon: Packages },
   { label: 'Storage', path: PRODUCT_PATHS.STORAGE, icon: HardDrive },
-  { label: 'Network', path: PRODUCT_PATHS.NETWORK, icon: NetworkAlt },
-  { label: 'Protection', path: PRODUCT_PATHS.PROTECTION, icon: Archive },
-  { label: 'Security', path: PRODUCT_PATHS.SECURITY, icon: HistoricShield },
+  { label: 'Files', path: PRODUCT_PATHS.STORAGE_FILES, icon: Archive },
+]
+
+const cloudNetwork = [
+  { label: 'Networks', path: PRODUCT_PATHS.NETWORK, icon: NetworkAlt },
+  {
+    label: 'Network Blueprints',
+    path: PRODUCT_PATHS.NETWORK_TEMPLATES,
+    icon: NetworkAlt,
+  },
+  {
+    label: 'Virtual Routers',
+    path: PRODUCT_PATHS.NETWORK_ROUTERS,
+    icon: NetworkAlt,
+  },
+  {
+    label: 'Firewall Rules',
+    path: PRODUCT_PATHS.SECURITY,
+    icon: HistoricShield,
+  },
+]
+
+const cloudProtection = [
+  {
+    label: 'Backup Plans',
+    path: PRODUCT_PATHS.PROTECTION_BACKUP_PLANS,
+    icon: Archive,
+  },
+  {
+    label: 'Recovery Points',
+    path: PRODUCT_PATHS.PROTECTION_RECOVERY_POINTS,
+    icon: Archive,
+  },
+  {
+    label: 'Site Recovery / DR',
+    path: PRODUCT_PATHS.PROTECTION_SITE_RECOVERY,
+    icon: HistoricShield,
+  },
+]
+
+const cloudOperations = [
   {
     label: 'Operations',
     path: PRODUCT_PATHS.OPERATIONS,
@@ -82,6 +138,7 @@ const common = [
   { label: 'Support', path: PRODUCT_PATHS.SUPPORT, icon: HeadsetHelp },
   { label: 'Settings', path: PRODUCT_PATHS.SETTINGS, icon: Settings },
 ]
+
 const adminGroups = [
   {
     label: 'Infrastructure',
@@ -97,6 +154,16 @@ const adminGroups = [
         label: 'Storage Pools',
         path: PRODUCT_PATHS.INFRA_STORAGE,
         icon: HardDrive,
+      },
+      {
+        label: 'Backup Storage',
+        path: PRODUCT_PATHS.INFRA_BACKUP_STORAGE,
+        icon: Archive,
+      },
+      {
+        label: 'Drivers',
+        path: PRODUCT_PATHS.INFRA_DRIVERS,
+        icon: SettingsProfiles,
       },
       { label: 'Zones / Sites', path: PRODUCT_PATHS.INFRA_ZONES, icon: Db },
       {
@@ -145,6 +212,26 @@ const adminGroups = [
         path: PRODUCT_PATHS.PLATFORM_APPS,
         icon: Packages,
       },
+      {
+        label: 'Service Templates',
+        path: PRODUCT_PATHS.PLATFORM_SERVICE_TEMPLATES,
+        icon: Packages,
+      },
+      {
+        label: 'Router Templates',
+        path: PRODUCT_PATHS.PLATFORM_ROUTER_TEMPLATES,
+        icon: NetworkAlt,
+      },
+      {
+        label: 'Marketplaces',
+        path: PRODUCT_PATHS.PLATFORM_MARKETPLACES,
+        icon: Packages,
+      },
+      {
+        label: 'Marketplace Apps',
+        path: PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS,
+        icon: Packages,
+      },
     ],
   },
 ]
@@ -152,7 +239,10 @@ const adminGroups = [
 export const isPlatformAdminView = (view) => view === 'admin'
 
 export const getNavigation = (view) => [
-  { label: 'Cloud', items: common },
+  { label: 'Cloud', items: cloudWorkloads },
+  { label: 'Network & Security', items: cloudNetwork },
+  { label: 'Protection', items: cloudProtection },
+  { label: 'Operations', items: cloudOperations },
   ...(isPlatformAdminView(view)
     ? adminGroups.map((group) => ({ ...group, items: group.children }))
     : []),

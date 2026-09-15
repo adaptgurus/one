@@ -17,8 +17,10 @@
 import PropTypes from 'prop-types'
 import { Alert, Box, Button, Tab, Tabs, Typography } from '@mui/material'
 import { Plus } from 'iconoir-react'
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
+import { DatastoreAPI, useViews } from '@FeaturesModule'
+import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
   PageFrame,
@@ -26,9 +28,28 @@ import {
 } from 'client/apps/layersentry/components/Primitives'
 import { colors } from 'client/apps/layersentry/theme/tokens'
 
-const ProtectionWorkspace = ({ endpoints }) => {
+const isBackupDatastore = (datastore = {}) =>
+  String(datastore?.TYPE) === '3' ||
+  String(datastore?.TYPE_STRING ?? '')
+    .toLowerCase()
+    .includes('backup')
+
+const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
   const history = useHistory()
-  const [tab, setTab] = useState(0)
+  const { view } = useViews()
+  const [tab, setTab] = useState(initialTab)
+  const datastoresQuery = DatastoreAPI.useGetDatastoresQuery()
+  const datastores = Array.isArray(datastoresQuery.data)
+    ? datastoresQuery.data
+    : datastoresQuery.data
+    ? [datastoresQuery.data]
+    : []
+  const backupDatastores = useMemo(
+    () => datastores.filter(isBackupDatastore),
+    [datastores]
+  )
+
+  useEffect(() => setTab(initialTab), [initialTab])
 
   return (
     <PageFrame
@@ -70,6 +91,27 @@ const ProtectionWorkspace = ({ endpoints }) => {
           </Surface>
         ))}
       </Box>
+      {backupDatastores.length === 0 && !datastoresQuery.isLoading && (
+        <Alert
+          severity="warning"
+          sx={{ mt: 2 }}
+          action={
+            view === 'admin' ? (
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => history.push(PRODUCT_PATHS.INFRA_BACKUP_STORAGE)}
+              >
+                Configure backup storage
+              </Button>
+            ) : undefined
+          }
+        >
+          No OpenNebula Backup Datastore is configured. Backup Plans and restore
+          require qualified backup storage such as Restic or Rsync before they
+          can execute successfully.
+        </Alert>
+      )}
       <Alert severity="info" sx={{ mt: 2 }}>
         LayerSentry does not promise an RPO/RTO that the configured backend has
         not qualified. Restore targets and retention behavior remain subject to
@@ -93,6 +135,7 @@ const ProtectionWorkspace = ({ endpoints }) => {
 
 ProtectionWorkspace.propTypes = {
   endpoints: PropTypes.arrayOf(PropTypes.object),
+  initialTab: PropTypes.number,
 }
 ProtectionWorkspace.defaultProps = { endpoints: [] }
 export default ProtectionWorkspace

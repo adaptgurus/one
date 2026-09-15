@@ -1,4 +1,18 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* ------------------------------------------------------------------------- *
+ * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
+ * ------------------------------------------------------------------------- */
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
@@ -39,15 +53,21 @@ test('product navigation covers customer and administrator workspaces', () => {
     'Kubernetes',
     'Applications',
     'Storage',
-    'Network',
-    'Protection',
-    'Security',
+    'Networks',
+    'Network Blueprints',
+    'Virtual Routers',
+    'Firewall Rules',
+    'Backup Plans',
+    'Recovery Points',
+    'Site Recovery / DR',
     'Operations',
     'Support',
     'Settings',
     'Compute Hosts',
     'Compute Clusters',
     'Storage Pools',
+    'Backup Storage',
+    'Drivers',
     'Zones / Sites',
     'Providers',
     'Users',
@@ -56,8 +76,15 @@ test('product navigation covers customer and administrator workspaces', () => {
     'Roles',
     'Limits',
     'Access Rules',
+    'Service Templates',
+    'Router Templates',
+    'Marketplaces',
+    'Marketplace Apps',
   ]) {
-    assert.match(nav, new RegExp(`label: '${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`))
+    assert.match(
+      nav,
+      new RegExp(`label: '${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`)
+    )
   }
 })
 
@@ -74,7 +101,10 @@ test('creation pages expose consistent guided workflow stages', () => {
 test('bare FireEdge redirects to LayerSentry and native Sunstone is not the default', () => {
   const server = read('src/server/index.js')
   assert.match(server, /res\.redirect\(`\/\$\{defaultAppName\}\/layersentry`\)/)
-  assert.doesNotMatch(server, /res\.redirect\(`\/\$\{defaultAppName\}\/sunstone`\)/)
+  assert.doesNotMatch(
+    server,
+    /res\.redirect\(`\/\$\{defaultAppName\}\/sunstone`\)/
+  )
 })
 
 test('non-Kubernetes workspaces have dedicated LayerSentry product surfaces', () => {
@@ -92,7 +122,9 @@ test('non-Kubernetes workspaces have dedicated LayerSentry product surfaces', ()
 })
 
 test('Kubernetes custom UX is deferred while OneKS lifecycle remains bridged', () => {
-  const workspace = read('src/client/apps/layersentry/pages/KubernetesWorkspace.js')
+  const workspace = read(
+    'src/client/apps/layersentry/pages/KubernetesWorkspace.js'
+  )
   assert.match(workspace, /existing OneKS lifecycle/)
   assert.match(workspace, /legacyPath="\/kubernetes"/)
   assert.doesNotMatch(workspace, /Harbor|Argo CD|OpenEverest/)
