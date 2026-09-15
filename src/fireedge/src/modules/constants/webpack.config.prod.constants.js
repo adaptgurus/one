@@ -74,6 +74,8 @@ module.exports = {
   ],
 
   optimization: {
+    // Federated remotes are compiled independently; keep public export names stable.
+    mangleExports: false,
     moduleIds: 'deterministic',
     chunkIds: 'deterministic',
   },

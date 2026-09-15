@@ -33,7 +33,9 @@ const { name: generalSlice } = GeneralSlice
 
 const { name: authSlice, actions } = AuthSlice
 
-const APPS_WITH_VIEWS = [_APPS.sunstone].map((app) => app.toLowerCase())
+const APPS_WITH_VIEWS = [_APPS.sunstone, _APPS.layersentry].map((app) =>
+  app.toLowerCase()
+)
 
 const appNeedViews = () => {
   const { appTitle } = useSelector((state) => state[generalSlice], shallowEqual)

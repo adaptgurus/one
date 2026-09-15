@@ -76,6 +76,8 @@ module.exports = {
   ],
 
   optimization: {
+    // Federated remotes are compiled independently; keep public export names stable.
+    mangleExports: false,
     minimizer: [new TerserPlugin({ extractComments: false })],
     moduleIds: 'deterministic',
     chunkIds: 'deterministic',
