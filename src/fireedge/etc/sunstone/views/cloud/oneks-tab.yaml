@@ -34,7 +34,7 @@ info-tabs:
     actions:
       create_dialog: true
   logs:
-    enabled: true
+    enabled: false
   events:
     enabled: true
   kubeconfig:

@@ -5,7 +5,7 @@ resource_name: "VM"
 
 actions:
   create_dialog: true
-  create_app_dialog: true
+  create_app_dialog: false
   deploy: false
   migrate: false
   migrate_live: false
@@ -161,4 +161,4 @@ info-tabs:
     enabled: false
 
   logs:
-    enabled: true
+    enabled: false

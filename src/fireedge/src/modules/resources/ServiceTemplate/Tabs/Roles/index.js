@@ -28,6 +28,7 @@ import { prettyBytes } from '@UtilsModule'
 import { SERVICETEMPLATES_ROLES_COLUMNS } from '@ModelsModule'
 import { Box } from '@mui/material'
 import { scale } from '@StylesModule'
+import { useViews } from '@FeaturesModule'
 
 /**
  * @param {object} root0 - Params
@@ -36,6 +37,8 @@ import { scale } from '@StylesModule'
  * @returns {Component} - Service Templates roles info tab
  */
 export const Roles = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { vmTemplateIdMap = {}, selected } = data
 
   const aSelected = [].concat(selected)
@@ -63,7 +66,7 @@ export const Roles = ({ data, config }) => {
           cell: ({ row }) =>
             row.original.name ? <Tag title={row.original.name} /> : '-',
         },
-        {
+        !isCloud && {
           header: T.TemplateID,
           id: 'template_id',
           accessorKey: 'template_id',
@@ -110,10 +113,10 @@ export const Roles = ({ data, config }) => {
         },
 
         ...SERVICETEMPLATES_ROLES_COLUMNS.slice(1),
-      ]}
+      ].filter(Boolean)}
       data={roles}
-      openRowDetailsOnClick
-      rowDetailsResourceId={RESOURCE_NAMES.VM_TEMPLATE}
+      openRowDetailsOnClick={!isCloud}
+      rowDetailsResourceId={isCloud ? undefined : RESOURCE_NAMES.VM_TEMPLATE}
     />
   )
 }

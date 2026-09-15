@@ -17,7 +17,7 @@
 import PropTypes from 'prop-types'
 import { Component, useMemo } from 'react'
 import { ProgressBar, Table } from '@ComponentsModule'
-import { VnAPI } from '@FeaturesModule'
+import { VnAPI, useViews } from '@FeaturesModule'
 import { RESOURCE_NAMES, T, VNET_THRESHOLD } from '@ConstantsModule'
 import { getLeasesInfo, getServiceNetworks } from '@ModelsModule'
 
@@ -56,6 +56,8 @@ const NETWORK_COLUMNS = [
  * @returns {Component} Service networks tab
  */
 export const Networks = ({ data }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const service = [].concat(data?.selected ?? []).filter(Boolean)[0] ?? {}
   const { data: vnets = [], isLoading } = VnAPI.useGetVNetworksQuery()
   const networks = useMemo(() => {
@@ -69,7 +71,7 @@ export const Networks = ({ data }) => {
 
   return (
     <Table
-      columns={NETWORK_COLUMNS}
+      columns={NETWORK_COLUMNS.filter(({ id }) => !isCloud || id !== 'id')}
       data={networks}
       isLoading={isLoading}
       getRowId={(row) => String(row.NAME)}

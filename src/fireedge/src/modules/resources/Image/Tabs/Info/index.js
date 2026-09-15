@@ -39,6 +39,7 @@ import {
 import { getDiskType, getImageState } from '@ModelsModule'
 import { getStyles } from '@modules/resources/Image/Tabs/Info/styles'
 import Serial from '@modules/resources/Image/Tabs/Info/serial'
+import { useViews } from '@FeaturesModule'
 
 /**
  * @param {object} root0 - Params
@@ -47,6 +48,8 @@ import Serial from '@modules/resources/Image/Tabs/Info/serial'
  * @returns {Component} - Image info tab
  */
 export const Info = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     selected,
     handleChangePermission,
@@ -114,7 +117,8 @@ export const Info = ({ data, config }) => {
       value: NAME,
       dataCy: 'name',
     },
-    DATASTORE_ID !== undefined &&
+    !isCloud &&
+      DATASTORE_ID !== undefined &&
       DATASTORE_ID !== null && {
         name: T.Datastore,
         value: hasDatastore ? (
@@ -141,11 +145,11 @@ export const Info = ({ data, config }) => {
         '-'
       ),
     },
-    {
+    !isCloud && {
       name: T.DiskType,
       value: imageDiskTypeName,
     },
-    {
+    !isCloud && {
       name: T.Locked,
       value: levelLockToString(LOCK?.LOCKED),
     },
@@ -188,11 +192,13 @@ export const Info = ({ data, config }) => {
                 title={T.Information}
                 options={info.map(({ name, value }) => [name, value ?? '-'])}
               />
-              <Serial
-                value={TEMPLATE?.SERIAL}
-                handleEditAttribute={handleEditAttribute}
-                isDisabled={isLocked || isActionsDisabled || isMutating}
-              />
+              {!isCloud && (
+                <Serial
+                  value={TEMPLATE?.SERIAL}
+                  handleEditAttribute={handleEditAttribute}
+                  isDisabled={isLocked || isActionsDisabled || isMutating}
+                />
+              )}
             </Box>
           )}
           <Box className="permissionsOwnershipContainer">

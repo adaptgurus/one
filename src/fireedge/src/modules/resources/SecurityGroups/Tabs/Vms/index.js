@@ -20,6 +20,7 @@ import { RESOURCE_NAMES, T } from '@ConstantsModule'
 import PropTypes from 'prop-types'
 import { Box } from '@mui/material'
 import { Component } from 'react'
+import { useViews } from '@FeaturesModule'
 
 /**
  * @param {object} root0 - Params
@@ -28,6 +29,8 @@ import { Component } from 'react'
  * @returns {Component} - Security Group VMs tab
  */
 export const Vms = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { selected } = data ?? {}
 
   const selectedVmIds = [
@@ -48,7 +51,12 @@ export const Vms = ({ data, config }) => {
     <Box className="vmsContainer">
       <TablePanel
         key={'Vms-tab'}
-        columns={secGroupVmTable.columns([...SECGROUP_VM_COLUMNS])}
+        columns={secGroupVmTable
+          .columns([...SECGROUP_VM_COLUMNS])
+          .filter(
+            ({ id }) =>
+              !isCloud || !['hostname', 'owner', 'group', 'labels'].includes(id)
+          )}
         data={vms}
         isLoading={isLoadingVms}
         openRowDetailsOnClick

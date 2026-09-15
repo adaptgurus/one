@@ -24,7 +24,7 @@ import { getStyles } from '@modules/resources/VirtualMachine/Tabs/Storage/styles
 import Graphs from '@modules/resources/VirtualMachine/Tabs/Storage/graphs'
 import * as VirtualMachine from '@modules/resources/VirtualMachine'
 import { Cancel, MoreVert } from 'iconoir-react'
-import { useGeneralApi, useModalsApi } from '@FeaturesModule'
+import { useGeneralApi, useModalsApi, useViews } from '@FeaturesModule'
 import {
   prettyBytes,
   stringToBoolean,
@@ -268,6 +268,15 @@ SnapshotDialog.propTypes = {
  * @returns {Component} - VM Instances info tab
  */
 export const Storage = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
+  const cloudHiddenColumns = new Set([
+    'target',
+    'datastore',
+    'fs',
+    'tm_mad',
+    'driver',
+  ])
   const { showModal } = useModalsApi()
   const { enqueueSuccess } = useGeneralApi()
   const { selectedVm } = data || {}
@@ -305,7 +314,9 @@ export const Storage = ({ data, config }) => {
 
   const columns = useMemo(
     () => [
-      ...vmdisksTable.columns(),
+      ...vmdisksTable
+        .columns()
+        .filter(({ id }) => !isCloud || !cloudHiddenColumns.has(id)),
       {
         header: '',
         id: 'actions',
@@ -349,6 +360,7 @@ export const Storage = ({ data, config }) => {
       actions,
       config,
       handleActionSuccess,
+      isCloud,
       openSnapshotDialog,
       selectedVm,
       showModal,
@@ -365,7 +377,9 @@ export const Storage = ({ data, config }) => {
 
   return (
     <Box sx={(theme) => getStyles({ theme })}>
-      <MenuButton placeholder={T.AttachDisk} options={[attachDiskOptions]} />
+      {!isCloud && (
+        <MenuButton placeholder={T.AttachDisk} options={[attachDiskOptions]} />
+      )}
       <Box className="table-container">
         <Table
           columns={columns}

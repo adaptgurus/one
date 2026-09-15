@@ -46,7 +46,7 @@ import { Component } from 'react'
 import { getStyles } from '@modules/resources/VirtualMachine/Tabs/Info/styles'
 import Graphs from '@modules/resources/VirtualMachine/Tabs/Info/graphs'
 import { ResizeCapacityForm } from '@modules/resources/VirtualMachine/Forms'
-import { useModalsApi, useSystemData, VmAPI } from '@FeaturesModule'
+import { useModalsApi, useSystemData, useViews, VmAPI } from '@FeaturesModule'
 
 const HIDDEN_MONITORING_REG =
   /^(CPU|MEMORY|NETTX|NETRX|STATE|DISK_SIZE|SNAPSHOT_SIZE)$/
@@ -83,6 +83,8 @@ export const Info = ({ data, config }) => {
   } = config || {}
 
   const { copy, isCopied } = useClipboard()
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { showModal } = useModalsApi()
   const { oneConfig, adminGroup } = useSystemData()
   const { color: stateColor, name: stateName } =
@@ -155,9 +157,12 @@ export const Info = ({ data, config }) => {
                     statusName={stateName}
                   />,
                 ],
-                [T.Owner, selectedVm?.UNAME],
-                [T.Reschedule, +selectedVm?.RESCHED !== 0 ? T.Yes : T.No],
-                [T.Locked, vmIsLocked ? T.Yes : T.No],
+                !isCloud && [T.Owner, selectedVm?.UNAME],
+                !isCloud && [
+                  T.Reschedule,
+                  +selectedVm?.RESCHED !== 0 ? T.Yes : T.No,
+                ],
+                !isCloud && [T.Locked, vmIsLocked ? T.Yes : T.No],
                 [
                   T.ip,
                   ((ips) =>
@@ -189,11 +194,11 @@ export const Info = ({ data, config }) => {
                       )
                     : '-',
                 ],
-                [T.Hypervisor, hypervisor ?? '-'],
-                [T.Host, hostName ?? T.Unknown, T.Hostname],
-                [T.Cluster, clusterId ?? '-'],
-                [T.DeployID, selectedVm?.DEPLOY_ID ?? '-'],
-              ]}
+                !isCloud && [T.Hypervisor, hypervisor ?? '-'],
+                !isCloud && [T.Host, hostName ?? T.Unknown, T.Hostname],
+                !isCloud && [T.Cluster, clusterId ?? '-'],
+                !isCloud && [T.DeployID, selectedVm?.DEPLOY_ID ?? '-'],
+              ].filter(Boolean)}
             />
           </Box>
         )}

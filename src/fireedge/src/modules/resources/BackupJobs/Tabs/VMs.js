@@ -27,7 +27,7 @@ import {
 import { RefreshDouble } from 'iconoir-react'
 import { AlertNotification, Button, Table, Tooltip } from '@ComponentsModule'
 import { BACKUPJOB_ACTIONS, RESOURCE_NAMES, T } from '@ConstantsModule'
-import { BackupJobAPI } from '@FeaturesModule'
+import { BackupJobAPI, useViews } from '@FeaturesModule'
 import { getBackupJobVmIds, vmsTable } from '@ModelsModule'
 import AttachVms from '@modules/resources/BackupJobs/Tabs/VMs/Actions'
 import {
@@ -83,6 +83,8 @@ const STATES = {
  * @returns {ReactElement} - BackupJob VMs tab
  */
 export const VMs = ({ data }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { availableActions = {}, isActionsDisabled, isLocked } = data || {}
   const selectedBackupJob = [].concat(data?.selected).filter(Boolean)?.[0] ?? {}
   const [state, setState] = useState(STATE_ALL)
@@ -134,8 +136,14 @@ export const VMs = ({ data }) => {
 
   const columns = useMemo(
     () =>
-      vmsTable.columns().filter(({ id }) => !HIDDEN_COLUMN_IDS.includes(id)),
-    []
+      vmsTable
+        .columns()
+        .filter(
+          ({ id }) =>
+            !HIDDEN_COLUMN_IDS.includes(id) &&
+            (!isCloud || !['cluster', 'owner', 'group'].includes(id))
+        ),
+    [isCloud]
   )
 
   return (

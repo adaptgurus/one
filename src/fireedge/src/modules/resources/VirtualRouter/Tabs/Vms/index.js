@@ -19,8 +19,20 @@ import { Component, useMemo } from 'react'
 import { TablePanel } from '@ComponentsModule'
 import { RESOURCE_NAMES, T } from '@ConstantsModule'
 import { getVirtualRouterVms, VM_COLUMNS, vmsTable } from '@ModelsModule'
+import { useViews } from '@FeaturesModule'
 
 const HIDDEN_COLUMN_IDS = ['cpu', 'memory', 'disk_size']
+const CLOUD_HIDDEN_COLUMN_IDS = [
+  'type',
+  'labels',
+  'hostname',
+  'vmhostname',
+  'ips',
+  'console',
+  'cluster',
+  'owner',
+  'group',
+]
 
 /**
  * @param {object} root0 - Params
@@ -28,6 +40,8 @@ const HIDDEN_COLUMN_IDS = ['cpu', 'memory', 'disk_size']
  * @returns {Component} - Virtual Router VMs tab
  */
 export const Vms = ({ data }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { vrouter = {} } = data || {}
   const vrouterVmIds = useMemo(
     () => getVirtualRouterVms(vrouter).map(String),
@@ -40,8 +54,13 @@ export const Vms = ({ data }) => {
     [vms, vrouterVmIds]
   )
   const columns = useMemo(
-    () => VM_COLUMNS.filter(({ id }) => !HIDDEN_COLUMN_IDS.includes(id)),
-    []
+    () =>
+      VM_COLUMNS.filter(
+        ({ id }) =>
+          !HIDDEN_COLUMN_IDS.includes(id) &&
+          (!isCloud || !CLOUD_HIDDEN_COLUMN_IDS.includes(id))
+      ),
+    [isCloud]
   )
 
   return (

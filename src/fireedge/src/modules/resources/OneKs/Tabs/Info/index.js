@@ -27,7 +27,7 @@ import {
   Tag,
 } from '@ComponentsModule'
 import { RESOURCE_NAMES, T, UNITS } from '@ConstantsModule'
-import { ClusterAPI, VmAPI, VnAPI } from '@FeaturesModule'
+import { ClusterAPI, VmAPI, VnAPI, useViews } from '@FeaturesModule'
 import { useClipboard } from '@HooksModule'
 import {
   aggregateOwnership,
@@ -114,6 +114,8 @@ VmLinks.propTypes = {
  * @returns {Component} - OneKs info tab
  */
 export const Info = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     selected,
     handleChangePermission,
@@ -230,33 +232,45 @@ export const Info = ({ data, config }) => {
     ],
     hasTargetCluster && [
       T.Cluster,
-      <ResourceLink
-        key="oneks-cluster"
-        resource={RESOURCE_NAMES.CLUSTER}
-        data={{ ID: targetClusterId, NAME: targetCluster?.NAME ?? '-' }}
-      >
-        {`#${targetClusterId} ${targetCluster?.NAME ?? '-'}`}
-      </ResourceLink>,
+      isCloud ? (
+        targetCluster?.NAME ?? '-'
+      ) : (
+        <ResourceLink
+          key="oneks-cluster"
+          resource={RESOURCE_NAMES.CLUSTER}
+          data={{ ID: targetClusterId, NAME: targetCluster?.NAME ?? '-' }}
+        >
+          {`#${targetClusterId} ${targetCluster?.NAME ?? '-'}`}
+        </ResourceLink>
+      ),
     ],
     hasPublicNetwork && [
       T.PublicNetwork,
-      <ResourceLink
-        key="oneks-public-network"
-        resource={RESOURCE_NAMES.VNET}
-        data={{ ID: publicNetwork, NAME: publicVnet?.NAME ?? '-' }}
-      >
-        {`#${publicNetwork} ${publicVnet?.NAME ?? '-'}`}
-      </ResourceLink>,
+      isCloud ? (
+        publicVnet?.NAME ?? '-'
+      ) : (
+        <ResourceLink
+          key="oneks-public-network"
+          resource={RESOURCE_NAMES.VNET}
+          data={{ ID: publicNetwork, NAME: publicVnet?.NAME ?? '-' }}
+        >
+          {`#${publicNetwork} ${publicVnet?.NAME ?? '-'}`}
+        </ResourceLink>
+      ),
     ],
     hasPrivateNetwork && [
       T.PrivateNetwork,
-      <ResourceLink
-        key="oneks-private-network"
-        resource={RESOURCE_NAMES.VNET}
-        data={{ ID: privateNetwork, NAME: privateVnet?.NAME ?? '-' }}
-      >
-        {`#${privateNetwork} ${privateVnet?.NAME ?? '-'}`}
-      </ResourceLink>,
+      isCloud ? (
+        privateVnet?.NAME ?? '-'
+      ) : (
+        <ResourceLink
+          key="oneks-private-network"
+          resource={RESOURCE_NAMES.VNET}
+          data={{ ID: privateNetwork, NAME: privateVnet?.NAME ?? '-' }}
+        >
+          {`#${privateNetwork} ${privateVnet?.NAME ?? '-'}`}
+        </ResourceLink>
+      ),
     ],
     [T.CreationTime, formatTime(CLUSTER_BODY?.registration_time)],
   ].filter(Boolean)
@@ -280,9 +294,13 @@ export const Info = ({ data, config }) => {
         statusName={cpStateName}
       />,
     ],
-    [T.VmIds, <VmLinks key="oneks-vms" ids={vms} vms={controlPlaneVms} />],
+    isCloud && [T.Nodes, String([].concat(vms).filter(Boolean).length)],
+    !isCloud && [
+      T.VmIds,
+      <VmLinks key="oneks-vms" ids={vms} vms={controlPlaneVms} />,
+    ],
     ...getFormattedCapacityData(userInputs),
-  ]
+  ].filter(Boolean)
 
   return (
     <Box sx={(theme) => getStyles({ theme })}>

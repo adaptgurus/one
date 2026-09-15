@@ -26,7 +26,10 @@ const backupDatastoreTable = {
   columns: () =>
     datastoreTable
       .columns()
-      .filter(({ id }) => !['owner', 'group', 'labels'].includes(id)),
+      .filter(
+        ({ id }) =>
+          !['id', 'type', 'clusters', 'owner', 'group', 'labels'].includes(id)
+      ),
   useData: () => {
     const result = datastoreTable.useData()
 

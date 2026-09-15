@@ -84,7 +84,10 @@ const Content = ({ data }) => {
     <Table
       columns={datastoreTable
         .columns()
-        .filter(({ id }) => !['owner', 'group', 'labels'].includes(id))}
+        .filter(
+          ({ id }) =>
+            !['id', 'type', 'clusters', 'owner', 'group', 'labels'].includes(id)
+        )}
       data={datastores}
       defaultPageSize={5}
       getRowId={(row) => String(row.ID)}

@@ -19,6 +19,7 @@ import { Component } from 'react'
 import { TablePanel, TagList } from '@ComponentsModule'
 import { RESOURCE_NAMES, T } from '@ConstantsModule'
 import { useResourceSingleViewContext } from '@ProvidersModule'
+import { useViews } from '@FeaturesModule'
 
 const isObject = (value) =>
   value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -42,6 +43,7 @@ const getNetworkSource = (definition) => {
     return {
       id: templateId,
       label: `Create from Virtual Network Template #${templateId}`,
+      cloudLabel: 'Published network template',
       resource: RESOURCE_NAMES.VN_TEMPLATE,
     }
   }
@@ -51,6 +53,7 @@ const getNetworkSource = (definition) => {
     return {
       id: reserveFrom,
       label: `Reserve from Virtual Network #${reserveFrom}`,
+      cloudLabel: 'Reserved network',
       resource: RESOURCE_NAMES.VNET,
     }
   }
@@ -61,6 +64,7 @@ const getNetworkSource = (definition) => {
     ? {
         id,
         label: `Use existing Virtual Network #${id}`,
+        cloudLabel: 'Existing network',
         resource: RESOURCE_NAMES.VNET,
       }
     : { label: '-' }
@@ -152,9 +156,18 @@ const NETWORK_COLUMNS = [
  * @returns {Component} Service Template networks tab
  */
 export const Networks = ({ data }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { openResourceSingleView } = useResourceSingleViewContext()
   const serviceTemplate = [].concat(data?.selected ?? []).filter(Boolean)[0]
   const networks = getNetworks(serviceTemplate)
+  const columns = isCloud
+    ? NETWORK_COLUMNS.map((column) =>
+        column.id === 'source'
+          ? { ...column, accessorFn: ({ source }) => source?.cloudLabel ?? '-' }
+          : column
+      )
+    : NETWORK_COLUMNS
 
   const handleOpenNetwork = (network) => {
     const resource = network?.source?.resource
@@ -167,11 +180,11 @@ export const Networks = ({ data }) => {
   return (
     <TablePanel
       title={T.Networks}
-      columns={NETWORK_COLUMNS}
+      columns={columns}
       data={networks}
       getRowId={({ key }) => key}
-      isRowsSelectable
-      onRowClick={handleOpenNetwork}
+      isRowsSelectable={!isCloud}
+      onRowClick={isCloud ? undefined : handleOpenNetwork}
       emptyContentProps={{
         title: T.NoNetworksYet,
         subtitle: 'This service template does not define any networks',

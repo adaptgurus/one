@@ -21,7 +21,7 @@ import PropTypes from 'prop-types'
 import { Component, useMemo } from 'react'
 import { getStyles } from '@modules/resources/VirtualMachine/Tabs/Backup/styles'
 import * as VirtualMachine from '@modules/resources/VirtualMachine'
-import { useModalsApi } from '@FeaturesModule'
+import { useModalsApi, useViews } from '@FeaturesModule'
 import { vmbackupsTable } from '@ModelsModule'
 
 /**
@@ -32,6 +32,8 @@ import { vmbackupsTable } from '@ModelsModule'
  */
 export const Backup = ({ data, config }) => {
   const { showModal } = useModalsApi()
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     selectedVm,
     extendedVmData,
@@ -77,7 +79,9 @@ export const Backup = ({ data, config }) => {
       <Button {...configureBackupOption} type={STYLE_BUTTONS.TYPE.SECONDARY} />
       <Box className="table-container">
         <Table
-          columns={vmbackupsTable.columns()}
+          columns={vmbackupsTable
+            .columns()
+            .filter(({ id }) => !isCloud || id !== 'datastore')}
           data={backups}
           isLoading={isFetchingBackups || isPerformingAction}
           emptyContentProps={{

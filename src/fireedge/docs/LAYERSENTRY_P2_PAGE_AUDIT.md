@@ -24,7 +24,7 @@ Central authority: `adaptgurus/codexagentlogic@f1f5e3f7a8a8137dc8627a6acce3fa9c2
 | VM create | PASS | Approved source, simple compute/access/disk/network/protection/GPU product inputs. |
 | Images | PASS | Cloud create removes advanced/custom provider fields and arbitrary PATH import. |
 | Files | PASS | Cloud create is upload-only; arbitrary provider/server PATH import removed. |
-| OneKS clusters | PASS | Native create/recover/upgrade/node-group/log/event/kubeconfig flow retained; provider cluster table becomes named Compute location. |
+| OneKS clusters | PASS | Native create/recover/upgrade/node-group/event/kubeconfig flow retained; steady-state provider Logs are hidden, while the native provisioning-progress log route remains available during create. Provider cluster placement is presented as named Compute location. |
 | Virtual Networks | PASS | IP ranges, leases and security operations retained; raw update/VN_MAD/bridge/VLAN/provider cluster details hidden. |
 | Network Templates | PASS | Cloud instantiate accepts address-range and security-group overrides only; provider configuration/context remains template-owned. |
 | Security Groups | PASS | Logical firewall direction/protocol/port/CIDR/VNet controls only. |
@@ -87,6 +87,34 @@ Package/version availability, LINBIT repository/subscription rights, DRBD kernel
 - Existing upstream/donor Webpack type-export and asset-size warnings remain; no audited P2 compile error was introduced.
 - Final source commit `f5f16be4bde3472f8119739a6879f45bb8d186b3` was pushed with `[skip ci]`; GitHub reported zero workflow runs for that SHA.
 - `Manoj-Test-Inst` can reach TCP/22 on all five lab nodes (`ls-fe1/2/3`, `ls-kvm1/2`), but key-only guest SSH authentication is not configured, so no live guest mutation was attempted.
+
+
+## Second-pass revalidation — 2026-09-15
+
+This pass revalidated the customer-facing cloud view page by page against the LayerSentry/OpenNebula ownership boundary. It is a source/UI security and UX revalidation only; it does not convert the environment to `LIVE_VERIFIED` or `PRODUCTION_CERTIFIED`.
+
+### Provider-detail gaps closed
+
+- VM details no longer expose owner, reschedule/lock state, hypervisor, physical host, provider cluster or deploy ID in cloud view. VM History, Storage and Network tables filter provider topology/driver fields; native Attach Disk, provider NIC actions and Attach NIC are hidden in cloud view. The VM-to-Marketplace create-app escape and steady-state VM provider Logs are disabled.
+- OneKS cloud details retain customer resource information, Kubernetes version, endpoint, named compute location, logical network names, control-plane name/flavour/state/node count and capacity without exposing clickable OpenNebula cluster/VNet/control-plane VM IDs. Node-group IDs and provider VM topology are hidden, and delete/recover confirmations use the customer-facing node-group name. Events and kubeconfig remain enabled; steady-state provider Logs are disabled without removing the provisioning-progress log route used during native OneKS create.
+- Virtual Network and Network Template pages hide provider driver, reservation-parent ID, PHYDEV, bridge implementation, VLAN/outer-VLAN implementation and related automatic-provider fields while retaining logical state, leases, address ranges, security controls and QoS.
+- Virtual Router, Security Group and VM Group views hide backing template/provider VM topology and ownership columns while retaining logical network/router/firewall and VM-affinity lifecycle.
+- OneFlow service views hide physical VM hostname, raw backing VM-template IDs and provider-resource drill-down. Service-template network sources use logical customer labels rather than provider source IDs.
+- Image, File and Backup details hide datastore identity, native disk/backend internals and provider VM-membership columns as applicable. Backup increments no longer expose backend `SOURCE` in cloud view.
+- Selection-only datastore tables for file/image/backup workflows hide datastore ID, type, clusters, owner, group and labels while retaining the selected native datastore ID internally for authoritative OpenNebula operations.
+- Final diff review also corrected two cloud/native view-reactivity defects: Backup Job VM columns and VM Storage columns now recompute when `isCloud` changes. An AST check of all changed React sources found zero remaining `useMemo` callbacks that reference `isCloud` without declaring it as a dependency.
+
+### Final source/UI qualification
+
+- Focused LayerSentry cloud/storage contracts: **45/45 PASS**.
+- Complete LayerSentry regression suite: **166/166 PASS**.
+- Changed-source lint/fix audit script: **PASS**; full FireEdge client and server ESLint: **PASS**.
+- Complete FireEdge production build (client, server and every module-federation remote): **PASS**. Existing upstream/shared-module and asset-size warnings remain non-fatal.
+- Chromium acceptance using the existing historically qualified Playwright 1.55.0 harness: **PASS** with `BROWSER_ACCEPTANCE=PASS`.
+- Static provider-boundary scan and full diff review: **PASS**; provider terms that remain in shared native components are disabled by cloud YAML or gated by `view === 'cloud'`/`isCloud` behavior.
+- `package.json` and `package-lock.json`: **unchanged**.
+- Browser-generated `dist/` and smoke screenshot evidence are removed after acceptance and are not staged.
+- Final push must use `[skip ci]`; GitHub workflow-run verification is performed against the pushed SHA after the commit exists, so it is intentionally not represented as self-referential evidence inside this commit.
 
 ## Remaining gates
 

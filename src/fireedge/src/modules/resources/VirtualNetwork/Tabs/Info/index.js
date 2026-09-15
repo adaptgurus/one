@@ -35,6 +35,7 @@ import {
   stringToBoolean,
 } from '@UtilsModule'
 import { getLeasesInfo, getVirtualNetworkState } from '@ModelsModule'
+import { useViews } from '@FeaturesModule'
 import { getStyles } from '@modules/resources/VirtualNetwork/Tabs/Info/styles'
 
 /**
@@ -44,6 +45,8 @@ import { getStyles } from '@modules/resources/VirtualNetwork/Tabs/Info/styles'
  * @returns {Component} - Virtual Network info tab
  */
 export const Info = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     vnet = {},
     selected,
@@ -116,7 +119,7 @@ export const Info = ({ data, config }) => {
               options={[
                 [T.ID, vnet?.ID],
                 [T.Name, vnet?.NAME],
-                [
+                !isCloud && [
                   T.Driver,
                   vnet?.VN_MAD ? (
                     <Tag key="driver" title={vnet.VN_MAD} status="default" />
@@ -132,17 +135,20 @@ export const Info = ({ data, config }) => {
                     statusName={stateName}
                   />,
                 ],
-                [T.ReservationParent, vnet?.PARENT_NETWORK_ID || '-'],
-                [T.PhysicalDevice, vnet?.PHYDEV || '-'],
-                [T.Bridge, vnet?.BRIDGE || '-'],
-                [T.BridgeType, vnet?.BRIDGE_TYPE || '-'],
-                [T.VlanId, vnet?.VLAN_ID || '-'],
-                [
+                !isCloud && [
+                  T.ReservationParent,
+                  vnet?.PARENT_NETWORK_ID || '-',
+                ],
+                !isCloud && [T.PhysicalDevice, vnet?.PHYDEV || '-'],
+                !isCloud && [T.Bridge, vnet?.BRIDGE || '-'],
+                !isCloud && [T.BridgeType, vnet?.BRIDGE_TYPE || '-'],
+                !isCloud && [T.VlanId, vnet?.VLAN_ID || '-'],
+                !isCloud && [
                   T.AutomaticVlanId,
                   booleanToString(stringToBoolean(vnet?.VLAN_ID_AUTOMATIC)),
                 ],
-                [T.OuterVlanId, vnet?.OUTER_VLAN_ID || '-'],
-                [
+                !isCloud && [T.OuterVlanId, vnet?.OUTER_VLAN_ID || '-'],
+                !isCloud && [
                   T.AutomaticOuterVlanId,
                   booleanToString(
                     stringToBoolean(vnet?.OUTER_VLAN_ID_AUTOMATIC)
@@ -161,7 +167,7 @@ export const Info = ({ data, config }) => {
                     ]}
                   />,
                 ],
-              ]}
+              ].filter(Boolean)}
             />
           </Box>
         )}

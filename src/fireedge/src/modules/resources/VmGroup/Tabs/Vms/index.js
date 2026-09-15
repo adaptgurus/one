@@ -19,6 +19,7 @@ import { Component } from 'react'
 import { TablePanel } from '@ComponentsModule'
 import { RESOURCE_NAMES, T } from '@ConstantsModule'
 import { vmgroupVmTable, VMGROUP_VM_COLUMNS } from '@ModelsModule'
+import { useViews } from '@FeaturesModule'
 
 const VMGROUP_VM_RESOURCE_COLUMNS = VMGROUP_VM_COLUMNS.filter(
   ({ id }) => !['owner', 'group'].includes(id)
@@ -34,6 +35,8 @@ const VMGROUP_VM_OWNERSHIP_COLUMNS = VMGROUP_VM_COLUMNS.filter(({ id }) =>
  * @returns {Component} - Service Templates roles info tab
  */
 export const VMs = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { vms, isLoadingVms } = data
 
   const aVms = [].concat(vms)
@@ -59,7 +62,7 @@ export const VMs = ({ data, config }) => {
               .concat(aVms?.ROLES?.ROLE)
               .find((r) => r?.VMS?.split(',').includes(row?.ID))?.POLICY ?? '-',
         },
-        ...VMGROUP_VM_OWNERSHIP_COLUMNS,
+        ...(isCloud ? [] : VMGROUP_VM_OWNERSHIP_COLUMNS),
       ])}
       data={aVms}
       isLoading={isLoadingVms}

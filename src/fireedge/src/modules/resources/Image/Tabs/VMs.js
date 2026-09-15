@@ -19,6 +19,7 @@ import { ReactElement, useMemo } from 'react'
 import { Table } from '@ComponentsModule'
 import { RESOURCE_NAMES, T, VM_EXTENDED_POOL } from '@ConstantsModule'
 import { vmsTable } from '@ModelsModule'
+import { useViews } from '@FeaturesModule'
 
 const HIDDEN_COLUMN_IDS = [
   'type',
@@ -36,6 +37,8 @@ const HIDDEN_COLUMN_IDS = [
  * @returns {ReactElement} - Image VMs tab
  */
 export const VMs = ({ data }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const image = [].concat(data?.selected).filter(Boolean)?.[0] ?? {}
 
   const { data: vmData = [] } = vmsTable.useData(
@@ -65,8 +68,14 @@ export const VMs = ({ data }) => {
 
   const columns = useMemo(
     () =>
-      vmsTable.columns().filter(({ id }) => !HIDDEN_COLUMN_IDS.includes(id)),
-    []
+      vmsTable
+        .columns()
+        .filter(
+          ({ id }) =>
+            !HIDDEN_COLUMN_IDS.includes(id) &&
+            (!isCloud || !['cluster', 'owner', 'group'].includes(id))
+        ),
+    [isCloud]
   )
 
   return (

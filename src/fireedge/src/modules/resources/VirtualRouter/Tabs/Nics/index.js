@@ -19,6 +19,7 @@ import { Component, useMemo } from 'react'
 import { TablePanel, TagList } from '@ComponentsModule'
 import { T } from '@ConstantsModule'
 import { getVirtualRouterNics } from '@ModelsModule'
+import { useViews } from '@FeaturesModule'
 
 const NIC_COLUMNS = [
   { header: T.ID, id: 'id', accessorKey: 'NIC_ID', grow: false },
@@ -75,13 +76,18 @@ const NIC_COLUMNS = [
  * @returns {Component} - Virtual Router NICs tab
  */
 export const Nics = ({ data }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { vrouter = {} } = data || {}
   const nics = useMemo(() => getVirtualRouterNics(vrouter), [vrouter])
 
   return (
     <TablePanel
       title={T.NicDevices}
-      columns={NIC_COLUMNS}
+      columns={NIC_COLUMNS.filter(
+        ({ id }) =>
+          !isCloud || !['network-id', 'ar-id', 'management'].includes(id)
+      )}
       data={nics}
       isFullHeight
     />

@@ -24,6 +24,7 @@ import {
   TitleSlot,
 } from '@ComponentsModule'
 import { getNodeGroupState } from '@ModelsModule'
+import { useViews } from '@FeaturesModule'
 
 /**
  * Displays a OneKS Node Group as a selectable card.
@@ -38,6 +39,8 @@ import { getNodeGroupState } from '@ModelsModule'
  */
 export const NodeGroupCard = forwardRef(
   ({ nodeGroup = {}, isSelected, onCheck, onClick }, ref) => {
+    const { view } = useViews()
+    const isCloud = view === 'cloud'
     const {
       id,
       name,
@@ -68,9 +71,14 @@ export const NodeGroupCard = forwardRef(
             MetadataSlot,
             {
               labels: [
-                [T.ID, id === undefined || id === null ? undefined : `#${id}`],
+                !isCloud && [
+                  T.ID,
+                  id === undefined || id === null ? undefined : `#${id}`,
+                ],
                 [T.Nodes, String(nodes)],
-              ].filter(([, value]) => value !== undefined && value !== null),
+              ]
+                .filter(Boolean)
+                .filter(([, value]) => value !== undefined && value !== null),
             },
           ],
           flavour && [

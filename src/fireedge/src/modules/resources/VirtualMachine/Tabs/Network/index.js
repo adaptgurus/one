@@ -39,6 +39,7 @@ import {
   VmAPI,
   useGeneralApi,
   useModalsApi,
+  useViews,
 } from '@FeaturesModule'
 import {
   getHypervisor,
@@ -248,6 +249,9 @@ SecurityGroupsDialog.propTypes = {
  */
 export const Network = ({ data, config }) => {
   const { showModal } = useModalsApi()
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
+  const cloudHiddenColumns = new Set(['target', 'vn_mad'])
   const { enqueueSuccess } = useGeneralApi()
   const { selectedVm } = data || {}
   const [securityGroupsDialog, setSecurityGroupsDialog] = useState()
@@ -464,7 +468,9 @@ export const Network = ({ data, config }) => {
   const closeSecurityGroupsDialog = () => setSecurityGroupsDialog()
 
   const columns = [
-    ...vmnicsTable.columns(),
+    ...vmnicsTable
+      .columns()
+      .filter(({ id }) => !isCloud || !cloudHiddenColumns.has(id)),
     {
       header: T.SecurityGroups,
       id: 'security-groups',
@@ -475,7 +481,7 @@ export const Network = ({ data, config }) => {
       id: 'alias',
       cell: ({ row }) => getAliasCount(row?.original, nics),
     },
-    {
+    !isCloud && {
       header: '',
       id: 'actions',
       grow: false,
@@ -531,7 +537,7 @@ export const Network = ({ data, config }) => {
         )
       },
     },
-  ]
+  ].filter(Boolean)
 
   const [attachNicOption] = VirtualMachine.Actions.Utils.generateMenuOptions({
     keys: [VM_ACTION_ENUM.ATTACH_NIC],
@@ -543,27 +549,29 @@ export const Network = ({ data, config }) => {
 
   return (
     <Box sx={(theme) => getStyles({ theme })}>
-      <Button
-        {...attachNicOption}
-        type={STYLE_BUTTONS.TYPE.SECONDARY}
-        onClick={() =>
-          showModal({
-            name: attachNicOption?.title,
-            isFormDialog: true,
-            dialogProps: {
-              title: attachNicOption?.title,
-              dataCy: 'modal-attach-nic',
-              steps: actions?.[VM_ACTION_ENUM.ATTACH_NIC]?.form,
-              stepProps: {
-                hypervisor: getHypervisor(selectedVm),
-                hostId: getVmHostId(selectedVm),
-                nics,
+      {!isCloud && (
+        <Button
+          {...attachNicOption}
+          type={STYLE_BUTTONS.TYPE.SECONDARY}
+          onClick={() =>
+            showModal({
+              name: attachNicOption?.title,
+              isFormDialog: true,
+              dialogProps: {
+                title: attachNicOption?.title,
+                dataCy: 'modal-attach-nic',
+                steps: actions?.[VM_ACTION_ENUM.ATTACH_NIC]?.form,
+                stepProps: {
+                  hypervisor: getHypervisor(selectedVm),
+                  hostId: getVmHostId(selectedVm),
+                  nics,
+                },
               },
-            },
-            onSubmit: handleAttachNic,
-          })
-        }
-      />
+              onSubmit: handleAttachNic,
+            })
+          }
+        />
+      )}
       <Box className="table-container">
         <Table
           columns={columns}

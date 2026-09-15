@@ -21,6 +21,7 @@ import PropTypes from 'prop-types'
 import { Component } from 'react'
 import { getStyles } from '@modules/resources/VirtualMachine/Tabs/History/styles'
 import { vmhistoryTable } from '@ModelsModule'
+import { useViews } from '@FeaturesModule'
 
 /**
  * @param {object} root0 - Params
@@ -30,6 +31,11 @@ import { vmhistoryTable } from '@ModelsModule'
  */
 export const History = ({ data, config }) => {
   const { selectedVm } = data || {}
+  const { view } = useViews()
+  const hiddenColumns =
+    view === 'cloud'
+      ? new Set(['hostname', 'datastore', 'vmMad', 'tmMad'])
+      : new Set()
 
   const { data: history = [], isFetching: isFetchingHistory } =
     vmhistoryTable.useData({ id: selectedVm?.ID }, { skip: !selectedVm?.ID })
@@ -38,7 +44,9 @@ export const History = ({ data, config }) => {
     <Box sx={(theme) => getStyles({ theme })}>
       <Box className="table-container">
         <Table
-          columns={vmhistoryTable.columns()}
+          columns={vmhistoryTable
+            .columns()
+            .filter(({ id }) => !hiddenColumns.has(id))}
           data={history}
           isLoading={isFetchingHistory}
           emptyContentProps={{

@@ -18,7 +18,7 @@ import PropTypes from 'prop-types'
 import { Component, useMemo } from 'react'
 import { TablePanel } from '@ComponentsModule'
 import { T } from '@ConstantsModule'
-import { VrAPI } from '@FeaturesModule'
+import { VrAPI, useViews } from '@FeaturesModule'
 import { getTotalOfResources } from '@UtilsModule'
 
 /**
@@ -27,6 +27,8 @@ import { getTotalOfResources } from '@UtilsModule'
  * @returns {Component} - Virtual Network virtual routers tab
  */
 export const VirtualRouters = ({ data }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { vnet = {} } = data || {}
 
   // API
@@ -54,9 +56,9 @@ export const VirtualRouters = ({ data }) => {
       header: T.VirtualMachines,
       cell: ({ row }) => getTotalOfResources(row.original?.VMS),
     },
-    { accessorKey: 'UNAME', header: T.Owner, grow: false },
-    { accessorKey: 'GNAME', header: T.Group, grow: false },
-  ]
+    !isCloud && { accessorKey: 'UNAME', header: T.Owner, grow: false },
+    !isCloud && { accessorKey: 'GNAME', header: T.Group, grow: false },
+  ].filter(Boolean)
 
   return (
     <TablePanel

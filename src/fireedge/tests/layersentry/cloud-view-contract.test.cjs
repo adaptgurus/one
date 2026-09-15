@@ -168,8 +168,9 @@ test('cloud VM self-service keeps lifecycle but hides raw provider device contro
     assert.equal(vm['info-tabs'].snapshot.actions[action], true, action)
   for (const action of ['backup-configure', 'backup-create', 'backup-restore'])
     assert.equal(vm['info-tabs'].backup.actions[action], true, action)
+  assert.equal(vm.actions.create_app_dialog, false)
   assert.equal(vm['info-tabs'].history.enabled, true)
-  assert.equal(vm['info-tabs'].logs.enabled, true)
+  assert.equal(vm['info-tabs'].logs.enabled, false)
 })
 
 test('cloud VM group is hidden while guest execution remains available', () => {
@@ -210,7 +211,7 @@ test('native OneKS customer lifecycle includes create, worker groups, recovery, 
   assert.equal(cfg.actions.upgrade, true)
   assert.equal(cfg.actions.delete, true)
   assert.equal(cfg['info-tabs'].nodegroup.actions.create_dialog, true)
-  assert.equal(cfg['info-tabs'].logs.enabled, true)
+  assert.equal(cfg['info-tabs'].logs.enabled, false)
   assert.equal(cfg['info-tabs'].events.enabled, true)
   assert.equal(cfg['info-tabs'].kubeconfig.enabled, true)
 })
@@ -539,4 +540,112 @@ test('cloud image and file creation reject arbitrary PATH sources while native a
   assert.match(fileSchema, /oneOf\(\[IMAGE_LOCATION_TYPES\.UPLOAD\]\)/)
   assert.match(fileSchema, /view !== ["']cloud["'] && PATH_FIELD/)
   assert.match(fileContainer, /stepProps=\{\{ view \}\}/)
+})
+
+test('second-pass VM detail boundary hides provider topology and Marketplace escapes', () => {
+  const root = resolve(
+    __dirname,
+    '../../src/modules/resources/VirtualMachine/Tabs'
+  )
+  const info = readFileSync(resolve(root, 'Info/index.js'), 'utf8')
+  const history = readFileSync(resolve(root, 'History/index.js'), 'utf8')
+  const storage = readFileSync(resolve(root, 'Storage/index.js'), 'utf8')
+  const network = readFileSync(resolve(root, 'Network/index.js'), 'utf8')
+  assert.match(info, /const isCloud = view === ['"]cloud['"]/)
+  for (const token of [
+    'T.Owner',
+    'T.Hypervisor',
+    'T.Host',
+    'T.Cluster',
+    'T.DeployID',
+  ])
+    assert.match(
+      info,
+      new RegExp(`!isCloud[^\\n]*.*${token.replace('.', '\\.')}`, 's')
+    )
+  for (const id of ['hostname', 'datastore', 'vmMad', 'tmMad'])
+    assert.match(history, new RegExp(id))
+  for (const id of ['target', 'datastore', 'fs', 'tm_mad', 'driver'])
+    assert.match(storage, new RegExp(id))
+  assert.match(
+    network,
+    /cloudHiddenColumns = new Set\(\[['"]target['"], ['"]vn_mad['"]\]\)/
+  )
+})
+
+test('second-pass OneKS network router and service views hide provider backing resources', () => {
+  const oneKsInfo = readFileSync(
+    resolve(__dirname, '../../src/modules/resources/OneKs/Tabs/Info/index.js'),
+    'utf8'
+  )
+  const nodeGroups = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/OneKs/Tabs/NodeGroups/index.js'
+    ),
+    'utf8'
+  )
+  const vnetInfo = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VirtualNetwork/Tabs/Info/index.js'
+    ),
+    'utf8'
+  )
+  const vrouterVms = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VirtualRouter/Tabs/Vms/index.js'
+    ),
+    'utf8'
+  )
+  const serviceRoles = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/Service/Tabs/Roles/index.js'
+    ),
+    'utf8'
+  )
+  assert.match(oneKsInfo, /const isCloud = view === ['"]cloud['"]/)
+  assert.match(oneKsInfo, /isCloud[\s\S]*targetCluster\?\.NAME/)
+  assert.match(nodeGroups, /CLOUD_HIDDEN_VM_COLUMN_IDS/)
+  for (const token of ['T.Driver', 'T.PhysicalDevice', 'T.Bridge', 'T.VlanId'])
+    assert.match(
+      vnetInfo,
+      new RegExp(`!isCloud[^\\n]*.*${token.replace('.', '\\.')}`, 's')
+    )
+  assert.match(vrouterVms, /CLOUD_HIDDEN_COLUMN_IDS/)
+  assert.match(serviceRoles, /!isCloud \|\| id !== ['"]hostname['"]/)
+})
+
+test('second-pass image backup file and datastore selectors hide provider storage internals', () => {
+  const files = [
+    '../../src/modules/resources/Files/Forms/CreateForm/Steps/DatastoresTable/schema.js',
+    '../../src/modules/resources/Image/Forms/CloneForm/Steps/DatastoresTable/schema.js',
+    '../../src/modules/resources/BackupJobs/Forms/CreateForm/Steps/DatastoreTable/schema.js',
+    '../../src/modules/resources/VirtualMachine/Forms/BackupForm/Steps/DatastoresTable/schema.js',
+    '../../src/modules/resources/Backups/Forms/RestoreForm/Steps/DatastoresTable/index.js',
+  ]
+  for (const file of files) {
+    const source = readFileSync(resolve(__dirname, file), 'utf8')
+    for (const id of ['id', 'type', 'clusters', 'owner', 'group', 'labels'])
+      assert.match(source, new RegExp(`['"]${id}['"]`), `${file}: ${id}`)
+  }
+  const imageInfo = readFileSync(
+    resolve(__dirname, '../../src/modules/resources/Image/Tabs/Info/index.js'),
+    'utf8'
+  )
+  const fileInfo = readFileSync(
+    resolve(__dirname, '../../src/modules/resources/Files/Tabs/Info/index.js'),
+    'utf8'
+  )
+  const backupInfo = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/Backups/Tabs/Info/index.js'
+    ),
+    'utf8'
+  )
+  for (const source of [imageInfo, fileInfo, backupInfo])
+    assert.match(source, /!isCloud[\s\S]*DATASTORE_ID/)
 })

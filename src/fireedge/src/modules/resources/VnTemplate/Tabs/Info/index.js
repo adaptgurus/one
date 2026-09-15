@@ -33,6 +33,7 @@ import {
   stringToBoolean,
 } from '@UtilsModule'
 import { getStyles } from '@modules/resources/VnTemplate/Tabs/Info/styles'
+import { useViews } from '@FeaturesModule'
 
 /**
  * @param {object} root0 - Params
@@ -41,6 +42,8 @@ import { getStyles } from '@modules/resources/VnTemplate/Tabs/Info/styles'
  * @returns {Component} - VN Templates info tab
  */
 export const Info = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     vnTemplate = {},
     selected,
@@ -113,7 +116,7 @@ export const Info = ({ data, config }) => {
               options={[
                 [T.ID, vnTemplate?.ID],
                 [T.Name, vnTemplate?.NAME],
-                [
+                !isCloud && [
                   T.Driver,
                   vnTemplate?.TEMPLATE?.VN_MAD ? (
                     <Tag
@@ -125,17 +128,17 @@ export const Info = ({ data, config }) => {
                     '-'
                   ),
                 ],
-                [T.VlanId, VLAN_ID || '-'],
-                [
+                !isCloud && [T.VlanId, VLAN_ID || '-'],
+                !isCloud && [
                   T.AutomaticVlanId,
                   booleanToString(stringToBoolean(AUTOMATIC_VLAN_ID)),
                 ],
-                [T.OuterVlanId, OUTER_VLAN_ID || '-'],
-                [
+                !isCloud && [T.OuterVlanId, OUTER_VLAN_ID || '-'],
+                !isCloud && [
                   T.AutomaticOuterVlanId,
                   booleanToString(stringToBoolean(AUTOMATIC_OUTER_VLAN_ID)),
                 ],
-              ]}
+              ].filter(Boolean)}
             />
           </Box>
         )}

@@ -38,6 +38,7 @@ import {
 } from '@UtilsModule'
 import { getDiskType, getImageState } from '@ModelsModule'
 import { getStyles } from '@modules/resources/Files/Tabs/Info/styles'
+import { useViews } from '@FeaturesModule'
 
 /**
  * @param {object} root0 - Params
@@ -46,6 +47,8 @@ import { getStyles } from '@modules/resources/Files/Tabs/Info/styles'
  * @returns {Component} - File info tab
  */
 export const Info = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     selected,
     handleChangePermission,
@@ -111,7 +114,8 @@ export const Info = ({ data, config }) => {
       value: NAME,
       dataCy: 'name',
     },
-    DATASTORE_ID !== undefined &&
+    !isCloud &&
+      DATASTORE_ID !== undefined &&
       DATASTORE_ID !== null && {
         name: T.Datastore,
         value: hasDatastore ? (
@@ -136,12 +140,12 @@ export const Info = ({ data, config }) => {
       value: fileTypeName ? <Tag title={fileTypeName} status="default" /> : '-',
       dataCy: 'type',
     },
-    {
+    !isCloud && {
       name: T.DiskType,
       value: fileDiskTypeName,
       dataCy: 'diskType',
     },
-    {
+    !isCloud && {
       name: T.Locked,
       value: levelLockToString(LOCK?.LOCKED),
       dataCy: 'locked',

@@ -34,6 +34,7 @@ import {
   getVirtualRouterTotalVms,
 } from '@ModelsModule'
 import { getStyles } from '@modules/resources/VirtualRouter/Tabs/Info/styles'
+import { useViews } from '@FeaturesModule'
 
 const toActionObject = (actions, supportedActions) =>
   Object.fromEntries(
@@ -49,6 +50,8 @@ const toActionObject = (actions, supportedActions) =>
  * @returns {Component} - Virtual Router info tab
  */
 export const Info = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const {
     vrouter = {},
     selected,
@@ -143,10 +146,10 @@ export const Info = ({ data, config }) => {
                 options={[
                   [T.ID, vrouter?.ID],
                   [T.Name, vrouter?.NAME],
-                  [T.TemplateID, vrouter?.TEMPLATE?.TEMPLATE_ID],
+                  !isCloud && [T.TemplateID, vrouter?.TEMPLATE?.TEMPLATE_ID],
                   [T.TotalVms, getVirtualRouterTotalVms(vrouter)],
                   [T.NIC, getVirtualRouterTotalNics(vrouter)],
-                ]}
+                ].filter(Boolean)}
               />
             </Box>
           )}

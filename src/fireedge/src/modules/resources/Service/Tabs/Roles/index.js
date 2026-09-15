@@ -14,7 +14,7 @@
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 
-import { useModalsApi } from '@FeaturesModule'
+import { useModalsApi, useViews } from '@FeaturesModule'
 import { RESOURCE_NAMES, SERVICE_ACTION_ENUM, T } from '@ConstantsModule'
 import { getServiceRoles, rolevmsTable } from '@ModelsModule'
 import { Box } from '@mui/material'
@@ -36,6 +36,8 @@ import * as Service from '@modules/resources/Service'
  * @returns {Component} - Service roles tab
  */
 export const Roles = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { selected: service = {} } = data || {}
   const { showModal } = useModalsApi()
   const roles = useMemo(() => getServiceRoles(service), [service])
@@ -158,7 +160,9 @@ export const Roles = ({ data, config }) => {
 
         <Box className="roleVmsTable">
           <Table
-            columns={rolevmsTable.columns()}
+            columns={rolevmsTable
+              .columns()
+              .filter(({ id }) => !isCloud || id !== 'hostname')}
             data={roleVms}
             isLoading={isLoadingRoleVms || isFetchingRoleVms}
             getRowId={(row) => String(row.ID)}

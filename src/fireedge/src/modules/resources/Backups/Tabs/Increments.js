@@ -20,6 +20,7 @@ import { Table, Tag } from '@ComponentsModule'
 import { T } from '@ConstantsModule'
 import { prettyBytes, timeFromMilliseconds } from '@UtilsModule'
 import { getBackupIncrements } from '@ModelsModule'
+import { useViews } from '@FeaturesModule'
 
 /**
  * @param {object} root0 - Params
@@ -27,47 +28,50 @@ import { getBackupIncrements } from '@ModelsModule'
  * @returns {ReactElement} - Backup increments tab
  */
 export const Increments = ({ data }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const backup = [].concat(data?.selected).filter(Boolean)?.[0] ?? {}
   const increments = useMemo(() => getBackupIncrements(backup), [backup])
 
   const columns = useMemo(
-    () => [
-      {
-        header: T.ID,
-        id: 'id',
-        accessorKey: 'ID',
-        grow: false,
-      },
-      {
-        header: T.Type,
-        id: 'type',
-        accessorKey: 'TYPE',
-        cell: ({ row }) =>
-          row.original?.TYPE ? (
-            <Tag title={row.original.TYPE} status="default" />
-          ) : (
-            '-'
-          ),
-      },
-      {
-        header: T.Size,
-        id: 'size',
-        accessorFn: (row) => prettyBytes(row?.SIZE, 'MB'),
-      },
-      {
-        header: T.Source,
-        id: 'source',
-        accessorKey: 'SOURCE',
-      },
-      {
-        header: T.Date,
-        id: 'date',
-        grow: false,
-        accessorFn: (row) =>
-          row?.DATE ? timeFromMilliseconds(+row.DATE).toRelative() : '-',
-      },
-    ],
-    []
+    () =>
+      [
+        {
+          header: T.ID,
+          id: 'id',
+          accessorKey: 'ID',
+          grow: false,
+        },
+        {
+          header: T.Type,
+          id: 'type',
+          accessorKey: 'TYPE',
+          cell: ({ row }) =>
+            row.original?.TYPE ? (
+              <Tag title={row.original.TYPE} status="default" />
+            ) : (
+              '-'
+            ),
+        },
+        {
+          header: T.Size,
+          id: 'size',
+          accessorFn: (row) => prettyBytes(row?.SIZE, 'MB'),
+        },
+        !isCloud && {
+          header: T.Source,
+          id: 'source',
+          accessorKey: 'SOURCE',
+        },
+        {
+          header: T.Date,
+          id: 'date',
+          grow: false,
+          accessorFn: (row) =>
+            row?.DATE ? timeFromMilliseconds(+row.DATE).toRelative() : '-',
+        },
+      ].filter(Boolean),
+    [isCloud]
   )
 
   return (

@@ -18,7 +18,7 @@ import PropTypes from 'prop-types'
 import { Box, Stack } from '@mui/material'
 import { EmptyContent, List, SkeletonLoading, Table } from '@ComponentsModule'
 import { T, RESOURCE_NAMES } from '@ConstantsModule'
-import { OneKsAPI } from '@FeaturesModule'
+import { OneKsAPI, useViews } from '@FeaturesModule'
 import { getVirtualOneKsState, showDataByState, vmsTable } from '@ModelsModule'
 import {
   AddNodeGroupAction,
@@ -29,6 +29,7 @@ import NodeGroupActions from '@modules/resources/OneKs/Tabs/NodeGroups/rowAction
 import { getStyles } from '@modules/resources/OneKs/Tabs/NodeGroups/styles'
 
 const HIDDEN_VM_COLUMN_IDS = ['ips', 'owner', 'group', 'labels']
+const CLOUD_HIDDEN_VM_COLUMN_IDS = ['hostname', 'cluster', 'vmhostname']
 
 /**
  * Renders Node Groups in the same list-and-detail layout as Service Roles.
@@ -38,6 +39,8 @@ const HIDDEN_VM_COLUMN_IDS = ['ips', 'owner', 'group', 'labels']
  * @returns {ReactElement} Node Groups tab
  */
 const NodeGroups = ({ data }) => {
+  const { view } = useViews()
+  const cloudHiddenColumns = view === 'cloud' ? CLOUD_HIDDEN_VM_COLUMN_IDS : []
   const cluster = data?.selected ?? {}
   const id = cluster?.ID ?? data?.id
   const { isLoading } = data ?? {}
@@ -71,8 +74,12 @@ const NodeGroups = ({ data }) => {
     () =>
       vmsTable
         .columns()
-        .filter(({ id: columnId }) => !HIDDEN_VM_COLUMN_IDS.includes(columnId)),
-    []
+        .filter(
+          ({ id: columnId }) =>
+            !HIDDEN_VM_COLUMN_IDS.includes(columnId) &&
+            !cloudHiddenColumns.includes(columnId)
+        ),
+    [cloudHiddenColumns.join(',')]
   )
 
   const handleSelectNodeGroup = (nodeGroupId) =>

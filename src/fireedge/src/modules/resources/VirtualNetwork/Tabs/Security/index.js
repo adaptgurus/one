@@ -26,7 +26,12 @@ import {
 } from '@ComponentsModule'
 import { ChangeForm } from '@modules/resources/SecurityGroups/Forms'
 import { STYLE_BUTTONS, T, VN_ACTIONS } from '@ConstantsModule'
-import { SecurityGroupAPI, VnAPI, useModalsApi } from '@FeaturesModule'
+import {
+  SecurityGroupAPI,
+  VnAPI,
+  useModalsApi,
+  useViews,
+} from '@FeaturesModule'
 import { jsonToXml } from '@UtilsModule'
 
 const getSecurityGroupIds = (vnet) =>
@@ -64,6 +69,8 @@ const dialogWidth = {
  * @returns {Component} - Virtual Network security groups tab
  */
 export const Security = ({ data, config }) => {
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { vnet = {}, handleRefresh, isActionsDisabled, isLocked } = data || {}
 
   // API
@@ -96,8 +103,8 @@ export const Security = ({ data, config }) => {
       header: T.Rules,
       cell: ({ row }) => getRulesCount(row.original),
     },
-    { accessorKey: 'UNAME', header: T.Owner, grow: false },
-    { accessorKey: 'GNAME', header: T.Group, grow: false },
+    !isCloud && { accessorKey: 'UNAME', header: T.Owner, grow: false },
+    !isCloud && { accessorKey: 'GNAME', header: T.Group, grow: false },
     {
       id: 'actions',
       header: '',
@@ -129,7 +136,7 @@ export const Security = ({ data, config }) => {
         )
       },
     },
-  ]
+  ].filter(Boolean)
 
   // Actions
   const updateSecurityGroups = async (nextSecurityGroupIds) => {

@@ -20,7 +20,12 @@ import { generatePath, useHistory } from 'react-router-dom'
 import { EditPencil, Expand, RefreshCircular, Trash } from 'iconoir-react'
 import { Button, ResourceActionConfirmation } from '@ComponentsModule'
 import { T, ONEKS_OPERATIONS, PATH } from '@ConstantsModule'
-import { OneKsAPI, useGeneralApi, useModalsApi } from '@FeaturesModule'
+import {
+  OneKsAPI,
+  useGeneralApi,
+  useModalsApi,
+  useViews,
+} from '@FeaturesModule'
 import {
   EditOneKsNodeGroupForm,
   ScaleKsGroupForm,
@@ -37,6 +42,8 @@ import { DIALOG_SIZE_PROPS } from '@modules/resources/OneKs/Tabs/NodeGroups/styl
  */
 const NodeGroupActions = memo(({ node, id }) => {
   const history = useHistory()
+  const { view } = useViews()
+  const isCloud = view === 'cloud'
   const { showModal } = useModalsApi()
   const { enqueueSuccess, enqueueError } = useGeneralApi()
   const [deleteNodeGroup] = OneKsAPI.useDeleteNodeGroupMutation()
@@ -44,6 +51,9 @@ const NodeGroupActions = memo(({ node, id }) => {
   const [recoverNodeGroup] = OneKsAPI.useRecoverOneKsNodeGroupMutation()
   const [updateNodeGroup] = OneKsAPI.useUpdateOneKsClusterNodeGroupsMutation()
   const nodeId = node?.id
+  const confirmationResource = isCloud
+    ? { NAME: node?.name }
+    : { ID: nodeId, NAME: node?.name }
   const isDisabled = nodeId === undefined || nodeId === null
 
   const handleRemove = async () => {
@@ -124,7 +134,7 @@ const NodeGroupActions = memo(({ node, id }) => {
         description: (
           <ResourceActionConfirmation
             description={T['resource.recover.confirmation']}
-            resources={{ ID: nodeId, NAME: node?.name }}
+            resources={confirmationResource}
             resourceType={T.NodeGroups}
           />
         ),
@@ -142,7 +152,7 @@ const NodeGroupActions = memo(({ node, id }) => {
         description: (
           <ResourceActionConfirmation
             description={T['resource.delete.confirmation']}
-            resources={{ ID: nodeId, NAME: node?.name }}
+            resources={confirmationResource}
             resourceType={T.NodeGroups}
           />
         ),
