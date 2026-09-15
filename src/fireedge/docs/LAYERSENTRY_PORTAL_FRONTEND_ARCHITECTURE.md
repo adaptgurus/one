@@ -1,8 +1,8 @@
 # LayerSentry Unified Portal — Frontend Architecture
 
-Status: DESIGN_DEFINED
+Status: PARTIAL — portal foundation source-complete; full product workflows pending
 Date: 2026-09-15
-Source base: `adaptgurus/one` @ `1124882b67e85d28d4e0dc9aa71badaef82c8bd3`
+Integrated P2 base: `adaptgurus/one` @ `a83be8a4b4220dfbd5cbe9552256b3a68d984b38`
 Central authority: `adaptgurus/codexagentlogic` @ `4f51de3e393c9619f3e5530d37fe6c25b7ec8b92`
 
 ## Product boundary
@@ -15,7 +15,7 @@ The portal reuses the existing FireEdge authentication, session, Redux/RTK Query
 
 The initial implementation lives inside the existing FireEdge Sunstone bundle so it can reuse the supported session and API infrastructure without duplicating authentication. After authentication, LayerSentry owns the shell, routes, navigation, terminology and visual system. Existing OpenNebula resource components are reached through an explicit bridge while each product area is progressively replaced by LayerSentry-native views.
 
-The current dirty P2 worktree is not modified by this design branch. This branch uses an independent Git worktree and will be integrated only after the P2 third-pass patch is safely qualified and committed.
+The P2 third-pass provider-boundary hardening was qualified, committed separately, and integrated before the unified portal commit. The deployed portal source includes that P2 base and preserves the native FireEdge/OpenNebula lifecycle boundaries.
 ## UX architecture
 
 The shell is one coherent product for all roles: top bar, grouped left navigation, page frame, status language, search, notifications/help affordances and account controls. Capability changes are role-driven; the product does not fork into unrelated UIs.
