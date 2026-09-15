@@ -18,6 +18,7 @@ import { CEPH_FIELDS } from './ceph'
 import { RESTIC_FIELDS } from './restic'
 import { RSYNC_FIELDS } from './rsync'
 import { NETAPP_FIELDS } from './netapp'
+import { LAYERSENTRY_STORAGE_FIELDS } from './layersentry'
 
 export {
   COMMON_FIELDS,
@@ -25,4 +26,5 @@ export {
   RESTIC_FIELDS,
   RSYNC_FIELDS,
   NETAPP_FIELDS,
+  LAYERSENTRY_STORAGE_FIELDS,
 }

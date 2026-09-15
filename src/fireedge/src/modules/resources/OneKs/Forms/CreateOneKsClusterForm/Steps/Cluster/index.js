@@ -16,29 +16,36 @@
 import PropTypes from 'prop-types'
 import { FormWithSchema } from '@ComponentsModule'
 import { T } from '@ConstantsModule'
-import { SCHEMA, FIELDS } from './schema'
+import { getFields, getSchema } from './schema'
 
 export const STEP_ID = 'cluster'
 
-const Content = () => (
-  <FormWithSchema id={STEP_ID} cy={`${STEP_ID}`} fields={FIELDS} />
+const Content = ({ view }) => (
+  <FormWithSchema id={STEP_ID} cy={`${STEP_ID}`} fields={getFields(view)} />
 )
 
 /**
  * Cluster configuration.
  *
+ * @param {object} root0 - Step properties
+ * @param {string} root0.view - Active FireEdge view
  * @returns {object} Cluster configuration step
  */
-const Cluster = () => ({
+const Cluster = ({ view } = {}) => ({
   id: STEP_ID,
-  label: T.SelectCluster,
-  resolver: SCHEMA,
+  label: view === 'cloud' ? 'Compute location' : T.SelectCluster,
+  resolver: getSchema(view),
   optionsValidate: { abortEarly: false },
-  content: () => Content(),
+  content: () => <Content view={view} />,
 })
 
 Cluster.propTypes = {
   families: PropTypes.array,
+  view: PropTypes.string,
+}
+
+Content.propTypes = {
+  view: PropTypes.string,
 }
 
 export default Cluster

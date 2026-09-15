@@ -21,6 +21,7 @@ import {
   DatastoreAPI,
   useGeneralApi,
   useSystemData,
+  useViews,
 } from '@FeaturesModule'
 import { jsonToXml } from '@UtilsModule'
 import { DefaultFormStepper, SkeletonStepsForm } from '@ComponentsModule'
@@ -41,6 +42,7 @@ export function CreateImage() {
   const [upload] = ImageAPI.useUploadImageMutation()
   const { enqueueSuccess, enqueueError, uploadSnackbar } = useGeneralApi()
   const { adminGroup, oneConfig } = useSystemData()
+  const { view } = useViews()
   DatastoreAPI.useGetDatastoresQuery(undefined, {
     refetchOnMountOrArgChange: false,
   })
@@ -87,6 +89,7 @@ export function CreateImage() {
           stepProps={{
             oneConfig,
             adminGroup,
+            view,
           }}
           fallback={<SkeletonStepsForm />}
         >

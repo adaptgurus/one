@@ -33,7 +33,10 @@ import CustomAttributes, {
 import { createSteps, cloneObject, set } from '@UtilsModule'
 
 const Steps = createSteps(
-  [General, Datastore, AdvancedOptions, CustomAttributes],
+  ({ view } = {}) =>
+    view === 'cloud'
+      ? [General, Datastore]
+      : [General, Datastore, AdvancedOptions, CustomAttributes],
   {
     transformBeforeSubmit: (formData) => {
       const {

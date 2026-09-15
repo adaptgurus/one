@@ -31,6 +31,7 @@ const INSTANTIATE_CONFIGURATION_TABS = [
   'security',
   'context',
 ]
+const CLOUD_INSTANTIATE_CONFIGURATION_TABS = ['addresses', 'security']
 
 const getAddressRanges = (template = {}) => [template?.AR ?? []].flat()
 const markOriginalAddressRanges = (addressRanges) =>
@@ -48,7 +49,10 @@ const InstantiateConfiguration = (props) =>
     ...props,
     isInstantiate: true,
     isUpdate: false,
-    tabIds: INSTANTIATE_CONFIGURATION_TABS,
+    tabIds:
+      props?.view === 'cloud'
+        ? CLOUD_INSTANTIATE_CONFIGURATION_TABS
+        : INSTANTIATE_CONFIGURATION_TABS,
   })
 
 const Steps = createSteps(() => [General, InstantiateConfiguration], {

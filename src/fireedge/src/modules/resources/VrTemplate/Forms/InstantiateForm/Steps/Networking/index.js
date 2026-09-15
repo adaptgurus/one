@@ -13,10 +13,11 @@
  * See the License for the specific language governing permissions and       *
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
+import PropTypes from 'prop-types'
 import { v4 as uuidv4 } from 'uuid'
 import {
-  FIELDS,
-  SCHEMA,
+  getFields,
+  getSchema,
 } from '@modules/resources/VrTemplate/Forms/InstantiateForm/Steps/Networking/schema'
 import { T } from '@ConstantsModule'
 import { ServerConnection as NetworkIcon } from 'iconoir-react'
@@ -44,7 +45,7 @@ const getDefaultNic = () => ({
   nicId: uuidv4(),
 })
 
-const Content = () => {
+const Content = ({ view }) => {
   const { watch } = useFormContext()
   const { data: vnets = [] } = VnAPI.useGetVNetworksQuery()
   const { data: secgroups = [] } = SecurityGroupAPI.useGetSecGroupsQuery()
@@ -125,7 +126,7 @@ const Content = () => {
             <FormWithSchema
               legend={T.VirtualRouterNICNetworkConfiguration}
               cy={STEP_ID}
-              fields={FIELDS}
+              fields={getFields(view)}
               saveState
               id={`${STEP_ID}.${selectedNic}`}
             />
@@ -139,14 +140,20 @@ const Content = () => {
 /**
  * Basic configuration about VM Template.
  *
+ * @param {object} root0 - Step properties
+ * @param {string} root0.view - Active FireEdge view
  * @returns {object} Basic configuration step
  */
-const Networking = () => ({
+const Networking = ({ view } = {}) => ({
   id: STEP_ID,
   label: T.ConfigureNetworking,
-  resolver: SCHEMA,
+  resolver: getSchema(view),
   optionsValidate: { abortEarly: false },
-  content: () => Content(),
+  content: () => <Content view={view} />,
 })
+
+Content.propTypes = { view: PropTypes.string }
+
+Networking.propTypes = { view: PropTypes.string }
 
 export default Networking

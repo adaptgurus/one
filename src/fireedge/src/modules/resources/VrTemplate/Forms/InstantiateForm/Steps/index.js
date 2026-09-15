@@ -51,7 +51,7 @@ const Steps = createSteps(
     return [
       isEmptyTemplate && (() => TemplateSelection()),
       () => BasicConfiguration({ vmTemplate: dataTemplateExtended, ...rest }),
-      Networking,
+      () => Networking({ view: rest?.view }),
       userInputs?.length > 0 &&
         (() => UserInputs(userInputs, userInputsLayout)),
     ].filter(Boolean)

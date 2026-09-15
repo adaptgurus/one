@@ -17,8 +17,8 @@ actions:
   unshare: false
   edit_labels: false
 filters:
-  owner: true
-  group: true
+  owner: false
+  group: false
 info-tabs:
   info:
     enabled: true
@@ -27,11 +27,11 @@ info-tabs:
       actions:
         rename: false
     permissions_panel:
-      enabled: true
+      enabled: false
       actions:
         chmod: false
     ownership_panel:
-      enabled: true
+      enabled: false
       actions:
         chown: false
         chgrp: false
@@ -40,4 +40,4 @@ info-tabs:
   networks:
     enabled: true
   template:
-    enabled: true
+    enabled: false

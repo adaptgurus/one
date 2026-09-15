@@ -15,7 +15,7 @@
  * ------------------------------------------------------------------------- */
 import { ReactElement } from 'react'
 import { generatePath, useHistory, useLocation } from 'react-router-dom'
-import { OneKsAPI, useGeneralApi } from '@FeaturesModule'
+import { OneKsAPI, useGeneralApi, useViews } from '@FeaturesModule'
 
 import { DefaultFormStepper, SkeletonStepsForm } from '@ComponentsModule'
 import { OneKs } from '@ResourcesModule'
@@ -34,6 +34,7 @@ export function CreateOneKsCluster() {
   const clusterId = state?.ID
 
   const { enqueueSuccess, enqueueError } = useGeneralApi()
+  const { view } = useViews()
   const [createOneKsCluster] = OneKsAPI.useCreateOneKsClusterMutation()
 
   const { data: families } = OneKsAPI.useGetOneKsFamiliesQuery()
@@ -75,6 +76,7 @@ export function CreateOneKsCluster() {
           stepProps={{
             families: familiesUserInputs,
             clusterId,
+            view,
           }}
           fallback={<SkeletonStepsForm />}
         >

@@ -1,4 +1,18 @@
-/* SPDX-License-Identifier: Apache-2.0 */
+/* ------------------------------------------------------------------------- *
+ * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
+ * ------------------------------------------------------------------------- */
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const { readFileSync, readdirSync } = require('node:fs')
@@ -212,6 +226,7 @@ test('network self-service includes template instantiation, IP ranges, leases an
   assert.equal(vnet['info-tabs'].security.actions.add_secgroup, true)
   assert.equal(vnet['info-tabs'].security.actions.delete_secgroup, true)
   assert.equal(vnet.actions.change_cluster, false)
+  assert.equal(vnet.actions.update_dialog, false)
 })
 
 test('traffic rules are customer-manageable but ownership and raw attributes are not', () => {
@@ -272,8 +287,256 @@ test('self-service account has quota/reporting and only safe credential actions'
   )
 })
 
+test('cloud view does not expose OpenNebula Marketplace Apps as the LayerSentry catalog', () => {
+  assert.equal(readdirSync(cloud).includes('marketplace-app-tab.yaml'), false)
+})
+
+test('customer network pages hide provider cluster, driver and raw-attribute details', () => {
+  const vnet = read('vnet-tab.yaml')
+  assert.equal(vnet.filters.vn_mad, false)
+  assert.equal(vnet['info-tabs'].cluster.enabled, false)
+  assert.equal(vnet['info-tabs'].info.permissions_panel.enabled, false)
+  assert.equal(vnet['info-tabs'].info.ownership_panel.enabled, false)
+  assert.equal(vnet['info-tabs'].info.attributes_panel.enabled, false)
+  const template = read('vnet-template-tab.yaml')
+  assert.equal(template['info-tabs'].cluster.enabled, false)
+  assert.equal(template['info-tabs'].template.enabled, false)
+  assert.equal(template['info-tabs'].info.attributes_panel.enabled, false)
+})
+
+test('customer OneKS and data-protection pages hide native chmod and ownership panels', () => {
+  for (const file of [
+    'oneks-tab.yaml',
+    'image-tab.yaml',
+    'backup-tab.yaml',
+    'backupjobs-tab.yaml',
+  ]) {
+    const cfg = read(file)
+    assert.equal(cfg['info-tabs'].info.permissions_panel.enabled, false, file)
+    assert.equal(cfg['info-tabs'].info.ownership_panel.enabled, false, file)
+  }
+})
+
+test('OneFlow customer service page consumes published definitions instead of raw service authoring', () => {
+  const cfg = read('service-tab.yaml')
+  assert.equal(cfg.actions.instantiate_dialog, true)
+  assert.equal(cfg.actions.create_dialog, false)
+  assert.equal(cfg['info-tabs'].template.enabled, false)
+  assert.equal(cfg['info-tabs'].info.permissions_panel.enabled, false)
+  assert.equal(cfg['info-tabs'].info.ownership_panel.enabled, false)
+})
+
 test('self-service support can create tickets and comments', () => {
   const cfg = read('support-tab.yaml')
   assert.equal(cfg.actions.create_dialog, true)
   assert.equal(cfg['info-tabs'].comments.actions.comment, true)
+})
+
+test('remaining customer resource pages hide raw provider metadata', () => {
+  for (const file of ['file-tab.yaml', 'sec-group-tab.yaml']) {
+    const cfg = read(file)
+    assert.equal(cfg['info-tabs'].info.permissions_panel.enabled, false, file)
+    assert.equal(cfg['info-tabs'].info.ownership_panel.enabled, false, file)
+    assert.equal(cfg['info-tabs'].info.attributes_panel.enabled, false, file)
+  }
+  const group = read('vm-group-tab.yaml')
+  assert.equal(group['info-tabs'].info.permissions_panel.enabled, false)
+  assert.equal(group['info-tabs'].info.ownership_panel.enabled, false)
+  for (const file of ['service-template-tab.yaml', 'vrouter-tab.yaml']) {
+    const cfg = read(file)
+    assert.equal(cfg.filters.owner, false, file)
+    assert.equal(cfg.filters.group, false, file)
+    assert.equal(cfg['info-tabs'].template.enabled, false, file)
+    assert.equal(cfg['info-tabs'].info.permissions_panel.enabled, false, file)
+    assert.equal(cfg['info-tabs'].info.ownership_panel.enabled, false, file)
+  }
+})
+
+test('self-service quota page is read-only', () => {
+  const cfg = read('user-tab.yaml')
+  assert.equal(cfg['info-tabs'].quota.enabled, true)
+  assert.equal(cfg['info-tabs'].quota.actions.quotas_dialog, false)
+  assert.equal(cfg['info-tabs'].info.attributes_panel.enabled, false)
+})
+
+test('cloud image creation hides native advanced and arbitrary attribute steps', () => {
+  const steps = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/Image/Forms/CreateForm/Steps/index.js'
+    ),
+    'utf8'
+  )
+  const container = readFileSync(
+    resolve(__dirname, '../../src/modules/containers/Images/Create.js'),
+    'utf8'
+  )
+  assert.match(steps, /view === ["']cloud["'][\s\S]*\? \[General, Datastore\]/)
+  assert.match(
+    steps,
+    /: \[General, Datastore, AdvancedOptions, CustomAttributes\]/
+  )
+  assert.match(container, /const \{ view \} = useViews\(\)/)
+  assert.match(container, /adminGroup,[\s\S]*view,/)
+})
+
+test('cloud OneKS create shows only a named compute location while preserving native placement ID', () => {
+  const schema = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/OneKs/Forms/CreateOneKsClusterForm/Steps/Cluster/schema.js'
+    ),
+    'utf8'
+  )
+  const steps = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/OneKs/Forms/CreateOneKsClusterForm/Steps/index.js'
+    ),
+    'utf8'
+  )
+  const create = readFileSync(
+    resolve(__dirname, '../../src/modules/containers/OneKs/Create.js'),
+    'utf8'
+  )
+  assert.match(schema, /CLOUD_CLUSTER_COLUMNS = new Set\(\[["']name["']\]\)/)
+  assert.match(
+    schema,
+    /view === ["']cloud["'] \? ["']Compute location["'] : T\.SelectCluster/
+  )
+  assert.match(
+    schema,
+    /model:[\s\S]*view === ["']cloud["'] \? cloudClusterSelectionTable : clusterSelectionTable/
+  )
+  assert.match(steps, /Cluster\(formProps\)/)
+  assert.match(steps, /deployment:[\s\S]*cluster:[\s\S]*id: toId\(clusterId\)/)
+  assert.match(create, /const \{ view \} = useViews\(\)/)
+  assert.match(create, /clusterId,[\s\S]*view,/)
+})
+
+test('cloud network-template instantiate accepts only address and security overrides', () => {
+  const cfg = read('vnet-template-tab.yaml')
+  assert.equal(cfg['instantiate-tabs'].address.enabled, true)
+  assert.equal(cfg['instantiate-tabs'].security.enabled, true)
+  assert.equal(cfg['instantiate-tabs'].configuration.enabled, false)
+  assert.equal(cfg['instantiate-tabs'].context.enabled, false)
+  const steps = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VnTemplate/Forms/InstantiateForm/Steps/index.js'
+    ),
+    'utf8'
+  )
+  const container = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VnTemplates/Instantiate.js'
+    ),
+    'utf8'
+  )
+  assert.match(
+    steps,
+    /CLOUD_INSTANTIATE_CONFIGURATION_TABS = \[["']addresses["'], ["']security["']\]/
+  )
+  assert.match(
+    steps,
+    /props\?\.view === ["']cloud["'][\s\S]*CLOUD_INSTANTIATE_CONFIGURATION_TABS/
+  )
+  assert.match(container, /const \{ view \} = useViews\(\)/)
+  assert.match(container, /adminGroup,[\s\S]*view,/)
+})
+
+test('cloud VRouter instantiate hides keepalived and implementation NIC controls', () => {
+  const basic = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VrTemplate/Forms/InstantiateForm/Steps/BasicConfiguration/informationSchema.js'
+    ),
+    'utf8'
+  )
+  const networking = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VrTemplate/Forms/InstantiateForm/Steps/Networking/schema.js'
+    ),
+    'utf8'
+  )
+  const core = readFileSync(
+    resolve(__dirname, '../../../../src/vrouter/VirtualRouter.cc'),
+    'utf8'
+  )
+  assert.match(
+    basic,
+    /view === ["']cloud["'] \? \[NAME, DESCRIPTION, INSTANCES\]/
+  )
+  assert.match(
+    networking,
+    /view === ["']cloud["'][\s\S]*NETWORK, FORCEIPV4, FORCEIPV6, SECURITY_GROUPS/
+  )
+  assert.match(core, /keepalived_id = \(oid % 255\) \+ 1/)
+  assert.match(
+    core,
+    /if \(!obj_template->get\("KEEPALIVED_ID", keepalived_id\)\)/
+  )
+})
+
+test('cloud VM Group keeps VM affinity but blocks physical-host placement edits', () => {
+  const roles = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmGroup/Forms/CreateForm/Steps/Roles/index.js'
+    ),
+    'utf8'
+  )
+  const steps = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmGroup/Forms/CreateForm/Steps/index.js'
+    ),
+    'utf8'
+  )
+  const container = readFileSync(
+    resolve(__dirname, '../../src/modules/containers/VmGroups/Create.js'),
+    'utf8'
+  )
+  assert.match(roles, /view !== ["']cloud["'] && \([\s\S]*<HostAffinityPanel/)
+  assert.match(roles, /<RoleVmVmPanel/)
+  assert.match(steps, /stepProps\?\.view === ["']cloud["']/)
+  assert.match(steps, /sourceRole = sourceRoles\.find/)
+  assert.match(steps, /HOST_AFFINED: toList\(sourceRole\?\.HOST_AFFINED\)/)
+  assert.match(container, /const \{ view \} = useViews\(\)/)
+  assert.match(container, /stepProps=\{\{ \.\.\.data, view \}\}/)
+})
+
+test('cloud image and file creation reject arbitrary PATH sources while native admin keeps them', () => {
+  const imageView = read('image-tab.yaml')
+  const fileView = read('file-tab.yaml')
+  assert.equal(imageView.actions.import_dialog, false)
+  assert.equal(fileView.actions.import_dialog, false)
+  const imageSchema = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/Image/Forms/CreateForm/Steps/General/schema.js'
+    ),
+    'utf8'
+  )
+  const fileSchema = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/Files/Forms/CreateForm/Steps/General/schema.js'
+    ),
+    'utf8'
+  )
+  const fileContainer = readFileSync(
+    resolve(__dirname, '../../src/modules/containers/Files/Create.js'),
+    'utf8'
+  )
+  assert.match(
+    imageSchema,
+    /oneOf\(\[IMAGE_LOCATION_TYPES\.UPLOAD, IMAGE_LOCATION_TYPES\.EMPTY\]\)/
+  )
+  assert.match(imageSchema, /view !== ["']cloud["'] && PATH_FIELD/)
+  assert.match(fileSchema, /oneOf\(\[IMAGE_LOCATION_TYPES\.UPLOAD\]\)/)
+  assert.match(fileSchema, /view !== ["']cloud["'] && PATH_FIELD/)
+  assert.match(fileContainer, /stepProps=\{\{ view \}\}/)
 })

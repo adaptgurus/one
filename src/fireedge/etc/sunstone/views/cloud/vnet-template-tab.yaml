@@ -18,20 +18,20 @@ info-tabs:
       actions:
         rename: false
     permissions_panel:
-      enabled: true
+      enabled: false
       actions:
         chmod: false
     ownership_panel:
-      enabled: true
+      enabled: false
       actions:
         chown: false
         chgrp: false
     qos_panel:
       enabled: true
     attributes_panel:
-      enabled: true
+      enabled: false
       actions:
-        copy: true
+        copy: false
         add: false
         edit: false
         delete: false
@@ -44,15 +44,15 @@ info-tabs:
   security:
     enabled: false
   cluster:
-    enabled: true
+    enabled: false
   template:
-    enabled: true
+    enabled: false
 instantiate-tabs:
   address:
     enabled: true
   security:
     enabled: true
   context:
-    enabled: true
+    enabled: false
   configuration:
-    enabled: true
+    enabled: false

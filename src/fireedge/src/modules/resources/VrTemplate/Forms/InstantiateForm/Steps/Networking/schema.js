@@ -125,7 +125,7 @@ const SECURITY_GROUPS = {
   grid: { md: 12 },
 }
 
-export const FIELDS = [
+const NATIVE_FIELDS = [
   RDP,
   SSH,
   NETWORK,
@@ -136,4 +136,19 @@ export const FIELDS = [
   SECURITY_GROUPS,
 ]
 
-export const SCHEMA = array().of(getObjectSchemaFromFields(FIELDS))
+/**
+ * @param {string} view - Active FireEdge view
+ * @returns {Array} Virtual-router network fields
+ */
+export const getFields = (view) =>
+  view === 'cloud'
+    ? [NETWORK, FORCEIPV4, FORCEIPV6, SECURITY_GROUPS]
+    : NATIVE_FIELDS
+export const FIELDS = getFields()
+/**
+ * @param {string} view - Active FireEdge view
+ * @returns {object} Virtual-router networking schema
+ */
+export const getSchema = (view) =>
+  array().of(getObjectSchemaFromFields(getFields(view)))
+export const SCHEMA = getSchema()

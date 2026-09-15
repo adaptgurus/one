@@ -141,20 +141,39 @@ export const UPLOAD_FIELD = {
   grid: { md: 12 },
 }
 
-/**
- * @returns {Field[]} Fields
- */
-export const FIELDS = [
-  NAME,
-  DESCRIPTION,
-  TYPE,
-  IMAGE_LOCATION_FIELD,
-  PATH_FIELD,
-  UPLOAD_FIELD,
-]
+const getImageLocationField = (view) =>
+  view === 'cloud'
+    ? {
+        ...IMAGE_LOCATION_FIELD,
+        values: arrayToOptions([[IMAGE_LOCATION_TYPES.UPLOAD, T.Upload]], {
+          addEmpty: false,
+          getText: ([_, name]) => name,
+          getValue: ([image]) => image,
+        }),
+        validation: string()
+          .trim()
+          .oneOf([IMAGE_LOCATION_TYPES.UPLOAD])
+          .required()
+          .default(() => IMAGE_LOCATION_TYPES.UPLOAD),
+      }
+    : IMAGE_LOCATION_FIELD
 
 /**
- * @param {object} [stepProps] - Step props
+ * @param {string} view - Active FireEdge view
+ * @returns {Field[]} Fields
+ */
+export const FIELDS = (view) =>
+  [
+    NAME,
+    DESCRIPTION,
+    TYPE,
+    getImageLocationField(view),
+    view !== 'cloud' && PATH_FIELD,
+    UPLOAD_FIELD,
+  ].filter(Boolean)
+
+/**
+ * @param {string} view - Active FireEdge view
  * @returns {ObjectSchema} Schema
  */
-export const SCHEMA = object(getValidationFromFields(FIELDS))
+export const SCHEMA = (view) => object(getValidationFromFields(FIELDS(view)))

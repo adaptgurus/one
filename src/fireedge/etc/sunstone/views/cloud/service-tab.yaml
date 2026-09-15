@@ -9,7 +9,7 @@ resource_name: "SERVICE"
 
 actions:
   instantiate_dialog: true # reference to deploy_dialog in service-template-tab.yaml
-  create_dialog: true
+  create_dialog: false
   recover: true
   recover_delete: true
   delete: true
@@ -23,8 +23,8 @@ actions:
 
 filters:
   state: true
-  owner: true
-  group: true
+  owner: false
+  group: false
 
 
 # Info Tabs - Which info tabs are used to show extended information
@@ -38,11 +38,11 @@ info-tabs:
       actions:
         rename: false
     permissions_panel:
-      enabled: true
+      enabled: false
       actions:
         chmod: false
     ownership_panel:
-      enabled: true
+      enabled: false
       actions:
         chown: false
         chgrp: false
@@ -86,7 +86,7 @@ info-tabs:
       sched-delete: true
 
   template:
-    enabled: true
+    enabled: false
 
 # Dialogs
 

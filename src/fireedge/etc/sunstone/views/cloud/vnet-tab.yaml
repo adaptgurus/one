@@ -7,7 +7,7 @@ actions:
   import_dialog: false
   instantiate_dialog: true
   reserve_dialog: true
-  update_dialog: true
+  update_dialog: false
   change_cluster: false
   chown: false
   chgrp: false
@@ -16,10 +16,10 @@ actions:
   delete: true
 filters:
   state: true
-  owner: true
-  group: true
-  locked: true
-  vn_mad: true
+  owner: false
+  group: false
+  locked: false
+  vn_mad: false
 info-tabs:
   info:
     enabled: true
@@ -28,20 +28,20 @@ info-tabs:
       actions:
         rename: true
     permissions_panel:
-      enabled: true
+      enabled: false
       actions:
-        chmod: true
+        chmod: false
     ownership_panel:
-      enabled: true
+      enabled: false
       actions:
         chown: false
         chgrp: false
     qos_panel:
       enabled: true
     attributes_panel:
-      enabled: true
+      enabled: false
       actions:
-        copy: true
+        copy: false
         add: false
         edit: false
         delete: false
@@ -64,4 +64,4 @@ info-tabs:
   virtual_router:
     enabled: true
   cluster:
-    enabled: true
+    enabled: false

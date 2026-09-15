@@ -47,7 +47,7 @@ const toId = (value) => {
 const Steps = createSteps(
   (formProps) => [
     () => General(),
-    () => Cluster(),
+    () => Cluster(formProps),
     () => Public(),
     () => Private(),
     () => KubernetesVersion(formProps),

@@ -14,6 +14,7 @@
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 
+import PropTypes from 'prop-types'
 import { FormWithSchema } from '@ComponentsModule'
 
 import {
@@ -23,31 +24,35 @@ import {
 import { T } from '@ConstantsModule'
 
 export const STEP_ID = 'general'
-const COLUMNS = [[], FIELDS, []]
-
-const Content = () => (
+const Content = ({ view }) => (
   <FormWithSchema
     id={STEP_ID}
-    fields={FIELDS}
+    fields={FIELDS(view)}
     cy={`${STEP_ID}`}
-    columns={COLUMNS}
+    columns={[[], FIELDS(view), []]}
     gridContainerSx={{
       gridTemplateColumns: { xs: '1fr', md: '1fr 2fr 1fr' },
     }}
   />
 )
 
+Content.propTypes = {
+  view: PropTypes.string,
+}
+
 /**
  * General configuration about VM Template.
  *
+ * @param {object} root0 - Step properties
+ * @param {string} root0.view - Active FireEdge view
  * @returns {object} General configuration step
  */
-const General = () => ({
+const General = ({ view } = {}) => ({
   id: STEP_ID,
   label: T.Configuration,
-  resolver: SCHEMA,
+  resolver: SCHEMA(view),
   optionsValidate: { abortEarly: false },
-  content: Content,
+  content: () => <Content view={view} />,
 })
 
 export default General

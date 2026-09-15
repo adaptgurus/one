@@ -24,10 +24,10 @@ import { T } from '@ConstantsModule'
 
 export const STEP_ID = 'general'
 
-const Content = (oneConfig, adminGroup) => (
+const Content = (oneConfig, adminGroup, view) => (
   <FormWithSchema
     id={STEP_ID}
-    fields={FIELDS(oneConfig, adminGroup)}
+    fields={FIELDS(oneConfig, adminGroup, view)}
     cy={`${STEP_ID}`}
   />
 )
@@ -38,14 +38,15 @@ const Content = (oneConfig, adminGroup) => (
  * @param {object} props - Step properties
  * @param {object} props.oneConfig - Open Nebula configuration
  * @param {boolean} props.adminGroup - If the user belongs to oneadmin group
+ * @param {string} props.view - Active FireEdge view
  * @returns {object} General configuration step
  */
-const General = ({ oneConfig, adminGroup }) => ({
+const General = ({ oneConfig, adminGroup, view }) => ({
   id: STEP_ID,
   label: T.Configuration,
-  resolver: SCHEMA(oneConfig, adminGroup),
+  resolver: SCHEMA(oneConfig, adminGroup, view),
   optionsValidate: { abortEarly: false },
-  content: () => Content(oneConfig, adminGroup),
+  content: () => Content(oneConfig, adminGroup, view),
 })
 
 export default General

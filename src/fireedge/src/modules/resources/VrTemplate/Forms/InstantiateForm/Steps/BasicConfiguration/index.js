@@ -13,20 +13,21 @@
  * See the License for the specific language governing permissions and       *
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
+import PropTypes from 'prop-types'
 import { FormWithSchema } from '@ComponentsModule'
 import {
-  SCHEMA,
-  FIELDS,
+  getSchema,
+  getFields,
 } from '@modules/resources/VrTemplate/Forms/InstantiateForm/Steps/BasicConfiguration/informationSchema'
 import { T } from '@ConstantsModule'
 
 export const STEP_ID = 'general'
 
-const Content = () => (
+const Content = ({ view }) => (
   <FormWithSchema
     key={STEP_ID}
     cy={STEP_ID}
-    fields={FIELDS}
+    fields={getFields(view)}
     saveState={true}
     id={STEP_ID}
   />
@@ -35,14 +36,20 @@ const Content = () => (
 /**
  * Basic configuration about VR Template.
  *
+ * @param {object} root0 - Step properties
+ * @param {string} root0.view - Active FireEdge view
  * @returns {object} Basic configuration step
  */
-const BasicConfiguration = () => ({
+const BasicConfiguration = ({ view } = {}) => ({
   id: STEP_ID,
   label: T.Configuration,
-  resolver: SCHEMA,
+  resolver: getSchema(view),
   optionsValidate: { abortEarly: false },
-  content: () => Content(),
+  content: () => <Content view={view} />,
 })
+
+Content.propTypes = { view: PropTypes.string }
+
+BasicConfiguration.propTypes = { view: PropTypes.string }
 
 export default BasicConfiguration

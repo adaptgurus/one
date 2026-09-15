@@ -240,22 +240,60 @@ export const SIZE = {
 }
 
 /**
- * @param {object} oneConfig - Open Nebula configuration
- * @param {boolean} adminGroup - If the user belongs to oneadmin group
- * @returns {Field[]} Fields
+ * @param {string} view - Active FireEdge view
+ * @returns {Field} Image source selector for the active view
  */
-export const FIELDS = (oneConfig, adminGroup) =>
+const getImageLocationField = (view) => {
+  if (view !== 'cloud') return IMAGE_LOCATION_FIELD
+
+  return {
+    ...IMAGE_LOCATION_FIELD,
+    values: arrayToOptions(
+      Object.entries(IMAGE_LOCATION).filter(
+        ([key]) => key !== IMAGE_LOCATION_TYPES.PATH
+      ),
+      {
+        addEmpty: false,
+        getText: ([_, name]) => name,
+        getValue: ([image]) => image,
+      }
+    ),
+    validation: lazy((value, { context }) =>
+      string()
+        .trim()
+        .oneOf([IMAGE_LOCATION_TYPES.UPLOAD, IMAGE_LOCATION_TYPES.EMPTY])
+        .when(TYPE.name, (typeInput, schema) =>
+          typeInput === IMAGE_TYPES_STR.FILESYSTEM
+            ? schema.strip()
+            : schema.required()
+        )
+        .default(() =>
+          context.general.TYPE !== IMAGE_TYPES_STR.FILESYSTEM
+            ? IMAGE_LOCATION_TYPES.UPLOAD
+            : undefined
+        )
+    ),
+  }
+}
+
+/**
+ * @param {object} oneConfig - OpenNebula configuration
+ * @param {boolean} adminGroup - Whether the user belongs to oneadmin
+ * @param {string} view - Active FireEdge view
+ * @returns {Field[]} Image form fields
+ */
+export const FIELDS = (oneConfig, adminGroup, view) =>
   disableFields(
     [
       NAME,
       DESCRIPTION,
       TYPE,
       PERSISTENT,
-      IMAGE_LOCATION_FIELD,
-      PATH_FIELD,
+      getImageLocationField(view),
+      view !== 'cloud' && PATH_FIELD,
       UPLOAD_FIELD,
       SIZE,
-    ],
+    ].filter(Boolean),
     '',
     oneConfig,
     adminGroup,
@@ -265,7 +303,8 @@ export const FIELDS = (oneConfig, adminGroup) =>
 /**
  * @param {object} oneConfig - Open Nebula configuration
  * @param {boolean} adminGroup - If the user belongs to oneadmin group
+ * @param {string} view - Active FireEdge view
  * @returns {ObjectSchema} Schema
  */
-export const SCHEMA = (oneConfig, adminGroup) =>
-  object(getValidationFromFields(FIELDS(oneConfig, adminGroup)))
+export const SCHEMA = (oneConfig, adminGroup, view) =>
+  object(getValidationFromFields(FIELDS(oneConfig, adminGroup, view)))

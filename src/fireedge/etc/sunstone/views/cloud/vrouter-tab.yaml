@@ -10,8 +10,8 @@ actions:
   unlock: true
   edit_labels: true
 filters:
-  owner: true
-  group: true
+  owner: false
+  group: false
 info-tabs:
   info:
     enabled: true
@@ -20,16 +20,16 @@ info-tabs:
       actions:
         rename: true
     permissions_panel:
-      enabled: true
+      enabled: false
       actions:
-        chmod: true
+        chmod: false
     ownership_panel:
-      enabled: true
+      enabled: false
       actions:
         chown: false
         chgrp: false
     attributes_panel:
-      enabled: true
+      enabled: false
       actions:
         copy: true
         add: false
@@ -40,4 +40,4 @@ info-tabs:
   nics:
     enabled: true
   template:
-    enabled: true
+    enabled: false

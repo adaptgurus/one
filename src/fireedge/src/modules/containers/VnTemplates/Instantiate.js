@@ -16,7 +16,12 @@
 import { ReactElement } from 'react'
 import { Redirect, useHistory, useLocation } from 'react-router'
 
-import { VnTemplateAPI, useGeneralApi, useSystemData } from '@FeaturesModule'
+import {
+  VnTemplateAPI,
+  useGeneralApi,
+  useSystemData,
+  useViews,
+} from '@FeaturesModule'
 
 import { DefaultFormStepper, SkeletonStepsForm } from '@ComponentsModule'
 import { VnTemplate } from '@ResourcesModule'
@@ -38,6 +43,7 @@ export const InstantiateVnTemplate = () => {
   const [instantiate] = VnTemplateAPI.useInstantiateVNTemplateMutation()
 
   const { adminGroup, oneConfig } = useSystemData()
+  const { view } = useViews()
 
   const { data: apiTemplateDataExtended, isError } =
     VnTemplateAPI.useGetVNTemplateQuery(
@@ -77,6 +83,7 @@ export const InstantiateVnTemplate = () => {
             dataTemplateExtended,
             oneConfig,
             adminGroup,
+            view,
           }}
           onSubmit={onSubmit}
           fallback={<SkeletonStepsForm />}

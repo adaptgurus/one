@@ -106,7 +106,7 @@ const HOLD = {
   grid: { md: 12 },
 }
 
-export const FIELDS = [
+const NATIVE_FIELDS = [
   NAME,
   DESCRIPTION,
   KEEPALIVEID,
@@ -116,4 +116,16 @@ export const FIELDS = [
   HOLD,
 ]
 
-export const SCHEMA = getObjectSchemaFromFields(FIELDS)
+/**
+ * @param {string} view - Active FireEdge view
+ * @returns {Array} Virtual-router basic fields
+ */
+export const getFields = (view) =>
+  view === 'cloud' ? [NAME, DESCRIPTION, INSTANCES] : NATIVE_FIELDS
+export const FIELDS = getFields()
+/**
+ * @param {string} view - Active FireEdge view
+ * @returns {object} Virtual-router basic schema
+ */
+export const getSchema = (view) => getObjectSchemaFromFields(getFields(view))
+export const SCHEMA = getSchema()

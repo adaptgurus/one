@@ -31,7 +31,11 @@ import {
   DISK_TYPES_BY_STORAGE_BACKEND,
 } from '@ConstantsModule'
 
-import { createSteps } from '@UtilsModule'
+import {
+  createSteps,
+  normalizeIscsiMultipath,
+  normalizeLinstor,
+} from '@UtilsModule'
 
 function getDsAndTMMad({
   STORAGE_BACKEND,
@@ -43,7 +47,13 @@ function getDsAndTMMad({
   let dsMad
   let tmMad = ''
 
-  if (STORAGE_BACKEND === DS_STORAGE_BACKENDS.CUSTOM.value) {
+  if (STORAGE_BACKEND === DS_STORAGE_BACKENDS.ISCSI_MULTIPATH.value) {
+    dsMad = 'fs'
+    tmMad = 'fs_lvm_ssh'
+  } else if (STORAGE_BACKEND === DS_STORAGE_BACKENDS.LINSTOR.value) {
+    dsMad = 'linstor'
+    tmMad = 'linstor'
+  } else if (STORAGE_BACKEND === DS_STORAGE_BACKENDS.CUSTOM.value) {
     if (DS_MAD === DATASTORE_OPTIONS.CUSTOM.value) {
       dsMad = CUSTOM_DS_MAD
     } else {
@@ -136,10 +146,14 @@ const Steps = createSteps(
       : [General, Cluster, ConfigurationAttributes, CustomVariables],
   {
     transformInitialValue: (dsTemplate, schema) => {
-      const STORAGE_BACKEND =
+      const nativeStorageBackend =
         [dsTemplate?.DS_MAD, dsTemplate?.TM_MAD]
           ?.filter((v) => Boolean(v) && v !== '-')
           ?.join('-') || undefined
+      const STORAGE_BACKEND =
+        dsTemplate?.TEMPLATE?.LAYERSENTRY_STORAGE_PROFILE === 'iscsi-multipath'
+          ? DS_STORAGE_BACKENDS.ISCSI_MULTIPATH.value
+          : nativeStorageBackend
 
       const generalAttrs = {
         NAME: dsTemplate?.NAME,
@@ -249,9 +263,28 @@ const Steps = createSteps(
 
       const cephHost = CEPH_HOST?.length > 0 ? CEPH_HOST.join(',') : undefined
 
+      const layerSentryProfileKeys = new Set([
+        'LAYERSENTRY_ISCSI_PORTALS',
+        'LAYERSENTRY_ISCSI_TARGET_IQN',
+        'LAYERSENTRY_ISCSI_WWID',
+        'LAYERSENTRY_MULTIPATH_REQUIRED',
+        'LINSTOR_RESOURCE_GROUP',
+        'LINSTOR_CONTROLLERS',
+      ])
+      const profileNeutralRestConf = Object.fromEntries(
+        Object.entries(restConf).filter(
+          ([key]) => !layerSentryProfileKeys.has(key)
+        )
+      )
+      const profileConf =
+        STORAGE_BACKEND === DS_STORAGE_BACKENDS.ISCSI_MULTIPATH.value
+          ? normalizeIscsiMultipath(restConf)
+          : STORAGE_BACKEND === DS_STORAGE_BACKENDS.LINSTOR.value
+          ? normalizeLinstor(restConf)
+          : {}
       const formatRestConf = formatResticAttributes(
         Object.fromEntries(
-          Object.entries(restConf).filter(
+          Object.entries(profileNeutralRestConf).filter(
             ([k]) => cacheEnabled || !k.startsWith('CACHE_')
           )
         ),
@@ -271,7 +304,14 @@ const Steps = createSteps(
           COMPATIBLE_SYS_DS: compatibleSysDs,
           CEPH_HOST: cephHost,
           DISK_TYPE: diskType,
+          LAYERSENTRY_STORAGE_PROFILE:
+            STORAGE_BACKEND === DS_STORAGE_BACKENDS.ISCSI_MULTIPATH.value
+              ? 'iscsi-multipath'
+              : STORAGE_BACKEND === DS_STORAGE_BACKENDS.LINSTOR.value
+              ? 'linstor-drbd'
+              : undefined,
           ...formatRestConf,
+          ...profileConf,
           ...customVariables,
         },
         cluster: cluster ?? clusterId,

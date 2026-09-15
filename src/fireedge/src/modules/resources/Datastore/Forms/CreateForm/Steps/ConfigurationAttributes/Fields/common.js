@@ -20,6 +20,8 @@ import { array, boolean, number, string } from 'yup'
 import {
   isCeph,
   isLvm,
+  isIscsiMultipath,
+  isLinstor,
   isShared,
   isSsh,
   typeIsOneOf,
@@ -158,13 +160,30 @@ const BRIDGE_LIST = {
     .compact()
     .default(() => [])
     .when('$general.STORAGE_BACKEND', (storageBackend, schema) =>
-      isCeph(storageBackend)
-        ? schema.min(1, 'Is a required field').required()
+      typeIsOneOf(storageBackend, [isCeph, isIscsiMultipath, isLinstor])
+        ? schema.min(1, 'Select at least one OpenNebula host').required()
         : schema.notRequired()
     ),
   dependOf: '$general.STORAGE_BACKEND',
   htmlType: (type) =>
-    !typeIsOneOf(type, [isShared, isSsh, isCeph]) && INPUT_TYPES.HIDDEN,
+    !typeIsOneOf(type, [
+      isShared,
+      isSsh,
+      isCeph,
+      isLvm,
+      isIscsiMultipath,
+      isLinstor,
+    ]) && INPUT_TYPES.HIDDEN,
+  values: () => {
+    const { data: hosts = [] } = HostAPI.useGetHostsQuery()
+    const hostNames = []
+      .concat(hosts)
+      ?.flat()
+      ?.map((host) => host?.TEMPLATE?.HOSTNAME ?? host?.NAME)
+      ?.filter(Boolean)
+
+    return arrayToOptions(hostNames, { addEmpty: false })
+  },
   fieldProps: {
     freeSolo: true,
   },

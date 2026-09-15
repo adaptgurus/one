@@ -64,17 +64,42 @@ const Steps = createSteps([General, RoleDefinition, RoleToRole], {
     return knownTemplate
   },
 
-  transformBeforeSubmit: (formData) => {
+  transformBeforeSubmit: (formData, _, stepProps) => {
     const {
       [GENERAL_ID]: generalData,
       [ROLE_DEFINITION_ID]: roleDefinitionData,
       [ROLE_TO_ROLE_ID]: roleToRoleData,
     } = formData
 
+    const sourceRoles = [].concat(stepProps?.ROLES?.ROLE ?? []).filter(Boolean)
+    const effectiveRoles =
+      stepProps?.view === 'cloud'
+        ? roleDefinitionData.map((role) => {
+            const sourceRole = sourceRoles.find(
+              (candidate) =>
+                (role?.ID && String(candidate?.ID) === String(role.ID)) ||
+                candidate?.NAME === role?.NAME
+            )
+            const toList = (value) =>
+              value
+                ? String(value)
+                    .split(',')
+                    .map((item) => item.trim())
+                    .filter(Boolean)
+                : []
+
+            return {
+              ...role,
+              HOST_AFFINED: toList(sourceRole?.HOST_AFFINED),
+              HOST_ANTI_AFFINED: toList(sourceRole?.HOST_ANTI_AFFINED),
+            }
+          })
+        : roleDefinitionData
+
     return {
       NAME: generalData.NAME,
       DESCRIPTION: generalData.DESCRIPTION,
-      ROLE: roleDefinitionData.map(
+      ROLE: effectiveRoles.map(
         ({ HOST_AFFINED, HOST_ANTI_AFFINED, ...role }) => ({
           ...role,
           ...(HOST_AFFINED &&

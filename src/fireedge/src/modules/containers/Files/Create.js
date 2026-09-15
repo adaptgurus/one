@@ -20,7 +20,12 @@ import { jsonToXml } from '@UtilsModule'
 import { DefaultFormStepper, SkeletonStepsForm } from '@ComponentsModule'
 import { Files } from '@ResourcesModule'
 
-import { useGeneralApi, DatastoreAPI, ImageAPI } from '@FeaturesModule'
+import {
+  useGeneralApi,
+  DatastoreAPI,
+  ImageAPI,
+  useViews,
+} from '@FeaturesModule'
 
 import { T, PATH } from '@ConstantsModule'
 
@@ -34,6 +39,7 @@ export function CreateFile() {
   const [allocate] = ImageAPI.useAllocateImageMutation()
   const [upload] = ImageAPI.useUploadImageMutation()
   const { enqueueSuccess, uploadSnackbar } = useGeneralApi()
+  const { view } = useViews()
   DatastoreAPI.useGetDatastoresQuery(undefined, {
     refetchOnMountOrArgChange: false,
   })
@@ -69,6 +75,7 @@ export function CreateFile() {
   return (
     <>
       <Files.Forms.CreateForm
+        stepProps={{ view }}
         onSubmit={onSubmit}
         fallback={<SkeletonStepsForm />}
       >

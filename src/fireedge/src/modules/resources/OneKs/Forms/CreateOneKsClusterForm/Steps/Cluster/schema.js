@@ -20,6 +20,15 @@ import { INPUT_TYPES, T } from '@ConstantsModule'
 import { Field, getValidationFromFields } from '@UtilsModule'
 
 /** @type {Field} Cluster field */
+const CLOUD_CLUSTER_COLUMNS = new Set(['name'])
+const cloudClusterSelectionTable = {
+  ...clusterSelectionTable,
+  columns: () =>
+    clusterSelectionTable
+      .columns()
+      .filter(({ id }) => CLOUD_CLUSTER_COLUMNS.has(id)),
+}
+
 const CLUSTER = {
   name: 'cluster',
   label: T.SelectCluster,
@@ -37,8 +46,26 @@ const CLUSTER = {
   grid: { md: 12 },
 }
 
-/** @type {Field[]} List of fields */
-export const FIELDS = [CLUSTER]
+/**
+ * @param {string} view - Active FireEdge view
+ * @returns {Field[]} List of fields
+ */
+export const getFields = (view) => [
+  {
+    ...CLUSTER,
+    label: view === 'cloud' ? 'Compute location' : T.SelectCluster,
+    model:
+      view === 'cloud' ? cloudClusterSelectionTable : clusterSelectionTable,
+  },
+]
 
-/** @type {object} Cluster step schema */
-export const SCHEMA = object(getValidationFromFields(FIELDS))
+/** @type {Field[]} Backward-compatible native fields */
+export const FIELDS = getFields()
+
+/**
+ * @param {string} view - Active FireEdge view
+ * @returns {object} Step schema
+ */
+export const getSchema = (view) =>
+  object(getValidationFromFields(getFields(view)))
+export const SCHEMA = getSchema()

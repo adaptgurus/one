@@ -56,6 +56,22 @@ function isLvm(type) {
 }
 
 /**
+ * @param {string} type - Datastore backend type
+ * @returns {boolean} True for the LayerSentry multipath iSCSI profile
+ */
+function isIscsiMultipath(type) {
+  return type === DS_STORAGE_BACKENDS.ISCSI_MULTIPATH.value
+}
+
+/**
+ * @param {string} type - Datastore backend type
+ * @returns {boolean} True for the LINSTOR datastore profile
+ */
+function isLinstor(type) {
+  return type === DS_STORAGE_BACKENDS.LINSTOR.value
+}
+
+/**
  * @param {string} type - Datastore type
  * @returns {boolean} - True if type is raw
  */
@@ -127,6 +143,8 @@ export {
   isSsh,
   isCeph,
   isLvm,
+  isIscsiMultipath,
+  isLinstor,
   isRaw,
   isRestic,
   isRsync,

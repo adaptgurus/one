@@ -23,6 +23,7 @@ import {
   UserAPI,
   VmTemplateAPI,
   VrTemplateAPI,
+  useViews,
 } from '@FeaturesModule'
 
 import { DefaultFormStepper, SkeletonStepsForm } from '@ComponentsModule'
@@ -47,6 +48,7 @@ export function InstantiateVrTemplate() {
   const [allocate] = VrTemplateAPI.useAllocateVrTemplateMutation()
 
   const { adminGroup, oneConfig } = useSystemData()
+  const { view } = useViews()
 
   const { data: apiTemplateDataExtended, isError } =
     VmTemplateAPI.useGetTemplateQuery(
@@ -129,6 +131,7 @@ export function InstantiateVrTemplate() {
             dataTemplateExtended,
             oneConfig,
             adminGroup,
+            view,
 
             isEmptyTemplate: !templateId,
           }}
@@ -152,6 +155,7 @@ export function InstantiateVrTemplate() {
             dataTemplateExtended,
             oneConfig,
             adminGroup,
+            view,
 
             isEmptyTemplate: !templateId,
           }}

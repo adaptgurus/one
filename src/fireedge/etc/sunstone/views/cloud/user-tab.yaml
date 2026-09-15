@@ -20,7 +20,7 @@ info-tabs:
       actions:
         rename: false
     attributes_panel:
-      enabled: true
+      enabled: false
       actions:
         copy: false
         add: false
@@ -33,7 +33,7 @@ info-tabs:
   quota:
     enabled: true
     actions:
-      quotas_dialog: true
+      quotas_dialog: false
   accounting:
     enabled: true
     actions:

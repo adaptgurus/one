@@ -23,6 +23,7 @@ import {
   RESTIC_FIELDS,
   RSYNC_FIELDS,
   NETAPP_FIELDS,
+  LAYERSENTRY_STORAGE_FIELDS,
 } from './Fields'
 import { isCustom, typeIsOneOf, isVirtioFs } from '../functions'
 
@@ -79,6 +80,7 @@ export const FIELDS = [
   ...RESTIC_FIELDS,
   ...RSYNC_FIELDS,
   ...NETAPP_FIELDS,
+  ...LAYERSENTRY_STORAGE_FIELDS,
   COMPATIBLE_SYSTEM_DATASTORES,
 ]
 

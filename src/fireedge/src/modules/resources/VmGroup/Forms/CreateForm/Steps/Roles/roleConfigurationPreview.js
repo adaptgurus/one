@@ -116,12 +116,14 @@ HostListPreview.propTypes = {
  * @param {object} props.role - Selected role
  * @param {number} props.selectedRoleIndex - Selected role index
  * @param {Function} props.onRemoveHost - Host remove handler
+ * @param {boolean} props.showHosts - Whether provider host affinity is visible
  * @returns {object} Role configuration preview
  */
 const RoleConfigurationPreview = ({
   role = {},
   selectedRoleIndex,
   onRemoveHost,
+  showHosts = true,
 }) => {
   const { translate } = useTranslation()
   const title = `#${(selectedRoleIndex ?? 0) + 1} ${translate(
@@ -152,22 +154,26 @@ const RoleConfigurationPreview = ({
         <Box>
           <strong>{translate(T.Policy)}:</strong> {policy}
         </Box>
-        <HostListPreview
-          title={translate(T.AffinedHosts)}
-          emptyText={translate(T.NoAffinedHosts)}
-          emptyTooltip={translate(T.NoAffinedHostsConcept)}
-          affinityKey="HOST_AFFINED"
-          hostIds={affinedHosts}
-          onRemoveHost={onRemoveHost}
-        />
-        <HostListPreview
-          title={translate(T.AntiAffinedHosts)}
-          emptyText={translate(T.NoAntiAffinedHosts)}
-          emptyTooltip={translate(T.NoAntiAffinedHostsConcept)}
-          affinityKey="HOST_ANTI_AFFINED"
-          hostIds={antiAffinedHosts}
-          onRemoveHost={onRemoveHost}
-        />
+        {showHosts && (
+          <HostListPreview
+            title={translate(T.AffinedHosts)}
+            emptyText={translate(T.NoAffinedHosts)}
+            emptyTooltip={translate(T.NoAffinedHostsConcept)}
+            affinityKey="HOST_AFFINED"
+            hostIds={affinedHosts}
+            onRemoveHost={onRemoveHost}
+          />
+        )}
+        {showHosts && (
+          <HostListPreview
+            title={translate(T.AntiAffinedHosts)}
+            emptyText={translate(T.NoAntiAffinedHosts)}
+            emptyTooltip={translate(T.NoAntiAffinedHostsConcept)}
+            affinityKey="HOST_ANTI_AFFINED"
+            hostIds={antiAffinedHosts}
+            onRemoveHost={onRemoveHost}
+          />
+        )}
       </Stack>
     </Box>
   )
@@ -182,6 +188,7 @@ RoleConfigurationPreview.propTypes = {
   }),
   selectedRoleIndex: PropTypes.number,
   onRemoveHost: PropTypes.func,
+  showHosts: PropTypes.bool,
 }
 
 export default RoleConfigurationPreview

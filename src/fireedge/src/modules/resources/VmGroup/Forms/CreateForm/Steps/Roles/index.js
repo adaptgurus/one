@@ -53,7 +53,7 @@ const RoleDefinitionDocumentation = () => {
   )
 }
 
-const Content = () => {
+const Content = ({ view }) => {
   const { translate } = useTranslation()
   const { control, setValue } = useFormContext()
   const watchedRoles = useWatch({
@@ -180,6 +180,7 @@ const Content = () => {
           >
             <RoleConfigurationPreview
               role={selectedRole}
+              showHosts={view !== 'cloud'}
               selectedRoleIndex={selectedRoleIndex}
               onRemoveHost={handleRemoveHostAffinity}
             />
@@ -188,11 +189,13 @@ const Content = () => {
                 formId={`${STEP_ID}.${selectedRoleIndex}`}
                 selectedRoleIndex={selectedRoleIndex}
               />
-              <HostAffinityPanel
-                roles={displayedRoles}
-                selectedRoleIndex={selectedRoleIndex}
-                onChange={handleHostAffinityChange}
-              />
+              {view !== 'cloud' && (
+                <HostAffinityPanel
+                  roles={displayedRoles}
+                  selectedRoleIndex={selectedRoleIndex}
+                  onChange={handleHostAffinityChange}
+                />
+              )}
             </Box>
           </Box>
         )}
@@ -206,14 +209,15 @@ const Content = () => {
  *
  * @param {object} props - Step properties
  * @param {string} props.version - OpenNebula version
+ * @param {string} props.view - Active FireEdge view
  * @returns {object} Roles definition configuration step
  */
-const RoleDefinition = ({ version }) => ({
+const RoleDefinition = ({ version, view }) => ({
   id: STEP_ID,
   label: 'Role Definition',
   resolver: SCHEMA,
   optionsValidate: { abortEarly: false },
-  content: Content,
+  content: () => <Content view={view} />,
   documentation: {
     title: T.RoleDefinition,
     content: RoleDefinitionDocumentation,
@@ -225,6 +229,11 @@ RoleDefinition.propTypes = {
   data: PropTypes.array,
   setFormData: PropTypes.func,
   version: PropTypes.string,
+  view: PropTypes.string,
+}
+
+Content.propTypes = {
+  view: PropTypes.string,
 }
 
 export default RoleDefinition

@@ -19,7 +19,7 @@ import { DefaultFormStepper, SkeletonStepsForm } from '@ComponentsModule'
 import { VmGroup } from '@ResourcesModule'
 
 import { jsonToXml, isDevelopment } from '@UtilsModule'
-import { VmGroupAPI, useGeneralApi } from '@FeaturesModule'
+import { VmGroupAPI, useGeneralApi, useViews } from '@FeaturesModule'
 
 import { isEqual } from 'lodash'
 import { T, PATH } from '@ConstantsModule'
@@ -87,6 +87,7 @@ export function CreateVmGroup() {
   const history = useHistory()
   const { state: { ID: templateId, NAME } = {} } = useLocation()
   const { enqueueSuccess, enqueueError } = useGeneralApi()
+  const { view } = useViews()
   const [createVmGroup] = VmGroupAPI.useAllocateVMGroupMutation()
   const [updateVmGroup] = VmGroupAPI.useUpdateVMGroupMutation()
   const [addNewRole] = VmGroupAPI.useAddVMGroupRoleMutation()
@@ -203,7 +204,7 @@ export function CreateVmGroup() {
         <VmGroup.Forms.CreateForm
           onSubmit={onSubmit}
           initialValues={data}
-          stepProps={data}
+          stepProps={{ ...data, view }}
           fallback={<SkeletonStepsForm />}
         >
           {(config) => <DefaultFormStepper {...config} />}

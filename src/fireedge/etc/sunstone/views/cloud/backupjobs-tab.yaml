@@ -23,18 +23,18 @@ info-tabs:
         rename: true
         priority: true
     permissions_panel:
-      enabled: true
+      enabled: false
       actions:
-        chmod: true
+        chmod: false
     ownership_panel:
-      enabled: true
+      enabled: false
       actions:
         chown: false
         chgrp: false
     attributes_panel:
-      enabled: true
+      enabled: false
       actions:
-        copy: true
+        copy: false
         add: false
         edit: false
         delete: false
