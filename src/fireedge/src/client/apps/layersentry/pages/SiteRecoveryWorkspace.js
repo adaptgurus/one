@@ -55,8 +55,10 @@ const SiteRecoveryWorkspace = () => {
   const history = useHistory()
   const { view } = useViews()
   const isAdmin = view === 'admin'
-  const zonesQuery = ZoneAPI.useGetZonesQuery()
-  const datastoresQuery = DatastoreAPI.useGetDatastoresQuery()
+  const zonesQuery = ZoneAPI.useGetZonesQuery(undefined, { skip: !isAdmin })
+  const datastoresQuery = DatastoreAPI.useGetDatastoresQuery(undefined, {
+    skip: !isAdmin,
+  })
   const routersQuery = VrAPI.useGetVrsQuery()
   const zones = toArray(zonesQuery.data)
   const datastores = toArray(datastoresQuery.data)
@@ -65,7 +67,7 @@ const SiteRecoveryWorkspace = () => {
   const cephDatastores = datastores.filter(isCephDatastore)
   const hasMultipleSites = zones.length > 1
   const hasCeph = cephDatastores.length > 0
-  const evidenceReady = hasMultipleSites && hasCeph
+  const evidenceReady = isAdmin && hasMultipleSites && hasCeph
 
   return (
     <PageFrame
@@ -73,51 +75,57 @@ const SiteRecoveryWorkspace = () => {
       description="Disaster-recovery readiness for the OpenNebula cloud. Real failover and failback stay disabled until the selected recovery architecture is qualified."
     >
       <Alert severity={evidenceReady ? 'info' : 'warning'} sx={{ mt: 2 }}>
-        {evidenceReady
+        {isAdmin && evidenceReady
           ? 'Multiple zones and Ceph-backed storage are visible, but Ceph RBD mirroring state and failover/failback are not exposed by the current FireEdge API. Treat DR as not qualified until runtime evidence is bound.'
-          : 'DR is not configured in this lab. OpenNebula DR requires a qualified recovery architecture; the current VM protection request metadata does not activate replication or failover.'}
+          : isAdmin
+          ? 'DR is not configured in this lab. OpenNebula DR requires a qualified recovery architecture; the current VM protection request metadata does not activate replication or failover.'
+          : 'Site Recovery is provider-managed. A protection request is not proof that replication, failover or failback is active. LayerSentry will show an active DR state only when the provider publishes verified runtime evidence.'}
       </Alert>
-      <Box
-        sx={{
-          display: 'grid',
-          gridTemplateColumns: {
-            xs: '1fr',
-            sm: 'repeat(2, 1fr)',
-            xl: 'repeat(4, 1fr)',
-          },
-          gap: 1.5,
-          mt: 2,
-        }}
-      >
-        <MetricCard
-          label="Sites / Zones"
-          value={zonesQuery.isLoading ? '…' : zones.length}
-          detail={
-            hasMultipleSites
-              ? 'Multiple sites visible'
-              : 'A second recovery site is required'
-          }
-        />
-        <MetricCard
-          label="Ceph RBD Stores"
-          value={datastoresQuery.isLoading ? '…' : cephDatastores.length}
-          detail={
-            hasCeph ? 'Ceph storage visible' : 'No Ceph RBD datastore detected'
-          }
-          accent={hasCeph ? colors.status.success : colors.status.warning}
-        />
-        <MetricCard
-          label="Backup Stores"
-          value={datastoresQuery.isLoading ? '…' : backupDatastores.length}
-          detail="Backup storage is separate from DR mirroring"
-        />
-        <MetricCard
-          label="Virtual Routers"
-          value={routersQuery.isLoading ? '…' : routers.length}
-          detail="Recovery networking / HA endpoint resources"
-          accent={colors.network}
-        />
-      </Box>
+      {isAdmin && (
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: {
+              xs: '1fr',
+              sm: 'repeat(2, 1fr)',
+              xl: 'repeat(4, 1fr)',
+            },
+            gap: 1.5,
+            mt: 2,
+          }}
+        >
+          <MetricCard
+            label="Sites / Zones"
+            value={zonesQuery.isLoading ? '…' : zones.length}
+            detail={
+              hasMultipleSites
+                ? 'Multiple sites visible'
+                : 'A second recovery site is required'
+            }
+          />
+          <MetricCard
+            label="Ceph RBD Stores"
+            value={datastoresQuery.isLoading ? '…' : cephDatastores.length}
+            detail={
+              hasCeph
+                ? 'Ceph storage visible'
+                : 'No Ceph RBD datastore detected'
+            }
+            accent={hasCeph ? colors.status.success : colors.status.warning}
+          />
+          <MetricCard
+            label="Backup Stores"
+            value={datastoresQuery.isLoading ? '…' : backupDatastores.length}
+            detail="Backup storage is separate from DR mirroring"
+          />
+          <MetricCard
+            label="Virtual Routers"
+            value={routersQuery.isLoading ? '…' : routers.length}
+            detail="Recovery networking / HA endpoint resources"
+            accent={colors.network}
+          />
+        </Box>
+      )}
 
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader

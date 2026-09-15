@@ -96,3 +96,35 @@ For the current lab, Site Recovery status is NOT CONFIGURED because there is onl
 - Existing upstream Webpack export/version and asset-size warnings remain non-fatal and unchanged in nature.
 
 This audit establishes GUI/source coverage. It does not fabricate backup execution or DR failover evidence where the live lab lacks the required backend configuration.
+
+## Second-pass gap closure
+
+A deeper action/role audit found and closed additional GUI gaps after the initial sidebar mapping:
+
+- Customer-owned OpenNebula Images are now directly discoverable under Storage → Images; the native cloud image view remains authoritative for create, clone, persistence, snapshot and delete actions.
+- Published VM Templates are now directly discoverable as Compute → VM Blueprints while remaining read-only definitions for cloud users; instantiation still uses the approved native lifecycle.
+- Network Blueprint creation is shown only to platform administrators. Cloud users retain the native instantiate action but do not see a provider-authoring create button.
+- Backup Storage is now a dedicated `BACKUP_DS`-only workspace rather than a generic datastore list.
+- Customer Protection and Site Recovery pages no longer query provider datastore/zone inventory; provider readiness diagnostics are admin-only.
+- Admin Marketplace Apps now has an explicit create workflow, and Support has an explicit Create Ticket action.
+- Legacy base paths for VM templates, images, files, VM Groups, Network Templates and Virtual Routers redirect to the corresponding LayerSentry product surface; detail/action routes remain permission-filtered compatibility routes.
+- Global search now lands on the specific Images, Backup Plans and VM Blueprints workspaces.
+- Fixed FireEdge routes were separately audited: Settings/account, Alerts/Attention and layout-free Guacamole console paths remain available.
+
+Validation added:
+
+- Cloud/admin discoverability and role-boundary contracts.
+- `BACKUP_DS`-only storage contract.
+- Provider-inventory suppression for customer Protection/DR.
+- Marketplace App and Support creation-action contracts.
+
+After this pass, no unaccounted OpenNebula 7.4 sidebar or fixed FireEdge product route remains in the non-Kubernetes GUI mapping. Runtime availability still depends on backend configuration and authorization.
+
+Second-pass qualification evidence:
+
+- Focused capability/role contracts: 17/17 PASS before the final full-suite run.
+- Complete LayerSentry suite after all second-pass fixes: 191/191 PASS.
+- Full FireEdge client/server ESLint: PASS.
+- `git diff --check`: PASS.
+- Complete FireEdge production build, including LayerSentry bundle and all module-federation remotes: PASS.
+- Existing upstream module-export and bundle-size warnings remain non-fatal and were present before this gap-closure patch.

@@ -23,6 +23,7 @@ import {
   OneKsAPI,
   ServiceAPI,
   VmAPI,
+  VmTemplateAPI,
   VnAPI,
 } from '@FeaturesModule'
 import {
@@ -42,6 +43,7 @@ const SearchPage = () => {
   const history = useHistory()
   const query = new URLSearchParams(location.search).get('q')?.trim() ?? ''
   const vms = VmAPI.useGetVmsQuery({ extended: false })
+  const vmTemplates = VmTemplateAPI.useGetTemplatesQuery()
   const kubernetes = OneKsAPI.useGetOneKsClustersQuery()
   const networks = VnAPI.useGetVNetworksQuery()
   const services = ServiceAPI.useGetServicesQuery()
@@ -57,6 +59,14 @@ const SearchPage = () => {
           type: 'Virtual Machine',
           name: vm.NAME,
           path: PRODUCT_PATHS.COMPUTE,
+        })
+    })
+    ;(vmTemplates.data ?? []).forEach((template) => {
+      if (includes(template?.NAME, query))
+        items.push({
+          type: 'VM Blueprint',
+          name: template.NAME,
+          path: PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
         })
     })
     ;(kubernetes.data ?? []).forEach((entry) => {
@@ -90,7 +100,7 @@ const SearchPage = () => {
         items.push({
           type: 'Image / Disk',
           name: image.NAME,
-          path: PRODUCT_PATHS.STORAGE,
+          path: PRODUCT_PATHS.STORAGE_IMAGES,
         })
     })
     ;(backups.data ?? []).forEach((job) => {
@@ -98,7 +108,7 @@ const SearchPage = () => {
         items.push({
           type: 'Backup Plan',
           name: job.NAME,
-          path: PRODUCT_PATHS.PROTECTION,
+          path: PRODUCT_PATHS.PROTECTION_BACKUP_PLANS,
         })
     })
 
@@ -106,6 +116,7 @@ const SearchPage = () => {
   }, [
     query,
     vms.data,
+    vmTemplates.data,
     kubernetes.data,
     networks.data,
     services.data,

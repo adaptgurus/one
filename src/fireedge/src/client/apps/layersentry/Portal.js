@@ -35,6 +35,7 @@ import ProtectionWorkspace from 'client/apps/layersentry/pages/ProtectionWorkspa
 import ComputeWorkspace from 'client/apps/layersentry/pages/ComputeWorkspace'
 import ApplicationsWorkspace from 'client/apps/layersentry/pages/ApplicationsWorkspace'
 import SiteRecoveryWorkspace from 'client/apps/layersentry/pages/SiteRecoveryWorkspace'
+import BackupStorageWorkspace from 'client/apps/layersentry/pages/BackupStorageWorkspace'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 
 const area = (props) => <AreaPage {...props} />
@@ -44,7 +45,10 @@ const LEGACY_REDIRECTS = Object.freeze({
   '/dashboard': PRODUCT_PATHS.OVERVIEW,
   '/vm': PRODUCT_PATHS.COMPUTE,
   '/vm/create': PRODUCT_PATHS.COMPUTE_CREATE,
+  '/vm-template': PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
   '/vm-group': PRODUCT_PATHS.COMPUTE_AFFINITY,
+  '/image': PRODUCT_PATHS.STORAGE_IMAGES,
+  '/file': PRODUCT_PATHS.STORAGE_FILES,
   '/virtual-network': PRODUCT_PATHS.NETWORK,
   '/virtual-network/create': '/network/create',
   '/network-template': PRODUCT_PATHS.NETWORK_TEMPLATES,
@@ -56,7 +60,6 @@ const LEGACY_REDIRECTS = Object.freeze({
   '/backup': PRODUCT_PATHS.PROTECTION_RECOVERY_POINTS,
   '/service': PRODUCT_PATHS.APPLICATIONS,
   '/service-template': PRODUCT_PATHS.APPLICATIONS,
-  '/file': PRODUCT_PATHS.STORAGE_FILES,
   '/attention': PRODUCT_PATHS.OPERATIONS,
 })
 
@@ -118,6 +121,22 @@ const Portal = ({ endpoints }) => {
               resources: [{ label: 'VM Groups', legacyPath: '/vm-group' }],
               createTo: '/vm-group/create',
               createLabel: 'Create Affinity Group',
+            })
+          }
+        />
+
+        <Route
+          exact
+          path={PRODUCT_PATHS.COMPUTE_BLUEPRINTS}
+          render={() =>
+            area({
+              endpoints,
+              title: 'VM Blueprints',
+              description:
+                'Browse approved virtual-machine blueprints and instantiate them through the backend-authorized workflow.',
+              resources: [
+                { label: 'VM Blueprints', legacyPath: '/vm-template' },
+              ],
             })
           }
         />
@@ -186,7 +205,7 @@ const Portal = ({ endpoints }) => {
                   legacyPath: '/network-template',
                 },
               ],
-              createTo: '/network-template/create',
+              createTo: isAdmin ? '/network-template/create' : undefined,
               createLabel: 'Create Network Blueprint',
             })
           }
@@ -239,6 +258,22 @@ const Portal = ({ endpoints }) => {
           path={PRODUCT_PATHS.STORAGE}
           render={() => <StorageWorkspace endpoints={endpoints} />}
         />
+        <Route
+          exact
+          path={PRODUCT_PATHS.STORAGE_IMAGES}
+          render={() =>
+            area({
+              endpoints,
+              title: 'Images',
+              description:
+                'Customer-visible OS and disk images with provider ownership and raw attributes hidden by the active OpenNebula view.',
+              resources: [{ label: 'Images', legacyPath: '/image' }],
+              createTo: '/image/create',
+              createLabel: 'Create Image',
+            })
+          }
+        />
+
         <Route
           exact
           path={PRODUCT_PATHS.STORAGE_FILES}
@@ -356,6 +391,8 @@ const Portal = ({ endpoints }) => {
               description:
                 'Get help and review support requests available to your account.',
               resources: [{ label: 'Support', legacyPath: '/support' }],
+              createTo: '/support/create',
+              createLabel: 'Create Ticket',
             })
           }
         />
@@ -575,6 +612,23 @@ const Portal = ({ endpoints }) => {
         {isAdmin && (
           <Route
             exact
+            path={PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS_CREATE}
+            render={() =>
+              create({
+                endpoints,
+                title: 'Create Marketplace App',
+                description:
+                  'Publish a Marketplace App through the native OpenNebula administrator workflow.',
+                legacyPath: '/marketplace-app/create',
+                returnTo: PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS,
+              })
+            }
+          />
+        )}
+
+        {isAdmin && (
+          <Route
+            exact
             path={PRODUCT_PATHS.INFRA_HOSTS}
             render={() =>
               area({
@@ -628,19 +682,7 @@ const Portal = ({ endpoints }) => {
           <Route
             exact
             path={PRODUCT_PATHS.INFRA_BACKUP_STORAGE}
-            render={() =>
-              area({
-                endpoints,
-                title: 'Backup Storage',
-                description:
-                  'OpenNebula Backup Datastores used by Backup Plans and restore operations.',
-                resources: [
-                  { label: 'Backup Datastores', legacyPath: '/datastore' },
-                ],
-                createTo: '/infrastructure/backup-storage/create',
-                createLabel: 'Create Backup Storage',
-              })
-            }
+            component={BackupStorageWorkspace}
           />
         )}
         {isAdmin && (
@@ -919,6 +961,8 @@ const Portal = ({ endpoints }) => {
                 resources: [
                   { label: 'Marketplace Apps', legacyPath: '/marketplace-app' },
                 ],
+                createTo: PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS_CREATE,
+                createLabel: 'Create Marketplace App',
               })
             }
           />

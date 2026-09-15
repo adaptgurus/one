@@ -37,8 +37,11 @@ const isBackupDatastore = (datastore = {}) =>
 const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
   const history = useHistory()
   const { view } = useViews()
+  const isAdmin = view === 'admin'
   const [tab, setTab] = useState(initialTab)
-  const datastoresQuery = DatastoreAPI.useGetDatastoresQuery()
+  const datastoresQuery = DatastoreAPI.useGetDatastoresQuery(undefined, {
+    skip: !isAdmin,
+  })
   const datastores = Array.isArray(datastoresQuery.data)
     ? datastoresQuery.data
     : datastoresQuery.data
@@ -56,14 +59,26 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
       title="Protection"
       description="Backup plans, recovery points and restores using the native OpenNebula protection lifecycle."
       actions={
-        <Button
-          variant="contained"
-          startIcon={<Plus width={17} height={17} />}
-          onClick={() => history.push('/protection/create')}
-          sx={{ textTransform: 'none' }}
-        >
-          Create backup plan
-        </Button>
+        isAdmin &&
+        !datastoresQuery.isLoading &&
+        backupDatastores.length === 0 ? (
+          <Button
+            variant="contained"
+            onClick={() => history.push(PRODUCT_PATHS.INFRA_BACKUP_STORAGE)}
+            sx={{ textTransform: 'none' }}
+          >
+            Configure backup storage
+          </Button>
+        ) : (
+          <Button
+            variant="contained"
+            startIcon={<Plus width={17} height={17} />}
+            onClick={() => history.push('/protection/create')}
+            sx={{ textTransform: 'none' }}
+          >
+            Create backup plan
+          </Button>
+        )
       }
     >
       <Box
@@ -91,12 +106,12 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
           </Surface>
         ))}
       </Box>
-      {backupDatastores.length === 0 && !datastoresQuery.isLoading && (
+      {isAdmin && backupDatastores.length === 0 && !datastoresQuery.isLoading && (
         <Alert
           severity="warning"
           sx={{ mt: 2 }}
           action={
-            view === 'admin' ? (
+            isAdmin ? (
               <Button
                 color="inherit"
                 size="small"
@@ -110,6 +125,12 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
           No OpenNebula Backup Datastore is configured. Backup Plans and restore
           require qualified backup storage such as Restic or Rsync before they
           can execute successfully.
+        </Alert>
+      )}
+      {!isAdmin && (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          Backup storage is provider-managed. Your Backup Plan form will show
+          only storage targets that OpenNebula authorizes for your account.
         </Alert>
       )}
       <Alert severity="info" sx={{ mt: 2 }}>

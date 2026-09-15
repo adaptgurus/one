@@ -36,12 +36,14 @@ export const PRODUCT_PATHS = Object.freeze({
   COMPUTE: '/compute',
   COMPUTE_CREATE: '/compute/create',
   COMPUTE_AFFINITY: '/compute/affinity',
+  COMPUTE_BLUEPRINTS: '/compute/blueprints',
   KUBERNETES: '/kubernetes',
   KUBERNETES_CREATE: '/kubernetes/create',
   APPLICATIONS: '/applications',
   APPLICATIONS_DEPLOY: '/applications/deploy',
   STORAGE: '/storage',
   STORAGE_FILES: '/storage/files',
+  STORAGE_IMAGES: '/storage/images',
   NETWORK: '/network',
   NETWORK_TEMPLATES: '/network/templates',
   NETWORK_ROUTERS: '/network/routers',
@@ -76,11 +78,17 @@ export const PRODUCT_PATHS = Object.freeze({
   PLATFORM_ROUTER_TEMPLATES: '/platform/router-templates',
   PLATFORM_MARKETPLACES: '/platform/marketplaces',
   PLATFORM_MARKETPLACE_APPS: '/platform/marketplace-apps',
+  PLATFORM_MARKETPLACE_APPS_CREATE: '/platform/marketplace-apps/create',
 })
 
 const cloudWorkloads = [
   { label: 'Overview', path: PRODUCT_PATHS.OVERVIEW, icon: DashboardDots },
   { label: 'Compute', path: PRODUCT_PATHS.COMPUTE, icon: Server },
+  {
+    label: 'VM Blueprints',
+    path: PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
+    icon: Packages,
+  },
   {
     label: 'Affinity Groups',
     path: PRODUCT_PATHS.COMPUTE_AFFINITY,
@@ -89,6 +97,7 @@ const cloudWorkloads = [
   { label: 'Kubernetes', path: PRODUCT_PATHS.KUBERNETES, icon: XrayView },
   { label: 'Applications', path: PRODUCT_PATHS.APPLICATIONS, icon: Packages },
   { label: 'Storage', path: PRODUCT_PATHS.STORAGE, icon: HardDrive },
+  { label: 'Images', path: PRODUCT_PATHS.STORAGE_IMAGES, icon: Packages },
   { label: 'Files', path: PRODUCT_PATHS.STORAGE_FILES, icon: Archive },
 ]
 
