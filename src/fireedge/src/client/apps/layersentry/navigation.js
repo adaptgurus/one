@@ -1,0 +1,128 @@
+/* ------------------------------------------------------------------------- *
+ * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
+ * ------------------------------------------------------------------------- */
+/* eslint-disable jsdoc/require-jsdoc */
+import {
+  Archive,
+  DashboardDots,
+  Db,
+  Group,
+  HardDrive,
+  HeadsetHelp,
+  HistoricShield,
+  NetworkAlt,
+  Packages,
+  Server,
+  Settings,
+  SettingsProfiles,
+  User,
+  XrayView,
+} from 'iconoir-react'
+
+export const PRODUCT_PATHS = Object.freeze({
+  OVERVIEW: '/overview',
+  COMPUTE: '/compute',
+  COMPUTE_CREATE: '/compute/create',
+  KUBERNETES: '/kubernetes',
+  KUBERNETES_CREATE: '/kubernetes/create',
+  STORAGE: '/storage',
+  NETWORK: '/network',
+  PROTECTION: '/protection',
+  SECURITY: '/security',
+  OPERATIONS: '/operations',
+  SUPPORT: '/support',
+  SETTINGS: '/settings',
+  INFRASTRUCTURE: '/infrastructure',
+  INFRA_HOSTS: '/infrastructure/hosts',
+  INFRA_CLUSTERS: '/infrastructure/clusters',
+  INFRA_STORAGE: '/infrastructure/storage',
+  ACCESS: '/access',
+  ACCESS_USERS: '/access/users',
+  ACCESS_TEAMS: '/access/teams',
+  PLATFORM: '/platform',
+  PLATFORM_IMAGES: '/platform/images',
+  PLATFORM_TEMPLATES: '/platform/templates',
+  PLATFORM_APPS: '/platform/applications',
+})
+
+const common = [
+  { label: 'Overview', path: PRODUCT_PATHS.OVERVIEW, icon: DashboardDots },
+  { label: 'Compute', path: PRODUCT_PATHS.COMPUTE, icon: Server },
+  { label: 'Kubernetes', path: PRODUCT_PATHS.KUBERNETES, icon: XrayView },
+  { label: 'Storage', path: PRODUCT_PATHS.STORAGE, icon: HardDrive },
+  { label: 'Network', path: PRODUCT_PATHS.NETWORK, icon: NetworkAlt },
+  { label: 'Protection', path: PRODUCT_PATHS.PROTECTION, icon: Archive },
+  { label: 'Security', path: PRODUCT_PATHS.SECURITY, icon: HistoricShield },
+  {
+    label: 'Operations',
+    path: PRODUCT_PATHS.OPERATIONS,
+    icon: SettingsProfiles,
+  },
+  { label: 'Support', path: PRODUCT_PATHS.SUPPORT, icon: HeadsetHelp },
+  { label: 'Settings', path: PRODUCT_PATHS.SETTINGS, icon: Settings },
+]
+const adminGroups = [
+  {
+    label: 'Infrastructure',
+    icon: Db,
+    children: [
+      { label: 'Compute Hosts', path: PRODUCT_PATHS.INFRA_HOSTS, icon: Server },
+      {
+        label: 'Compute Clusters',
+        path: PRODUCT_PATHS.INFRA_CLUSTERS,
+        icon: Group,
+      },
+      {
+        label: 'Storage Pools',
+        path: PRODUCT_PATHS.INFRA_STORAGE,
+        icon: HardDrive,
+      },
+    ],
+  },
+  {
+    label: 'Access',
+    icon: User,
+    children: [
+      { label: 'Users', path: PRODUCT_PATHS.ACCESS_USERS, icon: User },
+      { label: 'Teams', path: PRODUCT_PATHS.ACCESS_TEAMS, icon: Group },
+    ],
+  },
+  {
+    label: 'Platform',
+    icon: Packages,
+    children: [
+      { label: 'Images', path: PRODUCT_PATHS.PLATFORM_IMAGES, icon: Packages },
+      {
+        label: 'Templates',
+        path: PRODUCT_PATHS.PLATFORM_TEMPLATES,
+        icon: Packages,
+      },
+      {
+        label: 'Applications',
+        path: PRODUCT_PATHS.PLATFORM_APPS,
+        icon: Packages,
+      },
+    ],
+  },
+]
+
+export const isPlatformAdminView = (view) => view === 'admin'
+
+export const getNavigation = (view) => [
+  { label: 'Cloud', items: common },
+  ...(isPlatformAdminView(view)
+    ? adminGroups.map((group) => ({ ...group, items: group.children }))
+    : []),
+]

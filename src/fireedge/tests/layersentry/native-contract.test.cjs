@@ -38,7 +38,7 @@ try {
 console.log('Contract-test compiler: ' + compilerName)
 const jsx = (type, props, key) => ({ type, props: props || {}, key })
 const matchPath = (pathname, { path: pattern }) => new RegExp('^' + pattern.replace(/:[^/]+/g, '[^/]+') + '$').test(pathname)
-const markers = Object.fromEntries(['AuthLayout','ModalHost','Notifier','NotifierUpload','Sidebar','Router','SelfServiceAppearance','LayerSentryLogo','AppearanceSwitch','OpenNebulaLogo','SidebarUserMenu','SidebarRoleMenu','SidebarItem','Button'].map(k => [k, k]))
+const markers = Object.fromEntries(['AuthLayout','ModalHost','Notifier','NotifierUpload','Sidebar','Router','SelfServiceAppearance','LayerSentryLogo','AppearanceSwitch','OpenNebulaLogo','SidebarUserMenu','SidebarRoleMenu','SidebarItem','Button','LayerSentryPortal'].map(k => [k, k]))
 const permissionRoutes = [{ title: 'Instances', routes: [{ title: 'VMs', path: '/vm', sidebar: true, Component: 'VmPage', permissions: { native: true } }] }]
 const fixedEndpoints = [{ title: 'Dashboard', path: '/dashboard', Component: 'Dashboard' }, { title: 'Guacamole', path: '/guacamole/:id/:type', Component: 'Console', disableLayout: true }]
 const runtime = (options = {}) => {
@@ -74,6 +74,7 @@ const runtime = (options = {}) => {
     'client/apps/sunstone/components/Notifier': { default: markers.Notifier, NotifierUpload: markers.NotifierUpload, __esModule: true },
     'client/apps/sunstone/components/LayerSentry': { SelfServiceAppearance: markers.SelfServiceAppearance, LayerSentryLogo: markers.LayerSentryLogo, AppearanceSwitch: markers.AppearanceSwitch },
     'client/apps/sunstone/routes': { ENDPOINTS: fixedEndpoints, getEndpointsByView: (view, manifest) => manifest },
+    'client/apps/layersentry': { default: markers.LayerSentryPortal, __esModule: true },
     'client/router': { default: markers.Router, __esModule: true }, 'client/router/dev': { ENDPOINTS: [] },
     '@modules/components/primitives/Sidebar/Default/styles': { getStyles: () => ({}) },
     '@modules/components/primitives/Sidebar/Default/sidebarItem': { SidebarItem: markers.SidebarItem },
@@ -108,36 +109,57 @@ test('baseline fixtures match the exact reviewed Git blobs', () => {
     assert.equal(sha,expected[key])
   }
 })
-for (const options of [
-  {view:'cloud'}, {view:'admin'}, {view:'user'}, {view:'groupadmin'},
-  {view:'cloud',logged:false}, {view:'cloud',pathname:'/guacamole/7/vnc'},
-  {view:'cloud',search:'?layersentry-ui=classic'}, {view:'cloud',classic:true},
-  {view:'cloud',externalRedirect:'/vm/42'},
-]) test('native route/subscription/action-host contract: '+JSON.stringify(options), () => {
-  const before=runtime(options), after=runtime(options)
-  const a=before.render(before.load(native.app).default), b=after.render(after.load(changed.app).default)
-  assert.deepEqual(plain(visit(a,markers.Router)[0].props),plain(visit(b,markers.Router)[0].props))
-  assert.deepEqual(plain(visit(a,markers.AuthLayout)[0].props.subscriptions),plain(visit(b,markers.AuthLayout)[0].props.subscriptions))
-  for(const type of ['Notifier','NotifierUpload','ModalHost','Sidebar']) assert.equal(visit(a,markers[type]).length,visit(b,markers[type]).length,type)
-  if (visit(a,markers.Sidebar).length) assert.deepEqual(plain(visit(a,markers.Sidebar)[0].props.endpoints),plain(stripLabels(visit(b,markers.Sidebar)[0].props.endpoints)))
-  assert.deepEqual(before.calls,after.calls)
+const shellCases = [
+  { options: { view: 'cloud' }, portal: 1, router: 0, sidebar: 0 },
+  { options: { view: 'admin' }, portal: 1, router: 0, sidebar: 0 },
+  { options: { view: 'user' }, portal: 1, router: 0, sidebar: 0 },
+  { options: { view: 'groupadmin' }, portal: 1, router: 0, sidebar: 0 },
+  { options: { view: 'cloud', logged: false }, portal: 0, router: 1, sidebar: 0 },
+  { options: { view: 'cloud', pathname: '/guacamole/7/vnc' }, portal: 0, router: 1, sidebar: 0 },
+  { options: { view: 'cloud', search: '?layersentry-ui=classic' }, portal: 1, router: 0, sidebar: 0 },
+  { options: { view: 'cloud', classic: true }, portal: 1, router: 0, sidebar: 0 },
+  { options: { view: 'admin', search: '?native=1' }, portal: 0, router: 1, sidebar: 1 },
+]
+
+for (const { options, portal, router, sidebar } of shellCases) {
+  test('LayerSentry shell contract: ' + JSON.stringify(options), () => {
+    const ctx = runtime(options)
+    const tree = ctx.render(ctx.load(changed.app).default)
+    const logged = options.logged ?? true
+    assert.equal(visit(tree, markers.LayerSentryPortal).length, portal)
+    assert.equal(visit(tree, markers.Router).length, router)
+    assert.equal(visit(tree, markers.Sidebar).length, sidebar)
+    for (const type of ['Notifier', 'NotifierUpload', 'ModalHost']) {
+      assert.equal(visit(tree, markers[type]).length, logged ? 1 : 0, type)
+    }
+    assert.deepEqual(
+      plain(visit(tree, markers.AuthLayout)[0].props.subscriptions),
+      ['configSubscription', 'viewSubscription']
+    )
+  })
+}
+
+test('native Sunstone fallback is admin-only and explicit', () => {
+  const cloud = runtime({ view: 'cloud', search: '?native=1' })
+  const cloudTree = cloud.render(cloud.load(changed.app).default)
+  assert.equal(visit(cloudTree, markers.LayerSentryPortal).length, 1)
+  assert.equal(visit(cloudTree, markers.Sidebar).length, 0)
+
+  const admin = runtime({ view: 'admin', search: '?native=1' })
+  const adminTree = admin.render(admin.load(changed.app).default)
+  assert.equal(visit(adminTree, markers.LayerSentryPortal).length, 0)
+  assert.equal(visit(adminTree, markers.Sidebar).length, 1)
+  assert.equal(visit(adminTree, markers.Router).length, 1)
 })
-test('appearance toggle retains the native route and modal component types without navigation', () => {
-  const ctx=runtime({view:'cloud'}), App=ctx.load(changed.app).default
-  const first=ctx.render(App)
-  const Sidebar=visit(first,markers.Sidebar)[0]
-  Sidebar.props.footerContent({expanded:true}).props.onToggle()
-  const second=ctx.render(App)
-  assert.equal(visit(first,markers.Router)[0].type,visit(second,markers.Router)[0].type)
-  assert.equal(visit(first,markers.ModalHost)[0].type,visit(second,markers.ModalHost)[0].type)
-  assert.equal(ctx.store.get('layersentry.selfService.appearance.v1'),'classic')
-  assert.equal(ctx.calls.some(([name])=>name==='push'),false)
+
+test('disabled-layout console bypasses the product shell', () => {
+  const ctx = runtime({ view: 'cloud', pathname: '/guacamole/7/vnc' })
+  const tree = ctx.render(ctx.load(changed.app).default)
+  assert.equal(visit(tree, markers.LayerSentryPortal).length, 0)
+  assert.equal(visit(tree, markers.Sidebar).length, 0)
+  assert.equal(visit(tree, markers.Router).length, 1)
 })
-test('classic switch cannot override disabled-layout console exclusion', () => {
-  const ctx=runtime({view:'cloud',pathname:'/guacamole/7/vnc'}), tree=ctx.render(ctx.load(changed.app).default)
-  assert.equal(visit(tree,markers.SelfServiceAppearance)[0].props.enabled,false)
-  assert.equal(visit(tree,markers.Sidebar).length,0)
-})
+
 test('sidebar default retains original home, role menu, user menu and pin actions', () => {
   const a=runtime(), b=runtime()
   const first=a.render(a.load(native.sidebar).Sidebar,{isOpen:true,endpoints:fixedEndpoints})
@@ -167,9 +189,18 @@ test('existing non-English translations take precedence over new English wording
   const tree=ctx.render(ctx.load(changed.item).SidebarItem,{title:'VMs',displayTitle:'Virtual machines',path:'/vm',isExpanded:true})
   assert.equal(visit(tree,'Typography')[0].props.children,'Machines virtuelles')
 })
-test('native app endpoint filtering block is byte-identical', () => {
-  const block=s=>s.slice(s.indexOf('  const endpoints = useMemo'),s.indexOf('  const isLayoutDisabled = useMemo'))
-  assert.equal(block(changed.app),block(native.app))
+test('native endpoint filtering remains permission and manifest driven', () => {
+  const ctx = runtime({ view: 'cloud' })
+  const tree = ctx.render(ctx.load(changed.app).default)
+  const portal = visit(tree, markers.LayerSentryPortal)[0]
+  assert.deepEqual(
+    plain(portal.props.endpoints),
+    plain(fixedEndpoints.concat(permissionRoutes))
+  )
+  assert.match(changed.app, /getEndpointsByView\(\s*views\?\.\[view\]/)
+  assert.match(changed.app, /processTabManifest\(tabManifest\)/)
+  assert.match(changed.app, /fixedEndpoints\.concat\(viewEndpoints\)/)
+  assert.match(changed.app, /\[\s*tabManifest,\s*view,\s*views,/)
 })
 test('native sidebar filtering, ordering, sizing observers and pin handler are byte-identical', () => {
   const block=s=>s.slice(s.indexOf('    const { translate }'),s.indexOf('    return (\n      <Box'))

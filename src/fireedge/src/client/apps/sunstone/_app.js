@@ -13,32 +13,21 @@
  * See the License for the specific language governing permissions and       *
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
+/* eslint-disable jsdoc/require-jsdoc */
 import AuthLayout from 'client/apps/sunstone/components/AuthLayout'
 import ModalHost from 'client/apps/sunstone/components/ModalHost'
 import Notifier, {
   NotifierUpload,
 } from 'client/apps/sunstone/components/Notifier'
+import LayerSentryPortal from 'client/apps/layersentry'
 import { isDevelopment, processTabManifest } from '@UtilsModule'
 import { Sidebar } from '@ComponentsModule'
 import { ENDPOINTS, getEndpointsByView } from 'client/apps/sunstone/routes'
 import Router from 'client/router'
-import {
-  SelfServiceAppearance,
-  LayerSentryLogo,
-  AppearanceSwitch,
-} from 'client/apps/sunstone/components/LayerSentry'
-import {
-  ENABLE_SELF_SERVICE_APPEARANCE,
-  isSelfServiceView,
-  presentEndpoints,
-  readAppearance,
-  writeAppearance,
-  classicRequested,
-} from 'client/apps/sunstone/components/LayerSentry/presentation'
 import { ENDPOINTS as DEV_ENDPOINTS } from 'client/router/dev'
-import { ReactElement, useEffect, useMemo, useState } from 'react'
+import { ReactElement, useEffect, useMemo } from 'react'
 import { matchPath, useLocation } from 'react-router-dom'
-import { _APPS, SERVER_CONFIG, PATH } from '@ConstantsModule'
+import { _APPS, SERVER_CONFIG } from '@ConstantsModule'
 import {
   oneApi,
   SupportAPI,
@@ -53,10 +42,8 @@ export const APP_NAME = _APPS.sunstone
 const showSupportTab = (routes = [], find = true) => {
   if (find === true) return routes
 
-  const supportTab = routes.findIndex((route) => route?.path === PATH.SUPPORT)
-  if (supportTab >= 0) {
-    routes.splice(supportTab, 1)
-  }
+  const supportTab = routes.findIndex((route) => route?.path === '/support')
+  if (supportTab >= 0) routes.splice(supportTab, 1)
 
   return routes
 }
@@ -77,8 +64,17 @@ const isDisabledLayoutRoute = (pathname, routes = []) => {
   )
 }
 
+const nativeSunstoneRequested = (search = '') => {
+  try {
+    return new URLSearchParams(search).get('native') === '1'
+  } catch {
+    return false
+  }
+}
+
 /**
- * Sunstone App component.
+ * FireEdge application shell.
+ * LayerSentry is the default authenticated product experience.
  *
  * @returns {ReactElement} App rendered.
  */
@@ -101,9 +97,7 @@ const SunstoneApp = () => {
   }, [])
 
   useEffect(() => {
-    if (view && SERVER_CONFIG?.token_remote_support) {
-      getSupport()
-    }
+    if (view && SERVER_CONFIG?.token_remote_support) getSupport()
   }, [view, getSupport])
 
   const endpoints = useMemo(() => {
@@ -123,42 +117,26 @@ const SunstoneApp = () => {
       fixedEndpoints.concat(viewEndpoints),
       isSupportSuccess
     )
-  }, [tabManifest, view, isSupportSuccess, isManifestLoaded, isManifestLoading])
+  }, [
+    tabManifest,
+    view,
+    views,
+    isSupportSuccess,
+    isManifestLoaded,
+    isManifestLoading,
+  ])
 
   const isLayoutDisabled = useMemo(
     () => isDisabledLayoutRoute(pathname, endpoints),
     [endpoints, pathname]
   )
 
-  const [appearanceEnabled, setAppearanceEnabled] = useState(() => {
-    try {
-      return readAppearance(
-        typeof window === 'undefined' ? undefined : window.localStorage
-      )
-    } catch {
-      return true
-    }
-  })
-  const isSelfService = isSelfServiceView(view, isLogged, isLayoutDisabled)
-  const classicOverride = classicRequested(search)
-  const useLayerSentry =
-    ENABLE_SELF_SERVICE_APPEARANCE &&
-    isSelfService &&
-    appearanceEnabled &&
-    !classicOverride
-  const sidebarEndpoints = useMemo(
-    () => presentEndpoints(endpoints, useLayerSentry),
-    [endpoints, useLayerSentry]
-  )
-  const toggleAppearance = () => {
-    const next = !appearanceEnabled
-    setAppearanceEnabled(next)
-    try {
-      writeAppearance(window.localStorage, next)
-    } catch {
-      // Appearance still changes in this tab when storage is unavailable.
-    }
-  }
+  const allowNativeSunstone = view === 'admin'
+  const useNativeSunstone =
+    allowNativeSunstone && nativeSunstoneRequested(search) && !isLayoutDisabled
+  const useLayerSentryPortal =
+    isLogged && !isLayoutDisabled && !useNativeSunstone
+  const redirectWhenAuth = externalRedirect || '/overview'
 
   return (
     <AuthLayout
@@ -167,37 +145,28 @@ const SunstoneApp = () => {
         oneApi.endpoints.getSunstoneViews,
       ]}
     >
-      <SelfServiceAppearance enabled={useLayerSentry}>
-        {isLogged && (
-          <>
-            {!isLayoutDisabled && (
-              <Sidebar
-                endpoints={sidebarEndpoints}
-                logoComponent={useLayerSentry ? LayerSentryLogo : undefined}
-                footerContent={
-                  isSelfService && ENABLE_SELF_SERVICE_APPEARANCE
-                    ? ({ expanded }) => (
-                        <AppearanceSwitch
-                          enabled={useLayerSentry}
-                          expanded={expanded}
-                          locked={classicOverride}
-                          onToggle={toggleAppearance}
-                        />
-                      )
-                    : undefined
-                }
+      {' '}
+      {isLogged && (
+        <>
+          {useLayerSentryPortal ? (
+            <LayerSentryPortal endpoints={endpoints} />
+          ) : (
+            <>
+              {!isLayoutDisabled && <Sidebar endpoints={endpoints} />}
+              <Router
+                redirectWhenAuth={redirectWhenAuth}
+                endpoints={endpoints}
               />
-            )}
-            <Notifier />
-            <NotifierUpload />
-            <ModalHost />
-          </>
-        )}
-        <Router
-          redirectWhenAuth={externalRedirect || PATH.DASHBOARD}
-          endpoints={endpoints}
-        />
-      </SelfServiceAppearance>
+            </>
+          )}
+          <Notifier />
+          <NotifierUpload />
+          <ModalHost />
+        </>
+      )}
+      {!isLogged && (
+        <Router redirectWhenAuth={redirectWhenAuth} endpoints={endpoints} />
+      )}
     </AuthLayout>
   )
 }
