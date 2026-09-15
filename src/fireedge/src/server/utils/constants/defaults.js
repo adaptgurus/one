@@ -16,6 +16,7 @@
 
 const appName = 'fireedge'
 const appNameSunstone = 'sunstone'
+const appNameLayerSentry = 'layersentry'
 const internalSunstonePath = `${appName}/${appNameSunstone}`
 const baseUrl = `${appName ? `/${appName}/` : '/'}`
 const baseUrlWebsockets = 'websockets/'
@@ -26,6 +27,11 @@ const apps = {
     theme: appNameSunstone,
     name: appNameSunstone,
     assets: true,
+  },
+  [appNameLayerSentry]: {
+    theme: appNameSunstone,
+    name: appNameLayerSentry,
+    assets: false,
   },
 }
 const default2FAOpennebulaVar = 'TWO_FACTOR_AUTH_SECRET'

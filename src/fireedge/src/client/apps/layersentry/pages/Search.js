@@ -17,7 +17,14 @@
 import { Box, Button, Typography } from '@mui/material'
 import { useMemo } from 'react'
 import { useHistory, useLocation } from 'react-router-dom'
-import { OneKsAPI, VmAPI, VnAPI } from '@FeaturesModule'
+import {
+  BackupJobAPI,
+  ImageAPI,
+  OneKsAPI,
+  ServiceAPI,
+  VmAPI,
+  VnAPI,
+} from '@FeaturesModule'
 import {
   PageFrame,
   Surface,
@@ -37,6 +44,9 @@ const SearchPage = () => {
   const vms = VmAPI.useGetVmsQuery({ extended: false })
   const kubernetes = OneKsAPI.useGetOneKsClustersQuery()
   const networks = VnAPI.useGetVNetworksQuery()
+  const services = ServiceAPI.useGetServicesQuery()
+  const images = ImageAPI.useGetImagesQuery()
+  const backups = BackupJobAPI.useGetBackupJobsQuery()
 
   const results = useMemo(() => {
     if (!query) return []
@@ -66,9 +76,42 @@ const SearchPage = () => {
           path: PRODUCT_PATHS.NETWORK,
         })
     })
+    ;(services.data ?? []).forEach((service) => {
+      const resource = service?.DOCUMENT ?? service
+      if (includes(resource?.NAME, query))
+        items.push({
+          type: 'Application',
+          name: resource.NAME,
+          path: PRODUCT_PATHS.APPLICATIONS,
+        })
+    })
+    ;(images.data ?? []).forEach((image) => {
+      if (includes(image?.NAME, query))
+        items.push({
+          type: 'Image / Disk',
+          name: image.NAME,
+          path: PRODUCT_PATHS.STORAGE,
+        })
+    })
+    ;(backups.data ?? []).forEach((job) => {
+      if (includes(job?.NAME, query))
+        items.push({
+          type: 'Backup Plan',
+          name: job.NAME,
+          path: PRODUCT_PATHS.PROTECTION,
+        })
+    })
 
     return items.slice(0, 50)
-  }, [query, vms.data, kubernetes.data, networks.data])
+  }, [
+    query,
+    vms.data,
+    kubernetes.data,
+    networks.data,
+    services.data,
+    images.data,
+    backups.data,
+  ])
 
   return (
     <PageFrame

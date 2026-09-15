@@ -116,7 +116,7 @@ frontApps.forEach((frontApp) => {
   app.get(`${basename}/${frontApp}`, entrypointApp)
   app.get(`${basename}/${frontApp}/*`, entrypointApp)
 })
-app.get('/*', (_, res) => res.redirect(`/${defaultAppName}/sunstone`))
+app.get('/*', (_, res) => res.redirect(`/${defaultAppName}/layersentry`))
 // 404 - public
 app.get('*', entrypoint404)
 

@@ -283,7 +283,13 @@ const loadClient = async () => {
   // eslint-disable-next-line no-undef
   await __webpack_init_sharing__('default')
 
-  const { default: initApp } = await import('client/sunstone')
+  const isLayerSentry = window.location.pathname
+    .split('/')
+    .filter(Boolean)
+    .includes('layersentry')
+  const { default: initApp } = isLayerSentry
+    ? await import('client/layersentry')
+    : await import('client/sunstone')
   initApp()
 }
 

@@ -116,7 +116,7 @@ const bundle = ({ assets = false, name = 'sunstone' }) => {
       __dirname,
       'src',
       'client',
-      `${name === 'sunstone' ? 'bootstrap' : name}.js`
+      `${['sunstone', 'layersentry'].includes(name) ? 'bootstrap' : name}.js`
     ),
     target: 'web',
     devtool: 'source-map',

@@ -51,11 +51,10 @@ router.get('*', async (req, res) => {
   } catch (e) {
     writeInLogger(e)
   }
-  const APP_CONFIG = {
-    [defaultApps.sunstone.name]: {
-      ...getSunstoneConfig({ includeProtectedConfig: false }),
-    },
-  }
+  const sunstoneConfig = getSunstoneConfig({ includeProtectedConfig: false })
+  const APP_CONFIG = Object.fromEntries(
+    Object.values(defaultApps).map(({ name }) => [name, { ...sunstoneConfig }])
+  )
 
   const encodedFavIcon = await getEncodedFavicon()
 

@@ -20,6 +20,7 @@ import {
   HardDrive,
   NetworkAlt,
   Plus,
+  Packages,
   Server,
   XrayView,
 } from 'iconoir-react'
@@ -28,6 +29,7 @@ import {
   BackupJobAPI,
   DatastoreAPI,
   OneKsAPI,
+  ServiceAPI,
   VmAPI,
   VnAPI,
   useViews,
@@ -56,6 +58,7 @@ const Overview = () => {
   const vms = VmAPI.useGetVmsQuery({ extended: false })
   const kubernetes = OneKsAPI.useGetOneKsClustersQuery()
   const networks = VnAPI.useGetVNetworksQuery()
+  const applications = ServiceAPI.useGetServicesQuery()
   const backups = BackupJobAPI.useGetBackupJobsQuery()
   const storage = DatastoreAPI.useGetDatastoresQuery(undefined, {
     skip: !isAdmin,
@@ -80,7 +83,7 @@ const Overview = () => {
           gridTemplateColumns: {
             xs: '1fr',
             sm: 'repeat(2,1fr)',
-            xl: 'repeat(5,1fr)',
+            xl: 'repeat(6,1fr)',
           },
           gap: 2,
           mt: 3,
@@ -112,6 +115,13 @@ const Overview = () => {
           detail="Protection jobs"
           icon={Archive}
           accent={colors.status.warning}
+        />
+        <MetricCard
+          label="Applications"
+          value={count(applications)}
+          detail="OneFlow deployments"
+          icon={Packages}
+          accent={colors.brand.accent}
         />
         <MetricCard
           label={isAdmin ? 'Storage Pools' : 'Storage'}
@@ -218,6 +228,7 @@ const Overview = () => {
             {[
               ['Create a virtual machine', PRODUCT_PATHS.COMPUTE_CREATE],
               ['Create Kubernetes cluster', PRODUCT_PATHS.KUBERNETES_CREATE],
+              ['Deploy application', PRODUCT_PATHS.APPLICATIONS_DEPLOY],
               ['Open storage', PRODUCT_PATHS.STORAGE],
               ['Manage firewall rules', PRODUCT_PATHS.SECURITY],
               ['Check protection', PRODUCT_PATHS.PROTECTION],

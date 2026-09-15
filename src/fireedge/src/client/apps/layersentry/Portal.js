@@ -27,6 +27,13 @@ import AreaPage from 'client/apps/layersentry/pages/AreaPage'
 import CreatePage from 'client/apps/layersentry/pages/CreatePage'
 import SearchPage from 'client/apps/layersentry/pages/Search'
 import SettingsPage from 'client/apps/layersentry/pages/Settings'
+import StorageWorkspace from 'client/apps/layersentry/pages/StorageWorkspace'
+import NetworkWorkspace from 'client/apps/layersentry/pages/NetworkWorkspace'
+import KubernetesWorkspace from 'client/apps/layersentry/pages/KubernetesWorkspace'
+import OperationsWorkspace from 'client/apps/layersentry/pages/OperationsWorkspace'
+import ProtectionWorkspace from 'client/apps/layersentry/pages/ProtectionWorkspace'
+import ComputeWorkspace from 'client/apps/layersentry/pages/ComputeWorkspace'
+import ApplicationsWorkspace from 'client/apps/layersentry/pages/ApplicationsWorkspace'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 
 const area = (props) => <AreaPage {...props} />
@@ -43,6 +50,7 @@ const LEGACY_REDIRECTS = Object.freeze({
   '/backupjobs': PRODUCT_PATHS.PROTECTION,
   '/backupjobs/create': '/protection/create',
   '/backup': PRODUCT_PATHS.PROTECTION,
+  '/service': PRODUCT_PATHS.APPLICATIONS,
   '/attention': PRODUCT_PATHS.OPERATIONS,
 })
 
@@ -57,19 +65,6 @@ const Portal = ({ endpoints }) => {
       ),
     [endpoints]
   )
-  const storageResources = isAdmin
-    ? [
-        { label: 'Storage Pools', legacyPath: '/datastore' },
-        { label: 'Disk Images', legacyPath: '/image' },
-      ]
-    : [
-        {
-          label: 'Virtual machine disks',
-          legacyPath: '/vm',
-          unavailableLabel:
-            'Open Compute to manage disks attached to your virtual machines.',
-        },
-      ]
 
   return (
     <PortalShell>
@@ -88,23 +83,22 @@ const Portal = ({ endpoints }) => {
                 'A guided VM workflow using approved images, sizing, storage, networks and security.',
               legacyPath: '/vm/create',
               returnTo: PRODUCT_PATHS.COMPUTE,
+              steps: [
+                'Basics',
+                'Operating System',
+                'Size',
+                'Storage',
+                'Network',
+                'Security',
+                'Review',
+              ],
             })
           }
         />
         <Route
           exact
           path={PRODUCT_PATHS.COMPUTE}
-          render={() =>
-            area({
-              endpoints,
-              title: 'Compute',
-              description:
-                'Create and operate virtual machines without exposing provider internals.',
-              resources: [{ label: 'Virtual Machines', legacyPath: '/vm' }],
-              createTo: PRODUCT_PATHS.COMPUTE_CREATE,
-              createLabel: 'Create VM',
-            })
-          }
+          render={() => <ComputeWorkspace endpoints={endpoints} />}
         />
 
         <Route
@@ -118,23 +112,22 @@ const Portal = ({ endpoints }) => {
                 'Provision a managed cluster through the native OneKS lifecycle.',
               legacyPath: '/kubernetes/create',
               returnTo: PRODUCT_PATHS.KUBERNETES,
+              steps: [
+                'Basics',
+                'Version',
+                'Control Plane',
+                'Workers',
+                'Network',
+                'Storage & Add-ons',
+                'Review',
+              ],
             })
           }
         />
         <Route
           exact
           path={PRODUCT_PATHS.KUBERNETES}
-          render={() =>
-            area({
-              endpoints,
-              title: 'Kubernetes',
-              description:
-                'Create, scale, upgrade and recover managed Kubernetes clusters.',
-              resources: [{ label: 'Clusters', legacyPath: '/kubernetes' }],
-              createTo: PRODUCT_PATHS.KUBERNETES_CREATE,
-              createLabel: 'Create Cluster',
-            })
-          }
+          render={() => <KubernetesWorkspace endpoints={endpoints} />}
         />
 
         <Route
@@ -148,39 +141,47 @@ const Portal = ({ endpoints }) => {
                 'Define an isolated private, public or routed network using customer-friendly settings.',
               legacyPath: '/virtual-network/create',
               returnTo: PRODUCT_PATHS.NETWORK,
+              steps: ['Type', 'Address', 'Isolation', 'Security', 'Review'],
             })
           }
         />
         <Route
           exact
           path={PRODUCT_PATHS.NETWORK}
+          render={() => <NetworkWorkspace endpoints={endpoints} />}
+        />
+
+        <Route
+          exact
+          path={PRODUCT_PATHS.APPLICATIONS_DEPLOY}
           render={() =>
-            area({
+            create({
               endpoints,
-              title: 'Network',
+              title: 'Deploy Application',
               description:
-                'Networks and address spaces available to this project.',
-              resources: [
-                { label: 'Networks', legacyPath: '/virtual-network' },
+                'Choose a published application definition and provide only the deployment inputs exposed by that definition.',
+              legacyPath: '/service-template/instantiate/',
+              returnTo: PRODUCT_PATHS.APPLICATIONS,
+              steps: [
+                'Application',
+                'Inputs',
+                'Resources',
+                'Network',
+                'Review',
               ],
-              createTo: '/network/create',
-              createLabel: 'Create Network',
             })
           }
         />
         <Route
           exact
+          path={PRODUCT_PATHS.APPLICATIONS}
+          render={() => <ApplicationsWorkspace endpoints={endpoints} />}
+        />
+
+        <Route
+          exact
           path={PRODUCT_PATHS.STORAGE}
-          render={() =>
-            area({
-              endpoints,
-              title: 'Storage',
-              description: isAdmin
-                ? 'Manage platform storage pools and disk images.'
-                : 'Manage VM disks with safe detach, resize and reattach workflows.',
-              resources: storageResources,
-            })
-          }
+          render={() => <StorageWorkspace endpoints={endpoints} />}
         />
 
         <Route
@@ -194,26 +195,20 @@ const Portal = ({ endpoints }) => {
                 'Choose resources, schedule, retention and storage before enabling protection.',
               legacyPath: '/backupjobs/create',
               returnTo: PRODUCT_PATHS.PROTECTION,
+              steps: [
+                'Resources',
+                'Schedule',
+                'Retention',
+                'Storage',
+                'Review',
+              ],
             })
           }
         />
         <Route
           exact
           path={PRODUCT_PATHS.PROTECTION}
-          render={() =>
-            area({
-              endpoints,
-              title: 'Protection',
-              description:
-                'Backups, snapshots and restore operations supported by the current backend.',
-              resources: [
-                { label: 'Backup Plans', legacyPath: '/backupjobs' },
-                { label: 'Backups', legacyPath: '/backup' },
-              ],
-              createTo: '/protection/create',
-              createLabel: 'Create Backup Plan',
-            })
-          }
+          render={() => <ProtectionWorkspace endpoints={endpoints} />}
         />
 
         <Route
@@ -227,6 +222,13 @@ const Portal = ({ endpoints }) => {
                 'Create inbound and outbound rules using plain protocol, port and source settings.',
               legacyPath: '/security-group/create',
               returnTo: PRODUCT_PATHS.SECURITY,
+              steps: [
+                'Direction',
+                'Protocol & Port',
+                'Source',
+                'Policy',
+                'Review',
+              ],
             })
           }
         />
@@ -251,16 +253,9 @@ const Portal = ({ endpoints }) => {
         <Route
           exact
           path={PRODUCT_PATHS.OPERATIONS}
-          render={() =>
-            area({
-              endpoints,
-              title: 'Operations',
-              description:
-                'Health, alerts, events and tasks that need attention.',
-              resources: [{ label: 'Attention', legacyPath: '/attention' }],
-            })
-          }
+          render={() => <OperationsWorkspace endpoints={endpoints} />}
         />
+
         <Route
           exact
           path={PRODUCT_PATHS.SUPPORT}
@@ -283,6 +278,196 @@ const Portal = ({ endpoints }) => {
         {isAdmin && (
           <Route
             exact
+            path="/infrastructure/hosts/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Add Compute Host',
+                description:
+                  'Register a compute host using the native OpenNebula host lifecycle.',
+                legacyPath: '/host/create',
+                returnTo: PRODUCT_PATHS.INFRA_HOSTS,
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/infrastructure/clusters/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Create Compute Cluster',
+                description:
+                  'Create an administrative compute placement group.',
+                legacyPath: '/cluster/create',
+                returnTo: PRODUCT_PATHS.INFRA_CLUSTERS,
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/infrastructure/storage/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Create Storage',
+                description:
+                  'Create NFS, local, LVM, iSCSI multipath or qualified storage using the native datastore lifecycle.',
+                legacyPath: '/datastore/create',
+                returnTo: PRODUCT_PATHS.INFRA_STORAGE,
+                steps: [
+                  'Type',
+                  'Hosts',
+                  'Configuration',
+                  'Validation',
+                  'Review',
+                ],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/infrastructure/providers/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Add Provider',
+                description:
+                  'Register an infrastructure provider through the supported FireEdge workflow.',
+                legacyPath: '/provider/create',
+                returnTo: PRODUCT_PATHS.INFRA_PROVIDERS,
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/access/users/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Add User',
+                description:
+                  'Create a user and assign backend-enforced project access.',
+                legacyPath: '/user/create',
+                returnTo: PRODUCT_PATHS.ACCESS_USERS,
+                steps: [
+                  'Details',
+                  'Role',
+                  'Project / Team',
+                  'Limits',
+                  'Review',
+                ],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/access/teams/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Add Team',
+                description:
+                  'Create an OpenNebula group used as a LayerSentry team or role boundary.',
+                legacyPath: '/group/create',
+                returnTo: PRODUCT_PATHS.ACCESS_TEAMS,
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/access/projects/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Create Project',
+                description:
+                  'Create a virtual data center project and its resource boundaries.',
+                legacyPath: '/virtual-data-center/create',
+                returnTo: PRODUCT_PATHS.ACCESS_PROJECTS,
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/access/rules/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Create Access Rule',
+                description:
+                  'Advanced access control for administrators. Backend ACL enforcement remains authoritative.',
+                legacyPath: '/acl/create',
+                returnTo: PRODUCT_PATHS.ACCESS_RULES,
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/platform/images/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Create Image',
+                description:
+                  'Publish an approved operating-system or disk image.',
+                legacyPath: '/image/create',
+                returnTo: PRODUCT_PATHS.PLATFORM_IMAGES,
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/platform/templates/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Create VM Blueprint',
+                description: 'Create a reusable virtual-machine blueprint.',
+                legacyPath: '/vm-template/create',
+                returnTo: PRODUCT_PATHS.PLATFORM_TEMPLATES,
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path="/platform/applications/create"
+            render={() =>
+              create({
+                endpoints,
+                title: 'Create Application Definition',
+                description:
+                  'Create a reusable OneFlow application definition.',
+                legacyPath: '/service-template/create',
+                returnTo: PRODUCT_PATHS.PLATFORM_APPS,
+              })
+            }
+          />
+        )}
+
+        {isAdmin && (
+          <Route
+            exact
             path={PRODUCT_PATHS.INFRA_HOSTS}
             render={() =>
               area({
@@ -290,6 +475,8 @@ const Portal = ({ endpoints }) => {
                 title: 'Compute Hosts',
                 description: 'Physical compute host health and administration.',
                 resources: [{ label: 'Hosts', legacyPath: '/host' }],
+                createTo: '/infrastructure/hosts/create',
+                createLabel: 'Add Host',
               })
             }
           />
@@ -305,6 +492,8 @@ const Portal = ({ endpoints }) => {
                 description:
                   'Administrative compute placement and cluster management.',
                 resources: [{ label: 'Clusters', legacyPath: '/cluster' }],
+                createTo: '/infrastructure/clusters/create',
+                createLabel: 'Create Cluster',
               })
             }
           />
@@ -322,6 +511,40 @@ const Portal = ({ endpoints }) => {
                 resources: [
                   { label: 'Storage Pools', legacyPath: '/datastore' },
                 ],
+                createTo: '/infrastructure/storage/create',
+                createLabel: 'Create Storage',
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.INFRA_ZONES}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Zones / Sites',
+                description:
+                  'Administrative sites and zones available to this private cloud.',
+                resources: [{ label: 'Zones / Sites', legacyPath: '/zone' }],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.INFRA_PROVIDERS}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Providers',
+                description:
+                  'Provider integrations and infrastructure connection status.',
+                resources: [{ label: 'Providers', legacyPath: '/provider' }],
+                createTo: '/infrastructure/providers/create',
+                createLabel: 'Add Provider',
               })
             }
           />
@@ -336,6 +559,8 @@ const Portal = ({ endpoints }) => {
                 title: 'Users',
                 description: 'User accounts, roles and project access.',
                 resources: [{ label: 'Users', legacyPath: '/user' }],
+                createTo: '/access/users/create',
+                createLabel: 'Add User',
               })
             }
           />
@@ -350,6 +575,77 @@ const Portal = ({ endpoints }) => {
                 title: 'Teams',
                 description: 'Teams and project membership.',
                 resources: [{ label: 'Teams', legacyPath: '/group' }],
+                createTo: '/access/teams/create',
+                createLabel: 'Add Team',
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.ACCESS_PROJECTS}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Projects',
+                description:
+                  'Virtual data centers and project resource boundaries.',
+                resources: [
+                  { label: 'Projects', legacyPath: '/virtual-data-center' },
+                ],
+                createTo: '/access/projects/create',
+                createLabel: 'Create Project',
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.ACCESS_ROLES}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Roles',
+                description:
+                  'Role membership is mapped to OpenNebula groups and enforced by backend permissions.',
+                resources: [{ label: 'Roles / Groups', legacyPath: '/group' }],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.ACCESS_LIMITS}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Limits',
+                description:
+                  'Review user and team resource limits without exposing raw ACL syntax.',
+                resources: [
+                  { label: 'User Limits', legacyPath: '/user' },
+                  { label: 'Team Limits', legacyPath: '/group' },
+                ],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.ACCESS_RULES}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Access Rules',
+                description:
+                  'Advanced access rules. Use this only for administrator-level policy changes.',
+                resources: [{ label: 'Access Rules', legacyPath: '/acl' }],
+                createTo: '/access/rules/create',
+                createLabel: 'Create Access Rule',
               })
             }
           />
@@ -364,6 +660,8 @@ const Portal = ({ endpoints }) => {
                 title: 'Images',
                 description: 'Approved operating-system and disk images.',
                 resources: [{ label: 'Images', legacyPath: '/image' }],
+                createTo: '/platform/images/create',
+                createLabel: 'Create Image',
               })
             }
           />
@@ -381,6 +679,8 @@ const Portal = ({ endpoints }) => {
                 resources: [
                   { label: 'VM Blueprints', legacyPath: '/vm-template' },
                 ],
+                createTo: '/platform/templates/create',
+                createLabel: 'Create Blueprint',
               })
             }
           />
@@ -396,6 +696,8 @@ const Portal = ({ endpoints }) => {
                 description:
                   'Published application and OneFlow service definitions.',
                 resources: [{ label: 'Applications', legacyPath: '/service' }],
+                createTo: '/platform/applications/create',
+                createLabel: 'Create Application Definition',
               })
             }
           />

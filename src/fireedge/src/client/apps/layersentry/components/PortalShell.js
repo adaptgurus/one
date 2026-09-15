@@ -15,8 +15,22 @@
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
-import { Avatar, Box, InputBase, Tooltip, Typography } from '@mui/material'
-import { NavArrowRight, Search } from 'iconoir-react'
+import {
+  Avatar,
+  Box,
+  IconButton,
+  InputBase,
+  Tooltip,
+  Typography,
+} from '@mui/material'
+import {
+  BellNotification,
+  HeadsetHelp,
+  Menu,
+  NavArrowRight,
+  Search,
+  Settings,
+} from 'iconoir-react'
 import { useMemo, useState } from 'react'
 import { useHistory, useLocation } from 'react-router-dom'
 import { useAuth, useViews } from '@FeaturesModule'
@@ -102,6 +116,7 @@ const PortalShell = ({ children }) => {
   const { view } = useViews()
   const { user, groups = [] } = useAuth()
   const [search, setSearch] = useState('')
+  const [mobileOpen, setMobileOpen] = useState(false)
   const navigation = useMemo(() => getNavigation(view), [view])
   const groupName = useMemo(
     () => groups.find(({ ID }) => `${ID}` === `${user?.GID}`)?.NAME,
@@ -112,9 +127,14 @@ const PortalShell = ({ children }) => {
     location.pathname === path ||
     (path !== '/overview' && location.pathname.startsWith(`${path}/`))
 
+  const navigate = (path) => {
+    history.push(path)
+    setMobileOpen(false)
+  }
+
   const submitSearch = (event) => {
     if (event.key !== 'Enter' || !search.trim()) return
-    history.push(`/search?q=${encodeURIComponent(search.trim())}`)
+    navigate(`/search?q=${encodeURIComponent(search.trim())}`)
   }
 
   return (
@@ -125,6 +145,19 @@ const PortalShell = ({ children }) => {
         color: colors.text.primary,
       }}
     >
+      {mobileOpen && (
+        <Box
+          role="presentation"
+          onClick={() => setMobileOpen(false)}
+          sx={{
+            display: { xs: 'block', md: 'none' },
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1150,
+            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+          }}
+        />
+      )}
       <Box
         component="aside"
         sx={{
@@ -134,8 +167,9 @@ const PortalShell = ({ children }) => {
           backgroundColor: colors.brand.navy,
           color: colors.text.inverse,
           zIndex: 1200,
-          display: 'flex',
+          display: { xs: mobileOpen ? 'flex' : 'none', md: 'flex' },
           flexDirection: 'column',
+          boxShadow: { xs: '0 16px 40px rgba(15, 23, 42, 0.28)', md: 'none' },
         }}
       >
         {' '}
@@ -202,7 +236,7 @@ const PortalShell = ({ children }) => {
                     key={item.path ?? item.label}
                     item={item}
                     active={isActive(item.path)}
-                    onClick={() => history.push(item.path)}
+                    onClick={() => navigate(item.path)}
                   />
                 ))}
               </Box>
@@ -255,7 +289,7 @@ const PortalShell = ({ children }) => {
         sx={{
           position: 'fixed',
           top: 0,
-          left: SIDEBAR_WIDTH,
+          left: { xs: 0, md: SIDEBAR_WIDTH },
           right: 0,
           height: TOPBAR_HEIGHT,
           backgroundColor: colors.surface,
@@ -264,9 +298,19 @@ const PortalShell = ({ children }) => {
           display: 'flex',
           alignItems: 'center',
           gap: 2,
-          px: 3,
+          px: { xs: 1.5, md: 3 },
         }}
       >
+        <IconButton
+          aria-label="Open navigation"
+          onClick={() => setMobileOpen(true)}
+          sx={{
+            display: { xs: 'inline-flex', md: 'none' },
+            color: colors.text.primary,
+          }}
+        >
+          <Menu width={21} height={21} />
+        </IconButton>
         <Box
           sx={{
             flex: 1,
@@ -299,9 +343,37 @@ const PortalShell = ({ children }) => {
         <Box
           sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}
         >
+          <Tooltip title="Operations and alerts">
+            <IconButton
+              aria-label="Operations and alerts"
+              onClick={() => navigate('/operations')}
+              sx={{ color: colors.text.secondary }}
+            >
+              <BellNotification width={19} height={19} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Support">
+            <IconButton
+              aria-label="Support"
+              onClick={() => navigate('/support')}
+              sx={{ color: colors.text.secondary }}
+            >
+              <HeadsetHelp width={19} height={19} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Settings">
+            <IconButton
+              aria-label="Settings"
+              onClick={() => navigate('/settings')}
+              sx={{ color: colors.text.secondary }}
+            >
+              <Settings width={19} height={19} />
+            </IconButton>
+          </Tooltip>
           <Tooltip title="Current project">
             <Box
               sx={{
+                display: { xs: 'none', sm: 'block' },
                 px: 1.25,
                 py: 0.55,
                 border: `1px solid ${colors.border}`,
@@ -333,6 +405,7 @@ const PortalShell = ({ children }) => {
           </Tooltip>
           <Avatar
             sx={{
+              display: { xs: 'none', sm: 'flex' },
               width: 34,
               height: 34,
               fontSize: 12,
@@ -346,7 +419,7 @@ const PortalShell = ({ children }) => {
       <Box
         component="main"
         sx={{
-          ml: `${SIDEBAR_WIDTH}px`,
+          ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
           pt: `${TOPBAR_HEIGHT}px`,
           minHeight: '100vh',
         }}
