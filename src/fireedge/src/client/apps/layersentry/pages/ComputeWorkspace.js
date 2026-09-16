@@ -13,13 +13,31 @@
  * See the License for the specific language governing permissions and       *
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
+
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
-import { Box, Button, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  LinearProgress,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Typography,
+} from '@mui/material'
 import { HardDrive, NetworkAlt, Packages, Plus, Server } from 'iconoir-react'
+import { useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
-import { VmAPI } from '@FeaturesModule'
-import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
+import { VmAPI, useViews } from '@FeaturesModule'
+import { VirtualMachine } from '@ResourcesModule'
+import { UNITS } from '@ConstantsModule'
+import { getIpAddresses, getVirtualMachineState } from '@ModelsModule'
+import { prettyBytes } from '@UtilsModule'
+import { VirtualMachineDetailsDrawer as DetailsDrawer } from '@ContainersModule'
 import {
   MetricCard,
   PageFrame,
@@ -52,10 +70,106 @@ const COMPUTE_QUICK_ACTIONS = [
   { label: 'Networks', path: PRODUCT_PATHS.NETWORK, icon: NetworkAlt },
 ]
 
-const ComputeWorkspace = ({ endpoints }) => {
+const getErrorMessage = (error) => {
+  const data = error?.data
+  if (typeof data === 'string') return data
+  if (typeof data?.message === 'string') return data.message
+  if (typeof error?.error === 'string') return error.error
+
+  return 'OpenNebula could not load the virtual machine inventory.'
+}
+const VmInventory = ({ query, vms, onManage }) => {
+  if (query.isLoading) return <LinearProgress />
+  if (query.isError)
+    return <Alert severity="error">{getErrorMessage(query.error)}</Alert>
+  if (!vms.length) {
+    return (
+      <Alert severity="info">
+        No virtual machines are visible in the current OpenNebula scope.
+      </Alert>
+    )
+  }
+
+  return (
+    <TableContainer data-layersentry-vm-inventory sx={{ maxHeight: 560 }}>
+      <Table stickyHeader size="small" aria-label="Virtual machines">
+        <TableHead>
+          <TableRow>
+            <TableCell>Name</TableCell>
+            <TableCell>Status</TableCell>
+            <TableCell>vCPU</TableCell>
+            <TableCell>Memory</TableCell>
+            <TableCell>IP addresses</TableCell>
+            <TableCell align="right">Actions</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {vms.map((vm) => {
+            const state = getVirtualMachineState(vm)
+            const vcpu = vm?.TEMPLATE?.VCPU ?? vm?.TEMPLATE?.CPU ?? '—'
+            const memory = prettyBytes(vm?.TEMPLATE?.MEMORY ?? 0, UNITS.MB)
+            const ips = getIpAddresses(vm)?.filter(Boolean)?.join(', ') || '—'
+
+            return (
+              <TableRow
+                hover
+                key={vm.ID}
+                sx={{ cursor: 'pointer' }}
+                onClick={() => onManage(vm.ID)}
+              >
+                <TableCell>
+                  <Typography sx={{ fontSize: 13, fontWeight: 700 }}>
+                    {vm.NAME ?? `VM ${vm.ID}`}
+                  </Typography>
+                  <Typography sx={{ fontSize: 10.5, color: colors.text.muted }}>
+                    ID {vm.ID}
+                  </Typography>
+                </TableCell>
+                <TableCell>{state?.name ?? 'Unknown'}</TableCell>
+                <TableCell>{vcpu}</TableCell>
+                <TableCell>{memory}</TableCell>
+                <TableCell sx={{ maxWidth: 260 }}>{ips}</TableCell>
+                <TableCell align="right">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onManage(vm.ID)
+                    }}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Manage
+                  </Button>
+                </TableCell>
+              </TableRow>
+            )
+          })}
+        </TableBody>
+      </Table>
+    </TableContainer>
+  )
+}
+VmInventory.propTypes = {
+  query: PropTypes.object.isRequired,
+  vms: PropTypes.arrayOf(PropTypes.object).isRequired,
+  onManage: PropTypes.func.isRequired,
+}
+
+const ComputeWorkspace = () => {
   const history = useHistory()
+  const { getResourceView } = useViews()
   const query = VmAPI.useGetVmsQuery({ extended: true })
   const vms = toArray(query.data)
+  const [selectedVmId, setSelectedVmId] = useState()
+  const viewConfig = useMemo(
+    () => getResourceView(VirtualMachine.RID) ?? {},
+    [getResourceView]
+  )
+  const selectedVms = useMemo(
+    () => vms.filter(({ ID }) => `${ID}` === `${selectedVmId}`),
+    [selectedVmId, vms]
+  )
   const running = vms.filter(({ STATE }) => String(STATE) === '3').length
   const totalCpu = vms.reduce(
     (sum, vm) => sum + Number(vm?.TEMPLATE?.CPU ?? vm?.TEMPLATE?.VCPU ?? 0),
@@ -129,7 +243,7 @@ const ComputeWorkspace = ({ endpoints }) => {
       <Surface sx={{ mt: 2, p: 2 }}>
         <SectionHeader
           title="Compute actions"
-          description="Common VM tasks are always visible here. Select a virtual machine below for power, console, resize, disk, network, snapshot, backup and delete operations."
+          description="Common VM tasks are always visible here. Select Manage on a VM for native OpenNebula power, console, resize, disk, network, snapshot, backup and delete operations."
         />
         <Box
           data-layersentry-compute-actions
@@ -164,11 +278,10 @@ const ComputeWorkspace = ({ endpoints }) => {
       <Surface sx={{ mt: 2, p: 2 }}>
         <SectionHeader
           title="Virtual machines"
-          description="Power, console, snapshots, resize, networking and disk operations remain backed by OpenNebula authorization."
+          description="Inventory is loaded directly from OpenNebula. Manage opens the native authorized VM lifecycle and detail controls."
         />
-        <ResourceBridge endpoints={endpoints} legacyPath="/vm" />
+        <VmInventory query={query} vms={vms} onManage={setSelectedVmId} />
       </Surface>
-
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
           Storage safety
@@ -181,10 +294,16 @@ const ComputeWorkspace = ({ endpoints }) => {
           confirmed action.
         </Typography>
       </Surface>
+
+      <DetailsDrawer
+        selectedVms={selectedVms}
+        handleClose={() => setSelectedVmId(undefined)}
+        handleSelect={setSelectedVmId}
+        handleDeselect={() => setSelectedVmId(undefined)}
+        viewConfig={viewConfig}
+      />
     </PageFrame>
   )
 }
 
-ComputeWorkspace.propTypes = { endpoints: PropTypes.arrayOf(PropTypes.object) }
-ComputeWorkspace.defaultProps = { endpoints: [] }
 export default ComputeWorkspace
