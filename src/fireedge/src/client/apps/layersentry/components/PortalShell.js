@@ -16,6 +16,7 @@
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
 import {
+  Alert,
   Avatar,
   Box,
   IconButton,
@@ -35,6 +36,12 @@ import { useMemo, useState } from 'react'
 import { useHistory, useLocation } from 'react-router-dom'
 import { useAuth, useViews } from '@FeaturesModule'
 import { getNavigation } from 'client/apps/layersentry/navigation'
+import {
+  getCapabilityForPath,
+  getCapabilityModel,
+  getCapabilityState,
+  isCapabilityVisible,
+} from 'client/apps/layersentry/capabilities'
 import { colors, radius } from 'client/apps/layersentry/theme/tokens'
 
 const SIDEBAR_WIDTH = 264
@@ -87,7 +94,6 @@ const NavItem = ({ item, active, onClick }) => {
         },
       }}
     >
-      {' '}
       {Icon && <Icon width={19} height={19} />}
       <Typography
         sx={{
@@ -117,7 +123,24 @@ const PortalShell = ({ children }) => {
   const { user, groups = [] } = useAuth()
   const [search, setSearch] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
-  const navigation = useMemo(() => getNavigation(view), [view])
+  const capabilityModel = useMemo(() => getCapabilityModel(), [])
+  const navigation = useMemo(
+    () => getNavigation(view, capabilityModel),
+    [view, capabilityModel]
+  )
+  const pathCapability = useMemo(
+    () => getCapabilityForPath(location.pathname),
+    [location.pathname]
+  )
+  const pathCapabilityState = useMemo(
+    () =>
+      pathCapability
+        ? getCapabilityState(pathCapability, capabilityModel)
+        : undefined,
+    [pathCapability, capabilityModel]
+  )
+  const capabilityAvailable =
+    !pathCapability || isCapabilityVisible(pathCapability, capabilityModel)
   const groupName = useMemo(
     () => groups.find(({ ID }) => `${ID}` === `${user?.GID}`)?.NAME,
     [groups, user?.GID]
@@ -172,7 +195,6 @@ const PortalShell = ({ children }) => {
           boxShadow: { xs: '0 16px 40px rgba(15, 23, 42, 0.28)', md: 'none' },
         }}
       >
-        {' '}
         <Box
           sx={{
             height: TOPBAR_HEIGHT,
@@ -334,7 +356,7 @@ const PortalShell = ({ children }) => {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             onKeyDown={submitSearch}
-            placeholder="Search VMs, Kubernetes, storage, networks..."
+            placeholder="Search VMs, storage, networks..."
             inputProps={{ 'aria-label': 'Global search' }}
             sx={{ flex: 1, fontSize: 13, color: colors.text.primary }}
           />
@@ -425,7 +447,19 @@ const PortalShell = ({ children }) => {
         }}
       >
         <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1680, mx: 'auto' }}>
-          {children}
+          {capabilityAvailable ? (
+            children
+          ) : (
+            <Alert severity="warning" data-layersentry-capability-unavailable>
+              <Typography sx={{ fontWeight: 750 }}>
+                Capability unavailable
+              </Typography>
+              <Typography sx={{ mt: 0.5, fontSize: 13 }}>
+                {pathCapabilityState?.reason ??
+                  'This capability is not available in the current deployment.'}
+              </Typography>
+            </Alert>
+          )}
         </Box>
       </Box>
     </Box>
