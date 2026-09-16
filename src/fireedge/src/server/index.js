@@ -84,17 +84,34 @@ app.use(helmet.hidePoweredBy())
 app.use(compression())
 app.use(cookieParser())
 
-app.use(`${basename}/client`, express.static(resolve(__dirname, frontPath)))
-app.use(`${basename}/client/*`, express.static(resolve(__dirname, frontPath)))
+const staticHeaders = (res, filePath) => {
+  const isEntryBundle = /bundle\.(sunstone|layersentry)\.js$/.test(filePath)
+  const isRemoteEntry = /remoteEntry\.js$/.test(filePath)
+  if (isEntryBundle || isRemoteEntry) {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate')
+  }
+}
+
+const clientStaticOptions = { setHeaders: staticHeaders }
+const remoteStaticOptions = { setHeaders: staticHeaders }
+
+app.use(
+  `${basename}/client`,
+  express.static(resolve(__dirname, frontPath), clientStaticOptions)
+)
+app.use(
+  `${basename}/client/*`,
+  express.static(resolve(__dirname, frontPath), clientStaticOptions)
+)
 
 // Remote modules serving
 app.use(
   `${basename}/modules`,
-  express.static(resolve(__dirname, remoteModulesPath))
+  express.static(resolve(__dirname, remoteModulesPath), remoteStaticOptions)
 )
 app.use(
   `${basename}/modules/*`,
-  express.static(resolve(__dirname, remoteModulesPath))
+  express.static(resolve(__dirname, remoteModulesPath), remoteStaticOptions)
 )
 
 const loggerMiddleware = getLoggerMiddleware()

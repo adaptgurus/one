@@ -133,11 +133,17 @@ router.get('*', async (req, res) => {
       ${requestTimeOut}
       ${remoteModules}
       ${forecastConf}
-      <script src='${APP_URL}/client/bundle.${appName}.js'></script>
+      <script src='${APP_URL}/client/bundle.${appName}.js?v=${Date.now()}'></script>
     </body>
     </html>
   `
-  res.status(200).set({ 'Content-Type': 'text/html' }).end(html)
+  res
+    .status(200)
+    .set({
+      'Content-Type': 'text/html',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
+    })
+    .end(html)
 })
 
 module.exports = router

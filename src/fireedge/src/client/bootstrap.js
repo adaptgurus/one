@@ -17,6 +17,8 @@ const LOCAL_REMOTES_COPY = 'localRemotesConfig'
 const USING_FALLBACK = 'usingRemotesFallbackConfig'
 const FORCE_LOCAL_FALLBACK = 'usingLocalRemotesFallbackConfig'
 const HOST_RESOLVE_FLAG = '__HOST__'
+const CLIENT_BOOT_TIMEOUT_MS = 30000
+const CLIENT_MOUNT_SETTLE_MS = 50
 
 const showEditor = ({ failedModule = '', error = '' } = {}) =>
   new Promise((resolve) => {
@@ -194,12 +196,20 @@ const initLocalRemotesConfig = async (forceNoDialog = false) => {
   }
 
   const localCopyConfig = JSON.parse(localStorage.getItem(LOCAL_REMOTES_COPY))
+  const serverConfigValid = !fallback && isInitialized(remotesConfig)
 
-  if (!isInitialized(localCopyConfig) || (!fallback && !useLocalFallback)) {
+  if (serverConfigValid) {
+    syncLocalCopy()
+    localStorage.removeItem(USING_FALLBACK)
+    localStorage.removeItem(FORCE_LOCAL_FALLBACK)
+  } else if (!isInitialized(localCopyConfig)) {
     syncLocalCopy()
   }
 
-  if (!forceNoDialog && (fallback || useLocalFallback)) {
+  if (
+    !forceNoDialog &&
+    (fallback || (!serverConfigValid && useLocalFallback))
+  ) {
     await editFallbackConfig()
   }
 
@@ -279,6 +289,16 @@ const checkRemotes = async () => {
   return true
 }
 
+const waitForClientMount = () =>
+  new Promise((resolve, reject) => {
+    window.setTimeout(() => {
+      const root = document.getElementById('root')
+      root?.hasChildNodes()
+        ? resolve()
+        : reject(new Error('FireEdge client did not mount into #root'))
+    }, CLIENT_MOUNT_SETTLE_MS)
+  })
+
 const loadClient = async () => {
   // eslint-disable-next-line no-undef
   await __webpack_init_sharing__('default')
@@ -291,6 +311,7 @@ const loadClient = async () => {
     ? await import('client/layersentry')
     : await import('client/sunstone')
   initApp()
+  await waitForClientMount()
 }
 
 const syncConfig = async () => {
@@ -299,12 +320,28 @@ const syncConfig = async () => {
   )
 }
 
+const withTimeout = (promise, milliseconds, label) =>
+  Promise.race([
+    promise,
+    new Promise((resolve, reject) => {
+      if (milliseconds <= 0) return resolve()
+      window.setTimeout(
+        () => reject(new Error(`${label} timed out after ${milliseconds} ms`)),
+        milliseconds
+      )
+    }),
+  ])
+
 async function bootstrap(forceNoDialog = false) {
   try {
     await initLocalRemotesConfig(forceNoDialog)
     await checkRemotes()
     await syncConfig()
-    loadClient()
+    await withTimeout(
+      loadClient(),
+      CLIENT_BOOT_TIMEOUT_MS,
+      'FireEdge client bootstrap'
+    )
   } catch (error) {
     const failedModule = error?.message.match(/modules\/([^/]+)/)?.[1] || ''
     console.error('Failed to load module: ', failedModule || error)
