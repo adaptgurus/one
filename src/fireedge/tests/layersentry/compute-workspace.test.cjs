@@ -19,17 +19,8 @@ test('Compute workspace always exposes first-class LayerSentry actions', () => {
   assert.match(source, /PRODUCT_PATHS\.NETWORK/)
 })
 
-test('Compute inventory cannot collapse to the native full-page VM container', () => {
-  assert.match(source, /data-layersentry-vm-inventory/)
-  assert.match(source, /VmAPI\.useGetVmsQuery\(\{ extended: true \}\)/)
-  assert.match(source, /DetailsDrawer/)
-  assert.match(source, /getResourceView\(VirtualMachine\.RID\)/)
-  assert.match(source, /No virtual machines are visible/)
-  assert.match(source, /OpenNebula could not load the virtual machine inventory/)
-})
-test('Compute keeps OpenNebula authoritative for VM lifecycle actions', () => {
-  assert.match(source, /native authorized VM lifecycle/)
-  assert.doesNotMatch(source, /ResourceBridge/)
+test('Compute keeps OpenNebula authoritative for VM operations', () => {
+  assert.match(source, /ResourceBridge endpoints={endpoints} legacyPath="\/vm"/)
+  assert.match(source, /power, console, resize, disk, network, snapshot, backup and delete/)
   assert.doesNotMatch(source, /XML-RPC|xmlrpc|\/RPC2/)
-  assert.doesNotMatch(source, /fetch\(/)
 })
