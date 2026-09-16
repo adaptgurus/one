@@ -1,0 +1,39 @@
+name: LayerSentry Linux qualification
+
+on:
+  push:
+    branches:
+      - layersentry-linux-qualification-20260916
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - name: Probe Linux qualification runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '=== uname ==='
+            uname -a
+            echo '=== os-release ==='
+            cat /etc/os-release
+            echo '=== cpu/memory ==='
+            nproc
+            free -h || true
+            echo '=== kvm ==='
+            test -e /dev/kvm && ls -l /dev/kvm || echo NO_KVM
+            echo '=== tools ==='
+            command -v go || true
+            go version || true
+            command -v sudo || true
+            command -v dnf || command -v apt-get || true
+            echo '=== source transfer ==='
+            curl -fsS --max-time 30 http://10.250.10.1:18080/layersentry-platform-15e85371.tar.gz -o /tmp/layersentry-platform.tar.gz
+            sha256sum /tmp/layersentry-platform.tar.gz
+          } | tee /tmp/layersentry-preflight.txt
+          curl -fsS --max-time 30 -T /tmp/layersentry-preflight.txt http://10.250.10.1:18080/upload/layersentry-preflight.txt
