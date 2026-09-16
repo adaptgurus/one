@@ -30,6 +30,10 @@ import {
   User,
   XrayView,
 } from 'iconoir-react'
+import {
+  CAPABILITY_IDS,
+  isCapabilityVisible,
+} from 'client/apps/layersentry/capabilities'
 
 export const PRODUCT_PATHS = Object.freeze({
   OVERVIEW: '/overview',
@@ -94,8 +98,18 @@ const cloudWorkloads = [
     path: PRODUCT_PATHS.COMPUTE_AFFINITY,
     icon: Group,
   },
-  { label: 'Kubernetes', path: PRODUCT_PATHS.KUBERNETES, icon: XrayView },
-  { label: 'Applications', path: PRODUCT_PATHS.APPLICATIONS, icon: Packages },
+  {
+    label: 'Kubernetes',
+    path: PRODUCT_PATHS.KUBERNETES,
+    icon: XrayView,
+    capability: CAPABILITY_IDS.KUBERNETES,
+  },
+  {
+    label: 'Applications',
+    path: PRODUCT_PATHS.APPLICATIONS,
+    icon: Packages,
+    capability: CAPABILITY_IDS.APPLICATIONS_ONEFLOW,
+  },
   { label: 'Storage', path: PRODUCT_PATHS.STORAGE, icon: HardDrive },
   { label: 'Images', path: PRODUCT_PATHS.STORAGE_IMAGES, icon: Packages },
   { label: 'Files', path: PRODUCT_PATHS.STORAGE_FILES, icon: Archive },
@@ -125,16 +139,19 @@ const cloudProtection = [
     label: 'Backup Plans',
     path: PRODUCT_PATHS.PROTECTION_BACKUP_PLANS,
     icon: Archive,
+    capability: CAPABILITY_IDS.BACKUP_RECOVERY,
   },
   {
     label: 'Recovery Points',
     path: PRODUCT_PATHS.PROTECTION_RECOVERY_POINTS,
     icon: Archive,
+    capability: CAPABILITY_IDS.BACKUP_RECOVERY,
   },
   {
     label: 'Site Recovery / DR',
     path: PRODUCT_PATHS.PROTECTION_SITE_RECOVERY,
     icon: HistoricShield,
+    capability: CAPABILITY_IDS.SITE_RECOVERY_DR,
   },
 ]
 
@@ -168,6 +185,7 @@ const adminGroups = [
         label: 'Backup Storage',
         path: PRODUCT_PATHS.INFRA_BACKUP_STORAGE,
         icon: Archive,
+        capability: CAPABILITY_IDS.BACKUP_STORAGE,
       },
       {
         label: 'Drivers',
@@ -179,6 +197,7 @@ const adminGroups = [
         label: 'Providers',
         path: PRODUCT_PATHS.INFRA_PROVIDERS,
         icon: SettingsProfiles,
+        capability: CAPABILITY_IDS.PROVIDERS_ONEFORM,
       },
     ],
   },
@@ -220,11 +239,13 @@ const adminGroups = [
         label: 'Applications',
         path: PRODUCT_PATHS.PLATFORM_APPS,
         icon: Packages,
+        capability: CAPABILITY_IDS.APPLICATIONS_ONEFLOW,
       },
       {
         label: 'Service Templates',
         path: PRODUCT_PATHS.PLATFORM_SERVICE_TEMPLATES,
         icon: Packages,
+        capability: CAPABILITY_IDS.APPLICATIONS_ONEFLOW,
       },
       {
         label: 'Router Templates',
@@ -247,12 +268,33 @@ const adminGroups = [
 
 export const isPlatformAdminView = (view) => view === 'admin'
 
-export const getNavigation = (view) => [
-  { label: 'Cloud', items: cloudWorkloads },
-  { label: 'Network & Security', items: cloudNetwork },
-  { label: 'Protection', items: cloudProtection },
-  { label: 'Operations', items: cloudOperations },
-  ...(isPlatformAdminView(view)
-    ? adminGroups.map((group) => ({ ...group, items: group.children }))
-    : []),
-]
+const filterByCapability = (items, capabilityModel) =>
+  items.filter(
+    ({ capability }) =>
+      !capability || isCapabilityVisible(capability, capabilityModel)
+  )
+
+export const getNavigation = (view, capabilityModel = {}) => {
+  const sections = [
+    { label: 'Cloud', items: cloudWorkloads },
+    { label: 'Network & Security', items: cloudNetwork },
+    { label: 'Protection', items: cloudProtection },
+    { label: 'Operations', items: cloudOperations },
+  ]
+
+  if (isPlatformAdminView(view)) {
+    sections.push(
+      ...adminGroups.map((group) => ({
+        ...group,
+        items: filterByCapability(group.children, capabilityModel),
+      }))
+    )
+  }
+
+  return sections
+    .map((section) => ({
+      ...section,
+      items: filterByCapability(section.items, capabilityModel),
+    }))
+    .filter(({ items }) => items.length > 0)
+}
