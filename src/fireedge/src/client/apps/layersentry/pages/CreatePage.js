@@ -19,6 +19,7 @@ import { Box, Button, Typography } from '@mui/material'
 import { NavArrowLeft } from 'iconoir-react'
 import { useHistory } from 'react-router-dom'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
+import ProductionServiceWizard from 'client/apps/layersentry/pages/ProductionServiceWizard'
 import {
   PageFrame,
   Surface,
@@ -34,6 +35,10 @@ const CreatePage = ({
   steps = ['Basics', 'Configuration', 'Optional features', 'Review', 'Create'],
 }) => {
   const history = useHistory()
+
+  if (legacyPath === '/service-template/instantiate/') {
+    return <ProductionServiceWizard />
+  }
 
   return (
     <PageFrame
