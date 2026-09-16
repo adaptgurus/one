@@ -17,6 +17,8 @@
 import { SERVER_CONFIG } from '@ConstantsModule'
 
 export const CAPABILITY_IDS = Object.freeze({
+  VM_CREATE: 'VM_CREATE',
+  AFFINITY_CREATE: 'AFFINITY_CREATE',
   KUBERNETES: 'KUBERNETES',
   APPLICATIONS_ONEFLOW: 'APPLICATIONS_ONEFLOW',
   BACKUP_RECOVERY: 'BACKUP_RECOVERY',
@@ -52,6 +54,8 @@ const CAPABILITY_PATHS = Object.freeze([
   ['/protection/backup-plans', CAPABILITY_IDS.BACKUP_RECOVERY],
   ['/protection/create', CAPABILITY_IDS.BACKUP_RECOVERY],
   ['/protection', CAPABILITY_IDS.BACKUP_RECOVERY],
+  ['/compute/create', CAPABILITY_IDS.VM_CREATE],
+  ['/vm-group/create', CAPABILITY_IDS.AFFINITY_CREATE],
   ['/kubernetes', CAPABILITY_IDS.KUBERNETES],
   ['/applications', CAPABILITY_IDS.APPLICATIONS_ONEFLOW],
   ['/platform/applications', CAPABILITY_IDS.APPLICATIONS_ONEFLOW],
