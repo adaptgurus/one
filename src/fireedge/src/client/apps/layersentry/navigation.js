@@ -61,6 +61,7 @@ export const PRODUCT_PATHS = Object.freeze({
   INFRA_STORAGE: '/infrastructure/storage',
   INFRA_BACKUP_STORAGE: '/infrastructure/backup-storage',
   INFRA_DRIVERS: '/infrastructure/drivers',
+  INFRA_HOOKS: '/infrastructure/hooks',
   INFRA_ZONES: '/infrastructure/zones',
   INFRA_PROVIDERS: '/infrastructure/providers',
   ACCESS: '/access',
@@ -174,6 +175,11 @@ const adminGroups = [
         path: PRODUCT_PATHS.INFRA_DRIVERS,
         icon: SettingsProfiles,
       },
+      {
+        label: 'Automation Hooks',
+        path: PRODUCT_PATHS.INFRA_HOOKS,
+        icon: SettingsProfiles,
+      },
       { label: 'Zones / Sites', path: PRODUCT_PATHS.INFRA_ZONES, icon: Db },
       {
         label: 'Providers',
@@ -247,8 +253,22 @@ const adminGroups = [
 
 export const isPlatformAdminView = (view) => view === 'admin'
 
-export const getNavigation = (view) => [
-  { label: 'Cloud', items: cloudWorkloads },
+export const getNavigation = (view, capabilities = {}) => [
+  {
+    label: 'Cloud',
+    items: [
+      ...cloudWorkloads,
+      ...(capabilities.marketplaceApps
+        ? [
+            {
+              label: 'Appliance Catalog',
+              path: PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS,
+              icon: Packages,
+            },
+          ]
+        : []),
+    ],
+  },
   { label: 'Network & Security', items: cloudNetwork },
   { label: 'Protection', items: cloudProtection },
   { label: 'Operations', items: cloudOperations },

@@ -22,6 +22,7 @@ import DatastoreAPI from '@modules/features/OneApi/datastore'
 import DriverAPI from '@modules/features/OneApi/driver'
 import GroupAPI from '@modules/features/OneApi/group'
 import HostAPI from '@modules/features/OneApi/host'
+import HookAPI from '@modules/features/OneApi/hook'
 import ImageAPI from '@modules/features/OneApi/image'
 import LogoAPI from '@modules/features/OneApi/logo'
 import MarketplaceAPI from '@modules/features/OneApi/marketplace'
@@ -67,6 +68,7 @@ export {
   DOCUMENT_POOL,
   GroupAPI,
   HostAPI,
+  HookAPI,
   ImageAPI,
   LogoAPI,
   MarketplaceAPI,

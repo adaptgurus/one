@@ -8,7 +8,6 @@ actions:
   create_app_dialog: false
   deploy: false
   migrate: false
-  migrate_live: false
   live-migrate: false
   hold: false
   release: false
@@ -46,6 +45,7 @@ filters:
   locked: false
   ips: true
   hostname: false
+  cluster: false
 
 info-tabs:
   info:
@@ -80,23 +80,19 @@ info-tabs:
         delete: false
 
   vm_group:
-    enabled: false
+    enabled: true
     actions:
-      vmgroup-add: false
-      vmgroup-del: false
+      vmgroup-add: true
+      vmgroup-del: true
 
   # Display disks but do not expose native bus/cache/driver attach forms.
   storage:
     enabled: true
     actions:
-      disk-attach:
-        enabled: false
       disk-attach-image: false
       disk-attach-volatile: false
       disk-detach: false
       disk-resize: false
-      disk_saveas:
-        enabled: false
       disk-saveas: false
       disk-snapshot-create: false
       disk-snapshot-delete: false

@@ -51,6 +51,7 @@ filters:
   locked: true
   ips: true
   hostname: true
+  cluster: true
 
 # Info Tabs - Which info tabs are used to show extended information
 
@@ -93,6 +94,12 @@ info-tabs:
         add: true
         edit: true
         delete: true
+
+  vm_group:
+    enabled: true
+    actions:
+      vmgroup-add: true
+      vmgroup-del: true
 
   storage:
     enabled: true
@@ -147,6 +154,13 @@ info-tabs:
       sched-update: true
       sched-delete: true
       charter_create: true
+
+  exec:
+    enabled: true
+    actions:
+      exec: true
+      exec-retry: true
+      exec-cancel: true
 
   configuration:
     enabled: true

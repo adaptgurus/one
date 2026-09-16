@@ -36,6 +36,7 @@ import ComputeWorkspace from 'client/apps/layersentry/pages/ComputeWorkspace'
 import ApplicationsWorkspace from 'client/apps/layersentry/pages/ApplicationsWorkspace'
 import SiteRecoveryWorkspace from 'client/apps/layersentry/pages/SiteRecoveryWorkspace'
 import BackupStorageWorkspace from 'client/apps/layersentry/pages/BackupStorageWorkspace'
+import HooksWorkspace from 'client/apps/layersentry/pages/HooksWorkspace'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 
 const area = (props) => <AreaPage {...props} />
@@ -66,6 +67,17 @@ const LEGACY_REDIRECTS = Object.freeze({
 const Portal = ({ endpoints }) => {
   const { view } = useViews()
   const isAdmin = view === 'admin'
+  const authorizedPaths = useMemo(
+    () =>
+      new Set(
+        flattenEndpoints(endpoints)
+          .map(({ path }) => path)
+          .filter(Boolean)
+      ),
+    [endpoints]
+  )
+  const canMarketplaceApps = authorizedPaths.has('/marketplace-app')
+  const canCreateMarketplaceApp = authorizedPaths.has('/marketplace-app/create')
   const compatibilityEndpoints = useMemo(
     () =>
       flattenEndpoints(endpoints).filter(
@@ -76,7 +88,7 @@ const Portal = ({ endpoints }) => {
   )
 
   return (
-    <PortalShell>
+    <PortalShell endpoints={endpoints}>
       <Switch>
         <Route exact path={PRODUCT_PATHS.OVERVIEW} component={Overview} />
         <Route exact path="/search" component={SearchPage} />
@@ -609,7 +621,7 @@ const Portal = ({ endpoints }) => {
           />
         )}
 
-        {isAdmin && (
+        {canCreateMarketplaceApp && (
           <Route
             exact
             path={PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS_CREATE}
@@ -700,6 +712,14 @@ const Portal = ({ endpoints }) => {
             }
           />
         )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.INFRA_HOOKS}
+            component={HooksWorkspace}
+          />
+        )}
+
         {isAdmin && (
           <Route
             exact
@@ -948,20 +968,23 @@ const Portal = ({ endpoints }) => {
             }
           />
         )}
-        {isAdmin && (
+        {canMarketplaceApps && (
           <Route
             exact
             path={PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS}
             render={() =>
               area({
                 endpoints,
-                title: 'Marketplace Apps',
-                description:
-                  'Administrative appliance catalog imported from configured OpenNebula Marketplaces.',
+                title: isAdmin ? 'Marketplace Apps' : 'Appliance Catalog',
+                description: isAdmin
+                  ? 'Administrative appliance catalog imported from configured OpenNebula Marketplaces.'
+                  : 'Appliances available to your current OpenNebula role and project.',
                 resources: [
                   { label: 'Marketplace Apps', legacyPath: '/marketplace-app' },
                 ],
-                createTo: PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS_CREATE,
+                createTo: canCreateMarketplaceApp
+                  ? PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS_CREATE
+                  : undefined,
                 createLabel: 'Create Marketplace App',
               })
             }

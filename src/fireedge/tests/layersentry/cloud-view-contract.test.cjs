@@ -135,7 +135,6 @@ test('cloud VM self-service keeps lifecycle but hides raw provider device contro
     assert.notEqual(vm.actions[action], true, action)
   assert.equal(vm['info-tabs'].info.capacity_panel.actions.resize, false)
   assert.equal(vm['info-tabs'].storage.enabled, true)
-  assert.equal(vm['info-tabs'].storage.actions['disk-attach'].enabled, false)
   for (const action of [
     'disk-attach-image',
     'disk-attach-volatile',
@@ -173,11 +172,11 @@ test('cloud VM self-service keeps lifecycle but hides raw provider device contro
   assert.equal(vm['info-tabs'].logs.enabled, false)
 })
 
-test('cloud VM group is hidden while guest execution remains available', () => {
+test('cloud VM supports 7.4.1 VM group assignment and guest execution', () => {
   const vm = read('vm-tab.yaml')
-  assert.equal(vm['info-tabs'].vm_group.enabled, false)
-  assert.equal(vm['info-tabs'].vm_group.actions['vmgroup-add'], false)
-  assert.equal(vm['info-tabs'].vm_group.actions['vmgroup-del'], false)
+  assert.equal(vm['info-tabs'].vm_group.enabled, true)
+  assert.equal(vm['info-tabs'].vm_group.actions['vmgroup-add'], true)
+  assert.equal(vm['info-tabs'].vm_group.actions['vmgroup-del'], true)
   assert.equal(vm['info-tabs'].exec.enabled, true)
   assert.equal(vm['info-tabs'].exec.actions.exec, true)
   assert.equal(vm['info-tabs'].exec.actions['exec-retry'], true)

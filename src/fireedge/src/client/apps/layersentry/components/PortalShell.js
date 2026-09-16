@@ -35,6 +35,7 @@ import { useMemo, useState } from 'react'
 import { useHistory, useLocation } from 'react-router-dom'
 import { useAuth, useViews } from '@FeaturesModule'
 import { getNavigation } from 'client/apps/layersentry/navigation'
+import ContextSelectors from 'client/apps/layersentry/components/ContextSelectors'
 import { colors, radius } from 'client/apps/layersentry/theme/tokens'
 
 const SIDEBAR_WIDTH = 264
@@ -110,17 +111,29 @@ NavItem.propTypes = {
   onClick: PropTypes.func.isRequired,
 }
 
-const PortalShell = ({ children }) => {
+const PortalShell = ({ children, endpoints }) => {
   const history = useHistory()
   const location = useLocation()
   const { view } = useViews()
-  const { user, groups = [] } = useAuth()
+  const { user } = useAuth()
   const [search, setSearch] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
-  const navigation = useMemo(() => getNavigation(view), [view])
-  const groupName = useMemo(
-    () => groups.find(({ ID }) => `${ID}` === `${user?.GID}`)?.NAME,
-    [groups, user?.GID]
+  const hasMarketplaceApps = useMemo(() => {
+    const visit = (items = []) =>
+      items.some(
+        (item) =>
+          item?.path === '/marketplace-app' ||
+          (Array.isArray(item?.routes) && visit(item.routes))
+      )
+
+    return visit(endpoints)
+  }, [endpoints])
+  const navigation = useMemo(
+    () =>
+      getNavigation(view, {
+        marketplaceApps: view !== 'admin' && hasMarketplaceApps,
+      }),
+    [hasMarketplaceApps, view]
   )
   const userName = user?.NAME ?? 'User'
   const isActive = (path) =>
@@ -244,6 +257,7 @@ const PortalShell = ({ children }) => {
           ))}
         </Box>
         <Box sx={{ p: 1.5, borderTop: `1px solid ${colors.sidebar.border}` }}>
+          <ContextSelectors mobile />
           <Box
             sx={{
               display: 'flex',
@@ -370,39 +384,7 @@ const PortalShell = ({ children }) => {
               <Settings width={19} height={19} />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Current project">
-            <Box
-              sx={{
-                display: { xs: 'none', sm: 'block' },
-                px: 1.25,
-                py: 0.55,
-                border: `1px solid ${colors.border}`,
-                borderRadius: `${radius.sm}px`,
-                backgroundColor: colors.surfaceMuted,
-              }}
-            >
-              <Typography
-                sx={{
-                  color: colors.text.muted,
-                  fontSize: 9,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 700,
-                }}
-              >
-                Project
-              </Typography>
-              <Typography
-                sx={{
-                  color: colors.text.primary,
-                  fontSize: 12,
-                  fontWeight: 650,
-                }}
-              >
-                {groupName ?? 'Default'}
-              </Typography>
-            </Box>
-          </Tooltip>
+          <ContextSelectors />
           <Avatar
             sx={{
               display: { xs: 'none', sm: 'flex' },
@@ -434,6 +416,9 @@ const PortalShell = ({ children }) => {
 
 PortalShell.propTypes = {
   children: PropTypes.node,
+  endpoints: PropTypes.arrayOf(PropTypes.object),
 }
+
+PortalShell.defaultProps = { endpoints: [] }
 
 export default PortalShell

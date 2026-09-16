@@ -22,6 +22,7 @@ const {
 const HOOK_ALLOCATE = 'hook.allocate'
 const HOOK_DELETE = 'hook.delete'
 const HOOK_INFO = 'hook.info'
+const HOOK_UPDATE = 'hook.update'
 const HOOK_RENAME = 'hook.rename'
 const HOOK_LOCK = 'hook.lock'
 const HOOK_UNLOCK = 'hook.unlock'
@@ -33,6 +34,7 @@ const Actions = {
   HOOK_ALLOCATE,
   HOOK_DELETE,
   HOOK_INFO,
+  HOOK_UPDATE,
   HOOK_RENAME,
   HOOK_LOCK,
   HOOK_UNLOCK,
@@ -64,7 +66,7 @@ module.exports = {
         },
       },
     },
-    [HOOK_DELETE]: {
+    [HOOK_UPDATE]: {
       // inspected
       httpMethod: PUT,
       params: {
@@ -170,22 +172,10 @@ module.exports = {
       // inspected
       httpMethod: GET,
       params: {
-        minimun: {
-          from: postBody, // epoch time
-          default: '',
-        },
-        maximun: {
-          from: postBody, // epoch time
-          default: '',
-        },
-        id: {
-          from: postBody,
-          default: '', // check
-        },
-        execution: {
-          from: postBody,
-          default: 0,
-        },
+        min_ts: { from: query, default: -1 },
+        max_ts: { from: query, default: -1 },
+        hook_id: { from: query, default: -1 },
+        rc_hook: { from: query, default: 0 },
       },
     },
   },
