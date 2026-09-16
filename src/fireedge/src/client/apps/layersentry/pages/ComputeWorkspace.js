@@ -15,11 +15,16 @@
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
-import { Box, Button, Typography } from '@mui/material'
+import { Alert, Box, Button, Typography } from '@mui/material'
 import { HardDrive, NetworkAlt, Packages, Plus, Server } from 'iconoir-react'
 import { useHistory } from 'react-router-dom'
 import { VmAPI } from '@FeaturesModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
+import {
+  CAPABILITY_IDS,
+  getCapabilityModel,
+  isCapabilityVisible,
+} from 'client/apps/layersentry/capabilities'
 import {
   MetricCard,
   PageFrame,
@@ -37,6 +42,7 @@ const COMPUTE_QUICK_ACTIONS = [
     path: PRODUCT_PATHS.COMPUTE_CREATE,
     icon: Plus,
     primary: true,
+    capability: CAPABILITY_IDS.VM_CREATE,
   },
   {
     label: 'VM Blueprints',
@@ -65,22 +71,39 @@ const ComputeWorkspace = ({ endpoints }) => {
     (sum, vm) => sum + Number(vm?.TEMPLATE?.MEMORY ?? 0),
     0
   )
+  const capabilityModel = getCapabilityModel()
+  const canCreateVm = isCapabilityVisible(
+    CAPABILITY_IDS.VM_CREATE,
+    capabilityModel
+  )
+  const quickActions = COMPUTE_QUICK_ACTIONS.filter(
+    ({ capability }) =>
+      !capability || isCapabilityVisible(capability, capabilityModel)
+  )
 
   return (
     <PageFrame
       title="Compute"
-      description="Create and operate virtual machines without exposing provider host, datastore or placement internals."
+      description="View virtual machines through the OpenNebula API. Mutating actions appear only after their production path is qualified."
       actions={
-        <Button
-          variant="contained"
-          startIcon={<Plus width={17} height={17} />}
-          onClick={() => history.push(PRODUCT_PATHS.COMPUTE_CREATE)}
-          sx={{ textTransform: 'none' }}
-        >
-          Create VM
-        </Button>
+        canCreateVm ? (
+          <Button
+            variant="contained"
+            startIcon={<Plus width={17} height={17} />}
+            onClick={() => history.push(PRODUCT_PATHS.COMPUTE_CREATE)}
+            sx={{ textTransform: 'none' }}
+          >
+            Create VM
+          </Button>
+        ) : null
       }
     >
+      {query.isError && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          Compute summary could not be loaded. The inventory below contains its
+          own API error state so the LayerSentry shell remains usable.
+        </Alert>
+      )}
       <Box
         sx={{
           display: 'grid',
@@ -95,27 +118,29 @@ const ComputeWorkspace = ({ endpoints }) => {
       >
         <MetricCard
           label="Virtual Machines"
-          value={query.isLoading ? '…' : vms.length}
+          value={query.isLoading ? '…' : query.isError ? '—' : vms.length}
           icon={Server}
         />
         <MetricCard
           label="Running"
-          value={query.isLoading ? '…' : running}
+          value={query.isLoading ? '…' : query.isError ? '—' : running}
           detail="OpenNebula ACTIVE state"
           icon={Server}
           accent={colors.status.success}
         />
         <MetricCard
           label="Allocated vCPU"
-          value={query.isLoading ? '…' : totalCpu || '—'}
+          value={query.isLoading ? '…' : query.isError ? '—' : totalCpu || '—'}
           detail="Across visible VMs"
           icon={Server}
         />
         <MetricCard
           label="Allocated Memory"
           value={
-            query.isLoading
-              ? '…'
+            query.isLoading || query.isError
+              ? query.isLoading
+                ? '…'
+                : '—'
               : totalMemoryMb
               ? `${Math.round(totalMemoryMb / 1024)} GB`
               : '—'
@@ -129,7 +154,7 @@ const ComputeWorkspace = ({ endpoints }) => {
       <Surface sx={{ mt: 2, p: 2 }}>
         <SectionHeader
           title="Compute actions"
-          description="Common VM tasks are always visible here. Select a virtual machine below for power, console, resize, disk, network, snapshot, backup and delete operations."
+          description="Only qualified actions are shown. Unqualified create and Day-2 operations stay hidden rather than presenting a working-looking control."
         />
         <Box
           data-layersentry-compute-actions
@@ -143,7 +168,7 @@ const ComputeWorkspace = ({ endpoints }) => {
             gap: 1,
           }}
         >
-          {COMPUTE_QUICK_ACTIONS.map(({ label, path, icon: Icon, primary }) => (
+          {quickActions.map(({ label, path, icon: Icon, primary }) => (
             <Button
               key={path}
               variant={primary ? 'contained' : 'outlined'}
@@ -164,7 +189,7 @@ const ComputeWorkspace = ({ endpoints }) => {
       <Surface sx={{ mt: 2, p: 2 }}>
         <SectionHeader
           title="Virtual machines"
-          description="Power, console, snapshots, resize, networking and disk operations remain backed by OpenNebula authorization."
+          description="Read-only authoritative inventory. VM Day-2 controls remain hidden until each mutation path has API, readback, RBAC and recovery evidence."
         />
         <ResourceBridge endpoints={endpoints} legacyPath="/vm" />
       </Surface>
@@ -176,8 +201,8 @@ const ComputeWorkspace = ({ endpoints }) => {
         <Typography
           sx={{ mt: 0.5, fontSize: 12, color: colors.text.secondary }}
         >
-          Use the Storage workspace to create or attach persistent data disks.
-          Detach preserves the disk image; permanent deletion is a separate
+          Use the Storage workspace only for qualified persistent-disk actions.
+          Detach preserves the disk image; permanent deletion remains a separate
           confirmed action.
         </Typography>
       </Surface>
