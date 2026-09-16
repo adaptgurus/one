@@ -20,6 +20,11 @@ import { useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
+  getCapabilityForPath,
+  getCapabilityModel,
+  isCapabilityVisible,
+} from 'client/apps/layersentry/capabilities'
+import {
   CreateButton,
   PageFrame,
   Surface,
@@ -41,13 +46,24 @@ const AreaPage = ({
     [resources]
   )
   const selected = availableResources[tab] ?? availableResources[0]
+  const createCapability = useMemo(
+    () => (createTo ? getCapabilityForPath(createTo) : undefined),
+    [createTo]
+  )
+  const canCreate = useMemo(
+    () =>
+      Boolean(createTo) &&
+      (!createCapability ||
+        isCapabilityVisible(createCapability, getCapabilityModel())),
+    [createCapability, createTo]
+  )
 
   return (
     <PageFrame
       title={title}
       description={description}
       actions={
-        createTo ? (
+        canCreate ? (
           <CreateButton onClick={() => history.push(createTo)}>
             {createLabel}
           </CreateButton>
