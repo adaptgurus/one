@@ -85,7 +85,7 @@ const ComputeWorkspace = ({ endpoints }) => {
     (sum, vm) => sum + Number(vm?.TEMPLATE?.MEMORY ?? 0),
     0
   )
-  const capabilityModel = getCapabilityModel()
+  const capabilityModel = getCapabilityModel(endpoints)
   const canCreateVm = isCapabilityEnabled(
     CAPABILITY_IDS.VM_CREATE,
     capabilityModel
