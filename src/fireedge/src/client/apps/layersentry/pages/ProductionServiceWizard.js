@@ -194,12 +194,13 @@ const AdvancedSection = ({
 )
 
 const mergeRuntimeCatalog = (payload) => {
-  const items = Array.isArray(payload)
-    ? payload
-    : Array.isArray(payload?.items)
-    ? payload.items
-    : Array.isArray(payload?.blueprints)
-    ? payload.blueprints
+  const responseData = payload?.data ?? payload
+  const items = Array.isArray(responseData)
+    ? responseData
+    : Array.isArray(responseData?.items)
+    ? responseData.items
+    : Array.isArray(responseData?.blueprints)
+    ? responseData.blueprints
     : []
 
   if (!items.length) return null
@@ -314,6 +315,10 @@ const ProductionServiceWizard = () => {
   const [attemptedStep, setAttemptedStep] = useState(null)
   const [validated, setValidated] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
+  const [preflightState, setPreflightState] = useState({
+    status: 'idle',
+    result: null,
+  })
 
   useEffect(() => {
     let active = true
@@ -403,6 +408,7 @@ const ProductionServiceWizard = () => {
 
   const update = (key, value) => {
     setValidated(false)
+    setPreflightState({ status: 'idle', result: null })
     setDraft((current) => {
       let next = { ...current, [key]: value }
 
@@ -471,10 +477,12 @@ const ProductionServiceWizard = () => {
     setStep(0)
     setAttemptedStep(null)
     setValidated(false)
+    setPreflightState({ status: 'idle', result: null })
   }
 
   const updateStorage = (index, patch) => {
     setValidated(false)
+    setPreflightState({ status: 'idle', result: null })
     setDraft((current) => ({
       ...current,
       storage: current.storage.map((item, itemIndex) =>
@@ -485,6 +493,7 @@ const ProductionServiceWizard = () => {
 
   const updateDependencyMode = (dependency, mode) => {
     setValidated(false)
+    setPreflightState({ status: 'idle', result: null })
     setDraft((current) => ({
       ...current,
       dependencyModes: {
@@ -500,6 +509,7 @@ const ProductionServiceWizard = () => {
 
   const updateDependencyRef = (dependency, value) => {
     setValidated(false)
+    setPreflightState({ status: 'idle', result: null })
     setDraft((current) => ({
       ...current,
       dependencyRefs: {
@@ -1812,6 +1822,60 @@ const ProductionServiceWizard = () => {
     </>
   )
 
+  const runAuthoritativePreflight = async () => {
+    if (allErrors.length > 0) {
+      setValidated(false)
+      setAttemptedStep(step)
+      setPreflightState({ status: 'local-error', result: null })
+
+      return
+    }
+
+    setValidated(false)
+    setPreflightState({ status: 'loading', result: null })
+
+    try {
+      const response = await fetch(`${SERVICE_BLUEPRINT_API}/preflight`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          blueprintId: draft.blueprintId,
+          version: draft.version,
+          edition: draft.edition || undefined,
+          topology: draft.topology,
+        }),
+      })
+      const payload = await response.json()
+      const result = payload?.data ?? payload
+      const deployable = response.ok && result?.deployable === true
+
+      setValidated(deployable)
+      setPreflightState({
+        status: deployable ? 'passed' : 'blocked',
+        result,
+      })
+    } catch (error) {
+      setValidated(false)
+      setPreflightState({
+        status: 'error',
+        result: {
+          blockers: [
+            {
+              code: 'SERVICE_BLUEPRINT_PREFLIGHT_UNAVAILABLE',
+              message:
+                error?.message ||
+                'Authoritative production-service preflight is unavailable.',
+            },
+          ],
+        },
+      })
+    }
+  }
+
   const renderReview = () => {
     const safeDesign = sanitizeDesign(draft)
 
@@ -1958,24 +2022,48 @@ const ProductionServiceWizard = () => {
 
         {allErrors.length === 0 ? (
           <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
-            Frontend desired-state validation passed. Authoritative backend
-            preflight, exact OS/image resolution and tuple qualification are
-            still required before deployment.
+            Frontend desired-state validation passed. Run authoritative
+            preflight to verify that the exact tuple is promoted before
+            deployment.
           </Alert>
         ) : (
           <ErrorList errors={allErrors} />
         )}
 
+        {preflightState.status === 'loading' && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Running authoritative production-service preflight…
+          </Alert>
+        )}
+        {preflightState.status === 'passed' && (
+          <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
+            Authoritative preflight passed for this exact tuple.
+          </Alert>
+        )}
+        {(preflightState.status === 'blocked' ||
+          preflightState.status === 'error') && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+              Authoritative preflight blocked
+            </Typography>
+            {(preflightState.result?.blockers || []).map((blocker) => (
+              <Typography key={blocker.code} sx={{ fontSize: 12 }}>
+                {blocker.code} — {blocker.message}
+              </Typography>
+            ))}
+          </Alert>
+        )}
+
         <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
           <Button
             variant="outlined"
-            onClick={() => {
-              setValidated(allErrors.length === 0)
-              if (allErrors.length > 0) setAttemptedStep(step)
-            }}
+            disabled={preflightState.status === 'loading'}
+            onClick={runAuthoritativePreflight}
             sx={{ textTransform: 'none' }}
           >
-            Validate configuration
+            {preflightState.status === 'loading'
+              ? 'Validating…'
+              : 'Validate configuration'}
           </Button>
           <Button
             variant="outlined"
