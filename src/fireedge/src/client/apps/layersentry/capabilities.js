@@ -233,10 +233,112 @@ const hidden = (visibility, reason) => ({
   reason,
 })
 
-export const getCapabilityModel = () =>
-  SERVER_CONFIG?.layersentry_capabilities ??
-  SERVER_CONFIG?.layersentryCapabilities ??
-  {}
+
+const CAPABILITY_ENDPOINT_REQUIREMENTS = Object.freeze({
+  [CAPABILITY_IDS.COMPUTE]: ['/vm'],
+  [CAPABILITY_IDS.VM_CREATE]: ['/vm/create'],
+  [CAPABILITY_IDS.BLUEPRINTS]: ['/vm-template'],
+  [CAPABILITY_IDS.AFFINITY]: ['/vm-group'],
+  [CAPABILITY_IDS.AFFINITY_CREATE]: ['/vm-group/create'],
+  [CAPABILITY_IDS.KUBERNETES]: ['/kubernetes'],
+  [CAPABILITY_IDS.KUBERNETES_CREATE]: ['/kubernetes/create'],
+  [CAPABILITY_IDS.APPLICATIONS_ONEFLOW]: ['/service', '/service-template'],
+  [CAPABILITY_IDS.APPLICATIONS_DEPLOY]: ['/service-template/instantiate'],
+  [CAPABILITY_IDS.APPLICATIONS_ONEFLOW_CREATE]: ['/service-template/create'],
+  [CAPABILITY_IDS.STORAGE]: ['/vm', '/image'],
+  [CAPABILITY_IDS.STORAGE_IMAGES]: ['/image'],
+  [CAPABILITY_IDS.STORAGE_FILES]: ['/file'],
+  [CAPABILITY_IDS.STORAGE_DISK_ATTACH]: ['/vm', '/image'],
+  [CAPABILITY_IDS.STORAGE_DISK_RESIZE]: ['/vm'],
+  [CAPABILITY_IDS.STORAGE_DISK_DETACH]: ['/vm'],
+  [CAPABILITY_IDS.STORAGE_IMAGE_DELETE]: ['/image'],
+  [CAPABILITY_IDS.NETWORK]: ['/virtual-network'],
+  [CAPABILITY_IDS.NETWORK_CREATE]: ['/virtual-network/create'],
+  [CAPABILITY_IDS.NETWORK_TEMPLATES]: ['/network-template'],
+  [CAPABILITY_IDS.VIRTUAL_ROUTERS]: ['/vrouter'],
+  [CAPABILITY_IDS.FIREWALL_RULES]: ['/security-group'],
+  [CAPABILITY_IDS.FIREWALL_RULES_CREATE]: ['/security-group/create'],
+  [CAPABILITY_IDS.BACKUP_RECOVERY]: ['/backupjobs', '/backup'],
+  [CAPABILITY_IDS.BACKUP_RECOVERY_CREATE]: ['/backupjobs/create'],
+  [CAPABILITY_IDS.OPERATIONS]: ['/attention'],
+  [CAPABILITY_IDS.INFRA_HOSTS]: ['/host'],
+  [CAPABILITY_IDS.INFRA_HOSTS_CREATE]: ['/host/create'],
+  [CAPABILITY_IDS.INFRA_CLUSTERS]: ['/cluster'],
+  [CAPABILITY_IDS.INFRA_CLUSTERS_CREATE]: ['/cluster/create'],
+  [CAPABILITY_IDS.INFRA_STORAGE]: ['/datastore'],
+  [CAPABILITY_IDS.STORAGE_ONBOARDING]: ['/datastore/create'],
+  [CAPABILITY_IDS.BACKUP_STORAGE]: ['/datastore'],
+  [CAPABILITY_IDS.BACKUP_STORAGE_CREATE]: ['/datastore/create'],
+  [CAPABILITY_IDS.INFRA_ZONES]: ['/zone'],
+  [CAPABILITY_IDS.ACCESS_USERS]: ['/user'],
+  [CAPABILITY_IDS.ACCESS_USERS_CREATE]: ['/user/create'],
+  [CAPABILITY_IDS.ACCESS_TEAMS]: ['/group'],
+  [CAPABILITY_IDS.ACCESS_TEAMS_CREATE]: ['/group/create'],
+  [CAPABILITY_IDS.ACCESS_PROJECTS]: ['/vdc'],
+  [CAPABILITY_IDS.ACCESS_PROJECTS_CREATE]: ['/vdc/create'],
+  [CAPABILITY_IDS.ACCESS_RULES]: ['/acl'],
+  [CAPABILITY_IDS.ACCESS_RULES_CREATE]: ['/acl/create'],
+  [CAPABILITY_IDS.PLATFORM_IMAGES]: ['/image'],
+  [CAPABILITY_IDS.PLATFORM_IMAGES_CREATE]: ['/image/create'],
+  [CAPABILITY_IDS.PLATFORM_TEMPLATES]: ['/vm-template'],
+  [CAPABILITY_IDS.PLATFORM_TEMPLATES_CREATE]: ['/vm-template/create'],
+  [CAPABILITY_IDS.PLATFORM_ROUTER_TEMPLATES]: ['/vrouter-template'],
+  [CAPABILITY_IDS.MARKETPLACES]: ['/marketplace'],
+  [CAPABILITY_IDS.MARKETPLACE_APPS]: ['/marketplace-app'],
+  [CAPABILITY_IDS.MARKETPLACE_APPS_CREATE]: ['/marketplace-app/create'],
+  [CAPABILITY_IDS.SUPPORT_TICKETING]: ['/support'],
+})
+
+const normalizeEndpointPath = (value = '') => {
+  const normalized = `/${String(value).replace(/^\\/+|\\/+$/g, '')}`
+
+  return normalized === '/' ? normalized : normalized.replace(/\\/+$/g, '')
+}
+
+const flattenEndpointPaths = (endpoints = []) => {
+  const paths = new Set()
+  const visit = (endpoint) => {
+    if (endpoint?.path) paths.add(normalizeEndpointPath(endpoint.path))
+    endpoint?.routes?.forEach(visit)
+  }
+  endpoints.forEach(visit)
+
+  return paths
+}
+
+const applyEndpointAuthorization = (model = {}, endpoints) => {
+  if (!Array.isArray(endpoints)) return model
+
+  const endpointPaths = flattenEndpointPaths(endpoints)
+
+  return Object.fromEntries(
+    Object.entries(model).map(([capabilityId, capability]) => {
+      const required = CAPABILITY_ENDPOINT_REQUIREMENTS[capabilityId]
+      if (!required) return [capabilityId, capability]
+
+      const endpointAuthorized = required.every((path) =>
+        endpointPaths.has(normalizeEndpointPath(path))
+      )
+
+      return [
+        capabilityId,
+        {
+          ...capability,
+          authorization:
+            capability?.authorization === true && endpointAuthorized,
+        },
+      ]
+    })
+  )
+}
+
+export const getCapabilityModel = (endpoints) =>
+  applyEndpointAuthorization(
+    SERVER_CONFIG?.layersentry_capabilities ??
+      SERVER_CONFIG?.layersentryCapabilities ??
+      {},
+    endpoints
+  )
 
 export const getCapabilityState = (capabilityId, model = {}) => {
   const capability = model?.[capabilityId]
