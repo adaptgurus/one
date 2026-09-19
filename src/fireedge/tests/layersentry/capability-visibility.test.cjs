@@ -108,6 +108,8 @@ test('direct URLs use the same fail-closed capability policy', () => {
     assert.match(capabilities, new RegExp(route.replaceAll('/', '\\/')))
   }
 
+  assert.match(capabilities, /pathname === path/)
+  assert.doesNotMatch(capabilities, /pathname\.startsWith/)
   assert.match(capabilities, /if \(!capabilityId\) return false/)
   assert.match(capabilities, /MUTATING_CAPABILITIES\.has\(capabilityId\)/)
   assert.match(shell, /isCapabilityPathAvailable\(/)
@@ -146,6 +148,14 @@ test('mutation routes and actions require enabled qualification, not read-only v
   assert.match(applications, /isCapabilityEnabled\(/)
   assert.match(applications, /canDeploy \? \(/)
   assert.doesNotMatch(area, /!createCapability \|\|/)
+})
+
+test('native detail routes are not implicitly authorized by inventory capability', () => {
+  const capabilities = read('src/client/apps/layersentry/capabilities.js')
+
+  assert.match(capabilities, /\['\/vm', CAPABILITY_IDS\.COMPUTE\]/)
+  assert.doesNotMatch(capabilities, /'\/vm\/:/)
+  assert.doesNotMatch(capabilities, /startsWith/)
 })
 
 test('known blank core inventories bypass route-dependent embedded pages', () => {
