@@ -53,6 +53,7 @@ import {
   WIZARD_STEPS,
   createDraft,
   getArchitecturePlan,
+  getBackupProfile,
   getBlueprintById,
   getCredentialProfile,
   getDefaultDependencyState,
@@ -378,6 +379,10 @@ const ProductionServiceWizard = () => {
   )
   const credentialProfile = useMemo(
     () => getCredentialProfile(blueprint),
+    [blueprint]
+  )
+  const backupProfile = useMemo(
+    () => getBackupProfile(blueprint),
     [blueprint]
   )
   const currentErrors = useMemo(
@@ -1429,9 +1434,7 @@ const ProductionServiceWizard = () => {
   )
 
   const renderBackup = () => {
-    const applicationBackupSupported = !['kafka', 'pulsar'].includes(
-      blueprint?.id
-    )
+    const directBackup = backupProfile.mode === 'direct'
 
     return (
       <>
@@ -1440,12 +1443,19 @@ const ProductionServiceWizard = () => {
         </Typography>
         <Typography sx={{ color: colors.text.secondary, mb: 2 }}>
           Replication and VM snapshots are not labelled as application backup.
-          Recovery controls are exposed only where the service profile supports
-          them.
+          Recovery ownership is specific to the selected application.
         </Typography>
 
-        {applicationBackupSupported ? (
+        {directBackup ? (
           <>
+            <Surface sx={{ p: 2, mb: 2 }}>
+              <Typography sx={{ fontWeight: 800 }}>
+                {backupProfile.engine}
+              </Typography>
+              <Typography sx={{ color: colors.text.muted, fontSize: 11, mt: 0.5 }}>
+                {backupProfile.note}
+              </Typography>
+            </Surface>
             <FormControlLabel
               control={
                 <Switch
@@ -1500,10 +1510,15 @@ const ProductionServiceWizard = () => {
             )}
           </>
         ) : (
-          <Alert severity="info">
-            Generic application backup is not advertised for this service.
-            Native replication / DR and application-specific recovery are
-            qualified separately.
+          <Alert severity={backupProfile.mode === 'dependency' ? 'info' : 'warning'}>
+            <Typography sx={{ fontWeight: 800 }}>
+              {backupProfile.mode === 'dependency'
+                ? 'Recovery is owned by linked dependencies'
+                : 'No generic application backup is advertised'}
+            </Typography>
+            <Typography sx={{ mt: 0.5, fontSize: 12 }}>
+              {backupProfile.engine}. {backupProfile.note}
+            </Typography>
           </Alert>
         )}
 
@@ -1873,10 +1888,19 @@ const ProductionServiceWizard = () => {
             ],
             [
               'Backup / DR',
-              draft.backupEnabled
-                ? 'Backup enabled · ' + draft.retentionDays + ' day retention'
-                : 'Application backup disabled / not advertised',
-              (draft.pitr ? 'PITR enabled' : 'PITR disabled') +
+              backupProfile.mode === 'direct'
+                ? draft.backupEnabled
+                  ? 'Backup enabled · ' +
+                    draft.retentionDays +
+                    ' day retention · ' +
+                    backupProfile.engine
+                  : 'Direct backup disabled · ' + backupProfile.engine
+                : backupProfile.mode === 'dependency'
+                ? 'Dependency-owned recovery · ' + backupProfile.engine
+                : 'No generic application backup · ' + backupProfile.engine,
+              (draft.pitr && backupProfile.mode === 'direct'
+                ? 'PITR enabled'
+                : 'PITR not enabled here') +
                 ' · ' +
                 (draft.drEnabled ? 'DR configured' : 'DR disabled'),
             ],
