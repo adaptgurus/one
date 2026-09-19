@@ -245,6 +245,18 @@ class BootstrapRecoveryTest < Minitest::Test
     with_vm { assert_instance_of OpenNebula::Error, @group.recover_dependencies }
     assert_equal [36], @group.vms
   end
+  def test_seed_failure_surfaces_specific_onegate_error_code
+    @vm.fields['USER_TEMPLATE/ONEKS_STATE'] = 'PROVISIONING_FAILURE'
+    @vm.fields['USER_TEMPLATE/ONEKS_ERROR_CODE'] = 'MGMT_PROVIDER_INIT_FAILED'
+
+    with_vm do
+      error = @seed.wait_create(@group, nil)
+      assert_instance_of OpenNebula::Error, error
+      assert_match(/PROVISIONING_FAILURE/, error.message)
+      assert_match(/MGMT_PROVIDER_INIT_FAILED/, error.message)
+    end
+  end
+
   def test_failed_seed_cannot_be_silently_reused_or_duplicated
     @vm.fields['USER_TEMPLATE/ONEKS_STATE'] = 'PIVOTING_FAILURE'
     with_vm do
