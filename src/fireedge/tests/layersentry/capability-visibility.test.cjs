@@ -31,6 +31,8 @@ test('capabilities fail closed on the full production gate chain', () => {
   assert.match(source, /HIDDEN_NOT_QUALIFIED/)
   assert.match(source, /HIDDEN_INCOMPATIBLE/)
   assert.match(source, /isCapabilityEnabled/)
+  assert.match(source, /READ_ONLY_SAFE/)
+  assert.match(source, /mutation-safe read-only presentation/)
 })
 
 test('all backend-backed normal navigation entries carry a capability', () => {
@@ -117,6 +119,9 @@ test('mutation routes and actions require enabled qualification, not read-only v
   const capabilities = read('src/client/apps/layersentry/capabilities.js')
   const area = read('src/client/apps/layersentry/pages/AreaPage.js')
   const compute = read('src/client/apps/layersentry/pages/ComputeWorkspace.js')
+  const applications = read(
+    'src/client/apps/layersentry/pages/ApplicationsWorkspace.js'
+  )
 
   for (const capability of [
     'VM_CREATE',
@@ -137,6 +142,9 @@ test('mutation routes and actions require enabled qualification, not read-only v
   assert.match(area, /Boolean\(createCapability\)/)
   assert.match(area, /isCapabilityEnabled\(createCapability, getCapabilityModel\(\)\)/)
   assert.match(compute, /isCapabilityEnabled\(\s*CAPABILITY_IDS\.VM_CREATE/)
+  assert.match(applications, /CAPABILITY_IDS\.APPLICATIONS_DEPLOY/)
+  assert.match(applications, /isCapabilityEnabled\(/)
+  assert.match(applications, /canDeploy \? \(/)
   assert.doesNotMatch(area, /!createCapability \|\|/)
 })
 
