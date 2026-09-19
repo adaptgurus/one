@@ -37,9 +37,11 @@ import { useHistory, useLocation } from 'react-router-dom'
 import { useAuth, useViews } from '@FeaturesModule'
 import { getNavigation } from 'client/apps/layersentry/navigation'
 import {
+  CAPABILITY_IDS,
   getCapabilityForPath,
   getCapabilityModel,
   getCapabilityState,
+  isCapabilityPathAvailable,
   isCapabilityVisible,
 } from 'client/apps/layersentry/capabilities'
 import { colors, radius } from 'client/apps/layersentry/theme/tokens'
@@ -139,8 +141,14 @@ const PortalShell = ({ children }) => {
         : undefined,
     [pathCapability, capabilityModel]
   )
-  const capabilityAvailable =
-    !pathCapability || isCapabilityVisible(pathCapability, capabilityModel)
+  const capabilityAvailable = isCapabilityPathAvailable(
+    location.pathname,
+    capabilityModel
+  )
+  const operationsAvailable = isCapabilityVisible(
+    CAPABILITY_IDS.OPERATIONS,
+    capabilityModel
+  )
   const groupName = useMemo(
     () => groups.find(({ ID }) => `${ID}` === `${user?.GID}`)?.NAME,
     [groups, user?.GID]
@@ -365,15 +373,17 @@ const PortalShell = ({ children }) => {
         <Box
           sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}
         >
-          <Tooltip title="Operations and alerts">
-            <IconButton
-              aria-label="Operations and alerts"
-              onClick={() => navigate('/operations')}
-              sx={{ color: colors.text.secondary }}
-            >
-              <BellNotification width={19} height={19} />
-            </IconButton>
-          </Tooltip>
+          {operationsAvailable && (
+            <Tooltip title="Operations and alerts">
+              <IconButton
+                aria-label="Operations and alerts"
+                onClick={() => navigate('/operations')}
+                sx={{ color: colors.text.secondary }}
+              >
+                <BellNotification width={19} height={19} />
+              </IconButton>
+            </Tooltip>
+          )}
           <Tooltip title="Support">
             <IconButton
               aria-label="Support"
