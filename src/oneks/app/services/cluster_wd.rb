@@ -116,7 +116,8 @@ module OneKS
                     unless group.vms.include?(vm_id)
                         Log.warn(
                             COMP,
-                            "Re-adopting VM_ID=#{vm_id} (GROUP_ID=#{group_id}) from OpenNebula metadata",
+                            "Re-adopting VM_ID=#{vm_id} (GROUP_ID=#{group_id}) " \
+                            'from OpenNebula metadata',
                             cluster_id
                         )
                         group.add_vm(vm_id)
