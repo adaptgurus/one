@@ -20,6 +20,15 @@ export const WIZARD_STEPS = [
   'Review',
 ]
 
+export const LICENSE_NOTICES = Object.freeze({
+  'mongodb-community':
+    'MongoDB Community uses SSPL licensing. Catalog publication must follow LayerSentry licensing policy for the exact release.',
+  'percona-mongodb':
+    'Percona Server for MongoDB uses MongoDB-derived source-available licensing for current releases. Treat it separately from OSI-approved OSS.',
+  redis:
+    'Redis licensing varies by release. The production catalog must pin the approved exact artifact and license rather than assuming one license across versions.',
+})
+
 const catalogItem = (input) => ({
   qualification: 'NOT_TESTED',
   productionSelectable: false,
@@ -427,6 +436,7 @@ const PRODUCT_DEFAULTS = {
   ybDbName: 'appdb',
   rabbitVhostMode: 'Create application virtual host',
   rabbitVhost: '/app',
+  rabbitDurability: 'Quorum queues as production default',
   kafkaTopicMode: 'Application creates topics explicitly (recommended)',
   kafkaTopic: '',
   kafkaDurability: 'RF=3 / min ISR=2 baseline',
@@ -439,6 +449,7 @@ const PRODUCT_DEFAULTS = {
   webSourceRef: '',
   tomcatDeploy: 'Runtime only',
   tomcatArtifactRef: '',
+  tomcatSessionMode: 'Stateless / externalized application session state',
   keycloakAdminMode: 'Private/admin network only',
   keycloakAdminFqdn: '',
   supersetSecretMode: 'LayerSentry managed SECRET_KEY',
@@ -458,6 +469,8 @@ const PRODUCT_DEFAULTS = {
   promScrapeRef: '',
   promAlerting: 'Provision 3-node Alertmanager',
   promAlertRef: '',
+  prometheusHistoryMode: 'Independent local TSDB on each HA replica',
+  prometheusHistoryRef: '',
   grafanaDatasourceMode: 'Configure datasources later',
   grafanaDatasourceRef: '',
   grafanaSession: 'Sticky load-balancer sessions (recommended)',
@@ -518,6 +531,10 @@ const COMMON_DEFAULTS = {
   rpoMinutes: 15,
   rtoMinutes: 60,
   tls: true,
+  tlsCertificateMode: 'LayerSentry managed certificate / internal PKI',
+  tlsCertificateRef: '',
+  credentialMode: 'Generate managed service credential',
+  credentialRef: '',
   monitoring: true,
   logging: true,
   accessMode: 'SSH key / managed access',
@@ -534,6 +551,8 @@ const COMMON_DEFAULTS = {
   placementPolicy: 'Spread across qualified failure domains',
   dedicatedPool: '',
   storage: [],
+  dependencyModes: {},
+  dependencyRefs: {},
   advancedOpen: {
     product: false,
     storage: false,
@@ -688,6 +707,250 @@ export const getEndpointOptions = (draft, blueprint) => {
   return options[blueprint.id] || ['Existing load balancer']
 }
 
+export const getDependencySpecs = (draft, blueprint) => {
+  if (!blueprint) return []
+  const topology = draft.topology || ''
+  const service = (
+    key,
+    label,
+    provisionLabel,
+    vmEstimate,
+    existingLabel,
+    refLabel,
+    note
+  ) => ({
+    key,
+    label,
+    kind: 'service',
+    provisionLabel,
+    vmEstimate,
+    existingLabel,
+    refLabel,
+    note,
+  })
+  const storage = (
+    key,
+    label,
+    managedLabel,
+    existingLabel,
+    refLabel,
+    note
+  ) => ({
+    key,
+    label,
+    kind: 'storage',
+    managedLabel,
+    existingLabel,
+    refLabel,
+    note,
+  })
+  const external = (key, label, existingLabel, refLabel, note) => ({
+    key,
+    label,
+    kind: 'external',
+    existingLabel,
+    refLabel,
+    note,
+  })
+
+  switch (blueprint.id) {
+    case 'ferretdb':
+      return [
+        service(
+          'ferretBackend',
+          'PostgreSQL + DocumentDB backend',
+          'Provision linked 3-node PostgreSQL/DocumentDB HA backend',
+          3,
+          'Use existing qualified PostgreSQL/DocumentDB backend',
+          'Backend service ID / FQDN',
+          'FerretDB frontends are replaceable; authoritative data lives in the PostgreSQL/DocumentDB backend.'
+        ),
+      ]
+    case 'keycloak':
+      return [
+        service(
+          'metadataDb',
+          'HA relational database',
+          'Provision linked PostgreSQL 3-node HA',
+          3,
+          'Use existing qualified database',
+          'Existing database service ID / FQDN',
+          'Keycloak availability depends on this database; it is not hidden as an implementation detail.'
+        ),
+      ]
+    case 'superset': {
+      const deps = [
+        service(
+          'metadataDb',
+          'Superset metadata database',
+          'Provision linked PostgreSQL 3-node HA',
+          3,
+          'Use existing qualified metadata database',
+          'Database service ID / FQDN',
+          'SQLite is not used for the production profile.'
+        ),
+      ]
+      if (topology === 'Distributed') {
+        deps.push(
+          service(
+            'asyncBackend',
+            'Async broker / results backend',
+            'Provision linked Valkey Sentinel HA',
+            3,
+            'Use existing qualified Redis/Valkey backend',
+            'Broker/results service ID / FQDN',
+            'Distributed Celery execution requires a shared broker/results dependency.'
+          )
+        )
+      }
+      return deps
+    }
+    case 'airflow': {
+      const deps = [
+        service(
+          'metadataDb',
+          'Airflow metadata database',
+          'Provision linked PostgreSQL 3-node HA',
+          3,
+          'Use existing qualified metadata database',
+          'Database service ID / FQDN',
+          'Metadata database state is authoritative and separately protected.'
+        ),
+      ]
+      if (topology === 'Distributed Celery') {
+        deps.push(
+          service(
+            'queueBroker',
+            'Celery queue broker',
+            'Provision linked Valkey Sentinel HA',
+            3,
+            'Use existing qualified Redis/Valkey broker',
+            'Broker service ID / FQDN',
+            'Required by the distributed Celery executor profile.'
+          ),
+          storage(
+            'taskLogs',
+            'Task log / artifact storage',
+            'LayerSentry managed shared/object storage',
+            'Use existing qualified storage',
+            'Task log storage / bucket reference',
+            'Distributed task logs/artifacts need a shared durable backend; DAG code is supplied separately.'
+          )
+        )
+      }
+      return deps
+    }
+    case 'forgejo':
+      return [
+        service(
+          'metadataDb',
+          'Forgejo relational database',
+          'Provision linked PostgreSQL 3-node HA',
+          3,
+          'Use existing qualified database',
+          'Database service ID / FQDN',
+          'Database and repository/object state must be recovered consistently.'
+        ),
+        storage(
+          'repoStorage',
+          'Repository / LFS / attachment storage',
+          'LayerSentry managed shared storage',
+          'Use existing qualified storage',
+          'Storage service / mount / bucket reference',
+          'Load-balanced Forgejo nodes must not keep authoritative repository state on isolated local disks.'
+        ),
+      ]
+    case 'grafana':
+      return [
+        service(
+          'metadataDb',
+          'Grafana SQL database',
+          'Provision linked PostgreSQL 3-node HA',
+          3,
+          'Use existing qualified MySQL/PostgreSQL database',
+          'Database service ID / FQDN',
+          'HA Grafana instances share one external SQL database; SQLite is not used for HA.'
+        ),
+      ]
+    case 'alloy':
+      return [
+        external(
+          'telemetryTarget',
+          'Telemetry destination',
+          'Use existing qualified telemetry endpoint',
+          'Prometheus/Loki/Tempo/OTLP endpoint reference',
+          'A collector is not READY until its required destination/output contract is known.'
+        ),
+      ]
+    default:
+      return []
+  }
+}
+
+export const getDependencyOptions = (dependency) => {
+  if (dependency.kind === 'service') {
+    return [dependency.provisionLabel, dependency.existingLabel]
+  }
+  if (dependency.kind === 'storage') {
+    return [dependency.managedLabel, dependency.existingLabel]
+  }
+  return [dependency.existingLabel]
+}
+
+const defaultDependencyMode = (dependency) =>
+  getDependencyOptions(dependency)[0]
+
+export const getDefaultDependencyState = (draft, blueprint) => {
+  const modes = {}
+  const refs = {}
+  getDependencySpecs(draft, blueprint).forEach((dependency) => {
+    modes[dependency.key] = defaultDependencyMode(dependency)
+    refs[dependency.key] = ''
+  })
+  return { dependencyModes: modes, dependencyRefs: refs }
+}
+
+const dependencyNeedsReference = (dependency, mode) =>
+  mode === dependency.existingLabel
+
+const dependencyVmCount = (dependency, mode) =>
+  dependency.kind === 'service' && mode === dependency.provisionLabel
+    ? Number(dependency.vmEstimate || 0)
+    : 0
+
+export const getDependencyErrors = (draft, blueprint) =>
+  getDependencySpecs(draft, blueprint).flatMap((dependency) => {
+    const mode =
+      draft.dependencyModes?.[dependency.key] ||
+      defaultDependencyMode(dependency)
+    if (
+      dependencyNeedsReference(dependency, mode) &&
+      !String(draft.dependencyRefs?.[dependency.key] || '').trim()
+    ) {
+      return [
+        dependency.label +
+          ': enter the required existing dependency reference or choose a LayerSentry-managed/provisioned option.',
+      ]
+    }
+    return []
+  })
+
+export const getDependencySummary = (draft, blueprint) => {
+  const specs = getDependencySpecs(draft, blueprint)
+  if (!specs.length) return 'No required linked runtime dependency'
+  return specs
+    .map((dependency) => {
+      const mode =
+        draft.dependencyModes?.[dependency.key] ||
+        defaultDependencyMode(dependency)
+      const ref = dependencyNeedsReference(dependency, mode)
+        ? draft.dependencyRefs?.[dependency.key] || 'reference required'
+        : ''
+      return dependency.label + ': ' + mode + (ref ? ' · ' + ref : '')
+    })
+    .join(' | ')
+}
+
 const vol = (
   role,
   scope,
@@ -748,11 +1011,7 @@ export const getStorageTemplate = (draft, blueprint) => {
         vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
       ]
     case 'ferretdb':
-      return [
-        vol('PostgreSQL/DocumentDB data', 'Per backend database VM', d),
-        vol('PostgreSQL WAL', 'Per backend database VM', l),
-        vol('Backup repository', 'Backend recovery repository', b, 'Backup Repository', 'Repository-managed'),
-      ]
+      return []
     case 'redis':
     case 'valkey':
       return [
@@ -794,24 +1053,9 @@ export const getStorageTemplate = (draft, blueprint) => {
     case 'tomcat':
       return []
     case 'keycloak':
-      return [dependency('HA relational database', 'Required external PostgreSQL/MySQL dependency')]
     case 'superset':
-      return [
-        dependency('Metadata database', 'External PostgreSQL/MySQL dependency'),
-        ...(draft.topology === 'Distributed'
-          ? [dependency('Async broker/results backend', 'External Redis/RabbitMQ/results dependency')]
-          : []),
-      ]
     case 'airflow':
-      return [
-        dependency('Metadata database', 'Required external PostgreSQL/MySQL dependency'),
-        ...(draft.topology === 'Distributed Celery'
-          ? [
-              dependency('Queue broker', 'External Redis/RabbitMQ dependency'),
-              dependency('Task log / artifact storage', 'Shared durable backend for distributed recovery'),
-            ]
-          : []),
-      ]
+      return []
     case 'openbao':
       return [
         vol('Raft integrated-storage data', 'Per OpenBao server', Math.max(20, Math.min(d, 200))),
@@ -823,11 +1067,7 @@ export const getStorageTemplate = (draft, blueprint) => {
         vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
       ]
     case 'forgejo':
-      return [
-        vol('Repositories / attachments / LFS', 'Shared service storage', d, 'Shared Capacity Pool', 'Shared filesystem/object storage'),
-        dependency('Relational database', 'External PostgreSQL/MySQL dependency'),
-        vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
-      ]
+      return []
     case 'opensearch':
       return [
         vol('Index data', 'Per OpenSearch data VM', d),
@@ -842,13 +1082,8 @@ export const getStorageTemplate = (draft, blueprint) => {
         dependency('Optional long-term storage', 'Remote-write / Thanos-compatible backend when selected', false),
       ]
     case 'grafana':
-      return [
-        dependency('External SQL database', 'Required for production HA; SQLite is not used for HA'),
-      ]
     case 'alloy':
-      return [
-        dependency('Telemetry destination', 'Remote-write / OTLP / Loki destination owns durable telemetry'),
-      ]
+      return []
     default:
       return [vol('Data', 'Per service VM', d)]
   }
@@ -912,7 +1147,7 @@ const addEndpoint = (draft, currentPlan) => {
   return currentPlan
 }
 
-export const getArchitecturePlan = (draft, blueprint) => {
+const getBaseArchitecturePlan = (draft, blueprint) => {
   if (!blueprint) return plan(0, [])
   const id = blueprint.id
   const topology = draft.topology || ''
@@ -1147,7 +1382,6 @@ export const getArchitecturePlan = (draft, blueprint) => {
   if (id === 'ferretdb') {
     const ha = topology.indexOf('2 FerretDB') === 0
     const frontend = ha ? 2 : 1
-    const backend = ha ? 3 : 1
     return addEndpoint(
       draft,
       plan(
@@ -1158,14 +1392,7 @@ export const getArchitecturePlan = (draft, blueprint) => {
             'Stateless MongoDB-wire frontend VMs',
             frontend,
             frontend,
-            'Frontends are replaceable.'
-          ),
-          component(
-            'PostgreSQL + DocumentDB',
-            'Linked authoritative backend VMs',
-            backend,
-            backend,
-            'Backup/PITR/DR primarily protect this backend.'
+            'Frontends are replaceable; authoritative state belongs to the linked backend.'
           ),
         ],
         [],
@@ -1522,15 +1749,8 @@ export const getArchitecturePlan = (draft, blueprint) => {
             nodes,
             'HA nodes require a resilient external SQL database.'
           ),
-          component(
-            'Relational database',
-            'Required external HA dependency',
-            'external',
-            0,
-            'Database availability determines service availability.'
-          ),
         ],
-        ['external HA relational database'],
+        [],
         nodes,
         'Keycloak'
       )
@@ -1551,15 +1771,8 @@ export const getArchitecturePlan = (draft, blueprint) => {
               1,
               'Metadata database remains external.'
             ),
-            component(
-              'Metadata database',
-              'External PostgreSQL/MySQL',
-              'external',
-              0,
-              'SQLite is not a production metadata store.'
-            ),
           ],
-          ['external metadata database'],
+          [],
           1,
           'Superset web'
         )
@@ -1573,10 +1786,8 @@ export const getArchitecturePlan = (draft, blueprint) => {
           component('Superset web', 'Load-balanced web VMs', 2, 2, 'All web nodes share one metadata DB.'),
           component('Celery workers', 'Async query/background worker VMs', 2, 2, 'Workers share the same configuration.'),
           component('Celery beat', 'One active scheduler process', 'co-located', 0, 'Run exactly one active beat scheduler.'),
-          component('Metadata database', 'External PostgreSQL/MySQL', 'external', 0, 'Required shared state.'),
-          component('Broker/results backend', 'External Redis/RabbitMQ/results backend', 'external', 0, 'Required for distributed execution.'),
         ],
-        ['external metadata database', 'external broker/results backend'],
+        [],
         2,
         'Superset web'
       )
@@ -1597,9 +1808,8 @@ export const getArchitecturePlan = (draft, blueprint) => {
               1,
               'Use only where a single VM is acceptable.'
             ),
-            component('Metadata database', 'External SQL database', 'external', 0, 'Required authoritative metadata state.'),
           ],
-          ['external metadata database', 'versioned DAG source'],
+          [],
           1,
           'Airflow'
         )
@@ -1612,11 +1822,8 @@ export const getArchitecturePlan = (draft, blueprint) => {
         [
           component('Airflow control tier', '2 control VMs', 2, 2, 'API/scheduler/DAG-processor/triggerer placement is qualified.'),
           component('Airflow workers', 'Dedicated worker VMs', 2, 2, 'Task execution is isolated from the control tier.'),
-          component('Metadata database', 'External HA SQL database', 'external', 0, 'Shared authoritative state.'),
-          component('Queue broker', 'External Redis/RabbitMQ', 'external', 0, 'Required for Celery execution.'),
-          component('Task log/artifact backend', 'External durable backend', 'external', 0, 'Recovery keeps logs/artifacts consistent with metadata and DAG version.'),
         ],
-        ['external metadata database', 'external queue broker', 'versioned DAG source', 'task log/artifact backend'],
+        [],
         2,
         'Airflow control'
       )
@@ -1689,10 +1896,8 @@ export const getArchitecturePlan = (draft, blueprint) => {
         nodes,
         [
           component('Forgejo', 'Application VMs', nodes, nodes, 'HA nodes share DB and repository/object state.'),
-          component('Relational database', 'External HA dependency', 'external', 0, 'Database is protected separately.'),
-          component('Repository/object storage', 'Shared durable dependency', 'external', 0, 'Repositories, LFS and attachments must remain consistent with DB state.'),
         ],
-        ['external relational database', 'shared repository/object storage'],
+        [],
         nodes,
         'Forgejo'
       )
@@ -1774,11 +1979,10 @@ export const getArchitecturePlan = (draft, blueprint) => {
         nodes,
         [
           component('Grafana', 'Application VMs', nodes, nodes, 'HA instances share one external SQL database.'),
-          component('SQL database', 'External PostgreSQL/MySQL', 'external', 0, 'SQLite is not used for HA.'),
           component('Session continuity', draft.grafanaSession, 'external/policy', 0, 'Session continuity is independent of alerting HA.'),
           component('Unified Alerting HA', draft.grafanaAlertHa, 'policy/dependency', 0, 'Alerting HA state is explicitly selected.'),
         ],
-        ['external SQL database'],
+        [],
         nodes,
         'Grafana'
       )
@@ -1800,7 +2004,7 @@ export const getArchitecturePlan = (draft, blueprint) => {
             : 'No clustering overhead.'
         ),
       ],
-      ['versioned collector configuration', 'telemetry destination'],
+      ['versioned collector configuration'],
       nodes,
       'Alloy'
     )
@@ -1813,6 +2017,54 @@ export const getArchitecturePlan = (draft, blueprint) => {
     1,
     blueprint.name
   )
+}
+
+export const getArchitecturePlan = (draft, blueprint) => {
+  const current = getBaseArchitecturePlan(draft, blueprint)
+  const baseDedicated = Number(current.dedicated || 0)
+  let linkedDedicated = 0
+
+  getDependencySpecs(draft, blueprint).forEach((dependency) => {
+    const mode =
+      draft.dependencyModes?.[dependency.key] ||
+      defaultDependencyMode(dependency)
+    const adds = dependencyVmCount(dependency, mode)
+    linkedDedicated += adds
+
+    if (adds > 0) {
+      current.components.push(
+        component(
+          dependency.label,
+          'Linked LayerSentry dependency blueprint',
+          adds,
+          adds,
+          mode + '. Linked dependency VMs are counted explicitly.'
+        )
+      )
+    } else {
+      const ref = dependencyNeedsReference(dependency, mode)
+        ? draft.dependencyRefs?.[dependency.key] || 'reference required'
+        : mode
+      current.components.push(
+        component(
+          dependency.label,
+          mode,
+          dependency.kind === 'storage' ? 'managed/shared' : 'external',
+          0,
+          dependency.note + ' Reference/status: ' + ref + '.'
+        )
+      )
+      current.shared.push(dependency.label + ': ' + ref)
+    }
+  })
+
+  current.primaryDedicated =
+    current.primaryDedicated == null
+      ? baseDedicated
+      : current.primaryDedicated
+  current.linkedDedicated = linkedDedicated
+  current.dedicated = baseDedicated + linkedDedicated
+  return current
 }
 
 export const getProductConfigFields = (draft, blueprint) => {
@@ -1984,6 +2236,10 @@ export const getProductConfigFields = (draft, blueprint) => {
       select('rabbitVhostMode', 'Application virtual host', [
         'Create application virtual host',
         'Create virtual host later',
+      ]),
+      select('rabbitDurability', 'Default durability profile', [
+        'Quorum queues as production default',
+        'Application explicitly owns queue type',
       ])
     )
     if (draft.rabbitVhostMode === 'Create application virtual host') {
@@ -2059,6 +2315,10 @@ export const getProductConfigFields = (draft, blueprint) => {
       select('tomcatDeploy', 'Application deployment', [
         'Runtime only',
         'Deploy application artifact',
+      ]),
+      select('tomcatSessionMode', 'Session handling', [
+        'Stateless / externalized application session state',
+        'Tomcat replicated session state (qualified application profile)',
       ])
     )
     if (draft.tomcatDeploy === 'Deploy application artifact') {
@@ -2164,6 +2424,20 @@ export const getProductConfigFields = (draft, blueprint) => {
   }
 
   if (id === 'prometheus') {
+    fields.push(
+      select('prometheusHistoryMode', 'Metrics history ownership', [
+        'Independent local TSDB on each HA replica',
+        'Existing remote-write / long-term backend',
+      ])
+    )
+    if (
+      draft.prometheusHistoryMode ===
+      'Existing remote-write / long-term backend'
+    ) {
+      fields.push(
+        text('prometheusHistoryRef', 'Long-term metrics backend reference')
+      )
+    }
     fields.push(
       select('promScrapeMode', 'Scrape configuration', [
         'Configure scrape targets later',
@@ -2417,6 +2691,13 @@ export const getProductConfigErrors = (draft, blueprint) => {
 
   if (id === 'prometheus') {
     if (
+      draft.prometheusHistoryMode ===
+        'Existing remote-write / long-term backend' &&
+      !nonEmpty(draft.prometheusHistoryRef)
+    ) {
+      errors.push('Prometheus long-term history requires its remote-write / long-term backend reference.')
+    }
+    if (
       draft.promAlerting === 'Existing Alertmanager cluster' &&
       !nonEmpty(draft.promAlertRef)
     ) {
@@ -2524,6 +2805,74 @@ const storageErrors = (draft) => {
   return errors
 }
 
+export const getCredentialProfile = (blueprint) => {
+  const id = blueprint?.id
+  const noBlueprintCredential = new Set([
+    'nginx',
+    'apache-httpd',
+    'tomcat',
+    'prometheus',
+    'alloy',
+  ])
+  if (!id || noBlueprintCredential.has(id)) {
+    return {
+      required: false,
+      label: 'No blueprint-managed application credential',
+    }
+  }
+  if (id === 'openbao') {
+    return {
+      required: true,
+      label: 'OpenBao bootstrap material',
+      generated: 'Generate one-time managed bootstrap material',
+      existing: 'Use existing secure bootstrap secret reference',
+      refLabel: 'Bootstrap secret reference',
+    }
+  }
+  return {
+    required: true,
+    label: 'Service authentication',
+    generated: 'Generate managed service credential',
+    existing: 'Use existing secret reference',
+    refLabel: 'Secret reference',
+  }
+}
+
+const validIPv4 = (value) => {
+  const parts = String(value || '').trim().split('.')
+  return (
+    parts.length === 4 &&
+    parts.every(
+      (part) =>
+        /^\d{1,3}$/.test(part) &&
+        Number(part) >= 0 &&
+        Number(part) <= 255
+    )
+  )
+}
+
+const validIPv6 = (value) => {
+  const input = String(value || '').trim()
+  return (
+    input.includes(':') &&
+    /^[0-9a-f:]+$/i.test(input) &&
+    input.split(':').length >= 3 &&
+    input.split(':').length <= 9
+  )
+}
+
+const validProxyUrl = (value) => {
+  try {
+    const parsed = new URL(String(value || '').trim())
+    return (
+      (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+      Boolean(parsed.hostname)
+    )
+  } catch (_) {
+    return false
+  }
+}
+
 const networkErrors = (draft, blueprint) => {
   const errors = []
   if (!nonEmpty(draft.serviceName)) errors.push('Service name is required.')
@@ -2536,12 +2885,15 @@ const networkErrors = (draft, blueprint) => {
       .map((value) => value.trim())
       .filter(Boolean)
     const required = getArchitecturePlan(draft, blueprint).addressableNodes
-    if (typeof required === 'number' && addresses.length < required) {
+    if (typeof required === 'number' && addresses.length !== required) {
       errors.push(
-        'Static addressing requires at least ' +
+        'Static addressing requires exactly ' +
           String(required) +
-          ' address entries for this VM footprint.'
+          ' address entries for the service-owned VM footprint. Linked dependency IPs are managed by their linked blueprint.'
       )
+    }
+    if (addresses.some((address) => !validIPv4(address) && !validIPv6(address))) {
+      errors.push('One or more static VM addresses are not valid IPv4/IPv6 literals.')
     }
   }
 
@@ -2562,11 +2914,21 @@ const networkErrors = (draft, blueprint) => {
     if (!Number.isInteger(ttl) || ttl < 30 || ttl > 86400) {
       errors.push('Manual DNS TTL must be between 30 and 86400 seconds.')
     }
-    if (
-      draft.dnsTargetMode === 'Specify DNS target now' &&
-      !nonEmpty(draft.dnsTarget)
-    ) {
-      errors.push('Manual DNS target mode requires an IP address or target FQDN.')
+    if (draft.dnsTargetMode === 'Specify DNS target now') {
+      if (!nonEmpty(draft.dnsTarget)) {
+        errors.push('Manual DNS target mode requires an IP address or target FQDN.')
+      } else if (
+        draft.dnsRecordType === 'A/AAAA' &&
+        !validIPv4(draft.dnsTarget) &&
+        !validIPv6(draft.dnsTarget)
+      ) {
+        errors.push('Manual A/AAAA records require a valid IPv4 or IPv6 target.')
+      } else if (
+        draft.dnsRecordType === 'CNAME' &&
+        !isValidFqdn(draft.dnsTarget)
+      ) {
+        errors.push('Manual CNAME records require a target FQDN.')
+      }
     }
   }
 
@@ -2627,7 +2989,7 @@ const backupErrors = (draft, blueprint) => {
   return errors
 }
 
-const securityErrors = (draft) => {
+const securityErrors = (draft, blueprint) => {
   const errors = []
   if (draft.environment === 'Production' && !draft.tls) {
     errors.push('TLS is mandatory for the production service profile.')
@@ -2653,10 +3015,28 @@ const securityErrors = (draft) => {
   if (
     draft.packageSourceMode === 'Managed repositories' &&
     draft.internetAccess === 'HTTP(S) Proxy' &&
-    !nonEmpty(draft.proxyUrl)
+    !validProxyUrl(draft.proxyUrl)
   ) {
-    errors.push('Proxy mode requires a proxy URL. Username and password remain optional.')
+    errors.push('Proxy mode requires a valid http:// or https:// proxy URL. Username and password remain optional.')
   }
+
+  if (
+    draft.tls &&
+    draft.tlsCertificateMode === 'Existing certificate / secret reference' &&
+    !nonEmpty(draft.tlsCertificateRef)
+  ) {
+    errors.push('Existing TLS certificate mode requires a certificate/secret reference; private-key material must not be pasted into the design.')
+  }
+
+  const credential = getCredentialProfile(blueprint)
+  if (
+    credential.required &&
+    draft.credentialMode === credential.existing &&
+    !nonEmpty(draft.credentialRef)
+  ) {
+    errors.push(credential.label + ': enter the existing secret reference.')
+  }
+
   return errors
 }
 
@@ -2671,6 +3051,7 @@ export const validateStep = (step, draft, blueprint) => {
     if (!nonEmpty(draft.topology)) messages.push('Select a deployment topology.')
     if (blueprint.editions && !nonEmpty(draft.edition)) messages.push('Select an edition.')
     messages.push(...getProductConfigErrors(draft, blueprint))
+    messages.push(...getDependencyErrors(draft, blueprint))
   } else if (step === 2) {
     if (!Number.isInteger(Number(draft.vcpu)) || Number(draft.vcpu) < 1) {
       messages.push('vCPU per primary service node must be at least 1.')
@@ -2697,7 +3078,7 @@ export const validateStep = (step, draft, blueprint) => {
   } else if (step === 5) {
     messages.push(...backupErrors(draft, blueprint))
   } else if (step === 6) {
-    messages.push(...securityErrors(draft))
+    messages.push(...securityErrors(draft, blueprint))
   } else if (step === 7) {
     for (let index = 0; index < WIZARD_STEPS.length - 1; index += 1) {
       validateStep(index, draft, blueprint).forEach(({ message }) =>
@@ -2767,7 +3148,14 @@ export const getProductSummary = (draft, blueprint) => {
     return draft.ybApi + '; ' + draft.ybBootstrap + (draft.ybBootstrap === 'Create initial database / namespace' ? ' · ' + draft.ybDbName : '')
   }
   if (id === 'rabbitmq') {
-    return draft.rabbitVhostMode + (draft.rabbitVhostMode === 'Create application virtual host' ? ' · ' + draft.rabbitVhost : '')
+    return (
+      draft.rabbitVhostMode +
+      (draft.rabbitVhostMode === 'Create application virtual host'
+        ? ' · ' + draft.rabbitVhost
+        : '') +
+      '; ' +
+      draft.rabbitDurability
+    )
   }
   if (id === 'kafka') {
     return draft.kafkaTopicMode + (draft.kafkaTopic ? ' · ' + draft.kafkaTopic : '') + '; ' + draft.kafkaDurability
@@ -2786,7 +3174,12 @@ export const getProductSummary = (draft, blueprint) => {
     return draft.webMode + (draft.webSourceRef ? ' · ' + draft.webSourceRef : '')
   }
   if (id === 'tomcat') {
-    return draft.tomcatDeploy + (draft.tomcatArtifactRef ? ' · ' + draft.tomcatArtifactRef : '')
+    return (
+      draft.tomcatDeploy +
+      (draft.tomcatArtifactRef ? ' · ' + draft.tomcatArtifactRef : '') +
+      '; sessions: ' +
+      draft.tomcatSessionMode
+    )
   }
   if (id === 'keycloak') {
     return draft.keycloakAdminMode + (draft.keycloakAdminFqdn ? ' · ' + draft.keycloakAdminFqdn : '')
@@ -2810,7 +3203,14 @@ export const getProductSummary = (draft, blueprint) => {
     return draft.openSearchSecurity + (draft.openSearchSecurityRef ? ' · reference configured' : '')
   }
   if (id === 'prometheus') {
-    return 'Scrapes: ' + draft.promScrapeMode + '; alerting: ' + draft.promAlerting
+    return (
+      'History: ' +
+      draft.prometheusHistoryMode +
+      '; scrapes: ' +
+      draft.promScrapeMode +
+      '; alerting: ' +
+      draft.promAlerting
+    )
   }
   if (id === 'grafana') {
     return 'Datasources: ' + draft.grafanaDatasourceMode + '; sessions: ' + draft.grafanaSession + '; alerting HA: ' + draft.grafanaAlertHa
@@ -2842,5 +3242,10 @@ export const createDraft = (
     draft.pitr = false
   }
   draft.storage = getStorageTemplate(draft, blueprint)
+  Object.assign(draft, getDefaultDependencyState(draft, blueprint))
+  const credential = getCredentialProfile(blueprint)
+  if (credential.required) {
+    draft.credentialMode = credential.generated
+  }
   return draft
 }
