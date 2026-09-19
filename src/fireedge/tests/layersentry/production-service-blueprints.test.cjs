@@ -376,3 +376,181 @@ test('every service family declares explicit recovery ownership', () => {
     assert.ok(profile.note, `${blueprint.id}: missing recovery qualification note`)
   }
 })
+
+
+test('implemented React wizard renders the 27-family catalog and blocks incomplete progression', async () => {
+  const Module = require('node:module')
+  const { JSDOM } = require('jsdom')
+  const React = require('react')
+  const ReactDOM = require('react-dom')
+  const { act } = require('react-dom/test-utils')
+  const { MemoryRouter } = require('react-router-dom')
+
+  const sourceRoot = path.join(fireedgeRoot, 'src')
+  const previousNodePath = process.env.NODE_PATH
+  process.env.NODE_PATH = previousNodePath
+    ? sourceRoot + path.delimiter + previousNodePath
+    : sourceRoot
+  Module._initPaths()
+
+  const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', {
+    url: 'http://layersentry.test/applications/deploy',
+  })
+  const previousGlobals = {
+    window: global.window,
+    document: global.document,
+    navigator: global.navigator,
+    HTMLElement: global.HTMLElement,
+    Node: global.Node,
+    getComputedStyle: global.getComputedStyle,
+    ResizeObserver: global.ResizeObserver,
+    fetch: global.fetch,
+    requestAnimationFrame: global.requestAnimationFrame,
+    cancelAnimationFrame: global.cancelAnimationFrame,
+  }
+
+  dom.window.matchMedia =
+    dom.window.matchMedia ||
+    (() => ({
+      matches: false,
+      addListener() {},
+      removeListener() {},
+      addEventListener() {},
+      removeEventListener() {},
+      dispatchEvent() {
+        return false
+      },
+    }))
+  dom.window.scrollTo = () => {}
+
+  global.window = dom.window
+  global.document = dom.window.document
+  global.navigator = dom.window.navigator
+  global.HTMLElement = dom.window.HTMLElement
+  global.Node = dom.window.Node
+  global.getComputedStyle = dom.window.getComputedStyle.bind(dom.window)
+  global.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  global.requestAnimationFrame = (callback) => setTimeout(callback, 0)
+  global.cancelAnimationFrame = (id) => clearTimeout(id)
+  global.fetch = async () => {
+    throw new Error('runtime catalog intentionally unavailable in UI smoke test')
+  }
+
+  const originalLoader = require.extensions['.js']
+  require.extensions['.js'] = (module, filename) => {
+    if (filename.startsWith(sourceRoot)) {
+      const source = fs.readFileSync(filename, 'utf8')
+      const { code } = babel.transformSync(source, {
+        babelrc: false,
+        configFile: false,
+        presets: [
+          [
+            require.resolve('@babel/preset-env'),
+            { targets: { node: '22' }, modules: 'commonjs' },
+          ],
+          require.resolve('@babel/preset-react'),
+        ],
+      })
+      module._compile(code, filename)
+
+      return
+    }
+
+    originalLoader(module, filename)
+  }
+
+  try {
+    const wizardPath = path.join(
+      sourceRoot,
+      'client/apps/layersentry/pages/ProductionServiceWizard.js'
+    )
+    delete require.cache[require.resolve(wizardPath)]
+    const wizardModule = require(wizardPath)
+    const ProductionServiceWizard = wizardModule.default || wizardModule
+    const root = document.getElementById('root')
+
+    await act(async () => {
+      ReactDOM.render(
+        React.createElement(
+          MemoryRouter,
+          { initialEntries: ['/applications/deploy'] },
+          React.createElement(ProductionServiceWizard)
+        ),
+        root
+      )
+      await Promise.resolve()
+    })
+
+    assert.equal(
+      document.querySelectorAll('[data-testid^="service-"]').length,
+      27,
+      'all 27 service cards must render in the implemented React wizard'
+    )
+    assert.match(root.textContent, /Choose a production service/)
+    assert.doesNotMatch(
+      root.textContent,
+      /Rocky Linux|Ubuntu 24\.04|LayerSentry selected OS/
+    )
+
+    const clickNext = async () => {
+      const button = [...document.querySelectorAll('button')].find((item) =>
+        /Next/.test(item.textContent)
+      )
+      assert.ok(button, 'Next button must be present')
+      await act(async () => {
+        button.dispatchEvent(
+          new dom.window.MouseEvent('click', {
+            bubbles: true,
+            cancelable: true,
+          })
+        )
+        await Promise.resolve()
+      })
+    }
+
+    await clickNext()
+    assert.match(root.textContent, /Version & Deployment/)
+    const footprint = document.querySelector('[data-testid="vm-footprint"]')
+    assert.ok(footprint, 'VM footprint must be rendered on deployment step')
+    assert.match(footprint.textContent, /PostgreSQL/)
+    assert.match(footprint.textContent, /Patroni/)
+    assert.match(footprint.textContent, /3\s*new dedicated VMs/)
+
+    await clickNext()
+    assert.match(root.textContent, /Capacity/)
+
+    await clickNext()
+    assert.match(root.textContent, /Storage/)
+
+    await clickNext()
+    assert.match(root.textContent, /Network & Availability/)
+
+    await clickNext()
+    assert.match(
+      root.textContent,
+      /Configuration required/,
+      'network step must fail closed when DNS domain/FQDN are missing'
+    )
+    assert.match(
+      root.textContent,
+      /Network & Availability/,
+      'wizard must remain on the invalid step'
+    )
+    assert.doesNotMatch(root.textContent, /Backup & Recovery\s*Application-aware/)
+  } finally {
+    require.extensions['.js'] = originalLoader
+    process.env.NODE_PATH = previousNodePath
+    Module._initPaths()
+    ReactDOM.unmountComponentAtNode(document.getElementById('root'))
+    dom.window.close()
+
+    for (const [key, value] of Object.entries(previousGlobals)) {
+      if (value === undefined) delete global[key]
+      else global[key] = value
+    }
+  }
+})
