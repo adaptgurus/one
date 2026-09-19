@@ -78,7 +78,11 @@ const Portal = ({ endpoints }) => {
   return (
     <PortalShell endpoints={endpoints}>
       <Switch>
-        <Route exact path={PRODUCT_PATHS.OVERVIEW} component={Overview} />
+        <Route
+          exact
+          path={PRODUCT_PATHS.OVERVIEW}
+          render={() => <Overview endpoints={endpoints} />}
+        />
         <Route exact path="/search" component={SearchPage} />
 
         <Route

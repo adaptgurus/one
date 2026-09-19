@@ -27,7 +27,9 @@ test('LayerSentry is the default authenticated shell', () => {
 
 test('product routes preserve backend authority through an RBAC bridge', () => {
   const portal = read('src/client/apps/layersentry/Portal.js')
-  const bridge = read('src/client/apps/layersentry/components/ResourceBridge.js')
+  const bridge = read(
+    'src/client/apps/layersentry/components/ResourceBridge.js'
+  )
   for (const productArea of [
     'COMPUTE',
     'KUBERNETES',
@@ -71,11 +73,36 @@ test('LayerSentry brand colors live only in the theme token source', () => {
   assert.match(tokens, /background: '#F8FAFC'/)
 })
 
+test('overview gates live queries and actions through the capability model', () => {
+  const overview = read('src/client/apps/layersentry/pages/Overview.js')
+  assert.match(overview, /getCapabilityModel\(endpoints\)/)
+  assert.match(
+    overview,
+    /OneKsAPI\.useGetOneKsClustersQuery\(undefined, \{\s*skip: !canViewKubernetes/
+  )
+  assert.match(
+    overview,
+    /ServiceAPI\.useGetServicesQuery\(undefined, \{\s*skip: !canViewApplications/
+  )
+  assert.match(
+    overview,
+    /BackupJobAPI\.useGetBackupJobsQuery\(undefined, \{\s*skip: !canViewProtection/
+  )
+  assert.match(
+    overview,
+    /DatastoreAPI\.useGetDatastoresQuery\(undefined, \{\s*skip: !canViewAdminStorage/
+  )
+  assert.match(overview, /available: canCreateVm/)
+  assert.match(overview, /available: canCreateKubernetes/)
+  assert.match(overview, /available: canDeployApplication/)
+  assert.match(overview, /\.filter\(\(\{ available \}\) => available\)/)
+})
+
 test('customer overview avoids provider storage inventory fetches', () => {
   const overview = read('src/client/apps/layersentry/pages/Overview.js')
   assert.match(
     overview,
-    /DatastoreAPI\.useGetDatastoresQuery\(undefined, \{\s*skip: !isAdmin/
+    /canViewAdminStorage =\s*isAdmin &&\s*isCapabilityVisible\(CAPABILITY_IDS\.INFRA_STORAGE/
   )
   const search = read('src/client/apps/layersentry/pages/Search.js')
   assert.doesNotMatch(search, /HostAPI|ClusterAPI|DatastoreAPI/)
