@@ -34,7 +34,7 @@ const KubernetesWorkspace = ({ endpoints }) => {
   const history = useHistory()
   const canCreate = isCapabilityEnabled(
     CAPABILITY_IDS.KUBERNETES_CREATE,
-    getCapabilityModel()
+    getCapabilityModel(endpoints)
   )
 
   return (
