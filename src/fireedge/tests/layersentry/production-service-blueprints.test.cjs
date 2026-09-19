@@ -460,7 +460,7 @@ test('implemented React wizard renders the 27-family catalog and blocks incomple
             require.resolve('@babel/preset-env'),
             { targets: { node: '22' }, modules: 'commonjs' },
           ],
-          require.resolve('@babel/preset-react'),
+          [require.resolve('@babel/preset-react'), { runtime: 'automatic' }],
         ],
       })
       module._compile(code, filename)
