@@ -268,10 +268,7 @@ module OneKS
             return current if OpenNebula.is_error?(current)
 
             # Immediately fail if current state contains 'FAILURE'
-            return OpenNebula::Error.new(
-                "Seed VM #{@id} entered failure state: #{current}",
-                OpenNebula::Error::EACTION
-            ) if current.to_s.include?('FAILURE')
+            return seed_failure_error(group.client, current) if current.to_s.include?('FAILURE')
 
             Log.info(
                 COMP,
@@ -300,10 +297,7 @@ module OneKS
                 elsif current == target
                     return true
                 elsif current.to_s.include?('FAILURE')
-                    return OpenNebula::Error.new(
-                        "Seed VM #{@id} entered failure state: #{current}",
-                        OpenNebula::Error::EACTION
-                    )
+                    return seed_failure_error(group.client, current)
                 end
             end
         end
@@ -315,6 +309,27 @@ module OneKS
             return rc if OpenNebula.is_error?(rc)
 
             vm['USER_TEMPLATE/ONEKS_STATE']
+        end
+
+        def seed_failure_error(client, state)
+            vm = OpenNebula::VirtualMachine.new_with_id(@id, client)
+            rc = vm.info
+            code = if OpenNebula.is_error?(rc)
+                       nil
+                   else
+                       vm['USER_TEMPLATE/ONEKS_ERROR_CODE'].to_s.strip
+                   end
+            detail = code.nil? || code.empty? || code == 'NONE' ? '' : " (#{code})"
+
+            OpenNebula::Error.new(
+                "Seed VM #{@id} entered failure state: #{state}#{detail}",
+                OpenNebula::Error::EACTION
+            )
+        rescue StandardError
+            OpenNebula::Error.new(
+                "Seed VM #{@id} entered failure state: #{state}",
+                OpenNebula::Error::EACTION
+            )
         end
 
         class << self
