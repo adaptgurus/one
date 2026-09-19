@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - layersentry/p1-rke2-day2-production-20260913
+      - fix/live-oneks-qualification-20260919
   workflow_dispatch:
 
 permissions:
@@ -26,10 +27,16 @@ jobs:
       - name: Ruby syntax
         run: |
           set -euo pipefail
+          ruby -c src/oneks/app/controllers/group_controller.rb
           ruby -c src/oneks/app/controllers/lifecycle_controller.rb
+          ruby -c src/oneks/app/models/dependencies/seed_vm.rb
           ruby -c src/oneks/app/models/dependencies/seed_vm_heartbeat.rb
           ruby -c src/oneks/app/models/groups/controlplane.rb
+          ruby -c src/oneks/app/models/groups/nodegroup.rb
           ruby -c src/oneks/app/models/groups/nodegroup_day2.rb
+          ruby -c src/oneks/app/models/k8s_group.rb
+          ruby -c src/oneks/app/services/cluster_lcm.rb
+          ruby -c src/oneks/app/services/cluster_wd.rb
           ruby -c src/oneks/app/services/event_manager/event_manager_day2.rb
           ruby -c src/oneks/app/services/lifecycle_status.rb
           ruby -c src/oneks/app/services/lifecycle_status_autoscaler.rb
@@ -43,10 +50,16 @@ jobs:
         run: |
           ln -sf "$GITHUB_WORKSPACE/share/linters/.rubocop.yml" "$HOME/.rubocop.yml"
           rubocop \
+            src/oneks/app/controllers/group_controller.rb \
             src/oneks/app/controllers/lifecycle_controller.rb \
+            src/oneks/app/models/dependencies/seed_vm.rb \
             src/oneks/app/models/dependencies/seed_vm_heartbeat.rb \
             src/oneks/app/models/groups/controlplane.rb \
+            src/oneks/app/models/groups/nodegroup.rb \
             src/oneks/app/models/groups/nodegroup_day2.rb \
+            src/oneks/app/models/k8s_group.rb \
+            src/oneks/app/services/cluster_lcm.rb \
+            src/oneks/app/services/cluster_wd.rb \
             src/oneks/app/services/event_manager/event_manager_day2.rb \
             src/oneks/app/services/lifecycle_status.rb \
             src/oneks/app/services/lifecycle_status_autoscaler.rb \
