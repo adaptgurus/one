@@ -70,6 +70,7 @@ class LayerSentryProfileTest < Minitest::Test
     group.merge!(group_overrides)
     one_auth = 'test:fixture-only'
     one_xmlrpc = 'http://169.254.16.9:2633/RPC2'
+    artifact_base_url = ENV.fetch('ONEKS_RKE2_ARTIFACT_BASE_URL')
     dir = File.join(ROOT, type, 'layersentry-poc')
     templates = Dir[File.join(dir, 'templates', '*.erb')].to_h do |path|
       [File.basename(path, '.erb').to_sym, ERB.new(File.read(path)).result(binding)]
