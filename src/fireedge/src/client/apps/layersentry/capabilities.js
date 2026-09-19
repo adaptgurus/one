@@ -319,9 +319,7 @@ export const isCapabilityEnabled = (capabilityId, model = {}) =>
   CAPABILITY_VISIBILITY.VISIBLE_ENABLED
 
 export const getCapabilityForPath = (pathname = '') =>
-  CAPABILITY_PATHS.find(
-    ([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`)
-  )?.[1]
+  CAPABILITY_PATHS.find(([path]) => pathname === path)?.[1]
 
 export const isCapabilityPathAvailable = (pathname = '', model = {}) => {
   if (ALWAYS_AVAILABLE_PATHS.has(pathname)) return true
