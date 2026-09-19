@@ -563,3 +563,84 @@ test('implemented React wizard renders the 27-family catalog and blocks incomple
     }
   }
 })
+
+
+test('runtime service-blueprint catalog mirrors all frontend families and stays fail-closed', () => {
+  const serverCatalogPath = path.join(
+    fireedgeRoot,
+    'src/server/routes/api/serviceblueprints/catalog.js'
+  )
+  const serverCatalog = require(serverCatalogPath)
+  const runtimeItems = serverCatalog.getCatalog()
+
+  assert.equal(runtimeItems.length, api.FALLBACK_BLUEPRINTS.length)
+  assert.deepEqual(
+    runtimeItems.map(({ id }) => id).sort(),
+    api.FALLBACK_BLUEPRINTS.map(({ id }) => id).sort()
+  )
+
+  for (const item of runtimeItems) {
+    const frontend = api.getBlueprintById(item.id)
+    assert.ok(frontend, item.id)
+    assert.equal(item.productionSelectable, false, item.id)
+    assert.equal(item.executionBackendQualified, false, item.id)
+    assert.equal(item.qualification, 'NOT_TESTED', item.id)
+    assert.ok(item.versions.length > 0, item.id)
+    for (const version of item.versions) {
+      assert.ok(
+        frontend.versions.includes(version),
+        `${item.id}: runtime version ${version} must exist in frontend catalog`
+      )
+    }
+  }
+})
+
+test('FireEdge registers authenticated production-service catalog, preflight and deploy routes', () => {
+  const apiIndex = fs.readFileSync(
+    path.join(fireedgeRoot, 'src/server/routes/api/index.js'),
+    'utf8'
+  )
+  const routesSource = fs.readFileSync(
+    path.join(
+      fireedgeRoot,
+      'src/server/routes/api/serviceblueprints/routes.js'
+    ),
+    'utf8'
+  )
+  const functionsSource = fs.readFileSync(
+    path.join(
+      fireedgeRoot,
+      'src/server/routes/api/serviceblueprints/functions.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(apiIndex, /'serviceblueprints'/)
+  assert.match(routesSource, /path: basepath/)
+  assert.match(routesSource, /preflight/)
+  assert.match(routesSource, /deploy/)
+  assert.ok(
+    (routesSource.match(/auth: true/g) || []).length >= 3,
+    'all production-service API routes must require authentication'
+  )
+  assert.match(functionsSource, /SERVICE_BLUEPRINT_TUPLE_NOT_PROMOTED/)
+  assert.match(functionsSource, /SERVICE_BLUEPRINT_DEPLOYMENT_DISABLED/)
+  assert.doesNotMatch(functionsSource, /productionSelectable:\s*true/)
+})
+
+test('runtime catalog endpoint path matches the production-service frontend API contract', () => {
+  const frontendSource = fs.readFileSync(modelPath, 'utf8')
+  const routesSource = fs.readFileSync(
+    path.join(
+      fireedgeRoot,
+      'src/server/routes/api/serviceblueprints/routes.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(
+    frontendSource,
+    /SERVICE_BLUEPRINT_API = '\/api\/v1\/service-blueprints'/
+  )
+  assert.match(routesSource, /const basepath = '\/v1\/service-blueprints'/)
+})
