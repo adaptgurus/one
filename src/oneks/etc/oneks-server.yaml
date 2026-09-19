@@ -48,6 +48,11 @@
   :required: true
   :type: integer
 
+:rke2_artifact_base_url:
+  :required: false
+  :type: string
+  :default: ''
+
 :cluster_autoscaler:
   :required: false
   :type: object
