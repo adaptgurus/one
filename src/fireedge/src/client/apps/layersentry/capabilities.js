@@ -94,6 +94,12 @@ const DATA_SAFETY_REQUIRED = new Set([
   CAPABILITY_IDS.STORAGE_ONBOARDING,
 ])
 
+const READ_ONLY_SAFE = new Set([
+  CAPABILITY_IDS.COMPUTE,
+  CAPABILITY_IDS.BLUEPRINTS,
+  CAPABILITY_IDS.AFFINITY,
+])
+
 const MUTATING_CAPABILITIES = new Set([
   CAPABILITY_IDS.VM_CREATE,
   CAPABILITY_IDS.AFFINITY_CREATE,
@@ -279,6 +285,13 @@ export const getCapabilityState = (capabilityId, model = {}) => {
     return hidden(
       CAPABILITY_VISIBILITY.HIDDEN_NOT_QUALIFIED,
       'Required data-safety qualification is incomplete.'
+    )
+  }
+
+  if (capability.readOnly === true && !READ_ONLY_SAFE.has(capabilityId)) {
+    return hidden(
+      CAPABILITY_VISIBILITY.HIDDEN_NOT_QUALIFIED,
+      'A mutation-safe read-only presentation has not been qualified for this capability.'
     )
   }
 
