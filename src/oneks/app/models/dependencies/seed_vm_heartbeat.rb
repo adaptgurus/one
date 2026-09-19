@@ -125,7 +125,7 @@ module OneKS
             OneKS::ClusterLCM.instance.group_pool.impersonate(nil)
         end
 
-        def record_bootstrap_observation(group, state, error: nil, timed_out: false)
+        def record_bootstrap_observation(_group, state, error: nil, timed_out: false)
             now = Time.now.to_i
             @opts[:bootstrap_started_at] ||= now
             @opts[:last_heartbeat_at] = now
