@@ -1558,7 +1558,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
     return addEndpoint(
       draft,
       plan(
-        frontend + backend,
+        frontend,
         [
           component(
             'FerretDB',
