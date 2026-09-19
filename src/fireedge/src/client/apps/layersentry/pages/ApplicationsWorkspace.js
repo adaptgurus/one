@@ -21,6 +21,11 @@ import { useState } from 'react'
 import { useHistory } from 'react-router-dom'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
+  CAPABILITY_IDS,
+  getCapabilityModel,
+  isCapabilityEnabled,
+} from 'client/apps/layersentry/capabilities'
+import {
   PageFrame,
   SectionHeader,
   Surface,
@@ -30,20 +35,26 @@ import { colors } from 'client/apps/layersentry/theme/tokens'
 const ApplicationsWorkspace = ({ endpoints }) => {
   const history = useHistory()
   const [tab, setTab] = useState(0)
+  const canDeploy = isCapabilityEnabled(
+    CAPABILITY_IDS.APPLICATIONS_DEPLOY,
+    getCapabilityModel()
+  )
 
   return (
     <PageFrame
       title="Applications"
-      description="Deploy and operate published services while OneFlow remains the lifecycle authority."
+      description="Browse published services while OneFlow remains the lifecycle authority."
       actions={
-        <Button
-          variant="contained"
-          startIcon={<Plus width={17} height={17} />}
-          onClick={() => history.push('/applications/deploy')}
-          sx={{ textTransform: 'none' }}
-        >
-          Deploy application
-        </Button>
+        canDeploy ? (
+          <Button
+            variant="contained"
+            startIcon={<Plus width={17} height={17} />}
+            onClick={() => history.push('/applications/deploy')}
+            sx={{ textTransform: 'none' }}
+          >
+            Deploy application
+          </Button>
+        ) : null
       }
     >
       <Surface sx={{ mt: 2, p: 2.5 }}>
@@ -55,7 +66,10 @@ const ApplicationsWorkspace = ({ endpoints }) => {
           {[
             ['Catalog', 'Published OneFlow service templates'],
             ['Deployments', 'Running service instances'],
-            ['Lifecycle', 'Scale, recover and remove through OneFlow'],
+            [
+              'Lifecycle',
+              'Day-2 actions appear only after separate production qualification',
+            ],
           ].map(([title, description]) => (
             <Box
               key={title}
