@@ -86,17 +86,29 @@ export const PRODUCT_PATHS = Object.freeze({
 })
 
 const cloudWorkloads = [
-  { label: 'Overview', path: PRODUCT_PATHS.OVERVIEW, icon: DashboardDots },
-  { label: 'Compute', path: PRODUCT_PATHS.COMPUTE, icon: Server },
+  {
+    label: 'Overview',
+    path: PRODUCT_PATHS.OVERVIEW,
+    icon: DashboardDots,
+    always: true,
+  },
+  {
+    label: 'Compute',
+    path: PRODUCT_PATHS.COMPUTE,
+    icon: Server,
+    capability: CAPABILITY_IDS.COMPUTE,
+  },
   {
     label: 'VM Blueprints',
     path: PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
     icon: Packages,
+    capability: CAPABILITY_IDS.BLUEPRINTS,
   },
   {
     label: 'Affinity Groups',
     path: PRODUCT_PATHS.COMPUTE_AFFINITY,
     icon: Group,
+    capability: CAPABILITY_IDS.AFFINITY,
   },
   {
     label: 'Kubernetes',
@@ -110,27 +122,50 @@ const cloudWorkloads = [
     icon: Packages,
     capability: CAPABILITY_IDS.APPLICATIONS_ONEFLOW,
   },
-  { label: 'Storage', path: PRODUCT_PATHS.STORAGE, icon: HardDrive },
-  { label: 'Images', path: PRODUCT_PATHS.STORAGE_IMAGES, icon: Packages },
-  { label: 'Files', path: PRODUCT_PATHS.STORAGE_FILES, icon: Archive },
+  {
+    label: 'Storage',
+    path: PRODUCT_PATHS.STORAGE,
+    icon: HardDrive,
+    capability: CAPABILITY_IDS.STORAGE,
+  },
+  {
+    label: 'Images',
+    path: PRODUCT_PATHS.STORAGE_IMAGES,
+    icon: Packages,
+    capability: CAPABILITY_IDS.STORAGE_IMAGES,
+  },
+  {
+    label: 'Files',
+    path: PRODUCT_PATHS.STORAGE_FILES,
+    icon: Archive,
+    capability: CAPABILITY_IDS.STORAGE_FILES,
+  },
 ]
 
 const cloudNetwork = [
-  { label: 'Networks', path: PRODUCT_PATHS.NETWORK, icon: NetworkAlt },
+  {
+    label: 'Networks',
+    path: PRODUCT_PATHS.NETWORK,
+    icon: NetworkAlt,
+    capability: CAPABILITY_IDS.NETWORK,
+  },
   {
     label: 'Network Blueprints',
     path: PRODUCT_PATHS.NETWORK_TEMPLATES,
     icon: NetworkAlt,
+    capability: CAPABILITY_IDS.NETWORK_TEMPLATES,
   },
   {
     label: 'Virtual Routers',
     path: PRODUCT_PATHS.NETWORK_ROUTERS,
     icon: NetworkAlt,
+    capability: CAPABILITY_IDS.VIRTUAL_ROUTERS,
   },
   {
     label: 'Firewall Rules',
     path: PRODUCT_PATHS.SECURITY,
     icon: HistoricShield,
+    capability: CAPABILITY_IDS.FIREWALL_RULES,
   },
 ]
 
@@ -160,9 +195,20 @@ const cloudOperations = [
     label: 'Operations',
     path: PRODUCT_PATHS.OPERATIONS,
     icon: SettingsProfiles,
+    capability: CAPABILITY_IDS.OPERATIONS,
   },
-  { label: 'Support', path: PRODUCT_PATHS.SUPPORT, icon: HeadsetHelp },
-  { label: 'Settings', path: PRODUCT_PATHS.SETTINGS, icon: Settings },
+  {
+    label: 'Support',
+    path: PRODUCT_PATHS.SUPPORT,
+    icon: HeadsetHelp,
+    always: true,
+  },
+  {
+    label: 'Settings',
+    path: PRODUCT_PATHS.SETTINGS,
+    icon: Settings,
+    always: true,
+  },
 ]
 
 const adminGroups = [
@@ -170,16 +216,23 @@ const adminGroups = [
     label: 'Infrastructure',
     icon: Db,
     children: [
-      { label: 'Compute Hosts', path: PRODUCT_PATHS.INFRA_HOSTS, icon: Server },
+      {
+        label: 'Compute Hosts',
+        path: PRODUCT_PATHS.INFRA_HOSTS,
+        icon: Server,
+        capability: CAPABILITY_IDS.INFRA_HOSTS,
+      },
       {
         label: 'Compute Clusters',
         path: PRODUCT_PATHS.INFRA_CLUSTERS,
         icon: Group,
+        capability: CAPABILITY_IDS.INFRA_CLUSTERS,
       },
       {
         label: 'Storage Pools',
         path: PRODUCT_PATHS.INFRA_STORAGE,
         icon: HardDrive,
+        capability: CAPABILITY_IDS.INFRA_STORAGE,
       },
       {
         label: 'Backup Storage',
@@ -191,8 +244,14 @@ const adminGroups = [
         label: 'Drivers',
         path: PRODUCT_PATHS.INFRA_DRIVERS,
         icon: SettingsProfiles,
+        capability: CAPABILITY_IDS.INFRA_DRIVERS,
       },
-      { label: 'Zones / Sites', path: PRODUCT_PATHS.INFRA_ZONES, icon: Db },
+      {
+        label: 'Zones / Sites',
+        path: PRODUCT_PATHS.INFRA_ZONES,
+        icon: Db,
+        capability: CAPABILITY_IDS.INFRA_ZONES,
+      },
       {
         label: 'Providers',
         path: PRODUCT_PATHS.INFRA_PROVIDERS,
@@ -205,23 +264,41 @@ const adminGroups = [
     label: 'Access',
     icon: User,
     children: [
-      { label: 'Users', path: PRODUCT_PATHS.ACCESS_USERS, icon: User },
-      { label: 'Teams', path: PRODUCT_PATHS.ACCESS_TEAMS, icon: Group },
-      { label: 'Projects', path: PRODUCT_PATHS.ACCESS_PROJECTS, icon: Db },
+      {
+        label: 'Users',
+        path: PRODUCT_PATHS.ACCESS_USERS,
+        icon: User,
+        capability: CAPABILITY_IDS.ACCESS_USERS,
+      },
+      {
+        label: 'Teams',
+        path: PRODUCT_PATHS.ACCESS_TEAMS,
+        icon: Group,
+        capability: CAPABILITY_IDS.ACCESS_TEAMS,
+      },
+      {
+        label: 'Projects',
+        path: PRODUCT_PATHS.ACCESS_PROJECTS,
+        icon: Db,
+        capability: CAPABILITY_IDS.ACCESS_PROJECTS,
+      },
       {
         label: 'Roles',
         path: PRODUCT_PATHS.ACCESS_ROLES,
         icon: HistoricShield,
+        capability: CAPABILITY_IDS.ACCESS_ROLES,
       },
       {
         label: 'Limits',
         path: PRODUCT_PATHS.ACCESS_LIMITS,
         icon: SettingsProfiles,
+        capability: CAPABILITY_IDS.ACCESS_LIMITS,
       },
       {
         label: 'Access Rules',
         path: PRODUCT_PATHS.ACCESS_RULES,
         icon: HistoricShield,
+        capability: CAPABILITY_IDS.ACCESS_RULES,
       },
     ],
   },
@@ -229,11 +306,17 @@ const adminGroups = [
     label: 'Platform',
     icon: Packages,
     children: [
-      { label: 'Images', path: PRODUCT_PATHS.PLATFORM_IMAGES, icon: Packages },
+      {
+        label: 'Images',
+        path: PRODUCT_PATHS.PLATFORM_IMAGES,
+        icon: Packages,
+        capability: CAPABILITY_IDS.PLATFORM_IMAGES,
+      },
       {
         label: 'Templates',
         path: PRODUCT_PATHS.PLATFORM_TEMPLATES,
         icon: Packages,
+        capability: CAPABILITY_IDS.PLATFORM_TEMPLATES,
       },
       {
         label: 'Applications',
@@ -251,16 +334,19 @@ const adminGroups = [
         label: 'Router Templates',
         path: PRODUCT_PATHS.PLATFORM_ROUTER_TEMPLATES,
         icon: NetworkAlt,
+        capability: CAPABILITY_IDS.PLATFORM_ROUTER_TEMPLATES,
       },
       {
         label: 'Marketplaces',
         path: PRODUCT_PATHS.PLATFORM_MARKETPLACES,
         icon: Packages,
+        capability: CAPABILITY_IDS.MARKETPLACES,
       },
       {
         label: 'Marketplace Apps',
         path: PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS,
         icon: Packages,
+        capability: CAPABILITY_IDS.MARKETPLACE_APPS,
       },
     ],
   },
@@ -270,8 +356,9 @@ export const isPlatformAdminView = (view) => view === 'admin'
 
 const filterByCapability = (items, capabilityModel) =>
   items.filter(
-    ({ capability }) =>
-      !capability || isCapabilityVisible(capability, capabilityModel)
+    ({ always, capability }) =>
+      always === true ||
+      (Boolean(capability) && isCapabilityVisible(capability, capabilityModel))
   )
 
 export const getNavigation = (view, capabilityModel = {}) => {
