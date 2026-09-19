@@ -644,3 +644,21 @@ test('runtime catalog endpoint path matches the production-service frontend API 
   )
   assert.match(routesSource, /const basepath = '\/v1\/service-blueprints'/)
 })
+
+
+test('wizard unwraps FireEdge runtime catalog responses and calls authoritative preflight', () => {
+  const wizard = fs.readFileSync(
+    path.join(
+      fireedgeRoot,
+      'src/client/apps/layersentry/pages/ProductionServiceWizard.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(wizard, /const responseData = payload\?\.data \?\? payload/)
+  assert.match(wizard, /\$\{SERVICE_BLUEPRINT_API\}\/preflight/)
+  assert.match(wizard, /method: 'POST'/)
+  assert.match(wizard, /credentials: 'same-origin'/)
+  assert.match(wizard, /SERVICE_BLUEPRINT_PREFLIGHT_UNAVAILABLE/)
+  assert.match(wizard, /Authoritative preflight blocked/)
+})
