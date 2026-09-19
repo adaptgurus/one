@@ -48,11 +48,18 @@ import { colors, radius } from 'client/apps/layersentry/theme/tokens'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import {
   FALLBACK_BLUEPRINTS,
+  LICENSE_NOTICES,
   SERVICE_BLUEPRINT_API,
   WIZARD_STEPS,
   createDraft,
   getArchitecturePlan,
   getBlueprintById,
+  getCredentialProfile,
+  getDefaultDependencyState,
+  getDependencyErrors,
+  getDependencyOptions,
+  getDependencySpecs,
+  getDependencySummary,
   getEndpointOptions,
   getProductConfigErrors,
   getProductConfigFields,
@@ -361,6 +368,18 @@ const ProductionServiceWizard = () => {
     () => getProductConfigErrors(draft, blueprint),
     [draft, blueprint]
   )
+  const dependencySpecs = useMemo(
+    () => getDependencySpecs(draft, blueprint),
+    [draft, blueprint]
+  )
+  const dependencyErrors = useMemo(
+    () => getDependencyErrors(draft, blueprint),
+    [draft, blueprint]
+  )
+  const credentialProfile = useMemo(
+    () => getCredentialProfile(blueprint),
+    [blueprint]
+  )
   const currentErrors = useMemo(
     () => validateStep(step, draft, blueprint),
     [step, draft, blueprint]
@@ -394,8 +413,21 @@ const ProductionServiceWizard = () => {
         key === 'promAlerting'
       ) {
         const targetBlueprint = getBlueprintById(next.blueprintId, catalog)
+        const endpointChoices = getEndpointOptions(next, targetBlueprint)
+        const dependencyState =
+          key === 'topology' || key === 'edition'
+            ? getDefaultDependencyState(next, targetBlueprint)
+            : {
+                dependencyModes: next.dependencyModes,
+                dependencyRefs: next.dependencyRefs,
+              }
+
         next = {
           ...next,
+          ...dependencyState,
+          endpointMode: endpointChoices.includes(next.endpointMode)
+            ? next.endpointMode
+            : endpointChoices[0] || '',
           storage: getStorageTemplate(next, targetBlueprint),
         }
       }
@@ -442,8 +474,35 @@ const ProductionServiceWizard = () => {
     }))
   }
 
+  const updateDependencyMode = (dependency, mode) => {
+    setValidated(false)
+    setDraft((current) => ({
+      ...current,
+      dependencyModes: {
+        ...current.dependencyModes,
+        [dependency.key]: mode,
+      },
+      dependencyRefs: {
+        ...current.dependencyRefs,
+        [dependency.key]: '',
+      },
+    }))
+  }
+
+  const updateDependencyRef = (dependency, value) => {
+    setValidated(false)
+    setDraft((current) => ({
+      ...current,
+      dependencyRefs: {
+        ...current.dependencyRefs,
+        [dependency.key]: value,
+      },
+    }))
+  }
+
   const productAdvancedActive =
     productErrors.length > 0 ||
+    dependencyErrors.length > 0 ||
     draft.postgis === true ||
     (blueprint?.id === 'postgresql' &&
       (draft.dcsPlacement !== 'Shared LayerSentry etcd DCS' ||
@@ -484,16 +543,18 @@ const ProductionServiceWizard = () => {
       const withEdition = { ...current, edition }
       const currentBlueprint = getBlueprintById(current.blueprintId, catalog)
       const recommended = getRecommendedTopology(withEdition, currentBlueprint)
-      return {
+      const next = {
         ...withEdition,
         topology: recommended,
-        endpointMode:
-          currentBlueprint?.id === 'mysql-family'
-            ? recommended === 'Standalone'
-              ? 'Direct service endpoint'
-              : 'MySQL Router HA pair'
-            : current.endpointMode,
-        storage: getStorageTemplate(withEdition, currentBlueprint),
+      }
+      const endpointChoices = getEndpointOptions(next, currentBlueprint)
+      return {
+        ...next,
+        ...getDefaultDependencyState(next, currentBlueprint),
+        endpointMode: endpointChoices.includes(current.endpointMode)
+          ? current.endpointMode
+          : endpointChoices[0] || '',
+        storage: getStorageTemplate(next, currentBlueprint),
       }
     })
     setValidated(false)
@@ -647,6 +708,11 @@ const ProductionServiceWizard = () => {
           Choose the application. Guest OS, image digest and low-level tuning
           remain qualification-controlled and are intentionally hidden.
         </Typography>
+        {LICENSE_NOTICES[draft.blueprintId] && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            {LICENSE_NOTICES[draft.blueprintId]}
+          </Alert>
+        )}
         {categories.map((category) => (
           <Box key={category} sx={{ mb: 2.5 }}>
             <Typography sx={{ fontSize: 13, fontWeight: 800, mb: 1 }}>
@@ -729,6 +795,90 @@ const ProductionServiceWizard = () => {
     )
   }
 
+  const renderDependencies = () =>
+    dependencySpecs.length > 0 && (
+      <Surface sx={{ mt: 2, p: 2 }} data-testid="dependency-plan">
+        <Typography sx={{ fontWeight: 800 }}>Required dependency plan</Typography>
+        <Typography sx={{ color: colors.text.muted, fontSize: 11, mt: 0.25, mb: 1.5 }}>
+          Dependencies are not silently assumed to exist. Provisioned linked
+          service VMs are included in the total VM footprint; existing
+          dependencies require an explicit reference.
+        </Typography>
+        <Box sx={{ display: 'grid', gap: 1.5 }}>
+          {dependencySpecs.map((dependency) => {
+            const mode =
+              draft.dependencyModes?.[dependency.key] ||
+              getDependencyOptions(dependency)[0]
+            const requiresReference = mode === dependency.existingLabel
+            const addsVms =
+              dependency.kind === 'service' &&
+              mode === dependency.provisionLabel
+                ? Number(dependency.vmEstimate || 0)
+                : 0
+
+            return (
+              <Surface key={dependency.key} sx={{ p: 1.5 }}>
+                <Box
+                  sx={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'flex-start',
+                    gap: 2,
+                    mb: 1.25,
+                  }}
+                >
+                  <Box>
+                    <Typography sx={{ fontWeight: 800, fontSize: 13 }}>
+                      {dependency.label}
+                    </Typography>
+                    <Typography sx={{ color: colors.text.muted, fontSize: 11, mt: 0.25 }}>
+                      {dependency.note}
+                    </Typography>
+                  </Box>
+                  <StatusPill
+                    label={addsVms ? '+' + addsVms + ' linked VMs' : 'external/shared'}
+                    tone={addsVms ? 'success' : 'info'}
+                  />
+                </Box>
+                <Row>
+                  <SelectField
+                    label="Dependency handling"
+                    value={mode}
+                    onChange={(value) =>
+                      updateDependencyMode(dependency, value)
+                    }
+                  >
+                    {getDependencyOptions(dependency).map((option) => (
+                      <MenuItem key={option} value={option}>
+                        {option}
+                      </MenuItem>
+                    ))}
+                  </SelectField>
+                  {requiresReference && (
+                    <TextField
+                      label={dependency.refLabel}
+                      value={draft.dependencyRefs?.[dependency.key] || ''}
+                      onChange={(event) =>
+                        updateDependencyRef(dependency, event.target.value)
+                      }
+                      helperText="Reference only. Do not paste raw credentials."
+                      fullWidth
+                    />
+                  )}
+                </Row>
+              </Surface>
+            )
+          })}
+        </Box>
+        <ErrorList
+          errors={dependencyErrors.map((message, index) => ({
+            code: 'DEPENDENCY_' + String(index + 1),
+            message,
+          }))}
+        />
+      </Surface>
+    )
+
   const renderDeployment = () => (
     <>
       <Typography variant="h6" sx={{ mb: 0.5 }}>
@@ -788,6 +938,7 @@ const ProductionServiceWizard = () => {
       </Row>
 
       {renderArchitecture()}
+      {renderDependencies()}
 
       {productFields.length > 0 && (
         <AdvancedSection
@@ -936,6 +1087,13 @@ const ProductionServiceWizard = () => {
         Storage is application-aware. Per-node data volumes, shared recovery
         repositories and linked dependencies are shown separately.
       </Typography>
+      {(draft.storage || []).length === 0 && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          This service has no application-local persistent volume in the
+          selected profile. Authoritative state is owned by the linked
+          dependency plan or immutable configuration/artifacts.
+        </Alert>
+      )}
       <Box sx={{ display: 'grid', gap: 1.5 }}>
         {(draft.storage || []).map((item, index) => (
           <Surface key={item.role + '-' + index} sx={{ p: 2 }}>
@@ -1463,6 +1621,74 @@ const ProductionServiceWizard = () => {
         </SelectField>
       </Row>
 
+      <Surface sx={{ p: 2, mt: 2 }}>
+        <Typography sx={{ fontWeight: 800, mb: 1.5 }}>
+          TLS certificate and application credential ownership
+        </Typography>
+        <Row>
+          {draft.tls && (
+            <SelectField
+              label="TLS certificate source"
+              value={draft.tlsCertificateMode}
+              onChange={(value) => update('tlsCertificateMode', value)}
+            >
+              <MenuItem value="LayerSentry managed certificate / internal PKI">
+                LayerSentry managed certificate / internal PKI
+              </MenuItem>
+              <MenuItem value="Existing certificate / secret reference">
+                Existing certificate / secret reference
+              </MenuItem>
+            </SelectField>
+          )}
+          {draft.tls &&
+            draft.tlsCertificateMode ===
+              'Existing certificate / secret reference' && (
+              <TextField
+                label="Certificate / secret reference"
+                value={draft.tlsCertificateRef}
+                onChange={(event) =>
+                  update('tlsCertificateRef', event.target.value)
+                }
+                helperText="Reference only; never paste private-key material."
+                fullWidth
+              />
+            )}
+          {credentialProfile.required && (
+            <SelectField
+              label={credentialProfile.label}
+              value={draft.credentialMode}
+              onChange={(value) => {
+                setDraft((current) => ({
+                  ...current,
+                  credentialMode: value,
+                  credentialRef: '',
+                }))
+                setValidated(false)
+              }}
+            >
+              <MenuItem value={credentialProfile.generated}>
+                {credentialProfile.generated}
+              </MenuItem>
+              <MenuItem value={credentialProfile.existing}>
+                {credentialProfile.existing}
+              </MenuItem>
+            </SelectField>
+          )}
+          {credentialProfile.required &&
+            draft.credentialMode === credentialProfile.existing && (
+              <TextField
+                label={credentialProfile.refLabel}
+                value={draft.credentialRef}
+                onChange={(event) =>
+                  update('credentialRef', event.target.value)
+                }
+                helperText="Secret reference only; raw passwords/tokens are not persisted in the design."
+                fullWidth
+              />
+            )}
+        </Row>
+      </Surface>
+
       <AdvancedSection
         title="Package Source / Internet Access"
         description="Configure local/offline repositories or an HTTP(S) proxy without exposing credentials in the saved design."
@@ -1608,6 +1834,22 @@ const ProductionServiceWizard = () => {
               'Application configuration',
               getProductSummary(draft, blueprint),
               'Product-specific inputs were validated independently of VM settings.',
+            ],
+            [
+              'Dependencies',
+              getDependencySummary(draft, blueprint),
+              'Provisioned linked VMs are included in the VM footprint; existing dependencies use references only.',
+            ],
+            [
+              'Credential ownership',
+              credentialProfile.required
+                ? draft.credentialMode
+                : credentialProfile.label,
+              credentialProfile.required &&
+              draft.credentialMode === credentialProfile.existing
+                ? 'Existing secret reference configured: ' +
+                  (draft.credentialRef ? 'yes' : 'no')
+                : 'Raw credential values are not persisted in the design.',
             ],
             [
               'Capacity',
@@ -1867,7 +2109,12 @@ const ProductionServiceWizard = () => {
             [
               'VMs',
               String(architecture.dedicated) +
-                (architecture.minimum ? '+' : ''),
+                (architecture.minimum ? '+' : '') +
+                ' (' +
+                String(architecture.primaryDedicated ?? architecture.dedicated) +
+                ' service + ' +
+                String(architecture.linkedDedicated || 0) +
+                ' linked)',
             ],
             ['FQDN', draft.serviceFqdn || 'Not configured'],
             ['DNS', draft.dnsRegistration],
