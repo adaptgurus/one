@@ -124,6 +124,14 @@ test('mutation routes and actions require enabled qualification, not read-only v
   const applications = read(
     'src/client/apps/layersentry/pages/ApplicationsWorkspace.js'
   )
+  const storage = read('src/client/apps/layersentry/pages/StorageWorkspace.js')
+  const network = read('src/client/apps/layersentry/pages/NetworkWorkspace.js')
+  const kubernetes = read(
+    'src/client/apps/layersentry/pages/KubernetesWorkspace.js'
+  )
+  const protection = read(
+    'src/client/apps/layersentry/pages/ProtectionWorkspace.js'
+  )
 
   for (const capability of [
     'VM_CREATE',
@@ -131,6 +139,10 @@ test('mutation routes and actions require enabled qualification, not read-only v
     'KUBERNETES_CREATE',
     'APPLICATIONS_DEPLOY',
     'STORAGE_ONBOARDING',
+    'STORAGE_DISK_ATTACH',
+    'STORAGE_DISK_RESIZE',
+    'STORAGE_DISK_DETACH',
+    'STORAGE_IMAGE_DELETE',
     'NETWORK_CREATE',
     'FIREWALL_RULES_CREATE',
     'BACKUP_RECOVERY_CREATE',
@@ -147,6 +159,16 @@ test('mutation routes and actions require enabled qualification, not read-only v
   assert.match(applications, /CAPABILITY_IDS\.APPLICATIONS_DEPLOY/)
   assert.match(applications, /isCapabilityEnabled\(/)
   assert.match(applications, /canDeploy \? \(/)
+  assert.match(storage, /CAPABILITY_IDS\.STORAGE_DISK_ATTACH/)
+  assert.match(storage, /CAPABILITY_IDS\.STORAGE_DISK_RESIZE/)
+  assert.match(storage, /CAPABILITY_IDS\.STORAGE_DISK_DETACH/)
+  assert.match(storage, /CAPABILITY_IDS\.STORAGE_IMAGE_DELETE/)
+  assert.match(network, /CAPABILITY_IDS\.NETWORK_CREATE/)
+  assert.match(network, /canCreate \? \(/)
+  assert.match(kubernetes, /CAPABILITY_IDS\.KUBERNETES_CREATE/)
+  assert.match(kubernetes, /canCreate \? \(/)
+  assert.match(protection, /CAPABILITY_IDS\.BACKUP_RECOVERY_CREATE/)
+  assert.match(protection, /CAPABILITY_IDS\.BACKUP_STORAGE/)
   assert.doesNotMatch(area, /!createCapability \|\|/)
 })
 
