@@ -623,7 +623,7 @@ const ProductionServiceWizard = () => {
             sx={{
               display: { xs: 'none', md: 'block' },
               p: 1.25,
-              backgroundColor: '#FBFDFF',
+              backgroundColor: colors.surfaceMuted,
               borderBottom: '1px solid ' + colors.border,
               color: colors.text.muted,
               fontSize: 9,
@@ -768,7 +768,7 @@ const ProductionServiceWizard = () => {
                         borderRadius: radius.sm + 'px',
                         display: 'grid',
                         placeItems: 'center',
-                        color: '#1E40AF',
+                        color: colors.brand.primary,
                         backgroundColor: colors.status.infoSoft,
                         fontWeight: 850,
                         fontSize: 12,
