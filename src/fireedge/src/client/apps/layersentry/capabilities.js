@@ -222,6 +222,7 @@ const CAPABILITY_PATHS = Object.freeze([
 const ALWAYS_AVAILABLE_PATHS = new Set([
   '/',
   '/overview',
+  '/dashboard',
   '/search',
   '/support',
   '/settings',
