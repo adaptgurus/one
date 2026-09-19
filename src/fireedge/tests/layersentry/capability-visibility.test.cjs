@@ -108,6 +108,14 @@ test('direct URLs use the same fail-closed capability policy', () => {
     assert.match(capabilities, new RegExp(route.replaceAll('/', '\\/')))
   }
 
+  assert.match(capabilities, /CAPABILITY_ENDPOINT_REQUIREMENTS/)
+  assert.match(capabilities, /flattenEndpointPaths/)
+  assert.match(capabilities, /endpointAuthorized/)
+  assert.match(
+    capabilities,
+    /capability\?\.authorization === true && endpointAuthorized/
+  )
+  assert.match(capabilities, /'\/dashboard'/)
   assert.match(capabilities, /pathname === path/)
   assert.doesNotMatch(capabilities, /pathname\.startsWith/)
   assert.match(capabilities, /if \(!capabilityId\) return false/)
@@ -154,7 +162,11 @@ test('mutation routes and actions require enabled qualification, not read-only v
   }
 
   assert.match(area, /Boolean\(createCapability\)/)
-  assert.match(area, /isCapabilityEnabled\(createCapability, getCapabilityModel\(\)\)/)
+  assert.match(
+    area,
+    /isCapabilityEnabled\(createCapability, getCapabilityModel\(endpoints\)\)/
+  )
+  assert.match(area, /\[createCapability, createTo, endpoints\]/)
   assert.match(compute, /isCapabilityEnabled\(\s*CAPABILITY_IDS\.VM_CREATE/)
   assert.match(applications, /CAPABILITY_IDS\.APPLICATIONS_DEPLOY/)
   assert.match(applications, /isCapabilityEnabled\(/)
