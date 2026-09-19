@@ -23,6 +23,12 @@ import { DatastoreAPI, useViews } from '@FeaturesModule'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
+  CAPABILITY_IDS,
+  getCapabilityModel,
+  isCapabilityEnabled,
+  isCapabilityVisible,
+} from 'client/apps/layersentry/capabilities'
+import {
   PageFrame,
   Surface,
 } from 'client/apps/layersentry/components/Primitives'
@@ -38,6 +44,15 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
   const history = useHistory()
   const { view } = useViews()
   const isAdmin = view === 'admin'
+  const capabilityModel = getCapabilityModel()
+  const canCreateBackupPlan = isCapabilityEnabled(
+    CAPABILITY_IDS.BACKUP_RECOVERY_CREATE,
+    capabilityModel
+  )
+  const canViewBackupStorage = isCapabilityVisible(
+    CAPABILITY_IDS.BACKUP_STORAGE,
+    capabilityModel
+  )
   const [tab, setTab] = useState(initialTab)
   const datastoresQuery = DatastoreAPI.useGetDatastoresQuery(undefined, {
     skip: !isAdmin,
@@ -60,6 +75,7 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
       description="Backup plans, recovery points and restores using the native OpenNebula protection lifecycle."
       actions={
         isAdmin &&
+        canViewBackupStorage &&
         !datastoresQuery.isLoading &&
         backupDatastores.length === 0 ? (
           <Button
@@ -69,7 +85,7 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
           >
             Configure backup storage
           </Button>
-        ) : (
+        ) : canCreateBackupPlan ? (
           <Button
             variant="contained"
             startIcon={<Plus width={17} height={17} />}
@@ -78,7 +94,7 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
           >
             Create backup plan
           </Button>
-        )
+        ) : null
       }
     >
       <Box
@@ -111,7 +127,7 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
           severity="warning"
           sx={{ mt: 2 }}
           action={
-            isAdmin ? (
+            isAdmin && canViewBackupStorage ? (
               <Button
                 color="inherit"
                 size="small"
