@@ -308,6 +308,31 @@ module OneKS
             OneKS::Cluster.new_from_id(@client, cluster_id, :raw => true)
         end
 
+        # Resolve the approved RKE2 artifact mirror from persistent OneKS
+        # configuration. The environment variable remains as a compatibility
+        # fallback for existing deployments, but new installs should use
+        # :rke2_artifact_base_url in oneks-server.conf.
+        def rke2_artifact_base_url
+            value = SERVER_CONF[:rke2_artifact_base_url].to_s.strip
+            if value.empty?
+                value = ENV['ONEKS_RKE2_ARTIFACT_BASE_URL'].to_s.strip
+            end
+
+            return OpenNebula::Error.new(
+                'RKE2 artifact base URL is not configured',
+                OpenNebula::Error::EACTION
+            ) if value.empty?
+
+            unless value.match?(%r{\Ahttps?://[^\s'"]+\z})
+                return OpenNebula::Error.new(
+                    'RKE2 artifact base URL must be a valid HTTP(S) URL',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
+            value.sub(%r{/$}, '')
+        end
+
         #------------------------------------------------------
         # Group actions
         # Each K8sGroup subclass must implement these methods
