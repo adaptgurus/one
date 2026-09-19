@@ -413,3 +413,27 @@ test('cloud instantiate flow is customer-only and strips helper data', () => {
   assert.match(instantiate, /delete requestTemplate\.resources/)
   assert.match(instantiate, /delete requestTemplate\.services/)
 })
+
+
+test('VM source selection hands off to the qualified instantiate route', () => {
+  const create = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/containers/VirtualMachines/Create.js'
+    ),
+    'utf8'
+  )
+  const capabilities = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/client/apps/layersentry/capabilities.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(create, /PATH\.TEMPLATE\.VMS\.INSTANTIATE/)
+  assert.match(
+    capabilities,
+    /\['\/vm-template\/instantiate', CAPABILITY_IDS\.VM_CREATE\]/
+  )
+})
