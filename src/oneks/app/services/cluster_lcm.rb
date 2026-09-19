@@ -58,14 +58,11 @@ module OneKS
             @group_pool.each do |group|
                 Log.info(COMP, "Catching up #{group.type} #{group.id} in #{group.state}")
 
-                action = case group.state
-                         when :BOOTSTRAPPING
-                             :group_bootstrap_action
-                         when :PROVISIONING
-                             :group_provision_action
-                         when :WARNING
-                             :group_running_action
-                         end
+                action = {
+                    :BOOTSTRAPPING => :group_bootstrap_action,
+                    :PROVISIONING  => :group_provision_action,
+                    :WARNING       => :group_running_action
+                }[group.state]
                 next unless action
 
                 Log.info(COMP, "Resuming #{group.type} #{group.id} with #{action}")
@@ -94,18 +91,33 @@ module OneKS
                 pool.each do |group|
                     next unless group.is_a?(OneKS::NodeGroup)
                     next unless [:RUNNING, :WARNING].include?(group.state)
+
                     policy = group.body[:disk_autoscaling]
                     next unless policy && policy[:enabled] == true
                     next if group.vms.empty?
 
                     result = group.reconcile_disk_autoscaling
                     if OpenNebula.is_error?(result)
-                        Log.warn(COMP, "Disk autoscaling reconcile failed for group #{group.id}: #{result.message}", group.cluster_id)
+                        Log.warn(
+                            COMP,
+                            "Disk autoscaling reconcile failed for group #{group.id}: " \
+                            "#{result.message}",
+                            group.cluster_id
+                        )
                     elsif result.is_a?(Hash) && result[:action] != 'none'
-                        Log.info(COMP, "Disk autoscaling group #{group.id}: #{result[:action]}", group.cluster_id)
+                        Log.info(
+                            COMP,
+                            "Disk autoscaling group #{group.id}: #{result[:action]}",
+                            group.cluster_id
+                        )
                     end
                 rescue StandardError => e
-                    Log.warn(COMP, "Disk autoscaling group #{group.id} crashed: #{e.class}: #{e.message}", group.cluster_id)
+                    Log.warn(
+                        COMP,
+                        "Disk autoscaling group #{group.id} crashed: " \
+                        "#{e.class}: #{e.message}",
+                        group.cluster_id
+                    )
                 end
             end
         rescue StandardError => e
@@ -115,6 +127,7 @@ module OneKS
         def interruptible_sleep(seconds)
             seconds.times do
                 break if @tm.stop?
+
                 sleep(1)
             end
         end
