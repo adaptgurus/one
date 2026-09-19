@@ -345,6 +345,8 @@ test('portal routes Applications deploy to the production-service wizard', () =>
   assert.match(wizard, /Required dependency plan/)
   assert.match(wizard, /TLS certificate source/)
   assert.match(wizard, /Proxy password \(optional\)/)
+  assert.match(wizard, /const DEPLOYMENT_ACTION_AVAILABLE = false/)
+  assert.match(wizard, /!DEPLOYMENT_ACTION_AVAILABLE/)
   assert.doesNotMatch(wizard, /preferredOs|LayerSentry selected OS|Rocky Linux|Ubuntu 24\.04/)
 })
 
