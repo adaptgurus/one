@@ -234,7 +234,6 @@ const hidden = (visibility, reason) => ({
   reason,
 })
 
-
 const CAPABILITY_ENDPOINT_REQUIREMENTS = Object.freeze({
   [CAPABILITY_IDS.COMPUTE]: ['/vm'],
   [CAPABILITY_IDS.VM_CREATE]: ['/vm/create'],
