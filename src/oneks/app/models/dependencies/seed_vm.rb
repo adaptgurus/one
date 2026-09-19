@@ -31,6 +31,12 @@ module OneKS
         APPLIANCE_NAME = 'OneKS Appliance'
         READY_STATE    = 'RUNNING'
         VM_API_UPDATE  = 'EVENT API one.vm.update'
+        RESUMABLE_STATES = [
+            'PROVISIONING_MGMT',
+            'PROVISIONING_CP',
+            'PIVOTING_CLUSTER',
+            'RUNNING'
+        ].freeze
 
         # Marketplace app pool is empty on a fresh frontend until the
         # marketplace drivers complete their first monitor cycle
@@ -144,9 +150,7 @@ module OneKS
             end
 
             vm['STATE'].to_s == '3' && vm['LCM_STATE'].to_s == '3' &&
-                %w[PROVISIONING_MGMT PROVISIONING_CP PIVOTING_CLUSTER RUNNING].include?(
-                    vm['USER_TEMPLATE/ONEKS_STATE']
-                )
+                RESUMABLE_STATES.include?(vm['USER_TEMPLATE/ONEKS_STATE'])
         end
 
         # Retry a failed seed bootstrap without deleting healthy CAPI-created
@@ -186,7 +190,7 @@ module OneKS
                 rc = vm.info
                 unless OpenNebula.is_error?(rc)
                     current = vm['USER_TEMPLATE/ONEKS_STATE'].to_s
-                    if %w[PROVISIONING_MGMT PROVISIONING_CP PIVOTING_CLUSTER RUNNING].include?(current)
+                    if RESUMABLE_STATES.include?(current)
                         @opts[:last_state] = current
                         @opts.delete(:last_error)
                         @opts[:timed_out] = false
@@ -207,7 +211,7 @@ module OneKS
                 ) if Time.now.to_i >= deadline
                 sleep 2
             end
-        rescue ArgumentError, TypeError, StandardError => e
+        rescue StandardError => e
             OpenNebula::Error.new(
                 "Seed VM retry failed: #{e.message}", OpenNebula::Error::EACTION
             )
