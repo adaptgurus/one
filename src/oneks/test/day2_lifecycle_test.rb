@@ -12,6 +12,20 @@ require_relative '../app/services/lifecycle_status_autoscaler'
 class Day2LifecycleTest < Minitest::Test
 
     ROOT = File.expand_path('../specs', __dir__)
+    ARTIFACT_CACHE = 'http://10.10.10.140:8080'
+
+    def setup
+        @old_artifact_cache = ENV['ONEKS_RKE2_ARTIFACT_BASE_URL']
+        ENV['ONEKS_RKE2_ARTIFACT_BASE_URL'] = ARTIFACT_CACHE
+    end
+
+    def teardown
+        if @old_artifact_cache.nil?
+            ENV.delete('ONEKS_RKE2_ARTIFACT_BASE_URL')
+        else
+            ENV['ONEKS_RKE2_ARTIFACT_BASE_URL'] = @old_artifact_cache
+        end
+    end
 
     def test_day2_annotation_constants_are_module_visible
         assert_equal 'layersentry.io/shape-revision', OneKS::K8s::SHAPE_REVISION
