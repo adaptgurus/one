@@ -1,3 +1,5 @@
+<% artifact_base = ENV.fetch('ONEKS_RKE2_ARTIFACT_BASE_URL').sub(%r{/$}, '') %>
+<% artifact_version = "#{cluster[:kubernetes_version]}%2Brke2r1" %>
 apiVersion: bootstrap.cluster.x-k8s.io/v1beta1
 kind: RKE2ConfigTemplate
 metadata:
@@ -10,6 +12,23 @@ spec:
       agentConfig:
         airGapped: true
       preRKE2Commands:
+      - |-
+        set -eu
+        base='<%= artifact_base %>/<%= artifact_version %>'
+        install -d -m 0755 /opt/rke2-artifacts /var/lib/rancher/rke2/agent/images
+        fetch_artifact() {
+          url="$1"; dest="$2"; sha="$3"; tmp="${dest}.part"
+          rm -f "$tmp"
+          curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 600 "$url" -o "$tmp"
+          printf '%s  %s\n' "$sha" "$tmp" | sha256sum -c -
+          mv -f "$tmp" "$dest"
+        }
+        fetch_artifact "$base/install.sh" /opt/install.sh 42983c86d1da64a92061d83afb57630cedd69241989f1b0673f3db6c3d92ee6b
+        chmod 0755 /opt/install.sh
+        fetch_artifact "$base/sha256sum-amd64.txt" /opt/rke2-artifacts/sha256sum-amd64.txt 8e12805c4bda79bec2fd20c89f705af3cb2ed11ea8854dc4937fca41b124b57a
+        fetch_artifact "$base/rke2.linux-amd64.tar.gz" /opt/rke2-artifacts/rke2.linux-amd64.tar.gz 7bcbd3167d6947e1d79cdf722acdc740b28021fefb50dd5b974a1980776d4079
+        fetch_artifact "$base/rke2-images-core.linux-amd64.tar.zst" /var/lib/rancher/rke2/agent/images/rke2-images-core.linux-amd64.tar.zst 8988a2eff587dd88b8eab86fe719703e9541a1f08d22771a94cbec446a13db86
+        fetch_artifact "$base/rke2-images-canal.linux-amd64.tar.zst" /var/lib/rancher/rke2/agent/images/rke2-images-canal.linux-amd64.tar.zst 4359b651bfdec8f3bcc01b351b33a55ff21f06b18a767366db6f3800d5750871
       - install -d /var/lib/rancher/rke2/agent/images && touch /var/lib/rancher/rke2/agent/images/.cache.json
       - |-
         set -eu

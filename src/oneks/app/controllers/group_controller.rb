@@ -376,9 +376,9 @@ module OneKS
 
                 target = body[:target]
 
-                unless target.is_a?(Integer) && target >= 0
+                unless target.is_a?(Integer) && target.between?(0, NodeGroup::MAX_REPLICAS)
                     return internal_error(
-                        'Field target must be an integer greater than or equal to 0',
+                        'Field target must be an integer from 0 through 60',
                         ODS::ResponseHelper::VALIDATION_EC
                     )
                 end

@@ -55,6 +55,7 @@ end
 module OneKS
   module Log
     def self.info(*); end
+    def self.warn(*); end
   end
 end
 require_relative '../lib/helpers/k8s_helper'
@@ -69,7 +70,7 @@ require_relative '../app/models/dependencies/cluster_router'
 
 class BootstrapRecoveryTest < Minitest::Test
   class VM
-    attr_accessor :fields, :name, :owner_id, :result
+    attr_accessor :fields, :name, :owner_id, :result, :rebooted
     def initialize
       @name = 'group-uuid-seed'; @owner_id = 7
       @fields = {'UID'=>'7', 'STATE'=>'3', 'LCM_STATE'=>'3',
@@ -77,6 +78,11 @@ class BootstrapRecoveryTest < Minitest::Test
                  'USER_TEMPLATE/ONEKS_STATE'=>'PROVISIONING_CP'}
     end
     def info; result; end
+    def reboot(hard = false)
+      self.rebooted = hard
+      fields['USER_TEMPLATE/ONEKS_STATE'] = 'PROVISIONING_MGMT'
+      true
+    end
     def [](key); fields[key]; end
   end
   def setup
@@ -84,7 +90,7 @@ class BootstrapRecoveryTest < Minitest::Test
     @seed.id = 33
     @router = OneKS::ClusterRouter.new
     @group = OneKS::K8sGroup.allocate
-    values = {client: :fixture_client, owner_id: 7, uuid: 'group-uuid',
+    values = {client: :fixture_client, owner_id: 7, uuid: 'group-uuid', cluster_id: 12,
               parent_cluster: OpenStruct.new(uuid: 'cluster-uuid'),
               dependencies: [@seed, @router], vms: [36]}
     values.each {|key, value| @group.define_singleton_method(key) { value } }
@@ -115,23 +121,102 @@ class BootstrapRecoveryTest < Minitest::Test
     assert_match(/No pinned Cluster Autoscaler release/, error.message)
   end
 
-  def test_control_plane_scale_limit_rejects_above_seven_before_mutation
+  def test_control_plane_scale_limit_rejects_above_eleven_before_mutation
     control_plane = OneKS::ControlPlane.allocate
     control_plane.define_singleton_method(:parent_cluster) { OpenStruct.new }
 
-    error = control_plane.scale(8)
+    error = control_plane.scale(12)
     assert_instance_of OpenNebula::Error, error
-    assert_match(/between 1 and 7/, error.message)
-    assert_equal 7, OneKS::ControlPlane::MAX_REPLICAS
+    assert_match(/odd number from 1 through 11/, error.message)
+    assert_equal 11, OneKS::ControlPlane::MAX_REPLICAS
   end
 
-  def test_worker_autoscaling_limit_rejects_above_seven_before_mutation
+  def test_worker_autoscaling_limit_rejects_above_sixty_before_mutation
     node_group = OneKS::NodeGroup.allocate
 
-    error = node_group.configure_autoscaling(enabled: true, min: 1, max: 8)
+    error = node_group.configure_autoscaling(enabled: true, min: 1, max: 61)
     assert_instance_of OpenNebula::Error, error
-    assert_match(/max <= 7/, error.message)
-    assert_equal 7, OneKS::NodeGroup::MAX_AUTOSCALING_REPLICAS
+    assert_match(/max <= 60/, error.message)
+    assert_equal 60, OneKS::NodeGroup::MAX_AUTOSCALING_REPLICAS
+  end
+
+  def test_control_plane_scale_rejects_even_replica_counts
+    control_plane = OneKS::ControlPlane.allocate
+    control_plane.define_singleton_method(:parent_cluster) { OpenStruct.new }
+
+    [2, 4, 6, 8, 10].each do |target|
+      error = control_plane.scale(target)
+      assert_instance_of OpenNebula::Error, error
+      assert_match(/odd number from 1 through 11/, error.message)
+    end
+  end
+
+  def test_worker_scale_limit_rejects_above_sixty_before_mutation
+    node_group = OneKS::NodeGroup.allocate
+    error = node_group.scale(61)
+    assert_instance_of OpenNebula::Error, error
+    assert_match(/between 0 and 60/, error.message)
+    assert_equal 60, OneKS::NodeGroup::MAX_REPLICAS
+  end
+
+  def test_worker_scale_supports_sixty_and_zero
+    node_group = OneKS::NodeGroup.allocate
+    values = {count: 3}
+    node_group.define_singleton_method(:user_inputs_values) { values }
+    node_group.define_singleton_method(:parent_cluster) { OpenStruct.new(client: :cluster_client, leader: 69) }
+    node_group.define_singleton_method(:update) { true }
+    node_group.define_singleton_method(:uuid) { 'workers' }
+    targets = []
+
+    scaler = lambda do |client, leader, uuid, target|
+      targets << [client, leader, uuid, target]
+      true
+    end
+    OneKS::K8s.stub(:scale, scaler) do
+      assert_equal true, node_group.scale(60)
+      assert_equal 60, values[:count]
+      assert_equal true, node_group.scale(0)
+      assert_equal 0, values[:count]
+    end
+    assert_equal [60, 0], targets.map(&:last)
+  end
+
+  def test_control_plane_scale_supports_eleven_and_downscale_to_nine
+    control_plane = OneKS::ControlPlane.allocate
+    values = {count: 9}
+    cluster = OpenStruct.new(leader: 69, uuid: 'cluster-uuid')
+    control_plane.define_singleton_method(:parent_cluster) { cluster }
+    control_plane.define_singleton_method(:user_inputs_values) { values }
+    control_plane.define_singleton_method(:update) { true }
+    control_plane.define_singleton_method(:render) { 'rendered-spec' }
+    upgrades = []
+    health = []
+
+    OneKS::K8s.stub(:upgrade, ->(_client, _leader, spec) { upgrades << spec; true }) do
+      OneKS::K8s.stub(:reconcile_control_plane_health, ->(*args) { health << args.last; true }) do
+        assert_equal true, control_plane.scale(11)
+        assert_equal 11, values[:count]
+        assert_equal true, control_plane.scale(9)
+        assert_equal 9, values[:count]
+      end
+    end
+    assert_equal ['rendered-spec', 'rendered-spec'], upgrades
+    assert_equal [11, 9], health
+  end
+
+  def test_pivot_failure_retries_seed_without_deleting_existing_resources
+    @vm.fields['USER_TEMPLATE/ONEKS_STATE'] = 'PIVOTING_FAILURE'
+    @seed.ready = @router.ready = true
+
+    with_vm do
+      assert_equal true, @group.recover_dependencies
+    end
+    assert_equal true, @vm.rebooted
+    assert_equal 'PROVISIONING_MGMT', @vm.fields['USER_TEMPLATE/ONEKS_STATE']
+    assert_equal 33, @seed.id
+    assert_equal [36], @group.vms
+    refute @seed.ready?
+    refute @router.ready?
   end
 
   def test_timeout_recovery_preserves_seed_and_existing_control_plane
@@ -175,8 +260,7 @@ class BootstrapRecoveryTest < Minitest::Test
         OpenNebula::Error.new('Destructive recovery must not be invoked')
       end
     end
-    [['3', '3', 'PIVOTING_FAILURE'], ['3', '3', 'UNKNOWN'],
-     ['8', '0', 'PROVISIONING_CP']].each do |state, lcm, oneks|
+    [['3', '3', 'UNKNOWN'], ['8', '0', 'PROVISIONING_CP']].each do |state, lcm, oneks|
       @vm.fields.merge!('STATE'=>state, 'LCM_STATE'=>lcm,
                         'USER_TEMPLATE/ONEKS_STATE'=>oneks)
       with_vm { assert_instance_of OpenNebula::Error, @group.recover_dependencies }

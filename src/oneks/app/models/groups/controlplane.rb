@@ -24,7 +24,7 @@ module OneKS
         DOCUMENT_ATTRS = K8sGroup::DOCUMENT_ATTRS + [:kubeconfig, :endpoint]
         FAMILIES_DIR   = File.join(ONEKS_SPEC_DIR, 'controlplanes')
         COMPONENT_NAME = name.split('::').last
-        MAX_REPLICAS   = 7
+        MAX_REPLICAS   = 11
 
         def self.validate_spec(spec)
             template = super(spec)
@@ -33,7 +33,7 @@ module OneKS
             count = Integer(template.dig(:user_inputs_values, :count))
             unless count == 1 || (count.between?(3, MAX_REPLICAS) && count.odd?)
                 return OpenNebula::Error.new(
-                    'LayerSentry control-plane replicas must be 1, 3, 5 or 7',
+                    'LayerSentry control-plane replicas must be an odd number from 1 through 11',
                     OpenNebula::Error::EACTION
                 )
             end
@@ -157,18 +157,13 @@ module OneKS
 
             target = Integer(target)
             return OpenNebula::Error.new(
-                'Control plane target must be between 1 and 7',
+                'Control plane target must be an odd number from 1 through 11',
                 OpenNebula::Error::EACTION
-            ) unless (1..MAX_REPLICAS).cover?(target)
+            ) unless target == 1 || (target.between?(3, MAX_REPLICAS) && target.odd?)
 
-            current = Integer(expected_size || 0)
-            if current.positive? && target < current
-                return OpenNebula::Error.new(
-                    'Automatic control-plane scale-down is disabled; use a ' \
-                    'quorum-safe maintenance workflow',
-                    OpenNebula::Error::EACTION
-                )
-            end
+            # CAPRKE2 owns etcd membership changes. Keeping the target odd ensures
+            # quorum semantics while the controller removes or adds members.
+            # The reconciliation remains declarative and restart-safe.
 
             self.expected_size = target
             rc = update

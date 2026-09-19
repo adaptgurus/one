@@ -349,12 +349,16 @@ module OneKS
                     return true
                 end
 
-                # Failure/unknown appliance state is not proof that its CAPI
-                # operation stopped. Keep the seed, endpoints and nodes intact.
-                return OpenNebula::Error.new(
-                    'Seed state requires reconciliation; preserving existing resources',
-                    OpenNebula::Error::EACTION
-                )
+                retry_rc = seed.retry_bootstrap(self)
+                if OpenNebula.is_error?(retry_rc)
+                    return OpenNebula::Error.new(
+                        "Seed state requires reconciliation; resources preserved: #{retry_rc.message}",
+                        OpenNebula::Error::EACTION
+                    )
+                end
+
+                dependencies.each {|dep| dep.ready = false }
+                return true
             end
 
             return OpenNebula::Error.new(

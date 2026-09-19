@@ -94,8 +94,17 @@ module OneKS
                 :SCHED_REQUIREMENTS        => cluster.sched_requirements,
                 :ONEAPP_ONEKS_CLUSTER_NAME => cluster.uuid,
                 :ONEAPP_ONEKS_CLUSTER_SPEC => Base64.strict_encode64(spec),
-                :NIC => [{ :NETWORK_ID => cluster.public_network_id }]
+                :NIC => [{ :NETWORK_ID => cluster.public_network_id }],
+                :FEATURES => { :GUEST_AGENT => 'YES' }
             }
+
+            # Seed bootstrap runs kind + CAPI/CAPRKE2/CAPONE controllers. Keep
+            # sizing configurable so nested labs can provide enough CPU without
+            # changing the appliance template globally.
+            seed_shape = SERVER_CONF.fetch(:seed_shape, {})
+            extra_template[:CPU] = seed_shape[:cpu] if seed_shape[:cpu]
+            extra_template[:VCPU] = seed_shape[:vcpu] if seed_shape[:vcpu]
+            extra_template[:MEMORY] = seed_shape[:memory] if seed_shape[:memory]
 
             seed_id = template.instantiate(vm_name, false, Hash.to_raw(extra_template))
 
@@ -138,6 +147,70 @@ module OneKS
                 %w[PROVISIONING_MGMT PROVISIONING_CP PIVOTING_CLUSTER RUNNING].include?(
                     vm['USER_TEMPLATE/ONEKS_STATE']
                 )
+        end
+
+        # Retry a failed seed bootstrap without deleting healthy CAPI-created
+        # resources. The appliance bootstrap is idempotent: it reuses its kind
+        # management cluster, reapplies the workload spec, and retries the pivot.
+        def retry_bootstrap(group, timeout: 180)
+            return OpenNebula::Error.new(
+                'Seed VM ID cannot be nil', OpenNebula::Error::EACTION
+            ) if @id.nil?
+
+            vm = OpenNebula::VirtualMachine.new_with_id(@id, group.client)
+            rc = vm.info
+            return rc if OpenNebula.is_error?(rc)
+
+            unless vm.name == "#{group.uuid}-seed" && vm['UID'].to_s == group.owner_id.to_s
+                return OpenNebula::Error.new(
+                    'Seed ownership mismatch; refusing bootstrap retry',
+                    OpenNebula::Error::EACTION
+                )
+            end
+
+            state = vm['USER_TEMPLATE/ONEKS_STATE'].to_s
+            unless state.end_with?('_FAILURE')
+                return OpenNebula::Error.new(
+                    "Seed VM #{@id} is not in a retryable failure state: #{state}",
+                    OpenNebula::Error::EACTION
+                )
+            end
+
+            Log.warn(COMP, "Retrying Seed VM (ID=#{@id}) from #{state}", group.cluster_id)
+            rc = vm.reboot(true)
+            return rc if OpenNebula.is_error?(rc)
+
+            deadline = Time.now.to_i + Integer(timeout)
+            loop do
+                vm = OpenNebula::VirtualMachine.new_with_id(@id, group.client)
+                rc = vm.info
+                unless OpenNebula.is_error?(rc)
+                    current = vm['USER_TEMPLATE/ONEKS_STATE'].to_s
+                    if %w[PROVISIONING_MGMT PROVISIONING_CP PIVOTING_CLUSTER RUNNING].include?(current)
+                        @opts[:last_state] = current
+                        @opts.delete(:last_error)
+                        @opts[:timed_out] = false
+                        return true
+                    end
+
+                    if !current.empty? && current != state && current.end_with?('_FAILURE')
+                        return OpenNebula::Error.new(
+                            "Seed VM #{@id} retry entered failure state: #{current}",
+                            OpenNebula::Error::EACTION
+                        )
+                    end
+                end
+
+                return OpenNebula::Error.new(
+                    "Seed VM #{@id} retry did not resume within #{timeout}s",
+                    OpenNebula::Error::EACTION
+                ) if Time.now.to_i >= deadline
+                sleep 2
+            end
+        rescue ArgumentError, TypeError, StandardError => e
+            OpenNebula::Error.new(
+                "Seed VM retry failed: #{e.message}", OpenNebula::Error::EACTION
+            )
         end
 
         # Monitor seed VM creation

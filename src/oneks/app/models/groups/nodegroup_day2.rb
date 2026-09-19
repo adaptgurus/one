@@ -9,7 +9,7 @@ module OneKS
     class NodeGroup
 
         SHAPE_KEYS = [:cpu, :vcpu, :memory, :disk_size].freeze
-        MAX_AUTOSCALING_REPLICAS = 7
+        MAX_AUTOSCALING_REPLICAS = 60
         DISK_RESIZE_RETRY_SECONDS = 120
 
         # Resize workers by updating the group-owned OpenNebula VM template and then
@@ -59,7 +59,7 @@ module OneKS
             max = Integer(max)
             if min.negative? || max < min || max > MAX_AUTOSCALING_REPLICAS
                 return OpenNebula::Error.new(
-                    'Autoscaling requires 0 <= min <= max <= 7', OpenNebula::Error::EACTION
+                    'Autoscaling requires 0 <= min <= max <= 60', OpenNebula::Error::EACTION
                 )
             end
 

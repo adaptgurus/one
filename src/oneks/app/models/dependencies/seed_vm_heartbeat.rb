@@ -18,7 +18,7 @@ module OneKS
             if OpenNebula.is_error?(rc)
                 record_bootstrap_observation(group, @opts[:last_state], :error => rc.message)
             elsif @id
-                current = seed_state(group.client)
+                current = seed_state(fresh_group_client(group))
                 if OpenNebula.is_error?(current)
                     record_bootstrap_observation(group, 'SEED_CREATED', :error => current.message)
                 else
@@ -62,7 +62,7 @@ module OneKS
                 'Seed VM ID cannot be nil', OpenNebula::Error::EACTION
             ) if @id.nil?
 
-            current = seed_state(group.client)
+            current = seed_state(fresh_group_client(group))
             return current if OpenNebula.is_error?(current)
 
             record_bootstrap_observation(group, current || 'UNKNOWN')
@@ -91,7 +91,7 @@ module OneKS
                 next unless event_vm_id&.match?(/\A\d+\z/)
                 next unless event_vm_id.to_i == @id
 
-                current = seed_state(group.client)
+                current = seed_state(fresh_group_client(group))
                 if OpenNebula.is_error?(current)
                     return OpenNebula::Error.new(
                         "VM #{@id} ONEKS_STATE read failed: #{current.message}",
@@ -112,6 +112,19 @@ module OneKS
             end
         end
 
+        def fresh_group_client(group)
+            pool = OneKS::ClusterLCM.instance.group_pool
+            user_name = group['UNAME'].to_s
+            pool.impersonate(user_name.empty? ? nil : user_name)
+        rescue StandardError => e
+            Log.warn(
+                self.class::COMP,
+                "Unable to refresh seed-state client: #{e.message}",
+                group.cluster_id
+            )
+            OneKS::ClusterLCM.instance.group_pool.impersonate(nil)
+        end
+
         def record_bootstrap_observation(group, state, error: nil, timed_out: false)
             now = Time.now.to_i
             @opts[:bootstrap_started_at] ||= now
@@ -124,22 +137,13 @@ module OneKS
                 @opts[:last_error] = error.to_s[0, 512]
             end
 
-            # The dependency object lives inside the group document. Persist every
-            # observed OneGate update so API status survives server restart.
-            rc = group.update
-            Log.warning(
-                self.class::COMP,
-                "Unable to persist seed heartbeat: #{rc.message}",
-                group.cluster_id
-            ) if OpenNebula.is_error?(rc)
-            rc
-        rescue StandardError => e
-            Log.warning(
-                self.class::COMP,
-                "Unable to persist seed heartbeat: #{e.message}",
-                group.cluster_id
-            )
-            nil
+            # group_bootstrap_action already owns this group's pool mutex while
+            # dependencies are observed. Re-entering group_pool.get here causes
+            # recursive-lock deadlocks; writing a stale Group object directly can
+            # erase VM IDs/history recorded by the watchdog. Keep the observation
+            # on the dependency object and let the owning action persist the group
+            # when bootstrap completes.
+            true
         end
 
     end
