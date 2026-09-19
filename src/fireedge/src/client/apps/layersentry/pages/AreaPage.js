@@ -54,7 +54,7 @@ const AreaPage = ({
     () =>
       Boolean(createTo) &&
       Boolean(createCapability) &&
-      isCapabilityEnabled(createCapability, getCapabilityModel()),
+      isCapabilityEnabled(createCapability, getCapabilityModel(endpoints)),
     [createCapability, createTo]
   )
 
