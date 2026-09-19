@@ -291,9 +291,9 @@ const CAPABILITY_ENDPOINT_REQUIREMENTS = Object.freeze({
 })
 
 const normalizeEndpointPath = (value = '') => {
-  const normalized = `/${String(value).replace(/^\\/+|\\/+$/g, '')}`
+  const normalized = `/${String(value).replace(/^\/+|\/+$/g, '')}`
 
-  return normalized === '/' ? normalized : normalized.replace(/\\/+$/g, '')
+  return normalized === '/' ? normalized : normalized.replace(/\/+$/g, '')
 }
 
 const flattenEndpointPaths = (endpoints = []) => {
