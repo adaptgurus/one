@@ -1,0 +1,58 @@
+name: LayerSentry live qualification probe
+
+on:
+  push:
+    branches:
+      - ops/layersentry-live-qualification-20260919
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Runner and lab connectivity
+        shell: bash
+        run: |
+          set -u
+          echo "=== RUNNER ==="
+          hostname || true
+          id || true
+          uname -a || true
+          ip -brief address || true
+          ip route || true
+          echo "=== SSH MATERIAL (filenames only) ==="
+          if [ -d "$HOME/.ssh" ]; then
+            find "$HOME/.ssh" -maxdepth 1 -type f -printf '%f %m\n' 2>/dev/null | sort
+          else
+            echo "NO_SSH_DIR"
+          fi
+          echo "=== LAB TCP/HTTP ==="
+          for ip in 10.250.10.10 10.250.10.11 10.250.10.12 10.250.10.13 10.250.10.20 10.250.10.21; do
+            printf '%s ' "$ip"
+            if command -v curl >/dev/null 2>&1; then
+              code=$(curl -sS -o /dev/null -m 3 -w '%{http_code}' "http://$ip:2616/" || true)
+              printf 'fireedge=%s ' "$code"
+            fi
+            if command -v timeout >/dev/null 2>&1; then
+              if timeout 2 bash -c "</dev/tcp/$ip/22" 2>/dev/null; then printf 'ssh=open '; else printf 'ssh=closed '; fi
+            fi
+            echo
+          done
+          echo "=== BATCH SSH TRUST ==="
+          if command -v ssh >/dev/null 2>&1; then
+            for ip in 10.250.10.11 10.250.10.12 10.250.10.13 10.250.10.20 10.250.10.21; do
+              for user in oneadmin root opc; do
+                out=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=3 "$user@$ip" 'printf "HOST=%s USER=%s\n" "$(hostname)" "$(id -un)"' 2>/dev/null || true)
+                if [ -n "$out" ]; then
+                  echo "$ip $user $out"
+                  break
+                fi
+              done
+            done
+          else
+            echo "SSH_NOT_INSTALLED"
+          fi
