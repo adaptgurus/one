@@ -63,7 +63,7 @@ const mbToGb = (value) => Math.max(1, Math.ceil(asNumber(value) / 1024))
 const StorageWorkspace = ({ endpoints }) => {
   const { view } = useViews()
   const isAdmin = view === 'admin'
-  const capabilityModel = getCapabilityModel()
+  const capabilityModel = getCapabilityModel(endpoints)
   const canAttach = isCapabilityEnabled(
     CAPABILITY_IDS.STORAGE_DISK_ATTACH,
     capabilityModel
