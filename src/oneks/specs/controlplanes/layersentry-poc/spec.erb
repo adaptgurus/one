@@ -1,4 +1,4 @@
-<% artifact_base = ENV.fetch('ONEKS_RKE2_ARTIFACT_BASE_URL').sub(%r{/$}, '') %>
+<% artifact_base = artifact_base_url.sub(%r{/$}, '') %>
 <% artifact_version = "#{cluster[:kubernetes_version]}%2Brke2r1" %>
 apiVersion: v1
 kind: Secret
