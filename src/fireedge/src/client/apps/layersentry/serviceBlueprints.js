@@ -1,9 +1,17 @@
 /* ------------------------------------------------------------------------- *
- * LayerSentry VM service blueprint presentation and validation model.
- *
- * This module is deliberately fail-closed. The local catalog is a UX fallback
- * only; no local entry is deployable until the authoritative backend promotes
- * an exact immutable product/version/topology/OS tuple.
+ * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 
@@ -1140,7 +1148,7 @@ const vol = (
   mountpoint: '',
 })
 
-const dependency = (role, scope, required = true) => ({
+const storageDependency = (role, scope, required = true) => ({
   role,
   scope,
   sizeGiB: '',
@@ -1252,7 +1260,7 @@ export const getStorageTemplate = (draft, blueprint) => {
         ...(draft.promAlerting === 'Provision 3-node Alertmanager'
           ? [vol('Alertmanager local state', 'Per Alertmanager VM', 10)]
           : []),
-        dependency('Optional long-term storage', 'Remote-write / Thanos-compatible backend when selected', false),
+        storageDependency('Optional long-term storage', 'Remote-write / Thanos-compatible backend when selected', false),
       ]
     case 'grafana':
     case 'alloy':
