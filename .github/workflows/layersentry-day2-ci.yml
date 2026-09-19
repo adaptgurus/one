@@ -5,6 +5,9 @@ on:
     branches:
       - layersentry/p1-rke2-day2-production-20260913
       - fix/live-oneks-qualification-20260919
+  pull_request:
+    branches:
+      - layersentry/p1-rke2-day2-production-20260913
   workflow_dispatch:
 
 permissions:
