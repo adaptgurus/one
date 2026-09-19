@@ -12,6 +12,20 @@ require_relative '../app/services/lifecycle_status_autoscaler'
 class Day2LifecycleTest < Minitest::Test
 
     ROOT = File.expand_path('../specs', __dir__)
+    ARTIFACT_CACHE = 'http://10.10.10.140:8080'
+
+    def setup
+        @old_artifact_cache = ENV['ONEKS_RKE2_ARTIFACT_BASE_URL']
+        ENV['ONEKS_RKE2_ARTIFACT_BASE_URL'] = ARTIFACT_CACHE
+    end
+
+    def teardown
+        if @old_artifact_cache.nil?
+            ENV.delete('ONEKS_RKE2_ARTIFACT_BASE_URL')
+        else
+            ENV['ONEKS_RKE2_ARTIFACT_BASE_URL'] = @old_artifact_cache
+        end
+    end
 
     def test_day2_annotation_constants_are_module_visible
         assert_equal 'layersentry.io/shape-revision', OneKS::K8s::SHAPE_REVISION
@@ -51,6 +65,7 @@ class Day2LifecycleTest < Minitest::Test
         }
         one_auth = 'test:fixture-only'
         one_xmlrpc = 'http://169.254.16.9:2633/RPC2'
+        artifact_base_url = ENV.fetch('ONEKS_RKE2_ARTIFACT_BASE_URL', ARTIFACT_CACHE)
         dir = File.join(ROOT, type, 'layersentry-poc')
         templates = Dir[File.join(dir, 'templates', '*.erb')].to_h do |path|
             [File.basename(path, '.erb').to_sym, ERB.new(File.read(path)).result(binding)]
@@ -70,7 +85,7 @@ class Day2LifecycleTest < Minitest::Test
         assert_equal 1, flavour.fetch('defaults').fetch('count')
         count = conf.fetch('user_inputs').find {|input| input.fetch('name') == 'count' }
         assert_equal 1, count.dig('match', 'values', 'min')
-        assert_equal 7, count.dig('match', 'values', 'max')
+        assert_equal 11, count.dig('match', 'values', 'max')
 
         workers = YAML.load_file(
             File.join(ROOT, 'nodegroups', 'layersentry-poc', 'nodegroup.conf')
@@ -79,7 +94,7 @@ class Day2LifecycleTest < Minitest::Test
             input.fetch('name') == 'count'
         end
         assert_equal 0, worker_count.dig('match', 'values', 'min')
-        assert_equal 7, worker_count.dig('match', 'values', 'max')
+        assert_equal 60, worker_count.dig('match', 'values', 'max')
     end
 
     def test_control_plane_remediation_starts_only_after_three_members

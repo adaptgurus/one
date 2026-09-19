@@ -9,9 +9,53 @@ require 'active_support/core_ext/string/indent'
 class LayerSentryProfileTest < Minitest::Test
   ROOT = File.expand_path('../specs', __dir__)
   CONFIG = File.expand_path('../etc/oneks-server.conf', __dir__)
+  ARTIFACT_CACHE = 'http://10.10.10.140:8080'
+
+  def setup
+    @old_artifact_cache = ENV['ONEKS_RKE2_ARTIFACT_BASE_URL']
+    ENV['ONEKS_RKE2_ARTIFACT_BASE_URL'] = ARTIFACT_CACHE
+  end
+
+  def teardown
+    if @old_artifact_cache.nil?
+      ENV.delete('ONEKS_RKE2_ARTIFACT_BASE_URL')
+    else
+      ENV['ONEKS_RKE2_ARTIFACT_BASE_URL'] = @old_artifact_cache
+    end
+  end
+
+  def test_default_worker_disk_autoscaling_contract
+    helper = File.read(File.expand_path('../lib/helpers/worker_disk_manager.rb', __dir__))
+    assert_includes helper, 'DEFAULT_THRESHOLD = 70'
+    assert_includes helper, 'DEFAULT_INCREMENT_GIB = 30'
+    nodegroup = File.read(File.expand_path('../app/models/groups/nodegroup.rb', __dir__))
+    assert_includes nodegroup, 'WorkerDiskManager.normalize(:enabled => true)'
+  end
+
+  def test_multi_cluster_resource_identity_and_global_disk_reconciler
+    group_model = File.read(File.expand_path('../app/models/k8s_group.rb', __dir__))
+    router_model = File.read(File.expand_path('../app/models/dependencies/cluster_router.rb', __dir__))
+    lcm = File.read(File.expand_path('../app/services/cluster_lcm.rb', __dir__))
+
+    assert_includes group_model, 'SecureRandom.hex(6)'
+    assert_includes group_model, '"#{base_name}-group-#{id}-#{suffix}"'
+    assert_includes router_model, '"#{cluster.uuid}-cp"'
+    assert_includes lcm, 'OneKS::K8sGroupDocumentPool.new(:auth => @cloud_auth)'
+    assert_includes lcm, 'pool.each do |group|'
+    assert_includes lcm, 'group.reconcile_disk_autoscaling'
+  end
 
   def test_server_uses_selinux_labeled_kubectl_wrapper
     assert_includes File.read(CONFIG), ":kubectl_path: '/usr/local/libexec/oneks/kubectl'"
+  end
+
+  def test_replica_contracts
+    controlplane = YAML.safe_load(File.read(File.join(ROOT, 'controlplanes', 'layersentry-poc', 'controlplane.conf')))
+    nodegroup = YAML.safe_load(File.read(File.join(ROOT, 'nodegroups', 'layersentry-poc', 'nodegroup.conf')))
+    cp_count = controlplane.fetch('user_inputs').find { |input| input.fetch('name') == 'count' }
+    worker_count = nodegroup.fetch('user_inputs').find { |input| input.fetch('name') == 'count' }
+    assert_equal 11, cp_count.dig('match', 'values', 'max')
+    assert_equal 60, worker_count.dig('match', 'values', 'max')
   end
 
   def render(type, inputs = {}, group_overrides = {})
@@ -26,6 +70,7 @@ class LayerSentryProfileTest < Minitest::Test
     group.merge!(group_overrides)
     one_auth = 'test:fixture-only'
     one_xmlrpc = 'http://169.254.16.9:2633/RPC2'
+    artifact_base_url = ENV.fetch('ONEKS_RKE2_ARTIFACT_BASE_URL')
     dir = File.join(ROOT, type, 'layersentry-poc')
     templates = Dir[File.join(dir, 'templates', '*.erb')].to_h do |path|
       [File.basename(path, '.erb').to_sym, ERB.new(File.read(path)).result(binding)]
@@ -33,6 +78,14 @@ class LayerSentryProfileTest < Minitest::Test
     documents = YAML.load_stream(ERB.new(File.read(File.join(dir, 'spec.erb'))).result(binding))
     [documents.to_h { |d| [d.fetch('kind'), d] }, templates]
   end
+
+  def test_artifact_cache_configuration_is_required
+    saved = ENV.delete('ONEKS_RKE2_ARTIFACT_BASE_URL')
+    assert_raises(KeyError) { render('controlplanes') }
+  ensure
+    ENV['ONEKS_RKE2_ARTIFACT_BASE_URL'] = saved || ARTIFACT_CACHE
+  end
+
   def test_stable_endpoint_and_two_router_members
     docs, templates = render('controlplanes')
     router = docs.fetch('ONECluster').fetch('spec').fetch('virtualRouter')
@@ -43,10 +96,15 @@ class LayerSentryProfileTest < Minitest::Test
     cp_commands = cp.fetch('preRKE2Commands').join("\n")
     assert_includes cp_commands, '/opt/install.sh'
     assert_includes cp_commands, '7bcbd3167d6947e1d79cdf722acdc740b28021fefb50dd5b974a1980776d4079'
-    refute_includes cp_commands, 'curl '
+    assert_includes cp_commands, 'curl -fsSL'
+    assert_includes cp_commands, "base=\'#{ARTIFACT_CACHE}/v1.36.4%2Brke2r1\'"
     refute_includes cp_commands, 'wget '
+    assert_includes cp_commands, 'sha256sum -c -'
+    assert_includes cp_commands, '8988a2eff587dd88b8eab86fe719703e9541a1f08d22771a94cbec446a13db86'
+    assert_includes cp_commands, '4359b651bfdec8f3bcc01b351b33a55ff21f06b18a767366db6f3800d5750871'
     refute_includes cp_commands, 'get.rke2.io'
     refute_includes cp_commands, 'github.com/rancher/rke2/releases'
+    refute_includes cp_commands, 'raw.githubusercontent.com'
     assert_equal 'control-plane-endpoint', cp.fetch('registrationMethod')
     assert_equal 'v1.36.4+rke2r1', cp.fetch('version')
     assert_includes cp.fetch('preRKE2Commands').join, 'provider-id=one://%s'
@@ -69,10 +127,15 @@ class LayerSentryProfileTest < Minitest::Test
     assert_includes joined, '/opt/rke2-artifacts/rke2.linux-amd64.tar.gz'
     assert_includes joined, '/usr/local/libexec/oneks/worker-disk'
     assert_includes joined, '8e12805c4bda79bec2fd20c89f705af3cb2ed11ea8854dc4937fca41b124b57a'
-    refute_includes joined, 'curl '
+    assert_includes joined, 'curl -fsSL'
+    assert_includes joined, "base=\'#{ARTIFACT_CACHE}/v1.36.4%2Brke2r1\'"
     refute_includes joined, 'wget '
+    assert_includes joined, 'sha256sum -c -'
+    assert_includes joined, '8988a2eff587dd88b8eab86fe719703e9541a1f08d22771a94cbec446a13db86'
+    assert_includes joined, '4359b651bfdec8f3bcc01b351b33a55ff21f06b18a767366db6f3800d5750871'
     refute_includes joined, 'get.rke2.io'
     refute_includes joined, 'github.com/rancher/rke2/releases'
+    refute_includes joined, 'raw.githubusercontent.com'
     assert_includes cmds.join, 'provider-id=one://%s'
     assert_equal 'v1.36.4+rke2r1', docs.fetch('MachineDeployment').dig('spec', 'template', 'spec', 'version')
     assert_includes templates[:node], 'VMID = "$VMID"'

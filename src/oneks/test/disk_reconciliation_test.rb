@@ -86,6 +86,26 @@ class DiskReconciliationTest < Minitest::Test
 
     end
 
+    def test_default_disk_policy_is_strictly_above_seventy_and_grows_thirty_gib
+        policy = {
+            :enabled => true, :threshold_percent => 70, :increment_gib => 30,
+            :cooldown_seconds => 300, :root_max_gib => 120, :data_disks => []
+        }
+
+        group = NodeGroupHarness.new(:disk_autoscaling => policy)
+        OneKS::WorkerDiskManager.resize_calls = []
+        OneKS::WorkerDiskManager.resize_result = true
+        OneKS::WorkerDiskManager.status = { :disks => [runtime_disk('root', 0, 70)] }
+        result = group.reconcile_disk_autoscaling(:now => 1_000)
+        assert_equal 'none', result.fetch(:action)
+        assert_empty OneKS::WorkerDiskManager.resize_calls
+
+        OneKS::WorkerDiskManager.status = { :disks => [runtime_disk('root', 0, 71)] }
+        result = group.reconcile_disk_autoscaling(:now => 1_001)
+        assert_equal 'resize-submitted', result.fetch(:action)
+        assert_equal 60 * 1024, OneKS::WorkerDiskManager.resize_calls.last[2]
+    end
+
     def test_lost_response_and_restart_replay_fixed_target_without_double_growth
         policy = {
             :enabled => true, :threshold_percent => 70, :increment_gib => 30,

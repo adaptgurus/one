@@ -56,10 +56,13 @@ module OneKS
             app.post '/clusters/:id/control-plane/scale' do
                 payload = check_body(request)
                 target = payload[:target]
-                unless target.is_a?(Integer) && target >= 1 &&
-                       target <= ControlPlane::MAX_REPLICAS
+                valid_target = target.is_a?(Integer) &&
+                               (target == 1 ||
+                                (target.between?(3, ControlPlane::MAX_REPLICAS) &&
+                                 target.odd?))
+                unless valid_target
                     return internal_error(
-                        'Field target must be an integer from 1 through 7',
+                        'Field target must be an odd integer from 1 through 11',
                         ODS::ResponseHelper::VALIDATION_EC
                     )
                 end
