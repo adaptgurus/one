@@ -43,7 +43,7 @@ const ApplicationsWorkspace = ({ endpoints }) => {
   return (
     <PageFrame
       title="Applications"
-      description="Browse published services while OneFlow remains the lifecycle authority."
+      description="Deploy and operate qualified production services while OneFlow remains the lifecycle authority."
       actions={
         canDeploy ? (
           <Button
@@ -52,23 +52,26 @@ const ApplicationsWorkspace = ({ endpoints }) => {
             onClick={() => history.push('/applications/deploy')}
             sx={{ textTransform: 'none' }}
           >
-            Deploy application
+            Create Production Service
           </Button>
         ) : null
       }
     >
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
-          title="Application model"
-          description="Catalog definitions describe the service. Deployments are the running application instances."
+          title="Production service blueprints"
+          description="LayerSentry guides sizing, product-specific storage, DNS, HA, backup, DR, hardening, tuning and offline package sources. Exact OS/version tuples remain qualification-controlled."
         />
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
           {[
-            ['Catalog', 'Published OneFlow service templates'],
-            ['Deployments', 'Running service instances'],
             [
-              'Lifecycle',
-              'Day-2 actions appear only after separate production qualification',
+              'Catalog',
+              'Published and qualification-gated VM service blueprints',
+            ],
+            ['Deployments', 'Running OneFlow-backed service instances'],
+            [
+              'Safe lifecycle',
+              'Validate, revise, recover and remove through authoritative backends',
             ],
           ].map(([title, description]) => (
             <Box
