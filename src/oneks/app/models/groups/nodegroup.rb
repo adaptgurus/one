@@ -58,6 +58,9 @@ module OneKS
             deployment = cluster.deployment_info
             return deployment if OpenNebula.is_error?(deployment)
 
+            artifact_base_url = rke2_artifact_base_url
+            return artifact_base_url if OpenNebula.is_error?(artifact_base_url)
+
             cluster_values = cluster.plain_body.merge(
                 {
                     :uuid       => cluster.uuid,
@@ -75,9 +78,10 @@ module OneKS
 
             # Generate values for nodegroup spec template
             values = {
-                :cluster  => cluster_values,
-                :group    => group_values,
-                :one_auth => one_auth
+                :cluster           => cluster_values,
+                :group             => group_values,
+                :one_auth          => one_auth,
+                :artifact_base_url => artifact_base_url
             }
 
             # Render group templates before rendering main spec
