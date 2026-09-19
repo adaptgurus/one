@@ -23,6 +23,7 @@ import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
   CAPABILITY_IDS,
   getCapabilityModel,
+  isCapabilityEnabled,
   isCapabilityVisible,
 } from 'client/apps/layersentry/capabilities'
 import {
@@ -43,19 +44,32 @@ const COMPUTE_QUICK_ACTIONS = [
     icon: Plus,
     primary: true,
     capability: CAPABILITY_IDS.VM_CREATE,
+    mutation: true,
   },
   {
     label: 'VM Blueprints',
     path: PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
     icon: Packages,
+    capability: CAPABILITY_IDS.BLUEPRINTS,
   },
   {
     label: 'Affinity Groups',
     path: PRODUCT_PATHS.COMPUTE_AFFINITY,
     icon: Server,
+    capability: CAPABILITY_IDS.AFFINITY,
   },
-  { label: 'Disk Images', path: PRODUCT_PATHS.STORAGE_IMAGES, icon: HardDrive },
-  { label: 'Networks', path: PRODUCT_PATHS.NETWORK, icon: NetworkAlt },
+  {
+    label: 'Disk Images',
+    path: PRODUCT_PATHS.STORAGE_IMAGES,
+    icon: HardDrive,
+    capability: CAPABILITY_IDS.STORAGE_IMAGES,
+  },
+  {
+    label: 'Networks',
+    path: PRODUCT_PATHS.NETWORK,
+    icon: NetworkAlt,
+    capability: CAPABILITY_IDS.NETWORK,
+  },
 ]
 
 const ComputeWorkspace = ({ endpoints }) => {
@@ -72,13 +86,15 @@ const ComputeWorkspace = ({ endpoints }) => {
     0
   )
   const capabilityModel = getCapabilityModel()
-  const canCreateVm = isCapabilityVisible(
+  const canCreateVm = isCapabilityEnabled(
     CAPABILITY_IDS.VM_CREATE,
     capabilityModel
   )
   const quickActions = COMPUTE_QUICK_ACTIONS.filter(
-    ({ capability }) =>
-      !capability || isCapabilityVisible(capability, capabilityModel)
+    ({ capability, mutation }) =>
+      mutation
+        ? isCapabilityEnabled(capability, capabilityModel)
+        : isCapabilityVisible(capability, capabilityModel)
   )
 
   return (
