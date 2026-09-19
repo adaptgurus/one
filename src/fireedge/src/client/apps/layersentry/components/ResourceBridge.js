@@ -58,7 +58,9 @@ const InventoryTable = ({ query, columns, emptyLabel }) => {
   if (query.isError) {
     return (
       <Alert severity="error">
-        <Typography sx={{ fontWeight: 650 }}>\n          Could not load inventory\n        </Typography>
+        <Typography sx={{ fontWeight: 650 }}>
+          Could not load inventory
+        </Typography>
         <Typography sx={{ fontSize: 13 }}>
           {query.error?.data?.message ??
             query.error?.message ??
