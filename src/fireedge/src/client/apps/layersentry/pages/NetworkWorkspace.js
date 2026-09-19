@@ -21,6 +21,11 @@ import { useState } from 'react'
 import { useHistory } from 'react-router-dom'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
+  CAPABILITY_IDS,
+  getCapabilityModel,
+  isCapabilityEnabled,
+} from 'client/apps/layersentry/capabilities'
+import {
   PageFrame,
   SectionHeader,
   Surface,
@@ -38,20 +43,26 @@ const TIERS = ['web', 'app', 'db']
 const NetworkWorkspace = ({ endpoints }) => {
   const history = useHistory()
   const [tab, setTab] = useState(0)
+  const canCreate = isCapabilityEnabled(
+    CAPABILITY_IDS.NETWORK_CREATE,
+    getCapabilityModel()
+  )
 
   return (
     <PageFrame
       title="Network"
-      description="Create isolated workload networks and firewall rules using customer-friendly names while OpenNebula remains the network authority."
+      description="Browse workload networks and firewall policy while OpenNebula remains the network authority."
       actions={
-        <Button
-          variant="contained"
-          startIcon={<Plus width={17} height={17} />}
-          onClick={() => history.push('/network/create')}
-          sx={{ textTransform: 'none' }}
-        >
-          Create network
-        </Button>
+        canCreate ? (
+          <Button
+            variant="contained"
+            startIcon={<Plus width={17} height={17} />}
+            onClick={() => history.push('/network/create')}
+            sx={{ textTransform: 'none' }}
+          >
+            Create network
+          </Button>
+        ) : null
       }
     >
       <Surface sx={{ mt: 2, p: 2.5 }}>
