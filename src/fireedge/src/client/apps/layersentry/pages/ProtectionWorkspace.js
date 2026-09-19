@@ -44,7 +44,7 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
   const history = useHistory()
   const { view } = useViews()
   const isAdmin = view === 'admin'
-  const capabilityModel = getCapabilityModel()
+  const capabilityModel = getCapabilityModel(endpoints)
   const canCreateBackupPlan = isCapabilityEnabled(
     CAPABILITY_IDS.BACKUP_RECOVERY_CREATE,
     capabilityModel
