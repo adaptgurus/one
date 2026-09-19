@@ -222,7 +222,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Databases & Data',
     name: 'PostgreSQL',
     icon: 'PG',
-    description: 'Relational database with Patroni HA and application-aware recovery.',
+    description:
+      'Relational database with Patroni HA and application-aware recovery.',
     versions: ['16', '17', '18'],
     topologies: ['Standalone', '3-node HA', '5-node HA', 'HA + DR'],
     recommendedTopology: '3-node HA',
@@ -242,7 +243,12 @@ export const FALLBACK_BLUEPRINTS = [
       'Percona Server for MySQL',
       'Percona XtraDB Cluster',
     ],
-    topologies: ['Standalone', '3-node InnoDB Cluster', '5-node InnoDB Cluster', 'ClusterSet DR'],
+    topologies: [
+      'Standalone',
+      '3-node InnoDB Cluster',
+      '5-node InnoDB Cluster',
+      'ClusterSet DR',
+    ],
     recommendedTopology: '3-node InnoDB Cluster',
     workloads: ['OLTP', 'OLAP', 'Mixed'],
     defaultPort: 3306,
@@ -255,7 +261,12 @@ export const FALLBACK_BLUEPRINTS = [
     icon: 'MA',
     description: 'MariaDB with Galera quorum and asynchronous DR patterns.',
     versions: ['11.4 LTS', '11.8 LTS'],
-    topologies: ['Standalone', '3-node Galera', '5-node Galera', '3-node Galera + asynchronous DR'],
+    topologies: [
+      'Standalone',
+      '3-node Galera',
+      '5-node Galera',
+      '3-node Galera + asynchronous DR',
+    ],
     recommendedTopology: '3-node Galera',
     workloads: ['OLTP', 'Mixed'],
     defaultPort: 3306,
@@ -266,7 +277,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Databases & Data',
     name: 'MongoDB Community',
     icon: 'MO',
-    description: 'Replica-set and explicitly sized sharded MongoDB Community patterns.',
+    description:
+      'Replica-set and explicitly sized sharded MongoDB Community patterns.',
     versions: ['7.0', '8.0'],
     topologies: [
       '3-node Replica Set',
@@ -315,7 +327,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Databases & Data',
     name: 'Redis Open Source',
     icon: 'RD',
-    description: 'In-memory service with explicit persistence and Sentinel/Cluster patterns.',
+    description:
+      'In-memory service with explicit persistence and Sentinel/Cluster patterns.',
     versions: ['7.4', '8.2'],
     topologies: [
       'Standalone',
@@ -332,7 +345,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Databases & Data',
     name: 'Valkey',
     icon: 'VK',
-    description: 'Open-source in-memory data platform with Sentinel/Cluster patterns.',
+    description:
+      'Open-source in-memory data platform with Sentinel/Cluster patterns.',
     versions: ['8.1', '9.0'],
     topologies: [
       'Standalone',
@@ -351,7 +365,11 @@ export const FALLBACK_BLUEPRINTS = [
     icon: 'CH',
     description: 'Columnar analytics database with dedicated Keeper quorum.',
     versions: ['26.3 LTS', '26.8 LTS'],
-    topologies: ['Standalone', '3 data nodes + 3 Keeper', '2 shards × 2 replicas + 3 Keeper'],
+    topologies: [
+      'Standalone',
+      '3 data nodes + 3 Keeper',
+      '2 shards × 2 replicas + 3 Keeper',
+    ],
     recommendedTopology: '3 data nodes + 3 Keeper',
     workloads: ['Analytics', 'Events', 'Mixed'],
     defaultPort: 9440,
@@ -362,9 +380,14 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Databases & Data',
     name: 'Apache Cassandra',
     icon: 'CA',
-    description: 'Distributed wide-column database with explicit RF/DC placement.',
+    description:
+      'Distributed wide-column database with explicit RF/DC placement.',
     versions: ['5.0'],
-    topologies: ['3-node Cluster (RF=3)', '5-node Cluster (RF=3)', 'Multi-DC: 3 nodes per DC minimum'],
+    topologies: [
+      '3-node Cluster (RF=3)',
+      '5-node Cluster (RF=3)',
+      'Multi-DC: 3 nodes per DC minimum',
+    ],
     recommendedTopology: '3-node Cluster (RF=3)',
     workloads: ['Write-heavy', 'Mixed'],
     defaultPort: 9042,
@@ -395,7 +418,11 @@ export const FALLBACK_BLUEPRINTS = [
     icon: 'RQ',
     description: 'Message broker with quorum queues and federation DR.',
     versions: ['4.3'],
-    topologies: ['3-node Quorum Cluster', '5-node Quorum Cluster', 'Federation DR: 3 + 3 nodes'],
+    topologies: [
+      '3-node Quorum Cluster',
+      '5-node Quorum Cluster',
+      'Federation DR: 3 + 3 nodes',
+    ],
     recommendedTopology: '3-node Quorum Cluster',
     workloads: ['Messaging', 'Task queues', 'Mixed'],
     defaultPort: 5671,
@@ -406,9 +433,14 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Messaging & Streaming',
     name: 'Apache Kafka',
     icon: 'KF',
-    description: 'KRaft event streaming with dedicated brokers and controllers.',
+    description:
+      'KRaft event streaming with dedicated brokers and controllers.',
     versions: ['4.3'],
-    topologies: ['3 brokers + 3 controllers', '5 brokers + 3 controllers', '3 brokers + 5 controllers'],
+    topologies: [
+      '3 brokers + 3 controllers',
+      '5 brokers + 3 controllers',
+      '3 brokers + 5 controllers',
+    ],
     recommendedTopology: '3 brokers + 3 controllers',
     workloads: ['Streaming', 'Events', 'Mixed'],
     defaultPort: 9093,
@@ -419,7 +451,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Messaging & Streaming',
     name: 'Apache Pulsar',
     icon: 'PS',
-    description: 'Messaging/streaming with explicit metadata and BookKeeper ownership.',
+    description:
+      'Messaging/streaming with explicit metadata and BookKeeper ownership.',
     versions: ['4.0 LTS'],
     topologies: [
       'Production Cluster (3 broker+bookie + 3 metadata)',
@@ -435,7 +468,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Web & Application',
     name: 'NGINX OSS',
     icon: 'NG',
-    description: 'Web/reverse-proxy service with explicit upstream/content ownership.',
+    description:
+      'Web/reverse-proxy service with explicit upstream/content ownership.',
     versions: ['1.30 stable'],
     topologies: ['Standalone', 'HA Reverse Proxy Pair'],
     recommendedTopology: 'HA Reverse Proxy Pair',
@@ -474,7 +508,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Web & Application',
     name: 'Keycloak',
     icon: 'KC',
-    description: 'Identity service with external SQL dependency and private admin surface.',
+    description:
+      'Identity service with external SQL dependency and private admin surface.',
     versions: ['26.7'],
     topologies: ['Standalone', '3-node HA Cluster'],
     recommendedTopology: '3-node HA Cluster',
@@ -487,7 +522,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Web & Application',
     name: 'Apache Superset',
     icon: 'SS',
-    description: 'BI platform with external metadata DB and distributed workers.',
+    description:
+      'BI platform with external metadata DB and distributed workers.',
     versions: ['6.1'],
     topologies: ['Standalone', 'Distributed'],
     recommendedTopology: 'Distributed',
@@ -500,7 +536,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Web & Application',
     name: 'Apache Airflow',
     icon: 'AF',
-    description: 'Workflow orchestration with explicit DAG, metadata, broker and log ownership.',
+    description:
+      'Workflow orchestration with explicit DAG, metadata, broker and log ownership.',
     versions: ['3.1'],
     topologies: ['Standalone', 'Distributed Celery'],
     recommendedTopology: 'Distributed Celery',
@@ -539,7 +576,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'DevOps & Security',
     name: 'Forgejo',
     icon: 'FG',
-    description: 'Git forge with external SQL and durable repository/object state.',
+    description:
+      'Git forge with external SQL and durable repository/object state.',
     versions: ['15 LTS'],
     topologies: ['Standalone', 'HA Pair'],
     recommendedTopology: 'HA Pair',
@@ -552,7 +590,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Search & Observability',
     name: 'OpenSearch',
     icon: 'OS',
-    description: 'Search/analytics with dedicated cluster managers and data nodes.',
+    description:
+      'Search/analytics with dedicated cluster managers and data nodes.',
     versions: ['3.8'],
     topologies: ['3 managers + 3 data', '3 managers + 6 data'],
     recommendedTopology: '3 managers + 3 data',
@@ -565,7 +604,8 @@ export const FALLBACK_BLUEPRINTS = [
     category: 'Search & Observability',
     name: 'Prometheus',
     icon: 'PR',
-    description: 'Metrics collection with explicit alerting and scrape ownership.',
+    description:
+      'Metrics collection with explicit alerting and scrape ownership.',
     versions: ['3.13 LTS'],
     topologies: ['Standalone', 'HA Pair'],
     recommendedTopology: 'HA Pair',
@@ -790,11 +830,7 @@ export const getTopologyOptions = (draft, blueprint) => {
   }
 
   if (draft.edition === 'Percona XtraDB Cluster') {
-    return [
-      '3-node PXC',
-      '5-node PXC',
-      '3-node PXC + asynchronous DR',
-    ]
+    return ['3-node PXC', '5-node PXC', '3-node PXC + asynchronous DR']
   }
 
   return [
@@ -813,6 +849,7 @@ export const getRecommendedTopology = (draft, blueprint) => {
     }
     if (draft.edition === 'Percona XtraDB Cluster') return '3-node PXC'
   }
+
   return blueprint.recommendedTopology || blueprint.topologies[0]
 }
 
@@ -823,6 +860,7 @@ export const getEndpointOptions = (draft, blueprint) => {
     if (draft.topology === 'Standalone') {
       return ['Direct service endpoint', 'Existing load balancer']
     }
+
     return [
       'MySQL Router HA pair',
       'Existing load balancer',
@@ -849,7 +887,10 @@ export const getEndpointOptions = (draft, blueprint) => {
       'Native multi-host / replica-set discovery',
       'Existing load balancer',
     ],
-    ferretdb: ['LayerSentry managed FerretDB endpoint', 'Existing load balancer'],
+    ferretdb: [
+      'LayerSentry managed FerretDB endpoint',
+      'Existing load balancer',
+    ],
     redis: ['Native Sentinel/Cluster discovery', 'Existing load balancer'],
     valkey: ['Native Sentinel/Cluster discovery', 'Existing load balancer'],
     clickhouse: [
@@ -869,9 +910,16 @@ export const getEndpointOptions = (draft, blueprint) => {
       'Existing load balancer',
     ],
     kafka: ['Native bootstrap broker list'],
-    pulsar: ['Pulsar Proxy HA pair', 'Native broker service URL', 'Existing load balancer'],
+    pulsar: [
+      'Pulsar Proxy HA pair',
+      'Native broker service URL',
+      'Existing load balancer',
+    ],
     nginx: ['LayerSentry managed web endpoint', 'Existing load balancer'],
-    'apache-httpd': ['LayerSentry managed web endpoint', 'Existing load balancer'],
+    'apache-httpd': [
+      'LayerSentry managed web endpoint',
+      'Existing load balancer',
+    ],
     tomcat: ['LayerSentry managed web endpoint', 'Existing load balancer'],
     keycloak: ['LayerSentry managed web endpoint', 'Existing load balancer'],
     superset: ['LayerSentry managed web endpoint', 'Existing load balancer'],
@@ -879,7 +927,11 @@ export const getEndpointOptions = (draft, blueprint) => {
     openbao: ['LayerSentry managed OpenBao endpoint', 'Existing load balancer'],
     jenkins: ['LayerSentry managed web endpoint', 'Existing load balancer'],
     forgejo: ['LayerSentry managed web endpoint', 'Existing load balancer'],
-    opensearch: ['LayerSentry managed OpenSearch endpoint', 'Native node list', 'Existing load balancer'],
+    opensearch: [
+      'LayerSentry managed OpenSearch endpoint',
+      'Native node list',
+      'Existing load balancer',
+    ],
     prometheus: ['LayerSentry managed web endpoint', 'Existing load balancer'],
     grafana: ['LayerSentry managed web endpoint', 'Existing load balancer'],
     alloy: ['No customer service endpoint'],
@@ -984,6 +1036,7 @@ export const getDependencySpecs = (draft, blueprint) => {
           )
         )
       }
+
       return deps
     }
     case 'airflow': {
@@ -1019,6 +1072,7 @@ export const getDependencySpecs = (draft, blueprint) => {
           )
         )
       }
+
       return deps
     }
     case 'forgejo':
@@ -1075,6 +1129,7 @@ export const getDependencyOptions = (dependency) => {
   if (dependency.kind === 'storage') {
     return [dependency.managedLabel, dependency.existingLabel]
   }
+
   return [dependency.existingLabel]
 }
 
@@ -1088,6 +1143,7 @@ export const getDefaultDependencyState = (draft, blueprint) => {
     modes[dependency.key] = defaultDependencyMode(dependency)
     refs[dependency.key] = ''
   })
+
   return { dependencyModes: modes, dependencyRefs: refs }
 }
 
@@ -1113,12 +1169,14 @@ export const getDependencyErrors = (draft, blueprint) =>
           ': enter the required existing dependency reference or choose a LayerSentry-managed/provisioned option.',
       ]
     }
+
     return []
   })
 
 export const getDependencySummary = (draft, blueprint) => {
   const specs = getDependencySpecs(draft, blueprint)
   if (!specs.length) return 'No required linked runtime dependency'
+
   return specs
     .map((dependency) => {
       const mode =
@@ -1127,6 +1185,7 @@ export const getDependencySummary = (draft, blueprint) => {
       const ref = dependencyNeedsReference(dependency, mode)
         ? draft.dependencyRefs?.[dependency.key] || 'reference required'
         : ''
+
       return dependency.label + ': ' + mode + (ref ? ' · ' + ref : '')
     })
     .join(' | ')
@@ -1175,21 +1234,39 @@ export const getStorageTemplate = (draft, blueprint) => {
       return [
         vol('Data', 'Per PostgreSQL VM', d),
         vol('WAL', 'Per PostgreSQL VM', l),
-        vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Backup repository',
+          'Shared recovery repository',
+          b,
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'mysql-family':
     case 'mariadb':
       return [
         vol('Data', 'Per database VM', d),
         vol('Redo / binary log', 'Per database VM', l),
-        vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Backup repository',
+          'Shared recovery repository',
+          b,
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'mongodb-community':
     case 'percona-mongodb':
       return [
         vol('Data', 'Per data-bearing MongoDB VM', d),
         vol('Journal', 'Per data-bearing MongoDB VM', l),
-        vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Backup repository',
+          'Shared recovery repository',
+          b,
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'ferretdb':
       return []
@@ -1197,25 +1274,49 @@ export const getStorageTemplate = (draft, blueprint) => {
     case 'valkey':
       return [
         vol('Persistence data (RDB/AOF)', 'Per data node', d),
-        vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Backup repository',
+          'Shared recovery repository',
+          b,
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'clickhouse':
       return [
         vol('ClickHouse data', 'Per data node', d),
-        vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Backup repository',
+          'Shared recovery repository',
+          b,
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'cassandra':
       return [
         vol('Data', 'Per Cassandra node', d),
         vol('Commit log', 'Per Cassandra node', l),
-        vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Backup repository',
+          'Shared recovery repository',
+          b,
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'yugabytedb':
       return [
         vol('Tablet data', 'Per YB-TServer VM', d),
         vol('WAL', 'Per YB-TServer VM', l),
         vol('YB-Master metadata', 'Per dedicated YB-Master VM', 20),
-        vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Backup repository',
+          'Shared recovery repository',
+          b,
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'rabbitmq':
       return [vol('Persistent message data', 'Per RabbitMQ VM', d)]
@@ -1226,7 +1327,13 @@ export const getStorageTemplate = (draft, blueprint) => {
         vol('BookKeeper journal', 'Per bookie VM', l),
         vol('BookKeeper ledgers', 'Per bookie VM', d),
         ...(draft.pulsarConfigStore === 'Dedicated 3-node configuration store'
-          ? [vol('Configuration metadata state', 'Per configuration-store VM', 20)]
+          ? [
+              vol(
+                'Configuration metadata state',
+                'Per configuration-store VM',
+                20
+              ),
+            ]
           : []),
       ]
     case 'nginx':
@@ -1239,20 +1346,42 @@ export const getStorageTemplate = (draft, blueprint) => {
       return []
     case 'openbao':
       return [
-        vol('Raft integrated-storage data', 'Per OpenBao server', Math.max(20, Math.min(d, 200))),
-        vol('Raft snapshot repository', 'Shared recovery repository', Math.max(50, b), 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Raft integrated-storage data',
+          'Per OpenBao server',
+          Math.max(20, Math.min(d, 200))
+        ),
+        vol(
+          'Raft snapshot repository',
+          'Shared recovery repository',
+          Math.max(50, b),
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'jenkins':
       return [
         vol('JENKINS_HOME', 'Controller persistent state', d),
-        vol('Backup repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Backup repository',
+          'Shared recovery repository',
+          b,
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'forgejo':
       return []
     case 'opensearch':
       return [
         vol('Index data', 'Per OpenSearch data VM', d),
-        vol('Snapshot repository', 'Shared recovery repository', b, 'Backup Repository', 'Repository-managed'),
+        vol(
+          'Snapshot repository',
+          'Shared recovery repository',
+          b,
+          'Backup Repository',
+          'Repository-managed'
+        ),
       ]
     case 'prometheus':
       return [
@@ -1260,7 +1389,11 @@ export const getStorageTemplate = (draft, blueprint) => {
         ...(draft.promAlerting === 'Provision 3-node Alertmanager'
           ? [vol('Alertmanager local state', 'Per Alertmanager VM', 10)]
           : []),
-        storageDependency('Optional long-term storage', 'Remote-write / Thanos-compatible backend when selected', false),
+        storageDependency(
+          'Optional long-term storage',
+          'Remote-write / Thanos-compatible backend when selected',
+          false
+        ),
       ]
     case 'grafana':
     case 'alloy':
@@ -1343,7 +1476,8 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         ? 6
         : 3
     const dcs =
-      topology !== 'Standalone' && draft.dcsPlacement === 'Dedicated 3-node etcd'
+      topology !== 'Standalone' &&
+      draft.dcsPlacement === 'Dedicated 3-node etcd'
         ? 3
         : 0
     const proxy = draft.pgbouncerPlacement === 'Dedicated HA pair' ? 2 : 0
@@ -1415,6 +1549,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         )
       )
     }
+
     return addEndpoint(
       draft,
       plan(
@@ -1466,6 +1601,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
       name = 'MySQL Community'
       note = 'InnoDB Cluster uses Group Replication; ClusterSet DR is separate.'
     }
+
     return addEndpoint(
       draft,
       plan(
@@ -1481,7 +1617,14 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'mariadb') {
     const dr = topology.indexOf('DR') >= 0
-    const nodes = dr ? 6 : topology.indexOf('5-node') === 0 ? 5 : topology === 'Standalone' ? 1 : 3
+    const nodes = dr
+      ? 6
+      : topology.indexOf('5-node') === 0
+      ? 5
+      : topology === 'Standalone'
+      ? 1
+      : 3
+
     return addEndpoint(
       draft,
       plan(
@@ -1489,7 +1632,9 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         [
           component(
             'MariaDB',
-            dr ? 'Primary Galera + asynchronous DR cluster' : 'Galera database VMs',
+            dr
+              ? 'Primary Galera + asynchronous DR cluster'
+              : 'Galera database VMs',
             nodes,
             nodes,
             'Synchronous Galera quorum remains site-local.'
@@ -1512,6 +1657,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
       const shards = topology.indexOf('3 shards') >= 0 ? 3 : 2
       const shardNodes = shards * 3
       const total = shardNodes + 3 + 2
+
       return plan(
         total,
         [
@@ -1543,6 +1689,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
       )
     }
     const nodes = topology.indexOf('5-node') === 0 ? 5 : 3
+
     return plan(
       nodes,
       [
@@ -1563,6 +1710,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
   if (id === 'ferretdb') {
     const ha = topology.indexOf('2 FerretDB') === 0
     const frontend = ha ? 2 : 1
+
     return addEndpoint(
       draft,
       plan(
@@ -1626,6 +1774,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         name
       )
     }
+
     return plan(
       1,
       [component(name, 'Standalone service VM', 1, 1, 'No HA.')],
@@ -1639,13 +1788,22 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
     if (topology === 'Standalone') {
       return plan(
         1,
-        [component('ClickHouse', 'Standalone data VM', 1, 1, 'No replication quorum.')],
+        [
+          component(
+            'ClickHouse',
+            'Standalone data VM',
+            1,
+            1,
+            'No replication quorum.'
+          ),
+        ],
         [],
         1,
         'ClickHouse'
       )
     }
     const dataNodes = topology.indexOf('2 shards') === 0 ? 4 : 3
+
     return plan(
       dataNodes + 3,
       [
@@ -1679,6 +1837,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         : topology.indexOf('5-node') === 0
         ? 5
         : 3
+
     return plan(
       nodes,
       [
@@ -1701,12 +1860,9 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'yugabytedb') {
     const xcluster = topology.indexOf('xCluster DR') === 0
-    const tservers = xcluster
-      ? 6
-      : topology.indexOf('5 TServers') === 0
-      ? 5
-      : 3
+    const tservers = xcluster ? 6 : topology.indexOf('5 TServers') === 0 ? 5 : 3
     const masters = xcluster ? 6 : 3
+
     return addEndpoint(
       draft,
       plan(
@@ -1740,6 +1896,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
   if (id === 'rabbitmq') {
     const dr = topology.indexOf('Federation DR') === 0
     const nodes = dr ? 6 : topology.indexOf('5-node') === 0 ? 5 : 3
+
     return addEndpoint(
       draft,
       plan(
@@ -1747,7 +1904,9 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         [
           component(
             'RabbitMQ',
-            dr ? 'Two 3-node clusters for federation DR' : String(nodes) + '-node cluster',
+            dr
+              ? 'Two 3-node clusters for federation DR'
+              : String(nodes) + '-node cluster',
             nodes,
             nodes,
             'Quorum queues require majority availability.'
@@ -1764,6 +1923,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
   if (id === 'kafka') {
     const brokers = topology.indexOf('5 brokers') === 0 ? 5 : 3
     const controllers = topology.indexOf('5 controllers') >= 0 ? 5 : 3
+
     return plan(
       brokers + controllers,
       [
@@ -1807,7 +1967,9 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         'Three broker+bookie VMs per site in the baseline profile.'
       ),
       component(
-        draft.pulsarMetadata.indexOf('Oxia') === 0 ? 'Oxia local metadata' : 'ZooKeeper local metadata',
+        draft.pulsarMetadata.indexOf('Oxia') === 0
+          ? 'Oxia local metadata'
+          : 'ZooKeeper local metadata',
         'Dedicated local metadata quorum VMs',
         metadata,
         metadata,
@@ -1847,10 +2009,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
       sites === 2
     )
     addEndpoint(draft, current)
-    if (
-      sites === 2 &&
-      draft.endpointMode === 'Pulsar Proxy HA pair'
-    ) {
+    if (sites === 2 && draft.endpointMode === 'Pulsar Proxy HA pair') {
       current.components.push(
         component(
           'Pulsar Proxy secondary-site tier',
@@ -1863,12 +2022,14 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
       current.dedicated += 2
       current.addressableNodes = current.dedicated
     }
+
     return current
   }
 
   if (id === 'nginx' || id === 'apache-httpd') {
     const nodes = topology === 'Standalone' ? 1 : 2
     const name = id === 'nginx' ? 'NGINX OSS' : 'Apache HTTP Server'
+
     return addEndpoint(
       draft,
       plan(
@@ -1891,11 +2052,8 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'tomcat') {
     const nodes =
-      topology === 'Standalone'
-        ? 1
-        : topology.indexOf('3-node') === 0
-        ? 3
-        : 2
+      topology === 'Standalone' ? 1 : topology.indexOf('3-node') === 0 ? 3 : 2
+
     return addEndpoint(
       draft,
       plan(
@@ -1918,6 +2076,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'keycloak') {
     const nodes = topology === 'Standalone' ? 1 : 3
+
     return addEndpoint(
       draft,
       plan(
@@ -1959,14 +2118,33 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         )
       )
     }
+
     return addEndpoint(
       draft,
       plan(
         4,
         [
-          component('Superset web', 'Load-balanced web VMs', 2, 2, 'All web nodes share one metadata DB.'),
-          component('Celery workers', 'Async query/background worker VMs', 2, 2, 'Workers share the same configuration.'),
-          component('Celery beat', 'One active scheduler process', 'co-located', 0, 'Run exactly one active beat scheduler.'),
+          component(
+            'Superset web',
+            'Load-balanced web VMs',
+            2,
+            2,
+            'All web nodes share one metadata DB.'
+          ),
+          component(
+            'Celery workers',
+            'Async query/background worker VMs',
+            2,
+            2,
+            'Workers share the same configuration.'
+          ),
+          component(
+            'Celery beat',
+            'One active scheduler process',
+            'co-located',
+            0,
+            'Run exactly one active beat scheduler.'
+          ),
         ],
         [],
         2,
@@ -1996,13 +2174,26 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         )
       )
     }
+
     return addEndpoint(
       draft,
       plan(
         4,
         [
-          component('Airflow control tier', '2 control VMs', 2, 2, 'API/scheduler/DAG-processor/triggerer placement is qualified.'),
-          component('Airflow workers', 'Dedicated worker VMs', 2, 2, 'Task execution is isolated from the control tier.'),
+          component(
+            'Airflow control tier',
+            '2 control VMs',
+            2,
+            2,
+            'API/scheduler/DAG-processor/triggerer placement is qualified.'
+          ),
+          component(
+            'Airflow workers',
+            'Dedicated worker VMs',
+            2,
+            2,
+            'Task execution is isolated from the control tier.'
+          ),
         ],
         [],
         2,
@@ -2013,11 +2204,8 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'openbao') {
     const nodes =
-      topology === 'Standalone'
-        ? 1
-        : topology.indexOf('3-node') === 0
-        ? 3
-        : 5
+      topology === 'Standalone' ? 1 : topology.indexOf('3-node') === 0 ? 3 : 5
+
     return addEndpoint(
       draft,
       plan(
@@ -2042,6 +2230,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'jenkins') {
     const agents = topology.indexOf('4 agents') >= 0 ? 4 : 2
+
     return addEndpoint(
       draft,
       plan(
@@ -2071,12 +2260,19 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'forgejo') {
     const nodes = topology === 'Standalone' ? 1 : 2
+
     return addEndpoint(
       draft,
       plan(
         nodes,
         [
-          component('Forgejo', 'Application VMs', nodes, nodes, 'HA nodes share DB and repository/object state.'),
+          component(
+            'Forgejo',
+            'Application VMs',
+            nodes,
+            nodes,
+            'HA nodes share DB and repository/object state.'
+          ),
         ],
         [],
         nodes,
@@ -2087,13 +2283,26 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'opensearch') {
     const dataNodes = topology.indexOf('6 data') >= 0 ? 6 : 3
+
     return addEndpoint(
       draft,
       plan(
         3 + dataNodes,
         [
-          component('Cluster-manager nodes', 'Dedicated cluster-manager VMs', 3, 3, 'Three managers preserve quorum and isolate cluster-state work.'),
-          component('Data nodes', 'Dedicated data/ingest/search VMs', dataNodes, dataNodes, 'Data capacity scales independently from managers.'),
+          component(
+            'Cluster-manager nodes',
+            'Dedicated cluster-manager VMs',
+            3,
+            3,
+            'Three managers preserve quorum and isolate cluster-state work.'
+          ),
+          component(
+            'Data nodes',
+            'Dedicated data/ingest/search VMs',
+            dataNodes,
+            dataNodes,
+            'Data capacity scales independently from managers.'
+          ),
         ],
         [],
         dataNodes,
@@ -2138,6 +2347,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         )
       )
     }
+
     return addEndpoint(
       draft,
       plan(
@@ -2154,14 +2364,33 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'grafana') {
     const nodes = topology === 'Standalone' ? 1 : 2
+
     return addEndpoint(
       draft,
       plan(
         nodes,
         [
-          component('Grafana', 'Application VMs', nodes, nodes, 'HA instances share one external SQL database.'),
-          component('Session continuity', draft.grafanaSession, 'external/policy', 0, 'Session continuity is independent of alerting HA.'),
-          component('Unified Alerting HA', draft.grafanaAlertHa, 'policy/dependency', 0, 'Alerting HA state is explicitly selected.'),
+          component(
+            'Grafana',
+            'Application VMs',
+            nodes,
+            nodes,
+            'HA instances share one external SQL database.'
+          ),
+          component(
+            'Session continuity',
+            draft.grafanaSession,
+            'external/policy',
+            0,
+            'Session continuity is independent of alerting HA.'
+          ),
+          component(
+            'Unified Alerting HA',
+            draft.grafanaAlertHa,
+            'policy/dependency',
+            0,
+            'Alerting HA state is explicitly selected.'
+          ),
         ],
         [],
         nodes,
@@ -2172,6 +2401,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   if (id === 'alloy') {
     const nodes = topology.indexOf('3-node') === 0 ? 3 : 1
+
     return plan(
       nodes,
       [
@@ -2193,7 +2423,15 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
 
   return plan(
     1,
-    [component(blueprint.name, 'Qualified service VM', 1, 1, 'Exact component split is backend-qualified.')],
+    [
+      component(
+        blueprint.name,
+        'Qualified service VM',
+        1,
+        1,
+        'Exact component split is backend-qualified.'
+      ),
+    ],
     [],
     1,
     blueprint.name
@@ -2240,11 +2478,10 @@ export const getArchitecturePlan = (draft, blueprint) => {
   })
 
   current.primaryDedicated =
-    current.primaryDedicated == null
-      ? baseDedicated
-      : current.primaryDedicated
+    current.primaryDedicated == null ? baseDedicated : current.primaryDedicated
   current.linkedDedicated = linkedDedicated
   current.dedicated = baseDedicated + linkedDedicated
+
   return current
 }
 
@@ -2279,10 +2516,13 @@ export const getProductConfigFields = (draft, blueprint) => {
         'Create databases later',
       ])
     )
-    if (draft.databaseBootstrap === 'Create initial database(s) during deployment') {
+    if (
+      draft.databaseBootstrap === 'Create initial database(s) during deployment'
+    ) {
       fields.push(
         text('initialDatabases', 'Initial database name(s)', {
-          helper: 'Comma-separated names. Databases are created before extensions are enabled.',
+          helper:
+            'Comma-separated names. Databases are created before extensions are enabled.',
         })
       )
     }
@@ -2311,7 +2551,8 @@ export const getProductConfigFields = (draft, blueprint) => {
         key: 'postgis',
         label: 'PostGIS',
         type: 'switch',
-        helper: 'Enable geospatial types/functions only for selected database(s).',
+        helper:
+          'Enable geospatial types/functions only for selected database(s).',
       }
     )
     if (draft.postgis) {
@@ -2322,9 +2563,12 @@ export const getProductConfigFields = (draft, blueprint) => {
         ])
       )
       if (draft.postgisTarget === 'Existing/restored database(s)') {
-        fields.push(text('postgisDatabases', 'Existing/restored database name(s)'))
+        fields.push(
+          text('postgisDatabases', 'Existing/restored database name(s)')
+        )
       }
     }
+
     return fields
   }
 
@@ -2338,6 +2582,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.sqlBootstrap === 'Create initial application database') {
       fields.push(text('sqlDbName', 'Initial application database name'))
     }
+
     return fields
   }
 
@@ -2349,8 +2594,11 @@ export const getProductConfigFields = (draft, blueprint) => {
       ])
     )
     if (draft.mongoScopeMode === 'Create application credential scope') {
-      fields.push(text('mongoDbName', 'Application database / credential scope'))
+      fields.push(
+        text('mongoDbName', 'Application database / credential scope')
+      )
     }
+
     return fields
   }
 
@@ -2382,6 +2630,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.clickBootstrap === 'Create initial database') {
       fields.push(text('clickDbName', 'Initial ClickHouse database'))
     }
+
     return fields
   }
 
@@ -2395,6 +2644,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.cassBootstrap === 'Create initial keyspace') {
       fields.push(text('cassKeyspace', 'Initial keyspace'))
     }
+
     return fields
   }
 
@@ -2409,6 +2659,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.ybBootstrap === 'Create initial database / namespace') {
       fields.push(text('ybDbName', 'Initial database / namespace'))
     }
+
     return fields
   }
 
@@ -2426,6 +2677,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.rabbitVhostMode === 'Create application virtual host') {
       fields.push(text('rabbitVhost', 'RabbitMQ virtual host'))
     }
+
     return fields
   }
 
@@ -2443,6 +2695,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.kafkaTopicMode === 'Create bootstrap topic') {
       fields.push(text('kafkaTopic', 'Bootstrap topic'))
     }
+
     return fields
   }
 
@@ -2471,6 +2724,7 @@ export const getProductConfigFields = (draft, blueprint) => {
         ])
       )
     }
+
     return fields
   }
 
@@ -2488,6 +2742,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.webMode === 'Static/content service') {
       fields.push(text('webSourceRef', 'Versioned content / artifact source'))
     }
+
     return fields
   }
 
@@ -2503,8 +2758,14 @@ export const getProductConfigFields = (draft, blueprint) => {
       ])
     )
     if (draft.tomcatDeploy === 'Deploy application artifact') {
-      fields.push(text('tomcatArtifactRef', 'Immutable application artifact / bundle reference'))
+      fields.push(
+        text(
+          'tomcatArtifactRef',
+          'Immutable application artifact / bundle reference'
+        )
+      )
     }
+
     return fields
   }
 
@@ -2518,6 +2779,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.keycloakAdminMode === 'Separate admin FQDN') {
       fields.push(text('keycloakAdminFqdn', 'Admin FQDN'))
     }
+
     return fields
   }
 
@@ -2531,6 +2793,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.supersetSecretMode === 'Existing SECRET_KEY secret reference') {
       fields.push(text('supersetSecretRef', 'SECRET_KEY secret reference'))
     }
+
     return fields
   }
 
@@ -2549,6 +2812,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     ) {
       fields.push(text('airflowSecretRef', 'Internal secret reference'))
     }
+
     return fields
   }
 
@@ -2562,6 +2826,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.baoSealMode === 'Existing KMS/HSM/transit reference') {
       fields.push(text('baoSealRef', 'KMS / HSM / transit reference'))
     }
+
     return fields
   }
 
@@ -2572,19 +2837,23 @@ export const getProductConfigFields = (draft, blueprint) => {
         'Existing agent template/image reference',
       ])
     )
-    if (draft.jenkinsAgentSource === 'Existing agent template/image reference') {
+    if (
+      draft.jenkinsAgentSource === 'Existing agent template/image reference'
+    ) {
       fields.push(text('jenkinsAgentRef', 'Agent template / image reference'))
     }
+
     return fields
   }
 
   if (id === 'forgejo') {
-    fields.push(
-      select('forgejoSsh', 'Git-over-SSH', ['Enabled', 'Disabled'])
-    )
+    fields.push(select('forgejoSsh', 'Git-over-SSH', ['Enabled', 'Disabled']))
     if (draft.forgejoSsh === 'Enabled') {
-      fields.push(number('forgejoSshPort', 'Git SSH port', { min: 1, max: 65535 }))
+      fields.push(
+        number('forgejoSshPort', 'Git SSH port', { min: 1, max: 65535 })
+      )
     }
+
     return fields
   }
 
@@ -2599,8 +2868,11 @@ export const getProductConfigFields = (draft, blueprint) => {
       draft.openSearchSecurity ===
       'Existing security configuration secret reference'
     ) {
-      fields.push(text('openSearchSecurityRef', 'Security config / secret reference'))
+      fields.push(
+        text('openSearchSecurityRef', 'Security config / secret reference')
+      )
     }
+
     return fields
   }
 
@@ -2626,7 +2898,9 @@ export const getProductConfigFields = (draft, blueprint) => {
       ])
     )
     if (draft.promScrapeMode === 'Existing versioned scrape configuration') {
-      fields.push(text('promScrapeRef', 'Scrape config / target bundle reference'))
+      fields.push(
+        text('promScrapeRef', 'Scrape config / target bundle reference')
+      )
     }
     fields.push(
       select('promAlerting', 'Alerting integration', [
@@ -2636,8 +2910,11 @@ export const getProductConfigFields = (draft, blueprint) => {
       ])
     )
     if (draft.promAlerting === 'Existing Alertmanager cluster') {
-      fields.push(text('promAlertRef', 'Alertmanager service / endpoint reference'))
+      fields.push(
+        text('promAlertRef', 'Alertmanager service / endpoint reference')
+      )
     }
+
     return fields
   }
 
@@ -2652,7 +2929,9 @@ export const getProductConfigFields = (draft, blueprint) => {
       draft.grafanaDatasourceMode ===
       'Existing datasource configuration reference'
     ) {
-      fields.push(text('grafanaDatasourceRef', 'Datasource config / secret reference'))
+      fields.push(
+        text('grafanaDatasourceRef', 'Datasource config / secret reference')
+      )
     }
     fields.push(
       select('grafanaSession', 'Session continuity', [
@@ -2670,8 +2949,11 @@ export const getProductConfigFields = (draft, blueprint) => {
       ])
     )
     if (draft.grafanaAlertHa === 'Existing Redis for alerting HA') {
-      fields.push(text('grafanaAlertRef', 'Redis alerting-HA service reference'))
+      fields.push(
+        text('grafanaAlertRef', 'Redis alerting-HA service reference')
+      )
     }
+
     return fields
   }
 
@@ -2685,6 +2967,7 @@ export const getProductConfigFields = (draft, blueprint) => {
     if (draft.alloyConfig === 'Existing configuration bundle reference') {
       fields.push(text('alloyConfigRef', 'Configuration bundle reference'))
     }
+
     return fields
   }
 
@@ -2710,7 +2993,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
     draft.sqlBootstrap === 'Create initial application database' &&
     !dbNamePattern.test(String(draft.sqlDbName || '').trim())
   ) {
-    errors.push('Enter a valid initial application database name, or choose to create it later.')
+    errors.push(
+      'Enter a valid initial application database name, or choose to create it later.'
+    )
   }
 
   if (
@@ -2718,14 +3003,18 @@ export const getProductConfigErrors = (draft, blueprint) => {
     draft.mongoScopeMode === 'Create application credential scope' &&
     !simpleNamePattern.test(String(draft.mongoDbName || '').trim())
   ) {
-    errors.push('Enter the MongoDB application database / credential scope name.')
+    errors.push(
+      'Enter the MongoDB application database / credential scope name.'
+    )
   }
 
   if (
     id === 'ferretdb' &&
     !dbNamePattern.test(String(draft.ferretDbName || '').trim())
   ) {
-    errors.push('FerretDB requires a logical application database name for backend bootstrap.')
+    errors.push(
+      'FerretDB requires a logical application database name for backend bootstrap.'
+    )
   }
 
   if (
@@ -2733,7 +3022,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
     draft.kvPersistence === 'Cache-only (no durability)' &&
     draft.backupEnabled
   ) {
-    errors.push('Cache-only persistence conflicts with application backup. Disable backup or choose a durable profile.')
+    errors.push(
+      'Cache-only persistence conflicts with application backup. Disable backup or choose a durable profile.'
+    )
   }
 
   if (
@@ -2782,7 +3073,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
     (!simpleNamePattern.test(String(draft.pulsarTenant || '').trim()) ||
       !simpleNamePattern.test(String(draft.pulsarNamespace || '').trim()))
   ) {
-    errors.push('Pulsar tenant and namespace names are required when bootstrap is selected.')
+    errors.push(
+      'Pulsar tenant and namespace names are required when bootstrap is selected.'
+    )
   }
 
   if (
@@ -2803,7 +3096,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
     draft.tomcatDeploy === 'Deploy application artifact' &&
     !nonEmpty(draft.tomcatArtifactRef)
   ) {
-    errors.push('Tomcat application deployment requires an immutable artifact/bundle reference.')
+    errors.push(
+      'Tomcat application deployment requires an immutable artifact/bundle reference.'
+    )
   }
 
   if (
@@ -2811,7 +3106,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
     draft.keycloakAdminMode === 'Separate admin FQDN' &&
     !isValidFqdn(draft.keycloakAdminFqdn)
   ) {
-    errors.push('Keycloak separate administration exposure requires a valid admin FQDN.')
+    errors.push(
+      'Keycloak separate administration exposure requires a valid admin FQDN.'
+    )
   }
 
   if (
@@ -2819,7 +3116,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
     draft.supersetSecretMode === 'Existing SECRET_KEY secret reference' &&
     !nonEmpty(draft.supersetSecretRef)
   ) {
-    errors.push('Superset existing SECRET_KEY mode requires a secret reference, not the raw key.')
+    errors.push(
+      'Superset existing SECRET_KEY mode requires a secret reference, not the raw key.'
+    )
   }
 
   if (id === 'airflow') {
@@ -2827,11 +3126,12 @@ export const getProductConfigErrors = (draft, blueprint) => {
       errors.push('Airflow requires a versioned DAG source / bundle reference.')
     }
     if (
-      draft.airflowSecretMode ===
-        'Existing Fernet/signing secret reference' &&
+      draft.airflowSecretMode === 'Existing Fernet/signing secret reference' &&
       !nonEmpty(draft.airflowSecretRef)
     ) {
-      errors.push('Airflow existing internal-secret mode requires a secret reference, not raw secret material.')
+      errors.push(
+        'Airflow existing internal-secret mode requires a secret reference, not raw secret material.'
+      )
     }
   }
 
@@ -2840,7 +3140,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
     draft.baoSealMode === 'Existing KMS/HSM/transit reference' &&
     !nonEmpty(draft.baoSealRef)
   ) {
-    errors.push('OpenBao external seal/unseal mode requires a KMS/HSM/transit reference.')
+    errors.push(
+      'OpenBao external seal/unseal mode requires a KMS/HSM/transit reference.'
+    )
   }
 
   if (
@@ -2848,7 +3150,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
     draft.jenkinsAgentSource === 'Existing agent template/image reference' &&
     !nonEmpty(draft.jenkinsAgentRef)
   ) {
-    errors.push('Jenkins existing agent source requires a template/image reference.')
+    errors.push(
+      'Jenkins existing agent source requires a template/image reference.'
+    )
   }
 
   if (
@@ -2858,7 +3162,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
       Number(draft.forgejoSshPort) < 1 ||
       Number(draft.forgejoSshPort) > 65535)
   ) {
-    errors.push('Forgejo Git-over-SSH requires a valid TCP port between 1 and 65535.')
+    errors.push(
+      'Forgejo Git-over-SSH requires a valid TCP port between 1 and 65535.'
+    )
   }
 
   if (
@@ -2867,7 +3173,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
       'Existing security configuration secret reference' &&
     !nonEmpty(draft.openSearchSecurityRef)
   ) {
-    errors.push('OpenSearch existing security configuration requires a secret/config reference.')
+    errors.push(
+      'OpenSearch existing security configuration requires a secret/config reference.'
+    )
   }
 
   if (id === 'prometheus') {
@@ -2876,19 +3184,25 @@ export const getProductConfigErrors = (draft, blueprint) => {
         'Existing remote-write / long-term backend' &&
       !nonEmpty(draft.prometheusHistoryRef)
     ) {
-      errors.push('Prometheus long-term history requires its remote-write / long-term backend reference.')
+      errors.push(
+        'Prometheus long-term history requires its remote-write / long-term backend reference.'
+      )
     }
     if (
       draft.promAlerting === 'Existing Alertmanager cluster' &&
       !nonEmpty(draft.promAlertRef)
     ) {
-      errors.push('Existing Alertmanager mode requires an Alertmanager service / endpoint reference.')
+      errors.push(
+        'Existing Alertmanager mode requires an Alertmanager service / endpoint reference.'
+      )
     }
     if (
       draft.promScrapeMode === 'Existing versioned scrape configuration' &&
       !nonEmpty(draft.promScrapeRef)
     ) {
-      errors.push('Existing scrape-configuration mode requires a versioned configuration / target reference.')
+      errors.push(
+        'Existing scrape-configuration mode requires a versioned configuration / target reference.'
+      )
     }
   }
 
@@ -2897,20 +3211,26 @@ export const getProductConfigErrors = (draft, blueprint) => {
       draft.grafanaSession === 'Existing Redis session store' &&
       !nonEmpty(draft.grafanaSessionRef)
     ) {
-      errors.push('Grafana existing Redis session mode requires a Redis service reference.')
+      errors.push(
+        'Grafana existing Redis session mode requires a Redis service reference.'
+      )
     }
     if (
       draft.grafanaAlertHa === 'Existing Redis for alerting HA' &&
       !nonEmpty(draft.grafanaAlertRef)
     ) {
-      errors.push('Grafana Redis alerting-HA mode requires a Redis service reference.')
+      errors.push(
+        'Grafana Redis alerting-HA mode requires a Redis service reference.'
+      )
     }
     if (
       draft.grafanaDatasourceMode ===
         'Existing datasource configuration reference' &&
       !nonEmpty(draft.grafanaDatasourceRef)
     ) {
-      errors.push('Grafana existing datasource mode requires a datasource configuration / secret reference.')
+      errors.push(
+        'Grafana existing datasource mode requires a datasource configuration / secret reference.'
+      )
     }
   }
 
@@ -2919,7 +3239,9 @@ export const getProductConfigErrors = (draft, blueprint) => {
     draft.alloyConfig === 'Existing configuration bundle reference' &&
     !nonEmpty(draft.alloyConfigRef)
   ) {
-    errors.push('Grafana Alloy existing configuration mode requires a versioned configuration bundle reference.')
+    errors.push(
+      'Grafana Alloy existing configuration mode requires a versioned configuration bundle reference.'
+    )
   }
 
   if (id === 'postgresql') {
@@ -2928,22 +3250,27 @@ export const getProductConfigErrors = (draft, blueprint) => {
         'Create initial database(s) during deployment' &&
       !nonEmpty(draft.initialDatabases)
     ) {
-      errors.push('Database bootstrap is enabled. Enter at least one initial database name.')
+      errors.push(
+        'Database bootstrap is enabled. Enter at least one initial database name.'
+      )
     }
     if (
       draft.postgis &&
       draft.postgisTarget === 'Initial database(s)' &&
-      draft.databaseBootstrap !==
-        'Create initial database(s) during deployment'
+      draft.databaseBootstrap !== 'Create initial database(s) during deployment'
     ) {
-      errors.push('PostGIS targets initial databases, but initial database creation is disabled.')
+      errors.push(
+        'PostGIS targets initial databases, but initial database creation is disabled.'
+      )
     }
     if (
       draft.postgis &&
       draft.postgisTarget === 'Existing/restored database(s)' &&
       !nonEmpty(draft.postgisDatabases)
     ) {
-      errors.push('PostGIS is enabled. Enter the existing/restored database name(s).')
+      errors.push(
+        'PostGIS is enabled. Enter the existing/restored database name(s).'
+      )
     }
   }
 
@@ -2957,6 +3284,7 @@ const storageErrors = (draft) => {
       if (item.required !== false && !nonEmpty(item.attachmentRef)) {
         errors.push(item.role + ': provide the linked dependency reference.')
       }
+
       return
     }
     if (!nonEmpty(item.storagePool)) {
@@ -2973,7 +3301,9 @@ const storageErrors = (draft) => {
         item.layout === 'Existing mount') &&
       !nonEmpty(item.attachmentRef)
     ) {
-      errors.push(item.role + ': existing storage requires an attachment/reference.')
+      errors.push(
+        item.role + ': existing storage requires an attachment/reference.'
+      )
     }
     if (
       item.layout === 'Existing mount' &&
@@ -2983,6 +3313,7 @@ const storageErrors = (draft) => {
       errors.push(item.role + ': existing mount path must be absolute.')
     }
   })
+
   return errors
 }
 
@@ -3010,6 +3341,7 @@ export const getCredentialProfile = (blueprint) => {
       refLabel: 'Bootstrap secret reference',
     }
   }
+
   return {
     required: true,
     label: 'Service authentication',
@@ -3020,20 +3352,22 @@ export const getCredentialProfile = (blueprint) => {
 }
 
 const validIPv4 = (value) => {
-  const parts = String(value || '').trim().split('.')
+  const parts = String(value || '')
+    .trim()
+    .split('.')
+
   return (
     parts.length === 4 &&
     parts.every(
       (part) =>
-        /^\d{1,3}$/.test(part) &&
-        Number(part) >= 0 &&
-        Number(part) <= 255
+        /^\d{1,3}$/.test(part) && Number(part) >= 0 && Number(part) <= 255
     )
   )
 }
 
 const validIPv6 = (value) => {
   const input = String(value || '').trim()
+
   return (
     input.includes(':') &&
     /^[0-9a-f:]+$/i.test(input) &&
@@ -3045,6 +3379,7 @@ const validIPv6 = (value) => {
 const validProxyUrl = (value) => {
   try {
     const parsed = new URL(String(value || '').trim())
+
     return (
       (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
       Boolean(parsed.hostname)
@@ -3057,7 +3392,8 @@ const validProxyUrl = (value) => {
 const networkErrors = (draft, blueprint) => {
   const errors = []
   if (!nonEmpty(draft.serviceName)) errors.push('Service name is required.')
-  if (!isValidFqdn(draft.serviceFqdn)) errors.push('Enter a valid service FQDN.')
+  if (!isValidFqdn(draft.serviceFqdn))
+    errors.push('Enter a valid service FQDN.')
   if (!nonEmpty(draft.domain)) errors.push('DNS domain is required.')
 
   if (draft.ipMode === 'Static') {
@@ -3073,8 +3409,12 @@ const networkErrors = (draft, blueprint) => {
           ' address entries for the service-owned VM footprint. Linked dependency IPs are managed by their linked blueprint.'
       )
     }
-    if (addresses.some((address) => !validIPv4(address) && !validIPv6(address))) {
-      errors.push('One or more static VM addresses are not valid IPv4/IPv6 literals.')
+    if (
+      addresses.some((address) => !validIPv4(address) && !validIPv6(address))
+    ) {
+      errors.push(
+        'One or more static VM addresses are not valid IPv4/IPv6 literals.'
+      )
     }
   }
 
@@ -3082,11 +3422,18 @@ const networkErrors = (draft, blueprint) => {
     draft.endpointMode === 'Existing load balancer' &&
     !nonEmpty(draft.externalEndpoint)
   ) {
-    errors.push('Existing load-balancer mode requires its VIP / service address reference.')
+    errors.push(
+      'Existing load-balancer mode requires its VIP / service address reference.'
+    )
   }
 
-  if (draft.dnsRegistration === 'Existing DNS workflow' && !nonEmpty(draft.dnsWorkflowRef)) {
-    errors.push('Existing DNS workflow requires a workflow / integration reference.')
+  if (
+    draft.dnsRegistration === 'Existing DNS workflow' &&
+    !nonEmpty(draft.dnsWorkflowRef)
+  ) {
+    errors.push(
+      'Existing DNS workflow requires a workflow / integration reference.'
+    )
   }
 
   if (draft.dnsRegistration === 'Manual DNS records') {
@@ -3097,13 +3444,17 @@ const networkErrors = (draft, blueprint) => {
     }
     if (draft.dnsTargetMode === 'Specify DNS target now') {
       if (!nonEmpty(draft.dnsTarget)) {
-        errors.push('Manual DNS target mode requires an IP address or target FQDN.')
+        errors.push(
+          'Manual DNS target mode requires an IP address or target FQDN.'
+        )
       } else if (
         draft.dnsRecordType === 'A/AAAA' &&
         !validIPv4(draft.dnsTarget) &&
         !validIPv6(draft.dnsTarget)
       ) {
-        errors.push('Manual A/AAAA records require a valid IPv4 or IPv6 target.')
+        errors.push(
+          'Manual A/AAAA records require a valid IPv4 or IPv6 target.'
+        )
       } else if (
         draft.dnsRecordType === 'CNAME' &&
         !isValidFqdn(draft.dnsTarget)
@@ -3118,11 +3469,10 @@ const networkErrors = (draft, blueprint) => {
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
       errors.push('Custom service port must be between 1 and 65535.')
     }
-    if (
-      blueprint.id === 'yugabytedb' &&
-      draft.ybApi === 'Both YSQL + YCQL'
-    ) {
-      errors.push('YSQL and YCQL use separate listeners; one custom port cannot represent both APIs.')
+    if (blueprint.id === 'yugabytedb' && draft.ybApi === 'Both YSQL + YCQL') {
+      errors.push(
+        'YSQL and YCQL use separate listeners; one custom port cannot represent both APIs.'
+      )
     }
   }
 
@@ -3131,7 +3481,9 @@ const networkErrors = (draft, blueprint) => {
     getArchitecturePlan(draft, blueprint).dedicated > 1 &&
     draft.availability === 'Single failure domain'
   ) {
-    errors.push('Multi-VM production topology cannot use a single failure domain.')
+    errors.push(
+      'Multi-VM production topology cannot use a single failure domain.'
+    )
   }
 
   return errors
@@ -3144,7 +3496,9 @@ const backupErrors = (draft, blueprint) => {
   if (backup.mode !== 'direct' && draft.backupEnabled) {
     errors.push(
       'This service does not own a direct application-backup workflow. Recovery is ' +
-        (backup.mode === 'dependency' ? 'dependency-owned.' : 'rebuild/replication-based.')
+        (backup.mode === 'dependency'
+          ? 'dependency-owned.'
+          : 'rebuild/replication-based.')
     )
   }
 
@@ -3161,10 +3515,7 @@ const backupErrors = (draft, blueprint) => {
     if (draft.pitr && !blueprint.supportsPitr) {
       errors.push('PITR is not offered for this service profile.')
     }
-    if (
-      blueprint.id === 'postgresql' &&
-      draft.barmanPlacement === 'Disabled'
-    ) {
+    if (blueprint.id === 'postgresql' && draft.barmanPlacement === 'Disabled') {
       errors.push(
         'PostgreSQL backup is enabled. Select shared/dedicated Barman or disable backup.'
       )
@@ -3172,11 +3523,18 @@ const backupErrors = (draft, blueprint) => {
   }
 
   if (draft.drEnabled) {
-    if (!nonEmpty(draft.drTarget)) errors.push('DR requires a target site / profile.')
-    if (!Number.isFinite(Number(draft.rpoMinutes)) || Number(draft.rpoMinutes) < 0) {
+    if (!nonEmpty(draft.drTarget))
+      errors.push('DR requires a target site / profile.')
+    if (
+      !Number.isFinite(Number(draft.rpoMinutes)) ||
+      Number(draft.rpoMinutes) < 0
+    ) {
       errors.push('DR RPO must be zero or a positive number of minutes.')
     }
-    if (!Number.isFinite(Number(draft.rtoMinutes)) || Number(draft.rtoMinutes) < 0) {
+    if (
+      !Number.isFinite(Number(draft.rtoMinutes)) ||
+      Number(draft.rtoMinutes) < 0
+    ) {
       errors.push('DR RTO must be zero or a positive number of minutes.')
     }
   }
@@ -3190,16 +3548,22 @@ const securityErrors = (draft, blueprint) => {
     errors.push('TLS is mandatory for the production service profile.')
   }
   if (draft.environment === 'Production' && !draft.monitoring) {
-    errors.push('Monitoring must remain enabled for the production service profile.')
+    errors.push(
+      'Monitoring must remain enabled for the production service profile.'
+    )
   }
   if (draft.environment === 'Production' && !draft.logging) {
-    errors.push('Central logging must remain enabled for the production service profile.')
+    errors.push(
+      'Central logging must remain enabled for the production service profile.'
+    )
   }
   if (
     draft.packageSourceMode === 'Local repository / mirror' &&
     !nonEmpty(draft.repoUrl)
   ) {
-    errors.push('Local repository mode requires an internal repository URL / FQDN.')
+    errors.push(
+      'Local repository mode requires an internal repository URL / FQDN.'
+    )
   }
   if (
     draft.packageSourceMode === 'Air-gapped bundle' &&
@@ -3212,7 +3576,9 @@ const securityErrors = (draft, blueprint) => {
     draft.internetAccess === 'HTTP(S) Proxy' &&
     !validProxyUrl(draft.proxyUrl)
   ) {
-    errors.push('Proxy mode requires a valid http:// or https:// proxy URL. Username and password remain optional.')
+    errors.push(
+      'Proxy mode requires a valid http:// or https:// proxy URL. Username and password remain optional.'
+    )
   }
 
   if (
@@ -3220,7 +3586,9 @@ const securityErrors = (draft, blueprint) => {
     draft.tlsCertificateMode === 'Existing certificate / secret reference' &&
     !nonEmpty(draft.tlsCertificateRef)
   ) {
-    errors.push('Existing TLS certificate mode requires a certificate/secret reference; private-key material must not be pasted into the design.')
+    errors.push(
+      'Existing TLS certificate mode requires a certificate/secret reference; private-key material must not be pasted into the design.'
+    )
   }
 
   const credential = getCredentialProfile(blueprint)
@@ -3236,28 +3604,40 @@ const securityErrors = (draft, blueprint) => {
 }
 
 export const validateStep = (step, draft, blueprint) => {
-  if (!blueprint) return [{ code: 'SERVICE_REQUIRED', message: 'Select a service.' }]
+  if (!blueprint)
+    return [{ code: 'SERVICE_REQUIRED', message: 'Select a service.' }]
   let messages = []
 
   if (step === 0) {
     messages = blueprint ? [] : ['Select a service.']
   } else if (step === 1) {
     if (!nonEmpty(draft.version)) messages.push('Select a version.')
-    if (!nonEmpty(draft.topology)) messages.push('Select a deployment topology.')
-    if (blueprint.editions && !nonEmpty(draft.edition)) messages.push('Select an edition.')
+    if (!nonEmpty(draft.topology))
+      messages.push('Select a deployment topology.')
+    if (blueprint.editions && !nonEmpty(draft.edition))
+      messages.push('Select an edition.')
     messages.push(...getProductConfigErrors(draft, blueprint))
     messages.push(...getDependencyErrors(draft, blueprint))
   } else if (step === 2) {
     if (!Number.isInteger(Number(draft.vcpu)) || Number(draft.vcpu) < 1) {
       messages.push('vCPU per primary service node must be at least 1.')
     }
-    if (!Number.isInteger(Number(draft.memoryGiB)) || Number(draft.memoryGiB) < 1) {
+    if (
+      !Number.isInteger(Number(draft.memoryGiB)) ||
+      Number(draft.memoryGiB) < 1
+    ) {
       messages.push('Memory per primary service node must be at least 1 GiB.')
     }
-    if (!Number.isFinite(Number(draft.expectedDataGiB)) || Number(draft.expectedDataGiB) < 0) {
+    if (
+      !Number.isFinite(Number(draft.expectedDataGiB)) ||
+      Number(draft.expectedDataGiB) < 0
+    ) {
       messages.push('Expected data size cannot be negative.')
     }
-    if (!Number.isInteger(Number(draft.expectedConnections)) || Number(draft.expectedConnections) < 0) {
+    if (
+      !Number.isInteger(Number(draft.expectedConnections)) ||
+      Number(draft.expectedConnections) < 0
+    ) {
       messages.push('Expected connections cannot be negative.')
     }
   } else if (step === 3) {
@@ -3266,7 +3646,9 @@ export const validateStep = (step, draft, blueprint) => {
       draft.placementPolicy === 'Use qualified dedicated pool' &&
       !nonEmpty(draft.dedicatedPool)
     ) {
-      messages.push('Dedicated placement requires a qualified pool / policy reference.')
+      messages.push(
+        'Dedicated placement requires a qualified pool / policy reference.'
+      )
     }
   } else if (step === 4) {
     messages.push(...networkErrors(draft, blueprint))
@@ -3293,6 +3675,7 @@ export const validateDraft = (draft, blueprint) =>
 
 export const sanitizeDesign = (draft) => {
   const { proxyPassword, ...safe } = draft
+
   return {
     ...safe,
     proxyPasswordPresent: Boolean(proxyPassword),
@@ -3306,7 +3689,8 @@ export const getProductSummary = (draft, blueprint) => {
   if (id === 'postgresql') {
     return (
       'Initial DB: ' +
-      (draft.databaseBootstrap === 'Create initial database(s) during deployment'
+      (draft.databaseBootstrap ===
+      'Create initial database(s) during deployment'
         ? draft.initialDatabases
         : 'create later') +
       '; Patroni DCS: ' +
@@ -3330,17 +3714,39 @@ export const getProductSummary = (draft, blueprint) => {
     )
   }
   if (id === 'ferretdb') {
-    return 'Logical DB ' + draft.ferretDbName + '; linked PostgreSQL/DocumentDB backend'
+    return (
+      'Logical DB ' +
+      draft.ferretDbName +
+      '; linked PostgreSQL/DocumentDB backend'
+    )
   }
-  if (id === 'redis' || id === 'valkey') return 'Persistence: ' + draft.kvPersistence
+  if (id === 'redis' || id === 'valkey')
+    return 'Persistence: ' + draft.kvPersistence
   if (id === 'clickhouse') {
-    return draft.clickBootstrap + (draft.clickBootstrap === 'Create initial database' ? ' · ' + draft.clickDbName : '')
+    return (
+      draft.clickBootstrap +
+      (draft.clickBootstrap === 'Create initial database'
+        ? ' · ' + draft.clickDbName
+        : '')
+    )
   }
   if (id === 'cassandra') {
-    return draft.cassBootstrap + (draft.cassBootstrap === 'Create initial keyspace' ? ' · ' + draft.cassKeyspace : '')
+    return (
+      draft.cassBootstrap +
+      (draft.cassBootstrap === 'Create initial keyspace'
+        ? ' · ' + draft.cassKeyspace
+        : '')
+    )
   }
   if (id === 'yugabytedb') {
-    return draft.ybApi + '; ' + draft.ybBootstrap + (draft.ybBootstrap === 'Create initial database / namespace' ? ' · ' + draft.ybDbName : '')
+    return (
+      draft.ybApi +
+      '; ' +
+      draft.ybBootstrap +
+      (draft.ybBootstrap === 'Create initial database / namespace'
+        ? ' · ' + draft.ybDbName
+        : '')
+    )
   }
   if (id === 'rabbitmq') {
     return (
@@ -3353,7 +3759,12 @@ export const getProductSummary = (draft, blueprint) => {
     )
   }
   if (id === 'kafka') {
-    return draft.kafkaTopicMode + (draft.kafkaTopic ? ' · ' + draft.kafkaTopic : '') + '; ' + draft.kafkaDurability
+    return (
+      draft.kafkaTopicMode +
+      (draft.kafkaTopic ? ' · ' + draft.kafkaTopic : '') +
+      '; ' +
+      draft.kafkaDurability
+    )
   }
   if (id === 'pulsar') {
     return (
@@ -3366,7 +3777,9 @@ export const getProductSummary = (draft, blueprint) => {
     )
   }
   if (id === 'nginx' || id === 'apache-httpd') {
-    return draft.webMode + (draft.webSourceRef ? ' · ' + draft.webSourceRef : '')
+    return (
+      draft.webMode + (draft.webSourceRef ? ' · ' + draft.webSourceRef : '')
+    )
   }
   if (id === 'tomcat') {
     return (
@@ -3377,25 +3790,48 @@ export const getProductSummary = (draft, blueprint) => {
     )
   }
   if (id === 'keycloak') {
-    return draft.keycloakAdminMode + (draft.keycloakAdminFqdn ? ' · ' + draft.keycloakAdminFqdn : '')
+    return (
+      draft.keycloakAdminMode +
+      (draft.keycloakAdminFqdn ? ' · ' + draft.keycloakAdminFqdn : '')
+    )
   }
   if (id === 'superset') {
-    return draft.supersetSecretMode + (draft.supersetSecretRef ? ' · secret ref configured' : '')
+    return (
+      draft.supersetSecretMode +
+      (draft.supersetSecretRef ? ' · secret ref configured' : '')
+    )
   }
   if (id === 'airflow') {
-    return 'DAG source: ' + (draft.airflowDagRef || 'required') + '; ' + draft.airflowSecretMode
+    return (
+      'DAG source: ' +
+      (draft.airflowDagRef || 'required') +
+      '; ' +
+      draft.airflowSecretMode
+    )
   }
   if (id === 'openbao') {
-    return draft.baoSealMode + (draft.baoSealRef ? ' · trust ref configured' : '')
+    return (
+      draft.baoSealMode + (draft.baoSealRef ? ' · trust ref configured' : '')
+    )
   }
   if (id === 'jenkins') {
-    return draft.jenkinsAgentSource + (draft.jenkinsAgentRef ? ' · template ref configured' : '')
+    return (
+      draft.jenkinsAgentSource +
+      (draft.jenkinsAgentRef ? ' · template ref configured' : '')
+    )
   }
   if (id === 'forgejo') {
-    return 'Git HTTPS enabled; SSH ' + draft.forgejoSsh + (draft.forgejoSsh === 'Enabled' ? ' on ' + draft.forgejoSshPort : '')
+    return (
+      'Git HTTPS enabled; SSH ' +
+      draft.forgejoSsh +
+      (draft.forgejoSsh === 'Enabled' ? ' on ' + draft.forgejoSshPort : '')
+    )
   }
   if (id === 'opensearch') {
-    return draft.openSearchSecurity + (draft.openSearchSecurityRef ? ' · reference configured' : '')
+    return (
+      draft.openSearchSecurity +
+      (draft.openSearchSecurityRef ? ' · reference configured' : '')
+    )
   }
   if (id === 'prometheus') {
     return (
@@ -3408,9 +3844,17 @@ export const getProductSummary = (draft, blueprint) => {
     )
   }
   if (id === 'grafana') {
-    return 'Datasources: ' + draft.grafanaDatasourceMode + '; sessions: ' + draft.grafanaSession + '; alerting HA: ' + draft.grafanaAlertHa
+    return (
+      'Datasources: ' +
+      draft.grafanaDatasourceMode +
+      '; sessions: ' +
+      draft.grafanaSession +
+      '; alerting HA: ' +
+      draft.grafanaAlertHa
+    )
   }
   if (id === 'alloy') return draft.alloyConfig
+
   return 'Qualified product defaults'
 }
 
@@ -3419,7 +3863,9 @@ export const createDraft = (
   catalog = FALLBACK_BLUEPRINTS
 ) => {
   const blueprint =
-    getBlueprintById(blueprintId, catalog) || catalog[0] || FALLBACK_BLUEPRINTS[0]
+    getBlueprintById(blueprintId, catalog) ||
+    catalog[0] ||
+    FALLBACK_BLUEPRINTS[0]
   const draft = {
     ...COMMON_DEFAULTS,
     ...PRODUCT_DEFAULTS,
@@ -3429,7 +3875,8 @@ export const createDraft = (
     workload: blueprint.workloads[0] || 'General',
   }
   draft.topology = getRecommendedTopology(draft, blueprint)
-  draft.endpointMode = endpointDefaults[blueprint.id] || 'Existing load balancer'
+  draft.endpointMode =
+    endpointDefaults[blueprint.id] || 'Existing load balancer'
   draft.serviceName = blueprint.id + '-prod'
   const backup = getBackupProfile(blueprint)
   draft.backupEnabled = Boolean(backup.default)
@@ -3443,5 +3890,6 @@ export const createDraft = (
   if (credential.required) {
     draft.credentialMode = credential.generated
   }
+
   return draft
 }

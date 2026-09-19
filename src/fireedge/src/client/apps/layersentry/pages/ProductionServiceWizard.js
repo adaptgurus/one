@@ -177,9 +177,7 @@ const AdvancedSection = ({
       sx={{ px: 2 }}
     >
       <Box>
-        <Typography sx={{ fontWeight: 800, fontSize: 13 }}>
-          {title}
-        </Typography>
+        <Typography sx={{ fontWeight: 800, fontSize: 13 }}>{title}</Typography>
         {description && (
           <Typography sx={{ color: colors.text.muted, fontSize: 11, mt: 0.25 }}>
             {description}
@@ -187,9 +185,7 @@ const AdvancedSection = ({
         )}
       </Box>
     </AccordionSummary>
-    <AccordionDetails
-      sx={{ borderTop: '1px solid ' + colors.border, p: 2 }}
-    >
+    <AccordionDetails sx={{ borderTop: '1px solid ' + colors.border, p: 2 }}>
       {children}
     </AccordionDetails>
   </Accordion>
@@ -326,6 +322,7 @@ const ProductionServiceWizard = () => {
     })
       .then((response) => {
         if (!response.ok) throw new Error('catalog unavailable')
+
         return response.json()
       })
       .then((payload) => {
@@ -337,6 +334,7 @@ const ProductionServiceWizard = () => {
           setDraft((current) => {
             const runtime = getBlueprintById(current.blueprintId, merged)
             if (!runtime) return current
+
             return {
               ...current,
               version: runtime.versions.includes(current.version)
@@ -391,10 +389,7 @@ const ProductionServiceWizard = () => {
     () => getCredentialProfile(blueprint),
     [blueprint]
   )
-  const backupProfile = useMemo(
-    () => getBackupProfile(blueprint),
-    [blueprint]
-  )
+  const backupProfile = useMemo(() => getBackupProfile(blueprint), [blueprint])
   const currentErrors = useMemo(
     () => validateStep(step, draft, blueprint),
     [step, draft, blueprint]
@@ -447,10 +442,7 @@ const ProductionServiceWizard = () => {
         }
       }
 
-      if (
-        key === 'kvPersistence' &&
-        value === 'Cache-only (no durability)'
-      ) {
+      if (key === 'kvPersistence' && value === 'Cache-only (no durability)') {
         next = { ...next, backupEnabled: false, pitr: false }
       }
 
@@ -563,6 +555,7 @@ const ProductionServiceWizard = () => {
         topology: recommended,
       }
       const endpointChoices = getEndpointOptions(next, currentBlueprint)
+
       return {
         ...next,
         ...getDefaultDependencyState(next, currentBlueprint),
@@ -579,6 +572,7 @@ const ProductionServiceWizard = () => {
     const errors = validateStep(step, draft, blueprint)
     if (targetStep > step && errors.length) {
       setAttemptedStep(step)
+
       return
     }
     setAttemptedStep(null)
@@ -600,7 +594,9 @@ const ProductionServiceWizard = () => {
         }}
       >
         <Box>
-          <Typography sx={{ fontWeight: 800 }}>Deployment architecture</Typography>
+          <Typography sx={{ fontWeight: 800 }}>
+            Deployment architecture
+          </Typography>
           <Typography sx={{ color: colors.text.muted, fontSize: 11, mt: 0.5 }}>
             Every service-owned component and external/shared dependency is
             visible before capacity is reserved.
@@ -666,7 +662,9 @@ const ProductionServiceWizard = () => {
               <Typography sx={{ fontWeight: 800, fontSize: 12 }}>
                 {item.name}
               </Typography>
-              <Typography sx={{ color: colors.text.muted, fontSize: 10, mt: 0.25 }}>
+              <Typography
+                sx={{ color: colors.text.muted, fontSize: 10, mt: 0.25 }}
+              >
                 {item.note}
               </Typography>
             </Box>
@@ -710,9 +708,7 @@ const ProductionServiceWizard = () => {
   )
 
   const renderService = () => {
-    const categories = [
-      ...new Set(catalog.map(({ category }) => category)),
-    ]
+    const categories = [...new Set(catalog.map(({ category }) => category))]
 
     return (
       <>
@@ -797,9 +793,7 @@ const ProductionServiceWizard = () => {
                     </Typography>
                     <StatusPill
                       label={item.qualification}
-                      tone={
-                        item.productionSelectable ? 'success' : 'warning'
-                      }
+                      tone={item.productionSelectable ? 'success' : 'warning'}
                     />
                   </Surface>
                 ))}
@@ -813,8 +807,12 @@ const ProductionServiceWizard = () => {
   const renderDependencies = () =>
     dependencySpecs.length > 0 && (
       <Surface sx={{ mt: 2, p: 2 }} data-testid="dependency-plan">
-        <Typography sx={{ fontWeight: 800 }}>Required dependency plan</Typography>
-        <Typography sx={{ color: colors.text.muted, fontSize: 11, mt: 0.25, mb: 1.5 }}>
+        <Typography sx={{ fontWeight: 800 }}>
+          Required dependency plan
+        </Typography>
+        <Typography
+          sx={{ color: colors.text.muted, fontSize: 11, mt: 0.25, mb: 1.5 }}
+        >
           Dependencies are not silently assumed to exist. Provisioned linked
           service VMs are included in the total VM footprint; existing
           dependencies require an explicit reference.
@@ -846,12 +844,18 @@ const ProductionServiceWizard = () => {
                     <Typography sx={{ fontWeight: 800, fontSize: 13 }}>
                       {dependency.label}
                     </Typography>
-                    <Typography sx={{ color: colors.text.muted, fontSize: 11, mt: 0.25 }}>
+                    <Typography
+                      sx={{ color: colors.text.muted, fontSize: 11, mt: 0.25 }}
+                    >
                       {dependency.note}
                     </Typography>
                   </Box>
                   <StatusPill
-                    label={addsVms ? '+' + addsVms + ' linked VMs' : 'external/shared'}
+                    label={
+                      addsVms
+                        ? '+' + addsVms + ' linked VMs'
+                        : 'external/shared'
+                    }
                     tone={addsVms ? 'success' : 'info'}
                   />
                 </Box>
@@ -996,6 +1000,7 @@ const ProductionServiceWizard = () => {
     const choosePreset = (preset) => {
       if (preset === 'Custom') {
         update('capacityPreset', 'Custom')
+
         return
       }
       const sizing = presets[preset]
@@ -1156,9 +1161,7 @@ const ProductionServiceWizard = () => {
                 <NumberField
                   label="Size (GiB)"
                   value={item.sizeGiB}
-                  onChange={(value) =>
-                    updateStorage(index, { sizeGiB: value })
-                  }
+                  onChange={(value) => updateStorage(index, { sizeGiB: value })}
                   min={1}
                 />
                 <SelectField
@@ -1254,8 +1257,8 @@ const ProductionServiceWizard = () => {
         Network & Availability
       </Typography>
       <Typography sx={{ color: colors.text.secondary, mb: 2 }}>
-        Define the customer-facing name and availability intent. Raw
-        OpenNebula network internals stay hidden from normal users.
+        Define the customer-facing name and availability intent. Raw OpenNebula
+        network internals stay hidden from normal users.
       </Typography>
       <Row>
         <TextField
@@ -1326,7 +1329,9 @@ const ProductionServiceWizard = () => {
               onChange={(event) => update('staticIps', event.target.value)}
               helperText={
                 'At least ' +
-                String(architecture.addressableNodes || architecture.dedicated) +
+                String(
+                  architecture.addressableNodes || architecture.dedicated
+                ) +
                 ' addresses are required for this footprint.'
               }
             />
@@ -1351,18 +1356,14 @@ const ProductionServiceWizard = () => {
             <MenuItem value="Existing DNS workflow">
               Existing DNS workflow
             </MenuItem>
-            <MenuItem value="Manual DNS records">
-              Manual DNS records
-            </MenuItem>
+            <MenuItem value="Manual DNS records">Manual DNS records</MenuItem>
           </SelectField>
 
           {draft.dnsRegistration === 'Existing DNS workflow' && (
             <TextField
               label="DNS workflow / integration reference"
               value={draft.dnsWorkflowRef}
-              onChange={(event) =>
-                update('dnsWorkflowRef', event.target.value)
-              }
+              onChange={(event) => update('dnsWorkflowRef', event.target.value)}
             />
           )}
 
@@ -1404,9 +1405,7 @@ const ProductionServiceWizard = () => {
                 <TextField
                   label="DNS target IP / FQDN"
                   value={draft.dnsTarget}
-                  onChange={(event) =>
-                    update('dnsTarget', event.target.value)
-                  }
+                  onChange={(event) => update('dnsTarget', event.target.value)}
                 />
               )}
             </>
@@ -1417,9 +1416,7 @@ const ProductionServiceWizard = () => {
             value={draft.portPolicy}
             onChange={(value) => update('portPolicy', value)}
           >
-            <MenuItem value="Use product default">
-              Use product default
-            </MenuItem>
+            <MenuItem value="Use product default">Use product default</MenuItem>
             <MenuItem value="Custom qualified port">
               Custom qualified port
             </MenuItem>
@@ -1462,7 +1459,9 @@ const ProductionServiceWizard = () => {
               <Typography sx={{ fontWeight: 800 }}>
                 {backupProfile.engine}
               </Typography>
-              <Typography sx={{ color: colors.text.muted, fontSize: 11, mt: 0.5 }}>
+              <Typography
+                sx={{ color: colors.text.muted, fontSize: 11, mt: 0.5 }}
+              >
                 {backupProfile.note}
               </Typography>
             </Surface>
@@ -1510,9 +1509,7 @@ const ProductionServiceWizard = () => {
                   <NumberField
                     label="PITR recovery window (hours)"
                     value={draft.pitrWindowHours}
-                    onChange={(value) =>
-                      update('pitrWindowHours', value)
-                    }
+                    onChange={(value) => update('pitrWindowHours', value)}
                     min={1}
                   />
                 )}
@@ -1520,7 +1517,9 @@ const ProductionServiceWizard = () => {
             )}
           </>
         ) : (
-          <Alert severity={backupProfile.mode === 'dependency' ? 'info' : 'warning'}>
+          <Alert
+            severity={backupProfile.mode === 'dependency' ? 'info' : 'warning'}
+          >
             <Typography sx={{ fontWeight: 800 }}>
               {backupProfile.mode === 'dependency'
                 ? 'Recovery is owned by linked dependencies'
@@ -1549,9 +1548,7 @@ const ProductionServiceWizard = () => {
             control={
               <Switch
                 checked={draft.drEnabled}
-                onChange={(event) =>
-                  update('drEnabled', event.target.checked)
-                }
+                onChange={(event) => update('drEnabled', event.target.checked)}
               />
             }
             label="Configure a qualified DR topology"
@@ -1604,9 +1601,7 @@ const ProductionServiceWizard = () => {
           control={
             <Switch
               checked={draft.monitoring}
-              onChange={(event) =>
-                update('monitoring', event.target.checked)
-              }
+              onChange={(event) => update('monitoring', event.target.checked)}
             />
           }
           label="Monitoring enabled"
@@ -1628,9 +1623,7 @@ const ProductionServiceWizard = () => {
           <MenuItem value="SSH key / managed access">
             SSH key / managed access
           </MenuItem>
-          <MenuItem value="Managed access only">
-            Managed access only
-          </MenuItem>
+          <MenuItem value="Managed access only">Managed access only</MenuItem>
         </SelectField>
         <SelectField
           label="Hardening profile"
@@ -1734,9 +1727,7 @@ const ProductionServiceWizard = () => {
             <MenuItem value="Local repository / mirror">
               Local repository / mirror
             </MenuItem>
-            <MenuItem value="Air-gapped bundle">
-              Air-gapped bundle
-            </MenuItem>
+            <MenuItem value="Air-gapped bundle">Air-gapped bundle</MenuItem>
           </SelectField>
 
           {draft.packageSourceMode === 'Local repository / mirror' && (
@@ -1772,9 +1763,7 @@ const ProductionServiceWizard = () => {
                 <TextField
                   label="Proxy URL"
                   value={draft.proxyUrl}
-                  onChange={(event) =>
-                    update('proxyUrl', event.target.value)
-                  }
+                  onChange={(event) => update('proxyUrl', event.target.value)}
                   placeholder="http://proxy.example.internal:3128"
                 />
                 <TextField
@@ -1804,9 +1793,7 @@ const ProductionServiceWizard = () => {
                 <TextField
                   label="Proxy CA / trust reference (optional)"
                   value={draft.proxyCaRef}
-                  onChange={(event) =>
-                    update('proxyCaRef', event.target.value)
-                  }
+                  onChange={(event) => update('proxyCaRef', event.target.value)}
                 />
               </>
             )}
@@ -1845,7 +1832,11 @@ const ProductionServiceWizard = () => {
           }}
         >
           {[
-            ['Service', blueprint?.name, draft.version + ' · ' + draft.topology],
+            [
+              'Service',
+              blueprint?.name,
+              draft.version + ' · ' + draft.topology,
+            ],
             [
               'VM footprint',
               String(architecture.dedicated) +
@@ -1920,7 +1911,9 @@ const ProductionServiceWizard = () => {
                 ' · ' +
                 (draft.monitoring ? 'Monitoring' : 'Monitoring disabled') +
                 ' · ' +
-                (draft.logging ? 'Central logging' : 'Central logging disabled'),
+                (draft.logging
+                  ? 'Central logging'
+                  : 'Central logging disabled'),
               draft.hardeningProfile,
             ],
             [
@@ -2145,7 +2138,9 @@ const ProductionServiceWizard = () => {
               String(architecture.dedicated) +
                 (architecture.minimum ? '+' : '') +
                 ' (' +
-                String(architecture.primaryDedicated ?? architecture.dedicated) +
+                String(
+                  architecture.primaryDedicated ?? architecture.dedicated
+                ) +
                 ' service + ' +
                 String(architecture.linkedDedicated || 0) +
                 ' linked)',
@@ -2202,8 +2197,8 @@ const ProductionServiceWizard = () => {
         <DialogTitle>Configuration Review</DialogTitle>
         <DialogContent dividers>
           <Alert severity="info" sx={{ mb: 2 }}>
-            Secret values are excluded. In particular, proxy passwords are
-            never rendered in this review payload.
+            Secret values are excluded. In particular, proxy passwords are never
+            rendered in this review payload.
           </Alert>
           <Box
             component="pre"

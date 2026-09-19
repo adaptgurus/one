@@ -55,7 +55,10 @@ const ApplicationsWorkspace = ({ endpoints }) => {
           {[
             ['Catalog', 'Published and qualification-gated service blueprints'],
             ['Deployments', 'Running OneFlow-backed service instances'],
-            ['Safe lifecycle', 'Validate, revise, recover and remove through authoritative backends'],
+            [
+              'Safe lifecycle',
+              'Validate, revise, recover and remove through authoritative backends',
+            ],
           ].map(([title, description]) => (
             <Box
               key={title}
