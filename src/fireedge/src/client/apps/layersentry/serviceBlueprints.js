@@ -29,6 +29,179 @@ export const LICENSE_NOTICES = Object.freeze({
     'Redis licensing varies by release. The production catalog must pin the approved exact artifact and license rather than assuming one license across versions.',
 })
 
+export const BACKUP_PROFILES = Object.freeze({
+  postgresql: {
+    mode: 'direct',
+    default: true,
+    engine: 'Barman + PostgreSQL WAL archive',
+    note: 'Physical base backups plus WAL archiving; restore and PITR are separately qualified.',
+  },
+  'mysql-family': {
+    mode: 'direct',
+    default: true,
+    engine: 'Edition-qualified physical backup + binary logs',
+    note: 'Backup tooling and PITR implementation depend on the selected MySQL/Percona edition.',
+  },
+  mariadb: {
+    mode: 'direct',
+    default: true,
+    engine: 'mariadb-backup + binary logs',
+    note: 'PITR uses qualified backup plus binary-log retention.',
+  },
+  'mongodb-community': {
+    mode: 'direct',
+    default: true,
+    engine: 'Qualified MongoDB Community backup / snapshot workflow',
+    note: 'Application-level PITR is not advertised until an exact qualified recovery chain exists.',
+  },
+  'percona-mongodb': {
+    mode: 'direct',
+    default: true,
+    engine: 'Percona Backup for MongoDB (PBM)',
+    note: 'PBM backup/PITR is qualified for the exact product/version tuple.',
+  },
+  ferretdb: {
+    mode: 'dependency',
+    default: false,
+    engine: 'Linked PostgreSQL/DocumentDB backend recovery',
+    note: 'FerretDB frontends are replaceable; backup/PITR protect the linked backend database.',
+  },
+  redis: {
+    mode: 'direct',
+    default: true,
+    engine: 'RDB/AOF recovery workflow',
+    note: 'Sentinel/Cluster replication is HA, not backup.',
+  },
+  valkey: {
+    mode: 'direct',
+    default: true,
+    engine: 'RDB/AOF recovery workflow',
+    note: 'Replication and persistence recovery are separate controls.',
+  },
+  clickhouse: {
+    mode: 'direct',
+    default: true,
+    engine: 'ClickHouse BACKUP to qualified repository',
+    note: 'Replication/Keeper quorum and backups are independent; generic PITR is not claimed.',
+  },
+  cassandra: {
+    mode: 'direct',
+    default: true,
+    engine: 'Snapshot/incremental backup + repair-aware recovery',
+    note: 'Commit-log point recovery is not exposed until qualified.',
+  },
+  yugabytedb: {
+    mode: 'direct',
+    default: true,
+    engine: 'YugabyteDB backup + PITR workflow',
+    note: 'Backup/PITR is qualified for the exact release and storage topology.',
+  },
+  rabbitmq: {
+    mode: 'none',
+    default: false,
+    engine: 'Quorum/stream replication + definitions export',
+    note: 'Queue replication protects availability; this profile does not advertise portable message-data backup/PITR.',
+  },
+  kafka: {
+    mode: 'none',
+    default: false,
+    engine: 'Replication + application/event reprocessing policy',
+    note: 'Kafka replication is availability, not an application backup/PITR chain.',
+  },
+  pulsar: {
+    mode: 'none',
+    default: false,
+    engine: 'BookKeeper replication / geo-replication',
+    note: 'Ledger replication is availability/DR; generic application backup/PITR is not advertised.',
+  },
+  nginx: {
+    mode: 'none',
+    default: false,
+    engine: 'Configuration-as-code / artifact source',
+    note: 'Stateless web/proxy nodes are rebuilt from versioned configuration.',
+  },
+  'apache-httpd': {
+    mode: 'none',
+    default: false,
+    engine: 'Configuration/content source of truth',
+    note: 'Stateless web tier is rebuilt from source; no application PITR claim is made.',
+  },
+  tomcat: {
+    mode: 'none',
+    default: false,
+    engine: 'Application artifact + configuration source of truth',
+    note: 'Application binaries/configuration are redeployed; business data belongs to explicit dependencies.',
+  },
+  keycloak: {
+    mode: 'dependency',
+    default: false,
+    engine: 'Linked HA relational database recovery',
+    note: 'Keycloak persistence is owned by the linked database; its backup/PITR policy is managed there.',
+  },
+  superset: {
+    mode: 'dependency',
+    default: false,
+    engine: 'Metadata DB + async dependency recovery',
+    note: 'Production metadata and distributed async state are protected through their linked dependencies.',
+  },
+  airflow: {
+    mode: 'dependency',
+    default: false,
+    engine: 'Metadata DB + DAG source + log/artifact dependency recovery',
+    note: 'A metadata-DB-only restore is incomplete without matching DAG and log/artifact state.',
+  },
+  openbao: {
+    mode: 'direct',
+    default: true,
+    engine: 'Integrated Storage Raft snapshots',
+    note: 'Raft quorum is HA; periodic snapshots are the recovery artifact.',
+  },
+  jenkins: {
+    mode: 'direct',
+    default: true,
+    engine: 'JENKINS_HOME + configuration/credential-safe backup',
+    note: 'Agents are replaceable; controller state is backed up and restore-tested.',
+  },
+  forgejo: {
+    mode: 'dependency',
+    default: false,
+    engine: 'Coordinated DB + repository/object storage recovery',
+    note: 'Database-only recovery is insufficient because repository/object state must remain consistent.',
+  },
+  opensearch: {
+    mode: 'direct',
+    default: true,
+    engine: 'OpenSearch snapshots to qualified repository',
+    note: 'Repository snapshots are the recovery artifact; manager quorum is not a backup.',
+  },
+  prometheus: {
+    mode: 'none',
+    default: false,
+    engine: 'HA replicas + optional remote-write/long-term backend',
+    note: 'Local HA TSDBs are independent; durable shared history requires an explicit long-term backend.',
+  },
+  grafana: {
+    mode: 'dependency',
+    default: false,
+    engine: 'Linked SQL database recovery',
+    note: 'Grafana HA state is owned by the linked SQL database and selected session/alerting dependencies.',
+  },
+  alloy: {
+    mode: 'none',
+    default: false,
+    engine: 'Versioned configuration source of truth',
+    note: 'Collectors are replaceable; telemetry destinations own durable telemetry data.',
+  },
+})
+
+export const getBackupProfile = (blueprint) =>
+  BACKUP_PROFILES[blueprint?.id] || {
+    mode: 'none',
+    default: false,
+    engine: 'Qualified product recovery policy',
+    note: 'Recovery behavior is qualification-controlled.',
+  }
+
 const catalogItem = (input) => ({
   qualification: 'NOT_TESTED',
   productionSelectable: false,
@@ -2958,8 +3131,20 @@ const networkErrors = (draft, blueprint) => {
 
 const backupErrors = (draft, blueprint) => {
   const errors = []
-  if (draft.backupEnabled) {
-    if (!Number.isInteger(Number(draft.retentionDays)) || Number(draft.retentionDays) < 1) {
+  const backup = getBackupProfile(blueprint)
+
+  if (backup.mode !== 'direct' && draft.backupEnabled) {
+    errors.push(
+      'This service does not own a direct application-backup workflow. Recovery is ' +
+        (backup.mode === 'dependency' ? 'dependency-owned.' : 'rebuild/replication-based.')
+    )
+  }
+
+  if (backup.mode === 'direct' && draft.backupEnabled) {
+    if (
+      !Number.isInteger(Number(draft.retentionDays)) ||
+      Number(draft.retentionDays) < 1
+    ) {
       errors.push('Backup retention must be at least one day.')
     }
     if (!nonEmpty(draft.backupRepositoryRef)) {
@@ -2972,7 +3157,9 @@ const backupErrors = (draft, blueprint) => {
       blueprint.id === 'postgresql' &&
       draft.barmanPlacement === 'Disabled'
     ) {
-      errors.push('PostgreSQL backup is enabled. Select shared/dedicated Barman or disable backup.')
+      errors.push(
+        'PostgreSQL backup is enabled. Select shared/dedicated Barman or disable backup.'
+      )
     }
   }
 
@@ -3236,8 +3423,9 @@ export const createDraft = (
   draft.topology = getRecommendedTopology(draft, blueprint)
   draft.endpointMode = endpointDefaults[blueprint.id] || 'Existing load balancer'
   draft.serviceName = blueprint.id + '-prod'
-  draft.backupEnabled = !['kafka', 'pulsar'].includes(blueprint.id)
-  draft.pitr = Boolean(blueprint.supportsPitr)
+  const backup = getBackupProfile(blueprint)
+  draft.backupEnabled = Boolean(backup.default)
+  draft.pitr = backup.mode === 'direct' && Boolean(blueprint.supportsPitr)
   if (blueprint.id === 'redis' || blueprint.id === 'valkey') {
     draft.pitr = false
   }
