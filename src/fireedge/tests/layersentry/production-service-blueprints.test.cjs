@@ -347,3 +347,18 @@ test('portal routes Applications deploy to the production-service wizard', () =>
   assert.match(wizard, /Proxy password \(optional\)/)
   assert.doesNotMatch(wizard, /preferredOs|LayerSentry selected OS|Rocky Linux|Ubuntu 24\.04/)
 })
+
+test('production-service wizard uses LayerSentry theme tokens only', () => {
+  const wizard = fs.readFileSync(
+    path.join(
+      fireedgeRoot,
+      'src/client/apps/layersentry/pages/ProductionServiceWizard.js'
+    ),
+    'utf8'
+  )
+  assert.doesNotMatch(
+    wizard,
+    /#[0-9a-fA-F]{6}\b/,
+    'wizard colors must come from LayerSentry theme tokens'
+  )
+})
