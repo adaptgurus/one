@@ -441,6 +441,14 @@ test('implemented React wizard renders the 27-family catalog and blocks incomple
   }
 
   const originalLoader = require.extensions['.js']
+  const originalModuleLoad = Module._load
+  Module._load = function (request, parent, isMain) {
+    if (request === 'client/apps/layersentry/navigation') {
+      return { PRODUCT_PATHS: { APPLICATIONS: '/applications' } }
+    }
+
+    return originalModuleLoad.call(this, request, parent, isMain)
+  }
   require.extensions['.js'] = (module, filename) => {
     if (filename.startsWith(sourceRoot)) {
       const source = fs.readFileSync(filename, 'utf8')
@@ -543,6 +551,7 @@ test('implemented React wizard renders the 27-family catalog and blocks incomple
     assert.doesNotMatch(root.textContent, /Backup & Recovery\s*Application-aware/)
   } finally {
     require.extensions['.js'] = originalLoader
+    Module._load = originalModuleLoad
     process.env.NODE_PATH = previousNodePath
     Module._initPaths()
     ReactDOM.unmountComponentAtNode(document.getElementById('root'))
