@@ -118,14 +118,14 @@ NavItem.propTypes = {
   onClick: PropTypes.func.isRequired,
 }
 
-const PortalShell = ({ children }) => {
+const PortalShell = ({ children, endpoints }) => {
   const history = useHistory()
   const location = useLocation()
   const { view } = useViews()
   const { user, groups = [] } = useAuth()
   const [search, setSearch] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
-  const capabilityModel = useMemo(() => getCapabilityModel(), [])
+  const capabilityModel = useMemo(() => getCapabilityModel(endpoints), [endpoints])
   const navigation = useMemo(
     () => getNavigation(view, capabilityModel),
     [view, capabilityModel]
@@ -478,6 +478,11 @@ const PortalShell = ({ children }) => {
 
 PortalShell.propTypes = {
   children: PropTypes.node,
+  endpoints: PropTypes.arrayOf(PropTypes.object),
+}
+
+PortalShell.defaultProps = {
+  endpoints: [],
 }
 
 export default PortalShell
