@@ -704,7 +704,7 @@ const vol = (
   mountpoint: '',
 })
 
-const dependency = (role, scope) => ({
+const dependency = (role, scope, required = true) => ({
   role,
   scope,
   sizeGiB: '',
@@ -713,6 +713,7 @@ const dependency = (role, scope) => ({
   attachmentRef: '',
   mountpoint: '',
   dependency: true,
+  required,
 })
 
 const dataSize = (draft) => Math.max(20, Number(draft.expectedDataGiB) || 100)
@@ -748,7 +749,8 @@ export const getStorageTemplate = (draft, blueprint) => {
       ]
     case 'ferretdb':
       return [
-        dependency('PostgreSQL/DocumentDB backend', 'Linked authoritative data store'),
+        vol('PostgreSQL/DocumentDB data', 'Per backend database VM', d),
+        vol('PostgreSQL WAL', 'Per backend database VM', l),
         vol('Backup repository', 'Backend recovery repository', b, 'Backup Repository', 'Repository-managed'),
       ]
     case 'redis':
@@ -789,21 +791,26 @@ export const getStorageTemplate = (draft, blueprint) => {
       ]
     case 'nginx':
     case 'apache-httpd':
-      return [dependency('Configuration / content source', 'Versioned source; no business-data disk by default')]
     case 'tomcat':
-      return [dependency('Application artifacts', 'Immutable artifact source; business data stays external')]
+      return []
     case 'keycloak':
       return [dependency('HA relational database', 'Required external PostgreSQL/MySQL dependency')]
     case 'superset':
       return [
         dependency('Metadata database', 'External PostgreSQL/MySQL dependency'),
-        dependency('Async broker/results backend', 'External Redis/RabbitMQ/results dependency for distributed mode'),
+        ...(draft.topology === 'Distributed'
+          ? [dependency('Async broker/results backend', 'External Redis/RabbitMQ/results dependency')]
+          : []),
       ]
     case 'airflow':
       return [
         dependency('Metadata database', 'Required external PostgreSQL/MySQL dependency'),
-        dependency('DAG source', 'Versioned Git/object/bundle source'),
-        dependency('Task log / artifact storage', 'Shared durable backend for distributed recovery'),
+        ...(draft.topology === 'Distributed Celery'
+          ? [
+              dependency('Queue broker', 'External Redis/RabbitMQ dependency'),
+              dependency('Task log / artifact storage', 'Shared durable backend for distributed recovery'),
+            ]
+          : []),
       ]
     case 'openbao':
       return [
@@ -832,17 +839,15 @@ export const getStorageTemplate = (draft, blueprint) => {
         ...(draft.promAlerting === 'Provision 3-node Alertmanager'
           ? [vol('Alertmanager local state', 'Per Alertmanager VM', 10)]
           : []),
-        dependency('Optional long-term storage', 'Remote-write / Thanos-compatible backend when selected'),
+        dependency('Optional long-term storage', 'Remote-write / Thanos-compatible backend when selected', false),
       ]
     case 'grafana':
       return [
         dependency('External SQL database', 'Required for production HA; SQLite is not used for HA'),
-        dependency('Session HA', 'Sticky load-balancer sessions or an existing Redis session store'),
       ]
     case 'alloy':
       return [
         dependency('Telemetry destination', 'Remote-write / OTLP / Loki destination owns durable telemetry'),
-        dependency('Collector configuration', 'Versioned LayerSentry desired state'),
       ]
     default:
       return [vol('Data', 'Per service VM', d)]
@@ -2487,7 +2492,7 @@ const storageErrors = (draft) => {
   const errors = []
   ;(draft.storage || []).forEach((item) => {
     if (item.dependency) {
-      if (!nonEmpty(item.attachmentRef)) {
+      if (item.required !== false && !nonEmpty(item.attachmentRef)) {
         errors.push(item.role + ': provide the linked dependency reference.')
       }
       return
@@ -2624,6 +2629,15 @@ const backupErrors = (draft, blueprint) => {
 
 const securityErrors = (draft) => {
   const errors = []
+  if (draft.environment === 'Production' && !draft.tls) {
+    errors.push('TLS is mandatory for the production service profile.')
+  }
+  if (draft.environment === 'Production' && !draft.monitoring) {
+    errors.push('Monitoring must remain enabled for the production service profile.')
+  }
+  if (draft.environment === 'Production' && !draft.logging) {
+    errors.push('Central logging must remain enabled for the production service profile.')
+  }
   if (
     draft.packageSourceMode === 'Local repository / mirror' &&
     !nonEmpty(draft.repoUrl)
