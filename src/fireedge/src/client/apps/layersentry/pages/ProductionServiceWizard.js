@@ -83,6 +83,8 @@ import {
   validateStep,
 } from 'client/apps/layersentry/serviceBlueprints'
 
+const DEPLOYMENT_ACTION_AVAILABLE = false
+
 const Row = ({ children, columns = 2 }) => (
   <Box
     sx={{
@@ -1985,12 +1987,15 @@ const ProductionServiceWizard = () => {
           <Button
             variant="contained"
             disabled={
+              !DEPLOYMENT_ACTION_AVAILABLE ||
               !validated ||
               allErrors.length > 0 ||
               !blueprint?.productionSelectable
             }
             title={
-              !blueprint?.productionSelectable
+              !DEPLOYMENT_ACTION_AVAILABLE
+                ? 'Production deployment mutation is not wired yet; validation remains non-destructive.'
+                : !blueprint?.productionSelectable
                 ? 'Backend has not promoted this exact tuple for production deployment.'
                 : ''
             }
@@ -2000,6 +2005,13 @@ const ProductionServiceWizard = () => {
           </Button>
         </Box>
 
+        {!DEPLOYMENT_ACTION_AVAILABLE && (
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Production deployment is intentionally disabled until the
+            authoritative deployment mutation, operation journal and backend
+            preflight path are wired and qualified.
+          </Alert>
+        )}
         {!blueprint?.productionSelectable && (
           <Alert severity="warning" sx={{ mt: 2 }}>
             This exact tuple is not production-selectable yet. The UI is
