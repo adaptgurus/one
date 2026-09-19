@@ -125,7 +125,10 @@ const PortalShell = ({ children, endpoints }) => {
   const { user, groups = [] } = useAuth()
   const [search, setSearch] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
-  const capabilityModel = useMemo(() => getCapabilityModel(endpoints), [endpoints])
+  const capabilityModel = useMemo(
+    () => getCapabilityModel(endpoints),
+    [endpoints]
+  )
   const navigation = useMemo(
     () => getNavigation(view, capabilityModel),
     [view, capabilityModel]
