@@ -40,6 +40,11 @@ import {
 import { jsonToXml } from '@UtilsModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
+  CAPABILITY_IDS,
+  getCapabilityModel,
+  isCapabilityEnabled,
+} from 'client/apps/layersentry/capabilities'
+import {
   PageFrame,
   SectionHeader,
   Surface,
@@ -58,6 +63,23 @@ const mbToGb = (value) => Math.max(1, Math.ceil(asNumber(value) / 1024))
 const StorageWorkspace = ({ endpoints }) => {
   const { view } = useViews()
   const isAdmin = view === 'admin'
+  const capabilityModel = getCapabilityModel()
+  const canAttach = isCapabilityEnabled(
+    CAPABILITY_IDS.STORAGE_DISK_ATTACH,
+    capabilityModel
+  )
+  const canResize = isCapabilityEnabled(
+    CAPABILITY_IDS.STORAGE_DISK_RESIZE,
+    capabilityModel
+  )
+  const canDetach = isCapabilityEnabled(
+    CAPABILITY_IDS.STORAGE_DISK_DETACH,
+    capabilityModel
+  )
+  const canDeleteImage = isCapabilityEnabled(
+    CAPABILITY_IDS.STORAGE_IMAGE_DELETE,
+    capabilityModel
+  )
   const { enqueueSuccess, enqueueError } = useGeneralApi()
   const vmQuery = VmAPI.useGetVmsQuery({ extended: true })
   const imageQuery = ImageAPI.useGetImagesQuery()
@@ -203,7 +225,7 @@ const StorageWorkspace = ({ endpoints }) => {
   return (
     <PageFrame
       title="Storage"
-      description="Attach, resize, detach and preserve application disks without exposing storage-driver internals."
+      description="Authoritative disk inventory with storage mutations shown only after their production path is qualified."
       actions={
         <Button
           variant="outlined"
@@ -298,28 +320,32 @@ const StorageWorkspace = ({ endpoints }) => {
                         }))
                       }
                     />
-                    <Button
-                      disabled={busy}
-                      onClick={() => runResize(disk)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Resize
-                    </Button>
-                    <Button
-                      disabled={busy}
-                      color="warning"
-                      onClick={() => runDetach(disk)}
-                      sx={{ textTransform: 'none' }}
-                    >
-                      Detach
-                    </Button>
+                    {canResize && (
+                      <Button
+                        disabled={busy}
+                        onClick={() => runResize(disk)}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Resize
+                      </Button>
+                    )}
+                    {canDetach && (
+                      <Button
+                        disabled={busy}
+                        color="warning"
+                        onClick={() => runDetach(disk)}
+                        sx={{ textTransform: 'none' }}
+                      >
+                        Detach
+                      </Button>
+                    )}
                   </Box>
                 ))}
               </Box>
             </Surface>
           )}
 
-          {vm && (
+          {vm && canAttach && (
             <Surface sx={{ p: 2.5 }}>
               <SectionHeader
                 title="Add disk"
@@ -449,15 +475,17 @@ const StorageWorkspace = ({ endpoints }) => {
                     · persistent disk image
                   </Typography>
                 </Box>
-                <Button
-                  color="error"
-                  disabled={busy}
-                  startIcon={<Trash width={16} height={16} />}
-                  onClick={() => deleteImage(image)}
-                  sx={{ textTransform: 'none' }}
-                >
-                  Delete permanently
-                </Button>
+                {canDeleteImage && (
+                  <Button
+                    color="error"
+                    disabled={busy}
+                    startIcon={<Trash width={16} height={16} />}
+                    onClick={() => deleteImage(image)}
+                    sx={{ textTransform: 'none' }}
+                  >
+                    Delete permanently
+                  </Button>
+                )}
               </Box>
             ))}
           </Box>
