@@ -351,9 +351,10 @@ module OneKS
 
                 retry_rc = seed.retry_bootstrap(self)
                 if OpenNebula.is_error?(retry_rc)
+                    message = 'Seed state requires reconciliation; resources preserved: ' \
+                              "#{retry_rc.message}"
                     return OpenNebula::Error.new(
-                        "Seed state requires reconciliation; resources preserved: #{retry_rc.message}",
-                        OpenNebula::Error::EACTION
+                        message, OpenNebula::Error::EACTION
                     )
                 end
 
