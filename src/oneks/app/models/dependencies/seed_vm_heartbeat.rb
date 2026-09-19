@@ -69,10 +69,7 @@ module OneKS
             return true if current == target
 
             if current.to_s.include?('FAILURE')
-                return OpenNebula::Error.new(
-                    "Seed VM #{@id} entered failure state: #{current}",
-                    OpenNebula::Error::EACTION
-                )
+                return seed_failure_error(fresh_group_client(group), current)
             end
 
             Log.info(
@@ -104,10 +101,7 @@ module OneKS
 
                 return true if current == target
                 if current.to_s.include?('FAILURE')
-                    return OpenNebula::Error.new(
-                        "Seed VM #{@id} entered failure state: #{current}",
-                        OpenNebula::Error::EACTION
-                    )
+                    return seed_failure_error(fresh_group_client(group), current)
                 end
             end
         end
