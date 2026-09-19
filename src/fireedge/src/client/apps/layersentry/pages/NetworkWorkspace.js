@@ -45,7 +45,7 @@ const NetworkWorkspace = ({ endpoints }) => {
   const [tab, setTab] = useState(0)
   const canCreate = isCapabilityEnabled(
     CAPABILITY_IDS.NETWORK_CREATE,
-    getCapabilityModel()
+    getCapabilityModel(endpoints)
   )
 
   return (
