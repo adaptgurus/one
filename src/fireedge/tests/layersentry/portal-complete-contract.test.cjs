@@ -121,11 +121,14 @@ test('non-Kubernetes workspaces have dedicated LayerSentry product surfaces', ()
   }
 })
 
-test('Kubernetes custom UX is deferred while OneKS lifecycle remains bridged', () => {
+test('Kubernetes remains OneKS-backed and gates cluster creation independently', () => {
   const workspace = read(
     'src/client/apps/layersentry/pages/KubernetesWorkspace.js'
   )
-  assert.match(workspace, /existing OneKS lifecycle/)
+  assert.match(workspace, /View qualified OneKS clusters/)
+  assert.match(workspace, /CAPABILITY_IDS\.KUBERNETES_CREATE/)
+  assert.match(workspace, /isCapabilityEnabled\(/)
+  assert.match(workspace, /canCreate \? \(/)
   assert.match(workspace, /legacyPath="\/kubernetes"/)
   assert.doesNotMatch(workspace, /Harbor|Argo CD|OpenEverest/)
 })
