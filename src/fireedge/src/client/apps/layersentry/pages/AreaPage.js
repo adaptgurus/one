@@ -22,7 +22,7 @@ import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
   getCapabilityForPath,
   getCapabilityModel,
-  isCapabilityVisible,
+  isCapabilityEnabled,
 } from 'client/apps/layersentry/capabilities'
 import {
   CreateButton,
@@ -53,8 +53,8 @@ const AreaPage = ({
   const canCreate = useMemo(
     () =>
       Boolean(createTo) &&
-      (!createCapability ||
-        isCapabilityVisible(createCapability, getCapabilityModel())),
+      Boolean(createCapability) &&
+      isCapabilityEnabled(createCapability, getCapabilityModel()),
     [createCapability, createTo]
   )
 
