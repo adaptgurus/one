@@ -37,7 +37,7 @@ const ApplicationsWorkspace = ({ endpoints }) => {
   const [tab, setTab] = useState(0)
   const canDeploy = isCapabilityEnabled(
     CAPABILITY_IDS.APPLICATIONS_DEPLOY,
-    getCapabilityModel()
+    getCapabilityModel(endpoints)
   )
 
   return (
