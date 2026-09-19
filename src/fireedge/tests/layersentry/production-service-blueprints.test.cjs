@@ -662,3 +662,77 @@ test('wizard unwraps FireEdge runtime catalog responses and calls authoritative 
   assert.match(wizard, /SERVICE_BLUEPRINT_PREFLIGHT_UNAVAILABLE/)
   assert.match(wizard, /Authoritative preflight blocked/)
 })
+
+
+test('runtime service-blueprint handlers return catalog and fail closed', () => {
+  const Module = require('node:module')
+  const previousNodePath = process.env.NODE_PATH
+  process.env.NODE_PATH = [
+    path.join(fireedgeRoot, 'src'),
+    previousNodePath,
+  ]
+    .filter(Boolean)
+    .join(path.delimiter)
+  Module._initPaths()
+
+  try {
+    const handlers = require(path.join(
+      fireedgeRoot,
+      'src/server/routes/api/serviceblueprints/functions.js'
+    ))
+
+    const invoke = (handler, params = {}) => {
+      const res = { locals: {} }
+      let nextCount = 0
+      handler(res, () => {
+        nextCount += 1
+      }, params)
+      assert.equal(nextCount, 1)
+
+      return res.locals.httpCode
+    }
+
+    const catalogResponse = invoke(handlers.list)
+    assert.equal(catalogResponse.id, 200)
+    assert.equal(catalogResponse.data.failClosed, true)
+    assert.equal(catalogResponse.data.items.length, 27)
+
+    const blockedPreflight = invoke(handlers.preflight, {
+      blueprintId: 'postgresql',
+      version: '18',
+      topology: '3-node HA',
+    })
+    assert.equal(blockedPreflight.id, 409)
+    assert.equal(blockedPreflight.data.deployable, false)
+    assert.equal(
+      blockedPreflight.data.blockers[0].code,
+      'SERVICE_BLUEPRINT_TUPLE_NOT_PROMOTED'
+    )
+
+    const badVersion = invoke(handlers.preflight, {
+      blueprintId: 'postgresql',
+      version: '999',
+      topology: '3-node HA',
+    })
+    assert.equal(badVersion.id, 409)
+    assert.equal(
+      badVersion.data.blockers[0].code,
+      'SERVICE_BLUEPRINT_VERSION_NOT_PUBLISHED'
+    )
+
+    const deployResponse = invoke(handlers.deploy, {
+      blueprintId: 'postgresql',
+      version: '18',
+      topology: '3-node HA',
+    })
+    assert.equal(deployResponse.id, 503)
+    assert.equal(deployResponse.data.deployable, false)
+    assert.equal(
+      deployResponse.data.blockers[0].code,
+      'SERVICE_BLUEPRINT_DEPLOYMENT_DISABLED'
+    )
+  } finally {
+    process.env.NODE_PATH = previousNodePath
+    Module._initPaths()
+  }
+})
