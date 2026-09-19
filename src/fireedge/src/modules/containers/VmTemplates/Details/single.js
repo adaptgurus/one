@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   DetailsDrawer,
   getLabelMenuButtonProps,
   InfoSlot,
@@ -57,7 +56,7 @@ import {
   Play,
 } from 'iconoir-react'
 import { useHistory } from 'react-router'
-import { VmTemplateAPI, useModalsApi } from '@FeaturesModule'
+import { useViews, VmTemplateAPI, useModalsApi } from '@FeaturesModule'
 
 /**
  * @param {object} root0 - Params

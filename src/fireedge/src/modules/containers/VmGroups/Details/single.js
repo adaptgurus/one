@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   DetailsDrawer,
   getLabelMenuButtonProps,
   InfoSlot,
@@ -31,7 +30,7 @@ import { Box, useTheme } from '@mui/material'
 import PropTypes from 'prop-types'
 import { RefreshDouble, Edit, Cancel, Trash, Lock, NoLock } from 'iconoir-react'
 import { useHistory } from 'react-router'
-import { VmGroupAPI, useModalsApi } from '@FeaturesModule'
+import { useViews, VmGroupAPI, useModalsApi } from '@FeaturesModule'
 import {
   getLabelTags,
   getVmGroupTotalRoles,

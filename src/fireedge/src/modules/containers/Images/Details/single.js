@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   ButtonGroup,
   DetailsDrawer,
   getLabelMenuButtonProps,
@@ -53,7 +52,7 @@ import {
   jsonToXml,
   set,
 } from '@UtilsModule'
-import { ImageAPI, useModalsApi } from '@FeaturesModule'
+import { useViews, ImageAPI, useModalsApi } from '@FeaturesModule'
 import { Image as ImageResource } from '@ResourcesModule'
 
 /**

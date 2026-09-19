@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   DetailsDrawer,
   getLabelMenuButtonProps,
   InfoSlot,
@@ -40,7 +39,7 @@ import {
   Trash,
 } from 'iconoir-react'
 import { useHistory } from 'react-router'
-import { SecurityGroupAPI, useModalsApi } from '@FeaturesModule'
+import { useViews, SecurityGroupAPI, useModalsApi } from '@FeaturesModule'
 import { SecurityGroup } from '@ResourcesModule'
 import {
   getLabelTags,

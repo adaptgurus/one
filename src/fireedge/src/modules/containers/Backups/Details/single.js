@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   ButtonGroup,
   DetailsDrawer,
   InfoSlot,
@@ -41,7 +40,7 @@ import {
 } from 'iconoir-react'
 import { IMAGE_ACTIONS, T } from '@ConstantsModule'
 import { cloneObject, createActions, jsonToXml, set } from '@UtilsModule'
-import { ImageAPI, useModalsApi } from '@FeaturesModule'
+import { useViews, ImageAPI, useModalsApi } from '@FeaturesModule'
 import { Backups as BackupsResource } from '@ResourcesModule'
 import {
   getBackupDiskIds,

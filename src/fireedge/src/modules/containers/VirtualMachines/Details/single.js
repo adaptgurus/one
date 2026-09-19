@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   DetailsDrawer,
   InfoSlot,
   SummarySlot,
@@ -28,7 +27,7 @@ import {
   AlertNotification,
   getLabelMenuButtonProps,
 } from '@ComponentsModule'
-import { useModalsApi, VmAPI, ImageAPI, useGeneral } from '@FeaturesModule'
+import { useViews, useModalsApi, VmAPI, ImageAPI, useGeneral } from '@FeaturesModule'
 import { useClipboard } from '@HooksModule'
 import { Component, useMemo } from 'react'
 import {

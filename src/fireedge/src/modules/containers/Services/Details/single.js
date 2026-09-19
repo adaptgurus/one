@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   DetailsDrawer,
   getLabelMenuButtonProps,
   InfoSlot,
@@ -38,6 +37,7 @@ import {
   T,
 } from '@ConstantsModule'
 import {
+  useViews,
   ONE_RESOURCES_POOL,
   ServiceAPI,
   oneApi,

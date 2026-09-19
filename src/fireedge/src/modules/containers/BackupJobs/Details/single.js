@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   ButtonGroup,
   DetailsDrawer,
   getLabelMenuButtonProps,
@@ -40,7 +39,7 @@ import {
 } from 'iconoir-react'
 import { BACKUPJOB_ACTIONS, RESOURCE_NAMES, T } from '@ConstantsModule'
 import { cloneObject, createActions, jsonToXml, set } from '@UtilsModule'
-import { BackupJobAPI, useModalsApi } from '@FeaturesModule'
+import { useViews, BackupJobAPI, useModalsApi } from '@FeaturesModule'
 import { BackupJobs as BackupJobsResource } from '@ResourcesModule'
 import {
   getBackupJobLastBackupTime,

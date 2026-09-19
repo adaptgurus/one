@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   DetailsDrawer,
   getLabelMenuButtonProps,
   InfoSlot,
@@ -39,7 +38,7 @@ import {
 import { ONEKS_ACTIONS, RESOURCE_NAMES, T } from '@ConstantsModule'
 import { createActions, permissionsToOctal, toSnakeCase } from '@UtilsModule'
 import { getLabelTags, getVirtualOneKsState } from '@ModelsModule'
-import { OneKsAPI, useModalsApi } from '@FeaturesModule'
+import { useViews, OneKsAPI, useModalsApi } from '@FeaturesModule'
 import { OneKs as OneKsResource } from '@ResourcesModule'
 
 const getDocument = (data) => data?.DOCUMENT ?? data ?? {}

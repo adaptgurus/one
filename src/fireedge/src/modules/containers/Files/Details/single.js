@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   ButtonGroup,
   DetailsDrawer,
   InfoSlot,
@@ -49,7 +48,7 @@ import {
   jsonToXml,
   set,
 } from '@UtilsModule'
-import { ImageAPI, useModalsApi } from '@FeaturesModule'
+import { useViews, ImageAPI, useModalsApi } from '@FeaturesModule'
 import { Files as FilesResource } from '@ResourcesModule'
 
 /**

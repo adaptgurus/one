@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 
 import {
-  useViews,
   DetailsDrawer,
   getLabelMenuButtonProps,
   InfoSlot,
@@ -42,6 +41,7 @@ import {
 } from 'iconoir-react'
 import { useHistory } from 'react-router'
 import {
+  useViews,
   VmTemplateAPI,
   ServiceTemplateAPI,
   useModalsApi,
