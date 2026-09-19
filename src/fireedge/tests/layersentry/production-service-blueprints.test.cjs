@@ -362,3 +362,15 @@ test('production-service wizard uses LayerSentry theme tokens only', () => {
     'wizard colors must come from LayerSentry theme tokens'
   )
 })
+
+test('every service family declares explicit recovery ownership', () => {
+  for (const blueprint of api.FALLBACK_BLUEPRINTS) {
+    const profile = api.getBackupProfile(blueprint)
+    assert.ok(
+      ['direct', 'dependency', 'none'].includes(profile.mode),
+      `${blueprint.id}: invalid recovery ownership mode`
+    )
+    assert.ok(profile.engine, `${blueprint.id}: missing recovery engine`)
+    assert.ok(profile.note, `${blueprint.id}: missing recovery qualification note`)
+  }
+})
