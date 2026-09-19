@@ -148,7 +148,10 @@ const CAPABILITY_PATHS = Object.freeze([
   ['/infrastructure/clusters', CAPABILITY_IDS.INFRA_CLUSTERS],
   ['/infrastructure/storage/create', CAPABILITY_IDS.STORAGE_ONBOARDING],
   ['/infrastructure/storage', CAPABILITY_IDS.INFRA_STORAGE],
-  ['/infrastructure/backup-storage/create', CAPABILITY_IDS.BACKUP_STORAGE_CREATE],
+  [
+    '/infrastructure/backup-storage/create',
+    CAPABILITY_IDS.BACKUP_STORAGE_CREATE,
+  ],
   ['/infrastructure/backup-storage', CAPABILITY_IDS.BACKUP_STORAGE],
   ['/infrastructure/drivers', CAPABILITY_IDS.INFRA_DRIVERS],
   ['/infrastructure/zones', CAPABILITY_IDS.INFRA_ZONES],
