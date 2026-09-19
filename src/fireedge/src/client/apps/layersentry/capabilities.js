@@ -108,6 +108,8 @@ const READ_ONLY_SAFE = new Set([
   CAPABILITY_IDS.AFFINITY,
 ])
 
+const SOURCE_UNIMPLEMENTED = new Set([CAPABILITY_IDS.SITE_RECOVERY_DR])
+
 const MUTATING_CAPABILITIES = new Set([
   CAPABILITY_IDS.VM_CREATE,
   CAPABILITY_IDS.AFFINITY_CREATE,
@@ -347,6 +349,13 @@ export const getCapabilityModel = (endpoints) =>
 
 export const getCapabilityState = (capabilityId, model = {}) => {
   const capability = model?.[capabilityId]
+
+  if (SOURCE_UNIMPLEMENTED.has(capabilityId)) {
+    return hidden(
+      CAPABILITY_VISIBILITY.HIDDEN_NOT_QUALIFIED,
+      'The production execution path for this capability is not implemented.'
+    )
+  }
 
   if (!capability || capability.enabled !== true) {
     return hidden(
