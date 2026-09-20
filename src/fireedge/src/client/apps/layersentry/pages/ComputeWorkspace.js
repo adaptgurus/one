@@ -39,14 +39,6 @@ const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 
 const COMPUTE_QUICK_ACTIONS = [
   {
-    label: 'Create VM',
-    path: PRODUCT_PATHS.COMPUTE_CREATE,
-    icon: Plus,
-    primary: true,
-    capability: CAPABILITY_IDS.VM_CREATE,
-    mutation: true,
-  },
-  {
     label: 'VM Blueprints',
     path: PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
     icon: Packages,
