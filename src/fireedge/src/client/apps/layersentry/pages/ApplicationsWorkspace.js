@@ -15,11 +15,19 @@
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
-import { Box, Button, Tab, Tabs, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  LinearProgress,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material'
 import { Plus } from 'iconoir-react'
 import { useState } from 'react'
 import { useHistory } from 'react-router-dom'
-import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
+import { ServiceAPI, ServiceTemplateAPI } from '@FeaturesModule'
 import {
   CAPABILITY_IDS,
   getCapabilityModel,
@@ -32,6 +40,145 @@ import {
 } from 'client/apps/layersentry/components/Primitives'
 import { colors } from 'client/apps/layersentry/theme/tokens'
 
+const toArray = (value) =>
+  value === undefined || value === null || value === ''
+    ? []
+    : Array.isArray(value)
+    ? value
+    : [value]
+
+const getBody = (resource = {}) => resource?.TEMPLATE?.BODY ?? {}
+
+const countServiceRoles = (service) => toArray(getBody(service).roles).length
+
+const countServiceVms = (service) =>
+  toArray(getBody(service).roles).reduce(
+    (total, role) => total + toArray(role?.nodes).length,
+    0
+  )
+
+const countNetworks = (resource) => {
+  const networks = getBody(resource).networks
+
+  if (Array.isArray(networks)) return networks.length
+  if (networks && typeof networks === 'object') return Object.keys(networks).length
+
+  return 0
+}
+
+const getServiceStateLabel = (service) => {
+  const state = getBody(service).state
+
+  return state === undefined || state === null || state === ''
+    ? 'State unavailable'
+    : `State ${state}`
+}
+
+const DeploymentInventory = () => {
+  const query = ServiceAPI.useGetServicesQuery()
+  const services = toArray(query.data)
+
+  if (query.isLoading || query.isFetching) return <LinearProgress />
+
+  if (query.isError) {
+    return (
+      <Alert severity="error">
+        Could not load application deployments from the OneFlow API.
+      </Alert>
+    )
+  }
+
+  if (services.length === 0) {
+    return (
+      <Alert severity="info">
+        No application deployments are visible to this account.
+      </Alert>
+    )
+  }
+
+  return (
+    <Box
+      data-layersentry-readonly-application-deployments
+      sx={{ display: 'grid', gap: 1 }}
+    >
+      {services.map((service) => (
+        <Box
+          key={service.ID ?? service.NAME}
+          sx={{
+            p: 1.5,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 1.5,
+          }}
+        >
+          <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+            {service.NAME ?? `Application ${service.ID}`}
+          </Typography>
+          <Typography sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}>
+            #{service.ID} · {getServiceStateLabel(service)} ·{' '}
+            {countServiceRoles(service)} role
+            {countServiceRoles(service) === 1 ? '' : 's'} ·{' '}
+            {countServiceVms(service)} VM
+            {countServiceVms(service) === 1 ? '' : 's'} ·{' '}
+            {countNetworks(service)} network
+            {countNetworks(service) === 1 ? '' : 's'}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  )
+}
+
+const CatalogInventory = () => {
+  const query = ServiceTemplateAPI.useGetServiceTemplatesQuery()
+  const templates = toArray(query.data)
+
+  if (query.isLoading || query.isFetching) return <LinearProgress />
+
+  if (query.isError) {
+    return (
+      <Alert severity="error">
+        Could not load the application catalog from the OneFlow API.
+      </Alert>
+    )
+  }
+
+  if (templates.length === 0) {
+    return (
+      <Alert severity="info">
+        No application definitions are visible to this account.
+      </Alert>
+    )
+  }
+
+  return (
+    <Box
+      data-layersentry-readonly-application-catalog
+      sx={{ display: 'grid', gap: 1 }}
+    >
+      {templates.map((template) => (
+        <Box
+          key={template.ID ?? template.NAME}
+          sx={{
+            p: 1.5,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 1.5,
+          }}
+        >
+          <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+            {template.NAME ?? `Application definition ${template.ID}`}
+          </Typography>
+          <Typography sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}>
+            #{template.ID} · {countServiceRoles(template)} role
+            {countServiceRoles(template) === 1 ? '' : 's'} ·{' '}
+            {countNetworks(template)} network
+            {countNetworks(template) === 1 ? '' : 's'}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  )
+}
+
 const ApplicationsWorkspace = ({ endpoints }) => {
   const history = useHistory()
   const [tab, setTab] = useState(0)
@@ -43,7 +190,7 @@ const ApplicationsWorkspace = ({ endpoints }) => {
   return (
     <PageFrame
       title="Applications"
-      description="Browse published services while OneFlow remains the lifecycle authority."
+      description="Read-only OneFlow deployments and published application definitions; deploy and Day-2 operations remain separately qualified."
       actions={
         canDeploy ? (
           <Button
@@ -97,15 +244,7 @@ const ApplicationsWorkspace = ({ endpoints }) => {
         <Tab label="Application Catalog" />
       </Tabs>
       <Surface sx={{ mt: 2, p: 2 }}>
-        {tab === 0 && (
-          <ResourceBridge endpoints={endpoints} legacyPath="/service" />
-        )}
-        {tab === 1 && (
-          <ResourceBridge
-            endpoints={endpoints}
-            legacyPath="/service-template"
-          />
-        )}
+        {tab === 0 ? <DeploymentInventory /> : <CatalogInventory />}
       </Surface>
     </PageFrame>
   )

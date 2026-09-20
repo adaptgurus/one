@@ -277,6 +277,33 @@ test('Protection parent page is mutation-safe when qualified read-only', () => {
   assert.doesNotMatch(protection, /canViewBackupStorage/)
 })
 
+test('Applications parent page is mutation-safe when qualified read-only', () => {
+  const capabilities = read('src/client/apps/layersentry/capabilities.js')
+  const applications = read(
+    'src/client/apps/layersentry/pages/ApplicationsWorkspace.js'
+  )
+  const readOnlySafe = capabilities.match(
+    /const READ_ONLY_SAFE = new Set\(\[([\s\S]*?)\]\)/
+  )?.[1]
+
+  assert.match(readOnlySafe, /CAPABILITY_IDS\.APPLICATIONS_ONEFLOW/)
+  assert.match(applications, /ServiceAPI\.useGetServicesQuery\(\)/)
+  assert.match(
+    applications,
+    /ServiceTemplateAPI\.useGetServiceTemplatesQuery\(\)/
+  )
+  assert.match(
+    applications,
+    /data-layersentry-readonly-application-deployments/
+  )
+  assert.match(applications, /data-layersentry-readonly-application-catalog/)
+  assert.doesNotMatch(applications, /legacyPath="\/service"/)
+  assert.doesNotMatch(applications, /legacyPath="\/service-template"/)
+  assert.match(applications, /CAPABILITY_IDS\.APPLICATIONS_DEPLOY/)
+  assert.match(applications, /isCapabilityEnabled\(/)
+  assert.match(applications, /canDeploy \? \(/)
+})
+
 test('native detail routes are not implicitly authorized by inventory capability', () => {
   const capabilities = read('src/client/apps/layersentry/capabilities.js')
 
