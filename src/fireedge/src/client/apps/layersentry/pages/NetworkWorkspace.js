@@ -15,15 +15,26 @@
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
-import { Box, Button, Chip, Tab, Tabs, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  Chip,
+  LinearProgress,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material'
 import { Plus } from 'iconoir-react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
+import { VnAPI } from '@FeaturesModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
   CAPABILITY_IDS,
   getCapabilityModel,
   isCapabilityEnabled,
+  isCapabilityVisible,
 } from 'client/apps/layersentry/capabilities'
 import {
   PageFrame,
@@ -40,18 +51,116 @@ const ENVIRONMENTS = [
 ]
 const TIERS = ['web', 'app', 'db']
 
+const toArray = (value) =>
+  value === undefined || value === null || value === ''
+    ? []
+    : Array.isArray(value)
+    ? value
+    : [value]
+
+const NetworkInventory = () => {
+  const query = VnAPI.useGetVNetworksQuery()
+  const networks = toArray(query.data)
+
+  if (query.isLoading || query.isFetching) return <LinearProgress />
+
+  if (query.isError) {
+    return (
+      <Alert severity="error">
+        Could not load networks from the OpenNebula API.
+      </Alert>
+    )
+  }
+
+  if (networks.length === 0) {
+    return (
+      <Alert severity="info">No workload networks are visible to this account.</Alert>
+    )
+  }
+
+  return (
+    <Box data-layersentry-readonly-network-inventory sx={{ display: 'grid', gap: 1 }}>
+      {networks.map((network) => {
+        const ranges = toArray(network?.AR_POOL?.AR)
+        const allocatedLeases = ranges.reduce(
+          (total, range) => total + toArray(range?.LEASES?.LEASE).length,
+          0
+        )
+
+        return (
+          <Box
+            key={network.ID ?? network.NAME}
+            sx={{
+              p: 1.5,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 1.5,
+            }}
+          >
+            <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+              {network.NAME ?? `Network ${network.ID}`}
+            </Typography>
+            <Typography sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}>
+              #{network.ID} · {ranges.length} address range
+              {ranges.length === 1 ? '' : 's'} · {allocatedLeases} allocated lease
+              {allocatedLeases === 1 ? '' : 's'}
+            </Typography>
+          </Box>
+        )
+      })}
+    </Box>
+  )
+}
+
 const NetworkWorkspace = ({ endpoints }) => {
   const history = useHistory()
   const [tab, setTab] = useState(0)
+  const capabilityModel = getCapabilityModel(endpoints)
   const canCreate = isCapabilityEnabled(
     CAPABILITY_IDS.NETWORK_CREATE,
-    getCapabilityModel(endpoints)
+    capabilityModel
   )
+  const canViewFirewall = isCapabilityVisible(
+    CAPABILITY_IDS.FIREWALL_RULES,
+    capabilityModel
+  )
+  const canViewBlueprints = isCapabilityVisible(
+    CAPABILITY_IDS.NETWORK_TEMPLATES,
+    capabilityModel
+  )
+  const canViewRouters = isCapabilityVisible(
+    CAPABILITY_IDS.VIRTUAL_ROUTERS,
+    capabilityModel
+  )
+
+  const tabs = useMemo(
+    () =>
+      [
+        { label: 'Networks', kind: 'inventory' },
+        canViewFirewall && {
+          label: 'Firewall Rules',
+          kind: 'bridge',
+          legacyPath: '/security-group',
+        },
+        canViewBlueprints && {
+          label: 'Network Blueprints',
+          kind: 'bridge',
+          legacyPath: '/network-template',
+        },
+        canViewRouters && {
+          label: 'Virtual Routers',
+          kind: 'bridge',
+          legacyPath: '/vrouter',
+        },
+      ].filter(Boolean),
+    [canViewBlueprints, canViewFirewall, canViewRouters]
+  )
+  const safeTab = Math.min(tab, Math.max(0, tabs.length - 1))
+  const activeTab = tabs[safeTab]
 
   return (
     <PageFrame
       title="Network"
-      description="Browse workload networks and firewall policy while OpenNebula remains the network authority."
+      description="Browse workload networks while mutation-heavy firewall, blueprint and router surfaces remain separately qualified."
       actions={
         canCreate ? (
           <Button
@@ -108,27 +217,25 @@ const NetworkWorkspace = ({ endpoints }) => {
         </Box>
       </Surface>
 
-      <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mt: 2 }}>
-        <Tab label="Networks" />
-        <Tab label="Firewall Rules" />
-        <Tab label="Network Blueprints" />
-        <Tab label="Virtual Routers" />
+      <Tabs
+        value={safeTab}
+        onChange={(_, value) => setTab(value)}
+        sx={{ mt: 2 }}
+      >
+        {tabs.map(({ label }) => (
+          <Tab key={label} label={label} />
+        ))}
       </Tabs>
       <Surface sx={{ mt: 2, p: 2 }}>
-        {tab === 0 && (
-          <ResourceBridge endpoints={endpoints} legacyPath="/virtual-network" />
-        )}
-        {tab === 1 && (
-          <ResourceBridge endpoints={endpoints} legacyPath="/security-group" />
-        )}
-        {tab === 2 && (
-          <ResourceBridge
-            endpoints={endpoints}
-            legacyPath="/network-template"
-          />
-        )}
-        {tab === 3 && (
-          <ResourceBridge endpoints={endpoints} legacyPath="/vrouter" />
+        {activeTab?.kind === 'inventory' ? (
+          <NetworkInventory />
+        ) : (
+          activeTab?.legacyPath && (
+            <ResourceBridge
+              endpoints={endpoints}
+              legacyPath={activeTab.legacyPath}
+            />
+          )
         )}
       </Surface>
     </PageFrame>

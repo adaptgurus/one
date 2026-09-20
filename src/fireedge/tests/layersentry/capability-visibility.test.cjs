@@ -211,6 +211,45 @@ test('LayerSentry VM create route stays wired to the native guarded create dialo
   assert.match(vmView, /create_dialog: true/)
 })
 
+test('Network and Storage parent pages are mutation-safe when qualified read-only', () => {
+  const capabilities = read('src/client/apps/layersentry/capabilities.js')
+  const network = read('src/client/apps/layersentry/pages/NetworkWorkspace.js')
+  const storage = read('src/client/apps/layersentry/pages/StorageWorkspace.js')
+
+  assert.match(
+    capabilities,
+    /CAPABILITY_IDS\.STORAGE,[\s\S]*CAPABILITY_IDS\.NETWORK,[\s\S]*\]\)/
+  )
+
+  assert.match(network, /VnAPI\.useGetVNetworksQuery\(\)/)
+  assert.match(network, /data-layersentry-readonly-network-inventory/)
+  assert.doesNotMatch(
+    network,
+    /legacyPath="\/virtual-network"/
+  )
+  for (const child of [
+    'FIREWALL_RULES',
+    'NETWORK_TEMPLATES',
+    'VIRTUAL_ROUTERS',
+  ]) {
+    assert.match(network, new RegExp(`CAPABILITY_IDS\\.${child}`))
+  }
+  assert.match(network, /isCapabilityVisible\(/)
+  assert.match(network, /canCreate \? \(/)
+
+  assert.match(storage, /CAPABILITY_IDS\.INFRA_STORAGE/)
+  assert.match(storage, /canViewInfraStorage/)
+  assert.match(storage, /isCapabilityVisible\(/)
+  assert.match(
+    storage,
+    /skip: !\(canAttach \|\| canViewInfraStorage\)/
+  )
+  assert.match(
+    storage,
+    /\{canViewInfraStorage && <Tab label="Storage pools" \/>\}/
+  )
+})
+
 test('native detail routes are not implicitly authorized by inventory capability', () => {
   const capabilities = read('src/client/apps/layersentry/capabilities.js')
 

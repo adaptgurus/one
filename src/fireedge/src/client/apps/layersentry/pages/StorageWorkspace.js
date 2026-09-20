@@ -43,6 +43,7 @@ import {
   CAPABILITY_IDS,
   getCapabilityModel,
   isCapabilityEnabled,
+  isCapabilityVisible,
 } from 'client/apps/layersentry/capabilities'
 import {
   PageFrame,
@@ -64,6 +65,9 @@ const StorageWorkspace = ({ endpoints }) => {
   const { view } = useViews()
   const isAdmin = view === 'admin'
   const capabilityModel = getCapabilityModel(endpoints)
+  const canViewInfraStorage =
+    isAdmin &&
+    isCapabilityVisible(CAPABILITY_IDS.INFRA_STORAGE, capabilityModel)
   const canAttach = isCapabilityEnabled(
     CAPABILITY_IDS.STORAGE_DISK_ATTACH,
     capabilityModel
@@ -84,7 +88,7 @@ const StorageWorkspace = ({ endpoints }) => {
   const vmQuery = VmAPI.useGetVmsQuery({ extended: true })
   const imageQuery = ImageAPI.useGetImagesQuery()
   const datastoreQuery = DatastoreAPI.useGetDatastoresQuery(undefined, {
-    skip: false,
+    skip: !(canAttach || canViewInfraStorage),
   })
   const [allocateImage, allocateState] = ImageAPI.useAllocateImageMutation()
   const [removeImage, removeState] = ImageAPI.useRemoveImageMutation()
@@ -243,7 +247,7 @@ const StorageWorkspace = ({ endpoints }) => {
       <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mt: 2 }}>
         <Tab label="VM disks" />
         <Tab label="Disk images" />
-        {isAdmin && <Tab label="Storage pools" />}
+        {canViewInfraStorage && <Tab label="Storage pools" />}
       </Tabs>
 
       {tab === 0 && (
@@ -492,7 +496,7 @@ const StorageWorkspace = ({ endpoints }) => {
         </Surface>
       )}
 
-      {isAdmin && tab === 2 && (
+      {canViewInfraStorage && tab === 2 && (
         <Surface sx={{ mt: 2, p: 2 }}>
           <ResourceBridge endpoints={endpoints} legacyPath="/datastore" />
         </Surface>
