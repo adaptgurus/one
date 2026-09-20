@@ -437,3 +437,17 @@ test('VM source selection hands off to the qualified instantiate route', () => {
     /\['\/vm-template\/instantiate', CAPABILITY_IDS\.VM_CREATE\]/
   )
 })
+
+
+test('Compute workspace exposes one Create VM action', () => {
+  const compute = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/client/apps/layersentry/pages/ComputeWorkspace.js'
+    ),
+    'utf8'
+  )
+
+  assert.equal((compute.match(/>\s*Create VM\s*</g) || []).length, 1)
+  assert.match(compute, /CAPABILITY_IDS\.VM_CREATE/)
+})
