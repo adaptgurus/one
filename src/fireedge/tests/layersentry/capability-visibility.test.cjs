@@ -198,7 +198,7 @@ test('LayerSentry VM create route stays wired to the native guarded create dialo
   )
   assert.match(
     capabilities,
-    /\[CAPABILITY_IDS\.VM_CREATE\]: \['\/vm\/create'\]/
+    /\[CAPABILITY_IDS\.VM_CREATE\]: \['\/vm\/create', '\/vm-template\/instantiate'\]/
   )
   assert.match(portal, /path=\{PRODUCT_PATHS\.COMPUTE_CREATE\}/)
   assert.match(portal, /legacyPath: '\/vm\/create'/)
