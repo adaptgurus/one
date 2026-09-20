@@ -8,8 +8,15 @@ $ProgressPreference = "SilentlyContinue"
 
 function Invoke-WslStrict {
   param([Parameter(Mandatory = $true)][string[]]$ArgsList)
-  $output = & wsl.exe -d Ubuntu-22.04 -u opc -- $ArgsList 2>&1
-  $code = $LASTEXITCODE
+  $previousEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $output = & wsl.exe -d Ubuntu-22.04 -u opc -- $ArgsList 2>&1
+    $code = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousEap
+  }
   if ($code -ne 0) {
     $detail = $output -join [Environment]::NewLine
     throw "WSL command failed ($code): $($ArgsList -join ' ') $detail"
@@ -19,9 +26,17 @@ function Invoke-WslStrict {
 
 function Invoke-WslAllowFail {
   param([Parameter(Mandatory = $true)][string[]]$ArgsList)
-  $output = & wsl.exe -d Ubuntu-22.04 -u opc -- $ArgsList 2>&1
+  $previousEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $output = & wsl.exe -d Ubuntu-22.04 -u opc -- $ArgsList 2>&1
+    $code = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousEap
+  }
   return [pscustomobject]@{
-    ExitCode = $LASTEXITCODE
+    ExitCode = $code
     Output = @($output)
   }
 }
@@ -293,7 +308,7 @@ finally {
   }
 
   $configCheck = Invoke-WslAllowFail -ArgsList @(
-    "ssh", "rocky-01", "grep", "-q", "^  VM_CREATE:", "/etc/one/fireedge/sunstone/sunstone-server.conf"
+    "ssh", "rocky-01", "grep", "-q", "VM_CREATE:", "/etc/one/fireedge/sunstone/sunstone-server.conf"
   )
   if ($configCheck.ExitCode -eq 0) {
     $summary.restoredFailClosed = "FAIL_VM_CREATE_STILL_PRESENT"
