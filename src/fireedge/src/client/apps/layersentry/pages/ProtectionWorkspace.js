@@ -15,24 +15,180 @@
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
-import { Alert, Box, Button, Tab, Tabs, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Button,
+  LinearProgress,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material'
 import { Plus } from 'iconoir-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
-import { DatastoreAPI, useViews } from '@FeaturesModule'
+import { BackupJobAPI, DatastoreAPI, ImageAPI, useViews } from '@FeaturesModule'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
-import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
   CAPABILITY_IDS,
   getCapabilityModel,
   isCapabilityEnabled,
-  isCapabilityVisible,
 } from 'client/apps/layersentry/capabilities'
 import {
   PageFrame,
   Surface,
 } from 'client/apps/layersentry/components/Primitives'
 import { colors } from 'client/apps/layersentry/theme/tokens'
+
+const toArray = (value) =>
+  value === undefined || value === null || value === ''
+    ? []
+    : Array.isArray(value)
+    ? value
+    : [value]
+
+const hasIds = (value) => toArray(value?.ID).length > 0
+
+const getBackupPlanState = ({
+  BACKING_UP_VMS,
+  ERROR_VMS,
+  LAST_BACKUP_TIME,
+  OUTDATED_VMS,
+} = {}) => {
+  if (hasIds(ERROR_VMS)) return 'Error'
+  if (hasIds(BACKING_UP_VMS)) return 'Running'
+  if (!LAST_BACKUP_TIME || String(LAST_BACKUP_TIME) === '0') return 'Not started'
+  if (hasIds(OUTDATED_VMS)) return 'Completed · attention needed'
+
+  return 'Completed'
+}
+
+const countBackupVms = (plan = {}) =>
+  String(plan?.TEMPLATE?.BACKUP_VMS ?? '')
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean).length
+
+const formatLastBackup = (value) => {
+  const timestamp = Number(value)
+  if (!Number.isFinite(timestamp) || timestamp <= 0) return 'Never'
+
+  return new Date(timestamp).toLocaleString()
+}
+
+const formatBackupSize = (value) => {
+  const sizeMb = Number(value)
+  if (!Number.isFinite(sizeMb) || sizeMb <= 0) return 'Size unavailable'
+
+  return `${Math.max(1, Math.ceil(sizeMb / 1024))} GB`
+}
+
+const BackupPlanInventory = () => {
+  const query = BackupJobAPI.useGetBackupJobsQuery()
+  const plans = toArray(query.data)
+
+  if (query.isLoading || query.isFetching) return <LinearProgress />
+
+  if (query.isError) {
+    return (
+      <Alert severity="error">
+        Could not load backup plans from the OpenNebula API.
+      </Alert>
+    )
+  }
+
+  if (plans.length === 0) {
+    return (
+      <Alert severity="info">No backup plans are visible to this account.</Alert>
+    )
+  }
+
+  return (
+    <Box
+      data-layersentry-readonly-backup-plan-inventory
+      sx={{ display: 'grid', gap: 1 }}
+    >
+      {plans.map((plan) => (
+        <Box
+          key={plan.ID ?? plan.NAME}
+          sx={{
+            p: 1.5,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 1.5,
+          }}
+        >
+          <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+            {plan.NAME ?? `Backup plan ${plan.ID}`}
+          </Typography>
+          <Typography sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}>
+            #{plan.ID} · {getBackupPlanState(plan)} · {countBackupVms(plan)} VM
+            {countBackupVms(plan) === 1 ? '' : 's'}
+          </Typography>
+          <Typography
+            sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
+          >
+            Last backup: {formatLastBackup(plan.LAST_BACKUP_TIME)}
+            {plan.PRIORITY ? ` · Priority ${plan.PRIORITY}` : ''}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  )
+}
+
+const RecoveryPointInventory = () => {
+  const query = ImageAPI.useGetBackupsQuery()
+  const backups = toArray(query.data)
+
+  if (query.isLoading || query.isFetching) return <LinearProgress />
+
+  if (query.isError) {
+    return (
+      <Alert severity="error">
+        Could not load recovery points from the OpenNebula API.
+      </Alert>
+    )
+  }
+
+  if (backups.length === 0) {
+    return (
+      <Alert severity="info">No recovery points are visible to this account.</Alert>
+    )
+  }
+
+  return (
+    <Box
+      data-layersentry-readonly-recovery-point-inventory
+      sx={{ display: 'grid', gap: 1 }}
+    >
+      {backups.map((backup) => {
+        const increments = toArray(backup?.BACKUP_INCREMENTS?.INCREMENT)
+
+        return (
+          <Box
+            key={backup.ID ?? backup.NAME}
+            sx={{
+              p: 1.5,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 1.5,
+            }}
+          >
+            <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+              {backup.NAME ?? `Recovery point ${backup.ID}`}
+            </Typography>
+            <Typography
+              sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}
+            >
+              #{backup.ID} · {formatBackupSize(backup.SIZE)} ·{' '}
+              {increments.length} increment
+              {increments.length === 1 ? '' : 's'}
+            </Typography>
+          </Box>
+        )
+      })}
+    </Box>
+  )
+}
 
 const isBackupDatastore = (datastore = {}) =>
   String(datastore?.TYPE) === '3' ||
@@ -49,8 +205,8 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
     CAPABILITY_IDS.BACKUP_RECOVERY_CREATE,
     capabilityModel
   )
-  const canViewBackupStorage = isCapabilityVisible(
-    CAPABILITY_IDS.BACKUP_STORAGE,
+  const canConfigureBackupStorage = isCapabilityEnabled(
+    CAPABILITY_IDS.BACKUP_STORAGE_CREATE,
     capabilityModel
   )
   const [tab, setTab] = useState(initialTab)
@@ -72,10 +228,10 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
   return (
     <PageFrame
       title="Protection"
-      description="Backup plans, recovery points and restores using the native OpenNebula protection lifecycle."
+      description="Read-only backup plans and recovery points; create, run, restore and delete remain separately qualified."
       actions={
         isAdmin &&
-        canViewBackupStorage &&
+        canConfigureBackupStorage &&
         !datastoresQuery.isLoading &&
         backupDatastores.length === 0 ? (
           <Button
@@ -127,7 +283,7 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
           severity="warning"
           sx={{ mt: 2 }}
           action={
-            isAdmin && canViewBackupStorage ? (
+            canConfigureBackupStorage ? (
               <Button
                 color="inherit"
                 size="small"
@@ -156,15 +312,10 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
       </Alert>
       <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mt: 2 }}>
         <Tab label="Backup Plans" />
-        <Tab label="Backups & Restore" />
+        <Tab label="Recovery Points" />
       </Tabs>
       <Surface sx={{ mt: 2, p: 2 }}>
-        {tab === 0 && (
-          <ResourceBridge endpoints={endpoints} legacyPath="/backupjobs" />
-        )}
-        {tab === 1 && (
-          <ResourceBridge endpoints={endpoints} legacyPath="/backup" />
-        )}
+        {tab === 0 ? <BackupPlanInventory /> : <RecoveryPointInventory />}
       </Surface>
     </PageFrame>
   )
