@@ -57,7 +57,8 @@ const getBackupPlanState = ({
 } = {}) => {
   if (hasIds(ERROR_VMS)) return 'Error'
   if (hasIds(BACKING_UP_VMS)) return 'Running'
-  if (!LAST_BACKUP_TIME || String(LAST_BACKUP_TIME) === '0') return 'Not started'
+  if (!LAST_BACKUP_TIME || String(LAST_BACKUP_TIME) === '0')
+    return 'Not started'
   if (hasIds(OUTDATED_VMS)) return 'Completed · attention needed'
 
   return 'Completed'
@@ -99,7 +100,9 @@ const BackupPlanInventory = () => {
 
   if (plans.length === 0) {
     return (
-      <Alert severity="info">No backup plans are visible to this account.</Alert>
+      <Alert severity="info">
+        No backup plans are visible to this account.
+      </Alert>
     )
   }
 
@@ -152,7 +155,9 @@ const RecoveryPointInventory = () => {
 
   if (backups.length === 0) {
     return (
-      <Alert severity="info">No recovery points are visible to this account.</Alert>
+      <Alert severity="info">
+        No recovery points are visible to this account.
+      </Alert>
     )
   }
 
