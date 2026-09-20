@@ -215,10 +215,7 @@ const validateDesiredState = (desiredState = {}) => {
     }
   }
 
-  if (
-    desiredState.environment === 'Production' &&
-    desiredState.tls !== true
-  ) {
+  if (desiredState.environment === 'Production' && desiredState.tls !== true) {
     add('TLS_REQUIRED', 'TLS is mandatory for a production service.')
   }
 
@@ -301,10 +298,7 @@ const validateDesiredState = (desiredState = {}) => {
         item.layout !== 'Repository-managed' &&
         (!Number.isFinite(Number(item.sizeGiB)) || Number(item.sizeGiB) <= 0)
       ) {
-        add(
-          'STORAGE_SIZE_INVALID',
-          `${prefix} size must be greater than zero.`
-        )
+        add('STORAGE_SIZE_INVALID', `${prefix} size must be greater than zero.`)
       }
 
       if (
