@@ -59,6 +59,7 @@ jobs:
             src/server/routes/api/serviceblueprints/catalog.js \
             src/server/routes/api/serviceblueprints/routes.js \
             src/server/routes/api/serviceblueprints/functions.js \
+            src/server/routes/api/serviceblueprints/validation.js \
             src/server/routes/api/serviceblueprints/index.js
 
       - name: Full FireEdge production build
