@@ -816,3 +816,132 @@ test('exact tuple registry starts empty and validates immutable promotion record
   assert.ok(errors.some((message) => /QUALIFIED/.test(message)))
   assert.ok(errors.some((message) => /SHA-256/.test(message)))
 })
+
+test('private platform bridge uses immutable OpenNebula UID and keeps mutation fail-closed', async (t) => {
+  const Module = require('node:module')
+  const http = require('node:http')
+  const previousNodePath = process.env.NODE_PATH
+  process.env.NODE_PATH = [
+    path.join(fireedgeRoot, 'src'),
+    previousNodePath,
+  ]
+    .filter(Boolean)
+    .join(path.delimiter)
+  Module._initPaths()
+
+  let server
+  try {
+    const platform = require(path.join(
+      fireedgeRoot,
+      'src/server/routes/api/serviceblueprints/platform.js'
+    ))
+
+    assert.throws(
+      () => platform.validatePlatformUrl('http://10.20.30.40:9444'),
+      /must use HTTPS/
+    )
+    assert.equal(
+      platform.validatePlatformUrl('http://127.0.0.1:9444').hostname,
+      '127.0.0.1'
+    )
+    assert.equal(
+      platform.validatePlatformUrl('https://platform.example.internal:9444')
+        .protocol,
+      'https:'
+    )
+
+    const gatewayToken = 'g'.repeat(40)
+    let observed
+    server = http.createServer((req, res) => {
+      observed = {
+        method: req.method,
+        url: req.url,
+        token: req.headers['x-layersentry-gateway-token'],
+        user: req.headers['x-layersentry-user'],
+        uid: req.headers['x-layersentry-uid'],
+        oneadmin: req.headers['x-layersentry-oneadmin'],
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' })
+      res.end(
+        JSON.stringify({
+          capability: {
+            durableStoreReady: true,
+            providerMutationEnabled: false,
+            deploymentEnabled: false,
+          },
+        })
+      )
+    })
+    await new Promise((resolve) =>
+      server.listen(0, '127.0.0.1', resolve)
+    )
+    t.after(
+      () =>
+        new Promise((resolve) => {
+          server.close(resolve)
+        })
+    )
+
+    const oneConnection = (user, password) => {
+      assert.equal(user, 'tester')
+      assert.equal(password, 'session-only-value')
+
+      return ({ action, parameters, callback }) => {
+        assert.equal(action, 'user.info')
+        assert.deepEqual(parameters, [-1, false])
+        callback(null, {
+          USER: {
+            ID: '42',
+            NAME: 'tester',
+          },
+        })
+      }
+    }
+
+    const address = server.address()
+    const response = await platform.platformRequest(
+      {
+        method: 'GET',
+        path: '/v1/vm-services/capabilities',
+      },
+      {
+        user: 'tester',
+        password: 'session-only-value',
+      },
+      oneConnection,
+      {
+        baseURL: `http://127.0.0.1:${address.port}`,
+        gatewayToken,
+        timeout: 2_000,
+      }
+    )
+
+    assert.equal(response.capability.durableStoreReady, true)
+    assert.equal(response.capability.providerMutationEnabled, false)
+    assert.equal(response.capability.deploymentEnabled, false)
+    assert.deepEqual(observed, {
+      method: 'GET',
+      url: '/v1/vm-services/capabilities',
+      token: gatewayToken,
+      user: 'tester',
+      uid: '42',
+      oneadmin: 'false',
+    })
+
+    const defaultsSource = fs.readFileSync(
+      path.join(
+        fireedgeRoot,
+        'src/server/utils/constants/defaults.js'
+      ),
+      'utf8'
+    )
+    assert.match(
+      defaultsSource,
+      /\[appName\]: \['layersentry_platform_gateway_token'\]/
+    )
+  } finally {
+    process.env.NODE_PATH = previousNodePath
+    Module._initPaths()
+  }
+})
+
