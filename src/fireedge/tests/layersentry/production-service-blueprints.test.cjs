@@ -762,3 +762,52 @@ test('runtime service-blueprint handlers return catalog and fail closed', () => 
     Module._initPaths()
   }
 })
+
+
+test('exact tuple registry starts empty and validates immutable promotion records', () => {
+  const tuples = require(path.join(
+    fireedgeRoot,
+    'src/server/routes/api/serviceblueprints/tuples.js'
+  ))
+
+  assert.deepEqual(tuples.PROMOTED_TUPLES, [])
+  assert.equal(
+    tuples.findQualifiedTuple({
+      blueprintId: 'postgresql',
+      version: '18',
+      topology: '3-node HA',
+    }),
+    undefined
+  )
+
+  const qualified = {
+    id: 'postgresql-18.6-rocky9-x86_64-v1',
+    blueprintId: 'postgresql',
+    version: '18',
+    edition: '',
+    topology: '3-node HA',
+    exactApplicationVersion: '18.6',
+    osFamily: 'rocky9',
+    imageId: 'image-123',
+    imageDigest:
+      'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    architecture: 'x86_64',
+    sourceSha: '0123456789abcdef',
+    dependencyLock: 'lock-2026-09-20',
+    qualification: 'QUALIFIED',
+    executionBackend: 'oneflow+ansible-v1',
+  }
+
+  assert.deepEqual(tuples.validateTupleDefinition(qualified), [])
+
+  const unsafe = {
+    ...qualified,
+    architecture: 'arm64',
+    qualification: 'NOT_TESTED',
+    imageDigest: 'floating-latest',
+  }
+  const errors = tuples.validateTupleDefinition(unsafe)
+  assert.ok(errors.some((message) => /x86_64/.test(message)))
+  assert.ok(errors.some((message) => /QUALIFIED/.test(message)))
+  assert.ok(errors.some((message) => /SHA-256/.test(message)))
+})
