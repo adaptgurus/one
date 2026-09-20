@@ -73,8 +73,8 @@ class DiskResizeFinalizationTest < Minitest::Test
         assert_equal @inflight, @group.body[:disk_resize_inflight]
         assert_equal @inflight, @group.persisted.last[:disk_resize_inflight]
         assert_empty @group.body[:disk_resize_history]
-        assert_equal 60, @group.persisted.last.dig(:disk_autoscaling, :data_disks, 0,
-                                                  :initial_gib)
+        baseline = @group.persisted.last.dig(:disk_autoscaling, :data_disks, 0, :initial_gib)
+        assert_equal 60, baseline
         assert_no_disk_mutation
     end
 
@@ -121,10 +121,11 @@ class DiskResizeFinalizationTest < Minitest::Test
     end
 
     def test_reassigned_native_disk_id_does_not_receive_retry
-        OneKS::WorkerDiskManager.status = {
-            :disks => [@disk.merge(:name => 'data-b', :current_size_mib => 30 * 1024,
-                                  :mount => '/var/lib/layersentry/disks/data-b')]
-        }
+        replacement = @disk.merge(
+            :name => 'data-b', :current_size_mib => 30 * 1024,
+            :mount => '/var/lib/layersentry/disks/data-b'
+        )
+        OneKS::WorkerDiskManager.status = { :disks => [replacement] }
         result = @group.reconcile_disk_autoscaling(:now => 1_130)
 
         assert OpenNebula.is_error?(result)
