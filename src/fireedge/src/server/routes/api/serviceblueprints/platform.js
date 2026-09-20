@@ -233,9 +233,14 @@ const buildPlatformRequest = (
  * @param {Function} oneConnection - OpenNebula XML-RPC connection factory
  * @returns {Promise<object>} response body
  */
-const platformRequest = async (request, userData, oneConnection) => {
+const platformRequest = async (
+  request,
+  userData,
+  oneConnection,
+  config = getPlatformConfig()
+) => {
   const actor = await resolvePlatformActor(userData, oneConnection)
-  const response = await axios(buildPlatformRequest(request, actor))
+  const response = await axios(buildPlatformRequest(request, actor, config))
 
   return response.data
 }
