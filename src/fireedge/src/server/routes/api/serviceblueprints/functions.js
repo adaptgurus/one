@@ -26,6 +26,9 @@ const {
 const {
   findQualifiedTuple,
 } = require('server/routes/api/serviceblueprints/tuples')
+const {
+  platformCapabilities,
+} = require('server/routes/api/serviceblueprints/platform')
 
 const { defaultEmptyFunction } = defaults
 const { ok, badRequest, conflict, serviceUnavailable } = httpCodes
@@ -65,7 +68,13 @@ const list = (res = {}, next = defaultEmptyFunction) => {
  * @param {Function} next - Express stepper
  * @param {object} params - Requested service tuple
  */
-const preflight = (res = {}, next = defaultEmptyFunction, params = {}) => {
+const preflight = (
+  res = {},
+  next = defaultEmptyFunction,
+  params = {},
+  userData = {},
+  oneConnection
+) => {
   const { blueprintId, version, edition, topology, desiredState } = params
 
   if (!blueprintId || !version || !topology) {
@@ -152,18 +161,55 @@ const preflight = (res = {}, next = defaultEmptyFunction, params = {}) => {
     return
   }
 
-  // Defensive default. Exact tuple qualification does not by itself enable
-  // mutation; the execution adapter and durable operation journal must also be
-  // wired and qualified before deployment.
-  res.locals.httpCode = httpResponse(
-    serviceUnavailable,
-    blocked(
-      'SERVICE_BLUEPRINT_EXECUTION_NOT_WIRED',
-      'The exact tuple is qualified but no enabled execution adapter is available.',
-      { tupleId: qualifiedTuple.id }
-    )
-  )
-  next()
+  // A promoted tuple must also prove that the durable LayerSentry operation
+  // authority is online. This is a read-only bridge: provider mutation remains
+  // disabled until a separately qualified execution adapter is installed.
+  platformCapabilities(userData, oneConnection)
+    .then((platformState = {}) => {
+      const capability = platformState.capability || {}
+      if (!capability.durableStoreReady) {
+        res.locals.httpCode = httpResponse(
+          serviceUnavailable,
+          blocked(
+            'SERVICE_BLUEPRINT_JOURNAL_NOT_READY',
+            'The durable VM-service operation journal is not ready.',
+            {
+              tupleId: qualifiedTuple.id,
+              durableStoreReady: false,
+            }
+          )
+        )
+        next()
+
+        return
+      }
+
+      res.locals.httpCode = httpResponse(
+        serviceUnavailable,
+        blocked(
+          'SERVICE_BLUEPRINT_EXECUTION_NOT_WIRED',
+          'The exact tuple and durable journal are available, but no enabled execution adapter is qualified.',
+          {
+            tupleId: qualifiedTuple.id,
+            durableStoreReady: true,
+            providerMutationEnabled:
+              capability.providerMutationEnabled === true,
+          }
+        )
+      )
+      next()
+    })
+    .catch(() => {
+      res.locals.httpCode = httpResponse(
+        serviceUnavailable,
+        blocked(
+          'SERVICE_BLUEPRINT_CONTROL_PLANE_UNAVAILABLE',
+          'The LayerSentry VM-service control plane is unavailable or not configured.',
+          { tupleId: qualifiedTuple.id }
+        )
+      )
+      next()
+    })
 }
 
 /**
