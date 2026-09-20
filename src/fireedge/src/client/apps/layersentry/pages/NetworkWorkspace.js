@@ -74,12 +74,17 @@ const NetworkInventory = () => {
 
   if (networks.length === 0) {
     return (
-      <Alert severity="info">No workload networks are visible to this account.</Alert>
+      <Alert severity="info">
+        No workload networks are visible to this account.
+      </Alert>
     )
   }
 
   return (
-    <Box data-layersentry-readonly-network-inventory sx={{ display: 'grid', gap: 1 }}>
+    <Box
+      data-layersentry-readonly-network-inventory
+      sx={{ display: 'grid', gap: 1 }}
+    >
       {networks.map((network) => {
         const ranges = toArray(network?.AR_POOL?.AR)
         const allocatedLeases = ranges.reduce(
@@ -99,10 +104,12 @@ const NetworkInventory = () => {
             <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
               {network.NAME ?? `Network ${network.ID}`}
             </Typography>
-            <Typography sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}>
+            <Typography
+              sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}
+            >
               #{network.ID} · {ranges.length} address range
-              {ranges.length === 1 ? '' : 's'} · {allocatedLeases} allocated lease
-              {allocatedLeases === 1 ? '' : 's'}
+              {ranges.length === 1 ? '' : 's'} · {allocatedLeases} allocated
+              lease{allocatedLeases === 1 ? '' : 's'}
             </Typography>
           </Box>
         )
