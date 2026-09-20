@@ -34,6 +34,7 @@ const item = (id, name, versions, topologies) => ({
   executionBackendQualified: false,
 })
 
+// prettier-ignore
 const CATALOG = Object.freeze([
   item('postgresql', 'PostgreSQL', ['16', '17', '18'], [
     'Standalone',
