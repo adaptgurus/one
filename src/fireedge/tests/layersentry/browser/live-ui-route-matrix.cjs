@@ -135,6 +135,11 @@ const main = async () => {
       { timeout: 30000 }
     )
 
+    // Ignore expected unauthenticated bootstrap probes from the login screen.
+    errors.length = 0
+    failedRequests.length = 0
+    httpErrors.length = 0
+
     const results = []
     for (const profile of [
       { name: 'desktop', width: 1440, height: 1000 },
@@ -151,7 +156,24 @@ const main = async () => {
           waitUntil: 'domcontentloaded',
           timeout: 30000,
         })
-        await page.waitForTimeout(500)
+        await page.waitForFunction(
+          () => {
+            const bodyText = document.body?.innerText?.trim() || ''
+            return (
+              bodyText.length > 20 ||
+              Boolean(
+                document.querySelector(
+                  '[data-layersentry-capability-unavailable]'
+                )
+              ) ||
+              Boolean(
+                document.querySelector('[data-layersentry-login="true"]')
+              )
+            )
+          },
+          undefined,
+          { timeout: 30000 }
+        )
 
         const state = await page.evaluate(() => {
           const bodyText = document.body?.innerText?.trim() || ''
