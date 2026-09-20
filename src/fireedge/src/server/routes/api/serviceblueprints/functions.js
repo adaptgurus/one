@@ -35,11 +35,11 @@ const blocked = (code, message, extra = {}) => ({
  *
  * Catalog presence never implies deployment eligibility. Each item carries
  * explicit qualification and execution-backend gates.
+ *
+ * @param {object} res - HTTP response
+ * @param {Function} next - Express stepper
  */
-const list = (
-  res = {},
-  next = defaultEmptyFunction
-) => {
+const list = (res = {}, next = defaultEmptyFunction) => {
   res.locals.httpCode = httpResponse(ok, {
     items: getCatalog(),
     source: 'fireedge-runtime-catalog',
@@ -54,13 +54,14 @@ const list = (
  * This endpoint intentionally does not attempt product/OS compatibility or
  * infrastructure reservation until an exact tuple has been promoted by the
  * qualification pipeline.
+ *
+ * @param {object} res - HTTP response
+ * @param {Function} next - Express stepper
+ * @param {object} params - Requested service tuple
  */
-const preflight = (
-  res = {},
-  next = defaultEmptyFunction,
-  params = {}
-) => {
+const preflight = (res = {}, next = defaultEmptyFunction, params = {}) => {
   const { blueprintId, version, edition, topology } = params
+
   if (!blueprintId || !version || !topology) {
     res.locals.httpCode = httpResponse(
       badRequest,
@@ -137,15 +138,15 @@ const preflight = (
 }
 
 /**
- * Deployment remains hard-disabled until exact-tuple preflight, operation
- * journaling, OpenNebula/OneFlow execution and guest configuration adapters
- * are qualified together.
+ * Keep deployment hard-disabled until the exact-tuple preflight, operation
+ * journal, OpenNebula/OneFlow execution and guest configuration adapters are
+ * qualified together.
+ *
+ * @param {object} res - HTTP response
+ * @param {Function} next - Express stepper
+ * @param {object} params - Requested service tuple
  */
-const deploy = (
-  res = {},
-  next = defaultEmptyFunction,
-  params = {}
-) => {
+const deploy = (res = {}, next = defaultEmptyFunction, params = {}) => {
   const { blueprintId, version, edition, topology } = params
 
   res.locals.httpCode = httpResponse(
