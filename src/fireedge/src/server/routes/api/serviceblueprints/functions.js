@@ -23,6 +23,9 @@ const {
 const {
   validateDesiredState,
 } = require('server/routes/api/serviceblueprints/validation')
+const {
+  findQualifiedTuple,
+} = require('server/routes/api/serviceblueprints/tuples')
 
 const { defaultEmptyFunction } = defaults
 const { ok, badRequest, conflict, serviceUnavailable } = httpCodes
@@ -121,20 +124,26 @@ const preflight = (res = {}, next = defaultEmptyFunction, params = {}) => {
     return
   }
 
-  if (!blueprint.productionSelectable || !blueprint.executionBackendQualified) {
+  const qualifiedTuple = findQualifiedTuple({
+    blueprintId,
+    version,
+    edition: edition || '',
+    topology,
+  })
+  if (!qualifiedTuple) {
     res.locals.httpCode = httpResponse(
       conflict,
       blocked(
         'SERVICE_BLUEPRINT_TUPLE_NOT_PROMOTED',
-        'The requested tuple is not production-qualified for deployment.',
+        'The exact requested tuple is not production-qualified for deployment.',
         {
           blueprintId,
           version,
           edition,
           topology,
-          qualification: blueprint.qualification,
-          productionSelectable: blueprint.productionSelectable,
-          executionBackendQualified: blueprint.executionBackendQualified,
+          qualification: 'NOT_PROMOTED',
+          productionSelectable: false,
+          executionBackendQualified: false,
         }
       )
     )
@@ -143,13 +152,15 @@ const preflight = (res = {}, next = defaultEmptyFunction, params = {}) => {
     return
   }
 
-  // Defensive default. Promotion logic must replace this branch with exact
-  // immutable tuple resolution before any infrastructure mutation is enabled.
+  // Defensive default. Exact tuple qualification does not by itself enable
+  // mutation; the execution adapter and durable operation journal must also be
+  // wired and qualified before deployment.
   res.locals.httpCode = httpResponse(
     serviceUnavailable,
     blocked(
       'SERVICE_BLUEPRINT_EXECUTION_NOT_WIRED',
-      'No qualified execution adapter is available for this tuple.'
+      'The exact tuple is qualified but no enabled execution adapter is available.',
+      { tupleId: qualifiedTuple.id }
     )
   )
   next()
