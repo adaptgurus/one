@@ -89,6 +89,7 @@ test('direct URLs use the same fail-closed capability policy', () => {
   for (const route of [
     '/compute',
     '/compute/create',
+    '/vm-template/instantiate',
     '/compute/blueprints',
     '/compute/affinity',
     '/kubernetes',
@@ -272,4 +273,18 @@ test('search does not advertise hidden kubernetes capability', () => {
 
   assert.match(shell, /placeholder="Search VMs, storage, networks\.\.\."/)
   assert.doesNotMatch(shell, /placeholder="[^"]*Kubernetes/)
+})
+
+
+test('VM creation requires both selector and instantiate endpoints', () => {
+  const capabilities = read('src/client/apps/layersentry/capabilities.js')
+
+  assert.match(
+    capabilities,
+    /\['\/vm-template\/instantiate', CAPABILITY_IDS\.VM_CREATE\]/
+  )
+  assert.match(
+    capabilities,
+    /\[CAPABILITY_IDS\.VM_CREATE\]: \['\/vm\/create', '\/vm-template\/instantiate'\]/
+  )
 })
