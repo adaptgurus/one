@@ -200,6 +200,7 @@ const CAPABILITY_PATHS = Object.freeze([
   ['/platform/marketplace-apps', CAPABILITY_IDS.MARKETPLACE_APPS],
   ['/support/create', CAPABILITY_IDS.SUPPORT_TICKETING],
   ['/vm/create', CAPABILITY_IDS.VM_CREATE],
+  ['/vm-template/instantiate', CAPABILITY_IDS.VM_CREATE],
   ['/vm-template', CAPABILITY_IDS.BLUEPRINTS],
   ['/vm-group/create', CAPABILITY_IDS.AFFINITY_CREATE],
   ['/vm-group', CAPABILITY_IDS.AFFINITY],
@@ -238,7 +239,7 @@ const hidden = (visibility, reason) => ({
 
 const CAPABILITY_ENDPOINT_REQUIREMENTS = Object.freeze({
   [CAPABILITY_IDS.COMPUTE]: ['/vm'],
-  [CAPABILITY_IDS.VM_CREATE]: ['/vm/create'],
+  [CAPABILITY_IDS.VM_CREATE]: ['/vm/create', '/vm-template/instantiate'],
   [CAPABILITY_IDS.BLUEPRINTS]: ['/vm-template'],
   [CAPABILITY_IDS.AFFINITY]: ['/vm-group'],
   [CAPABILITY_IDS.AFFINITY_CREATE]: ['/vm-group/create'],
