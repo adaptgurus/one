@@ -181,6 +181,7 @@ try {
     "ssh", "rocky-01", "sudo", "-n", "bash", "/tmp/live-qual-gate.sh",
     "enable", $gateRemote
   ) | Set-Content -LiteralPath (Join-Path $runDir "gate-enable.log")
+  $gateEnabled = $true
   Invoke-WslStrict -ArgsList @(
     "scp", "-q", "rocky-01:$gateRemote", "$runWsl/gate.env"
   ) | Out-Null
@@ -190,7 +191,6 @@ try {
   $gateState = ConvertFrom-StringData ((Get-Content -Raw -LiteralPath $gateLocal))
   $backupPath = $gateState.BACKUP
   if (-not $backupPath) { throw "Temporary gate backup path was not returned" }
-  $gateEnabled = $true
   $summary.vmCreateGate = "ENABLED_TEMPORARILY"
 
   Remove-Item Env:LAYERSENTRY_EXPECT_BASELINE_FAIL_CLOSED -ErrorAction SilentlyContinue
@@ -232,6 +232,16 @@ try {
   $summary.error = $_.Exception.Message
 }
 finally {
+  if ($gateEnabled -and -not $backupPath) {
+    $recoverGate = Invoke-WslAllowFail -ArgsList @(
+      "scp", "-q", "rocky-01:$gateRemote", "$runWsl/gate.env"
+    )
+    if ($recoverGate.ExitCode -eq 0 -and (Test-Path $gateLocal)) {
+      $recoveredGateState = ConvertFrom-StringData ((Get-Content -Raw -LiteralPath $gateLocal))
+      $backupPath = $recoveredGateState.BACKUP
+    }
+  }
+
   if ($gateEnabled -and $backupPath) {
     $restore = Invoke-WslAllowFail -ArgsList @(
       "ssh", "rocky-01", "sudo", "-n", "bash", "/tmp/live-qual-gate.sh",
@@ -246,6 +256,12 @@ finally {
       $failed = $true
       if (-not $summary.error) { $summary.error = "Production config restore failed" }
     }
+  }
+
+  if ($gateEnabled -and -not $backupPath) {
+    $summary.restoredFailClosed = "FAIL_NO_BACKUP_METADATA"
+    $failed = $true
+    if (-not $summary.error) { $summary.error = "Temporary gate enabled but backup metadata could not be recovered" }
   }
 
   if ($identity -and $summary.restoredFailClosed -eq "PASS") {
