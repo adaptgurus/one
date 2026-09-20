@@ -57,6 +57,7 @@ PY
   wait_ready
   umask 077
   printf 'BACKUP=%s\n' "${BACKUP}" > "${STATE_FILE}"
+  chmod 0644 "${STATE_FILE}"
 elif [[ "${MODE}" == "restore" ]]; then
   BACKUP="${2:?backup path required}"
   test -f "${BACKUP}"
