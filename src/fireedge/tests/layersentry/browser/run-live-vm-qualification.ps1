@@ -189,7 +189,32 @@ try {
   $env:LAYERSENTRY_SOURCE_ROOT = $sourceDir
   $env:LAYERSENTRY_ROUTE_EVIDENCE_PATH = Join-Path $runDir "baseline-routes.json"
   $env:LAYERSENTRY_EXPECT_BASELINE_FAIL_CLOSED = "1"
-  Remove-Item Env:LAYERSENTRY_ROUTE_MATRIX -ErrorAction SilentlyContinue
+  $env:LAYERSENTRY_ROUTE_MATRIX = @(
+    "overview",
+    "compute",
+    "compute/create",
+    "compute/blueprints",
+    "compute/affinity",
+    "kubernetes",
+    "kubernetes/create",
+    "applications",
+    "applications/deploy",
+    "storage",
+    "storage/files",
+    "storage/images",
+    "network",
+    "network/templates",
+    "network/routers",
+    "security",
+    "protection",
+    "protection/backup-plans",
+    "protection/recovery-points",
+    "protection/site-recovery",
+    "operations",
+    "search",
+    "support",
+    "settings"
+  ) -join ","
   Invoke-BrowserHarness -Script (Join-Path $browserDir "live-ui-route-matrix.cjs") -Log (Join-Path $runDir "baseline-route.log")
   $summary.baselineRouteMatrix = "PASS"
 
