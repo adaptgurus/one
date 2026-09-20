@@ -7,6 +7,8 @@ on:
       - 'src/fireedge/src/client/apps/layersentry/pages/ProductionServiceWizard.js'
       - 'src/fireedge/src/client/apps/layersentry/pages/ApplicationsWorkspace.js'
       - 'src/fireedge/src/client/apps/layersentry/Portal.js'
+      - 'src/fireedge/src/server/routes/api/index.js'
+      - 'src/fireedge/src/server/routes/api/serviceblueprints/**'
       - 'src/fireedge/tests/layersentry/production-service-blueprints.test.cjs'
       - '.github/workflows/layersentry-production-service.yml'
   pull_request:
@@ -15,6 +17,8 @@ on:
       - 'src/fireedge/src/client/apps/layersentry/pages/ProductionServiceWizard.js'
       - 'src/fireedge/src/client/apps/layersentry/pages/ApplicationsWorkspace.js'
       - 'src/fireedge/src/client/apps/layersentry/Portal.js'
+      - 'src/fireedge/src/server/routes/api/index.js'
+      - 'src/fireedge/src/server/routes/api/serviceblueprints/**'
       - 'src/fireedge/tests/layersentry/production-service-blueprints.test.cjs'
       - '.github/workflows/layersentry-production-service.yml'
   workflow_dispatch:
@@ -50,7 +54,12 @@ jobs:
             src/client/apps/layersentry/serviceBlueprints.js \
             src/client/apps/layersentry/pages/ProductionServiceWizard.js \
             src/client/apps/layersentry/pages/ApplicationsWorkspace.js \
-            src/client/apps/layersentry/Portal.js
+            src/client/apps/layersentry/Portal.js \
+            src/server/routes/api/index.js \
+            src/server/routes/api/serviceblueprints/catalog.js \
+            src/server/routes/api/serviceblueprints/routes.js \
+            src/server/routes/api/serviceblueprints/functions.js \
+            src/server/routes/api/serviceblueprints/index.js
 
       - name: Full FireEdge production build
         run: npm run build
