@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 require 'erb'
+require 'digest'
 require 'yaml'
 require 'minitest/autorun'
 require 'tmpdir'
@@ -237,4 +238,143 @@ class LayerSentryProfileTest < Minitest::Test
       end
     end
   end
+  def bootstrap_configuration(type)
+    docs, = render(type)
+    type == 'controlplanes' ? docs.fetch('RKE2ControlPlane').fetch('spec') :
+      docs.fetch('RKE2ConfigTemplate').dig('spec', 'template', 'spec')
+  end
+
+  def with_artifact_fetch_fixture(type)
+    command = bootstrap_configuration(type).fetch('preRKE2Commands').first
+    function = command[/^\s*fetch_artifact\(\) \{.*?^\s*\}/m]
+    refute_nil function
+    Dir.mktmpdir do |dir|
+      bin = File.join(dir, 'bin')
+      Dir.mkdir(bin)
+      curl = File.join(bin, 'curl')
+      File.write(curl, <<~SH)
+        #!/bin/sh
+        set -eu
+        printf 'called\\n' >> "$FETCH_MARKER"
+        out=''
+        while [ "$#" -gt 0 ]; do
+          if [ "$1" = -o ]; then out="$2"; shift 2; else shift; fi
+        done
+        test -n "$out"
+        printf '%s' "$FETCH_PAYLOAD" > "$out"
+      SH
+      File.chmod(0o755, curl)
+      runner = File.join(dir, 'fetch.sh')
+      File.write(runner, "#!/bin/sh\nset -eu\n#{function}\nfetch_artifact \"$1\" \"$2\" \"$3\"\n")
+      payload = 'approved artifact fixture'
+      yield({ dest: File.join(dir, 'artifact'), runner: runner, payload: payload,
+              digest: Digest::SHA256.hexdigest(payload), marker: File.join(dir, 'curl-called'),
+              env: { 'PATH' => "#{bin}:#{ENV.fetch('PATH')}",
+                     'FETCH_MARKER' => File.join(dir, 'curl-called'), 'FETCH_PAYLOAD' => payload } })
+    end
+  end
+
+  def fetch_fixture(fixture)
+    Open3.capture3(fixture.fetch(:env), '/bin/sh', fixture.fetch(:runner),
+                   'https://unused.invalid/artifact', fixture.fetch(:dest), fixture.fetch(:digest))
+  end
+
+  def test_verified_baked_artifact_is_used_without_network_or_rewrite
+    %w[controlplanes nodegroups].each do |type|
+      with_artifact_fetch_fixture(type) do |f|
+        File.write(f[:dest], f[:payload])
+        stamp = Time.at(1_789_000_000)
+        File.utime(stamp, stamp, f[:dest])
+        _, error, status = fetch_fixture(f)
+        assert status.success?, error
+        assert_equal f[:payload], File.read(f[:dest])
+        assert_equal stamp, File.mtime(f[:dest])
+        refute File.exist?(f[:marker]), 'verified image artifact caused a network fetch'
+      end
+    end
+  end
+
+  def test_missing_baked_artifact_uses_verified_download
+    %w[controlplanes nodegroups].each do |type|
+      with_artifact_fetch_fixture(type) do |f|
+        _, error, status = fetch_fixture(f)
+        assert status.success?, error
+        assert_equal f[:payload], File.read(f[:dest])
+        assert File.exist?(f[:marker])
+        refute File.exist?(f[:dest] + '.part')
+      end
+    end
+  end
+
+  def test_corrupt_baked_artifact_is_replaced_only_by_verified_bytes
+    %w[controlplanes nodegroups].each do |type|
+      with_artifact_fetch_fixture(type) do |f|
+        File.write(f[:dest], 'corrupt local artifact')
+        _, error, status = fetch_fixture(f)
+        assert status.success?, error
+        assert_equal f[:payload], File.read(f[:dest])
+        assert File.exist?(f[:marker])
+      end
+    end
+  end
+
+  def test_corrupt_local_and_remote_artifacts_fail_closed
+    %w[controlplanes nodegroups].each do |type|
+      with_artifact_fetch_fixture(type) do |f|
+        File.write(f[:dest], 'corrupt local artifact')
+        f[:env]['FETCH_PAYLOAD'] = 'corrupt remote artifact'
+        _, _, status = fetch_fixture(f)
+        refute status.success?, 'unverified remote bytes were accepted'
+        assert_equal 'corrupt local artifact', File.read(f[:dest])
+        assert File.exist?(f[:marker])
+      end
+    end
+  end
+
+  def with_selinux_preflight(type, enabled:, policy_present:)
+    commands = bootstrap_configuration(type).fetch('preRKE2Commands')
+    source = commands.find { |command| command.include?('91-layersentry-selinux.yaml') }
+    refute_nil source
+    condition = source[/if command -v selinuxenabled.*?^\s*fi/m]
+    refute_nil condition
+    Dir.mktmpdir do |dir|
+      %w[selinuxenabled rpm].each do |name|
+        code = name == 'selinuxenabled' ? (enabled ? 0 : 1) : (policy_present ? 0 : 1)
+        path = File.join(dir, name)
+        File.write(path, "#!/bin/sh\nexit #{code}\n")
+        File.chmod(0o755, path)
+      end
+      script = "set -eu\n" + condition.gsub('/etc/rancher/rke2/config.yaml.d', dir)
+      _, error, status = Open3.capture3({ 'PATH' => "#{dir}:#{ENV.fetch('PATH')}" }, '/bin/sh', '-c', script)
+      yield status, error, File.join(dir, '91-layersentry-selinux.yaml')
+    end
+  end
+
+  def test_selinux_enabled_nodes_require_policy_and_enable_runtime_labeling
+    %w[controlplanes nodegroups].each do |type|
+      with_selinux_preflight(type, enabled: true, policy_present: true) do |status, error, path|
+        assert status.success?, error
+        assert_equal true, YAML.load_file(path).fetch('selinux')
+      end
+    end
+  end
+
+  def test_missing_selinux_policy_blocks_bootstrap
+    %w[controlplanes nodegroups].each do |type|
+      with_selinux_preflight(type, enabled: true, policy_present: false) do |status, _, path|
+        refute status.success?
+        refute File.exist?(path)
+      end
+    end
+  end
+
+  def test_non_selinux_nodes_do_not_receive_selinux_override
+    %w[controlplanes nodegroups].each do |type|
+      with_selinux_preflight(type, enabled: false, policy_present: false) do |status, error, path|
+        assert status.success?, error
+        refute File.exist?(path)
+      end
+    end
+  end
+
 end

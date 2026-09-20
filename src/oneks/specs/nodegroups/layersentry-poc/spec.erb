@@ -18,6 +18,10 @@ spec:
         install -d -m 0755 /opt/rke2-artifacts /var/lib/rancher/rke2/agent/images
         fetch_artifact() {
           url="$1"; dest="$2"; sha="$3"; tmp="${dest}.part"
+          # Reuse only image-baked bytes that match the immutable release pin.
+          if [ -f "$dest" ] && printf '%s  %s\n' "$sha" "$dest" | sha256sum -c - >/dev/null 2>&1; then
+            return 0
+          fi
           rm -f "$tmp"
           curl -fsSL --retry 3 --retry-delay 2 --connect-timeout 5 --max-time 600 "$url" -o "$tmp"
           printf '%s  %s\n' "$sha" "$tmp" | sha256sum -c -
@@ -41,6 +45,11 @@ spec:
         SHA256
         test -x /usr/local/libexec/oneks/worker-disk
         systemctl is-enabled --quiet qemu-guest-agent
+        if command -v selinuxenabled >/dev/null 2>&1 && selinuxenabled; then
+          rpm -q --quiet rke2-selinux container-selinux
+          install -d -m 0700 /etc/rancher/rke2/config.yaml.d
+          printf 'selinux: true\n' > /etc/rancher/rke2/config.yaml.d/91-layersentry-selinux.yaml
+        fi
       - >-
         install -d /var/lib/rancher/rke2/agent/etc/kubelet.conf.d &&
         printf 'apiVersion: kubelet.config.k8s.io/v1beta1\nkind: KubeletConfiguration\nruntimeRequestTimeout: 30m\n' > /var/lib/rancher/rke2/agent/etc/kubelet.conf.d/90-layersentry-poc.conf
