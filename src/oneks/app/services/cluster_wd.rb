@@ -64,6 +64,10 @@ module OneKS
                 register_vm(obj[:id], obj[:group_id], obj[:cluster_id])
             end
 
+            # Reconcile VMs that OpenNebula already allocated before this process
+            # started. Allocation events are not replayed after a restart.
+            adopt_existing_vms
+
             Log.info(COMP, 'Starting Cluster Watchdog')
 
             @tm.start(:wd_vm_allocation)       { watch_vm_allocation }
@@ -72,6 +76,75 @@ module OneKS
             Log.error(COMP, "Cluster watchdog start crashed: #{e.class}: #{e.message}")
         end
 
+        # Re-adopt existing OpenNebula VMs after a server restart. A VM is
+        # accepted only when its OneKS identity matches a live cluster/group
+        # and its OpenNebula owner matches the group owner.
+        def adopt_existing_vms
+            vm_pool = OpenNebula::VirtualMachinePool.new(@cloud_auth.client, -1)
+            rc = vm_pool.info
+            if OpenNebula.is_error?(rc)
+                Log.error(COMP, "Unable to inspect VMs during watchdog recovery: #{rc.message}")
+                return
+            end
+
+            vm_pool.each do |vm|
+                info_rc = vm.info
+                if OpenNebula.is_error?(info_rc)
+                    Log.warn(COMP, "Unable to inspect VM_ID=#{vm.id}: #{info_rc.message}")
+                    next
+                end
+
+                cluster_id = vm['USER_TEMPLATE/ONEKS/CLUSTER_ID']
+                group_id   = vm['USER_TEMPLATE/ONEKS/GROUP_ID']
+                type       = vm['USER_TEMPLATE/ONEKS/TYPE'].to_s.strip
+                next unless cluster_id.to_s.match?(/\A\d+\z/)
+                next unless group_id.to_s.match?(/\A\d+\z/)
+                next if type.empty?
+
+                cluster_id = cluster_id.to_i
+                group_id   = group_id.to_i
+                vm_id      = vm.id.to_i
+                next if vm_registered?(vm_id)
+                next unless self.class.group_registered?(@cluster_pool, cluster_id, group_id)
+
+                adopted = false
+                rc = @group_pool.get(group_id) do |group|
+                    next unless group.cluster_id.to_i == cluster_id
+                    next unless group.type.to_s == type
+                    next unless vm['UID'].to_s == group.owner_id.to_s
+
+                    unless group.vms.include?(vm_id)
+                        Log.warn(
+                            COMP,
+                            "Re-adopting VM_ID=#{vm_id} (GROUP_ID=#{group_id}) " \
+                            'from OpenNebula metadata',
+                            cluster_id
+                        )
+                        group.add_vm(vm_id)
+                        update_rc = group.update
+                        next update_rc if OpenNebula.is_error?(update_rc)
+                    end
+                    adopted = true
+                end
+
+                if OpenNebula.is_error?(rc)
+                    Log.error(
+                        COMP,
+                        "Unable to re-adopt VM_ID=#{vm_id}: #{rc.message}",
+                        cluster_id
+                    )
+                    next
+                end
+                next unless adopted
+
+                register_vm(vm_id, group_id, cluster_id)
+                check_vm_state(
+                    { :cluster_id => cluster_id, :group_id => group_id, :vm_id => vm_id }
+                )
+            end
+        rescue StandardError => e
+            Log.error(COMP, "Watchdog VM recovery failed: #{e.class}: #{e.message}")
+        end
         #------------------------------------------------------
         # Indexes
         #------------------------------------------------------

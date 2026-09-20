@@ -23,6 +23,24 @@ module OneKS
 
         FAMILIES_DIR   = File.join(ONEKS_SPEC_DIR, 'nodegroups')
         COMPONENT_NAME = name.split('::').last
+        MAX_REPLICAS   = 60
+
+        # Worker groups are born with conservative root-disk autoscaling enabled.
+        # Defaults are centralized in WorkerDiskManager: >70% usage, +30 GiB,
+        # 5-minute cooldown, and a 1 TiB root ceiling. Users can override or
+        # disable the policy through the Day-2 disk-autoscaling API.
+        def allocate(cluster, spec)
+            rc = super
+            return rc if OpenNebula.is_error?(rc)
+
+            return rc if @body[:disk_autoscaling]
+
+            policy = WorkerDiskManager.normalize(:enabled => true)
+            return policy if OpenNebula.is_error?(policy)
+
+            @body[:disk_autoscaling] = policy
+            update
+        end
 
         #------------------------------------------------------
         # Group actions
@@ -39,6 +57,9 @@ module OneKS
 
             deployment = cluster.deployment_info
             return deployment if OpenNebula.is_error?(deployment)
+
+            artifact_base_url = rke2_artifact_base_url
+            return artifact_base_url if OpenNebula.is_error?(artifact_base_url)
 
             cluster_values = cluster.plain_body.merge(
                 {
@@ -57,9 +78,10 @@ module OneKS
 
             # Generate values for nodegroup spec template
             values = {
-                :cluster  => cluster_values,
-                :group    => group_values,
-                :one_auth => one_auth
+                :cluster           => cluster_values,
+                :group             => group_values,
+                :one_auth          => one_auth,
+                :artifact_base_url => artifact_base_url
             }
 
             # Render group templates before rendering main spec
@@ -137,11 +159,14 @@ module OneKS
         # Persist the desired target before the MachineDeployment mutation. The
         # target is declarative, so replay after a crash is safe and idempotent.
         def scale(target)
+            target = Integer(target)
+            return OpenNebula::Error.new(
+                'Node group target must be between 0 and 60',
+                OpenNebula::Error::EACTION
+            ) unless (0..MAX_REPLICAS).cover?(target)
+
             cluster = parent_cluster
             return cluster if OpenNebula.is_error?(cluster)
-
-            target = Integer(target)
-            target = [target, 0].max
 
             self.expected_size = target
             rc = update

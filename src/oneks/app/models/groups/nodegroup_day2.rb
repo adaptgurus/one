@@ -9,7 +9,7 @@ module OneKS
     class NodeGroup
 
         SHAPE_KEYS = [:cpu, :vcpu, :memory, :disk_size].freeze
-        MAX_AUTOSCALING_REPLICAS = 7
+        MAX_AUTOSCALING_REPLICAS = 60
         DISK_RESIZE_RETRY_SECONDS = 120
 
         # Resize workers by updating the group-owned OpenNebula VM template and then
@@ -59,7 +59,7 @@ module OneKS
             max = Integer(max)
             if min.negative? || max < min || max > MAX_AUTOSCALING_REPLICAS
                 return OpenNebula::Error.new(
-                    'Autoscaling requires 0 <= min <= max <= 7', OpenNebula::Error::EACTION
+                    'Autoscaling requires 0 <= min <= max <= 60', OpenNebula::Error::EACTION
                 )
             end
 
@@ -298,6 +298,14 @@ module OneKS
                 OpenNebula::Error::EACTION
             ) unless disk && disk[:present]
 
+            key = "#{vm_id}:#{disk_id}"
+            unless disk[:name].to_s == inflight[:name].to_s && inflight[:key].to_s == key
+                return OpenNebula::Error.new(
+                    "In-flight worker disk #{key} identity no longer matches its operation",
+                    OpenNebula::Error::EACTION
+                )
+            end
+
             target = Integer(inflight[:to_mib])
             if disk[:current_size_mib].to_i >= target
                 unless disk[:guest_caught_up]
@@ -307,17 +315,27 @@ module OneKS
                     return inflight.merge(:action => 'guest-grow-submitted')
                 end
 
-                key = inflight[:key].to_s
-                history[key] = now
+                # Persist the replacement baseline while retaining the retry journal.
+                # A template failure or restart must replay publication, not lose it.
                 update_disk_baseline(policy, inflight[:name].to_s, target)
                 @body[:disk_autoscaling] = policy
-                @body[:disk_resize_history] = history
-                @body.delete(:disk_resize_inflight)
                 rc = update
                 return rc if OpenNebula.is_error?(rc)
 
                 rc = update_group_template(cluster)
                 return rc if OpenNebula.is_error?(rc)
+
+                previous_history = history.dup
+                history[key] = now
+                @body[:disk_resize_history] = history
+                @body.delete(:disk_resize_inflight)
+                rc = update
+                if OpenNebula.is_error?(rc)
+                    # Keep this in-memory instance retryable after an uncertain write.
+                    history.replace(previous_history)
+                    @body[:disk_resize_inflight] = raw_inflight
+                    return rc
+                end
 
                 return inflight.merge(
                     :action => 'resized',
