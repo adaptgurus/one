@@ -662,6 +662,11 @@ test('wizard unwraps FireEdge runtime catalog responses and calls authoritative 
   assert.match(wizard, /desiredState: sanitizeDesign\(draft\)/)
   assert.match(wizard, /SERVICE_BLUEPRINT_PREFLIGHT_UNAVAILABLE/)
   assert.match(wizard, /Authoritative preflight blocked/)
+  assert.match(wizard, /preflightState\.status !== 'passed'/)
+  assert.doesNotMatch(
+    wizard,
+    /!blueprint\?\.productionSelectable\s*\|\|\s*!validated/
+  )
 })
 
 
