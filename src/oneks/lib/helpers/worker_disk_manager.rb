@@ -13,9 +13,9 @@ module OneKS
         DEFAULT_COOLDOWN_SECONDS = 300
         DEFAULT_ROOT_MAX_GIB = 1024
         MAX_DATA_DISKS = 8
-        DATA_TARGETS = %w[vdb vdc vdd vde vdf vdg vdh vdi].freeze
+        DATA_TARGETS = ['vdb', 'vdc', 'vdd', 'vde', 'vdf', 'vdg', 'vdh', 'vdi'].freeze
         NAME_PATTERN = /\A[a-z][a-z0-9-]{0,30}\z/
-        FILESYSTEMS = %w[xfs ext4].freeze
+        FILESYSTEMS = ['xfs', 'ext4'].freeze
         MOUNT_BASE = '/var/lib/layersentry/disks'
         GUEST_DISK_HELPER = '/usr/local/libexec/oneks/worker-disk'
 
@@ -30,17 +30,26 @@ module OneKS
                 root_max = Integer(policy.fetch(:root_max_gib, DEFAULT_ROOT_MAX_GIB))
                 disks = Array(policy[:data_disks])
 
-                raise ArgumentError, 'disk threshold must be 1..95 percent' unless (1..95).cover?(threshold)
-                raise ArgumentError, 'disk increment must be 1..1024 GiB' unless (1..1024).cover?(increment)
-                raise ArgumentError, 'disk cooldown must be 30..86400 seconds' unless (30..86_400).cover?(cooldown)
+                raise ArgumentError,
+                      'disk threshold must be 1..95 percent' unless (1..95).cover?(threshold)
+                raise ArgumentError,
+                      'disk increment must be 1..1024 GiB' unless (1..1024).cover?(increment)
+                raise ArgumentError,
+                      'disk cooldown must be 30..86400 seconds' unless (30..86_400).cover?(cooldown)
                 raise ArgumentError, 'root maximum must be at least 4 GiB' if root_max < 4
-                raise ArgumentError, "at most #{MAX_DATA_DISKS} managed data disks are supported" if disks.length > MAX_DATA_DISKS
+                if disks.length > MAX_DATA_DISKS
+                    raise ArgumentError,
+                          "at most #{MAX_DATA_DISKS} managed data disks are supported"
+                end
 
                 seen = {}
                 normalized_disks = disks.each_with_index.map do |raw, index|
                     disk = raw.transform_keys(&:to_sym)
                     name = disk[:name].to_s
-                    raise ArgumentError, "invalid managed disk name #{name.inspect}" unless NAME_PATTERN.match?(name)
+                    raise ArgumentError, 'managed disk name root is reserved' if name == 'root'
+                    unless NAME_PATTERN.match?(name)
+                        raise ArgumentError, "invalid managed disk name #{name.inspect}"
+                    end
                     raise ArgumentError, "duplicate managed disk name #{name}" if seen[name]
 
                     seen[name] = true
@@ -48,8 +57,11 @@ module OneKS
                     maximum = Integer(disk.fetch(:max_gib, [initial, DEFAULT_ROOT_MAX_GIB].max))
                     filesystem = disk.fetch(:filesystem, 'xfs').to_s
                     raise ArgumentError, 'managed disk initial size must be >= 1 GiB' if initial < 1
-                    raise ArgumentError, 'managed disk maximum must be >= initial size' if maximum < initial
-                    raise ArgumentError, "unsupported managed disk filesystem #{filesystem}" unless FILESYSTEMS.include?(filesystem)
+                    raise ArgumentError,
+                          'managed disk maximum must be >= initial size' if maximum < initial
+                    unless FILESYSTEMS.include?(filesystem)
+                        raise ArgumentError, "unsupported managed disk filesystem #{filesystem}"
+                    end
 
                     {
                         :name => name,
@@ -146,12 +158,27 @@ module OneKS
             end
 
             def locate_disk(disks, managed)
-                return disks.find {|disk| disk['DISK_ID'].to_i.zero? } if managed[:name] == 'root'
+                if managed[:name] == 'root'
+                    return unless managed[:mount] == '/' && managed[:disk_id].to_s == '0'
 
-                disks.find do |disk|
-                    disk['LAYERSENTRY_DISK'].to_s == managed[:name] ||
-                        disk['TARGET'].to_s == managed[:target]
+                    roots = disks.select {|disk| disk['DISK_ID'].to_s == '0' }
+                    return roots.one? ? roots.first : nil
                 end
+
+                return if managed[:name].to_s.empty? || managed[:target].to_s.empty?
+
+                # A guest device address is not proof of volume ownership.
+                owned = disks.select {|disk| disk['LAYERSENTRY_DISK'] == managed[:name] }
+                return unless owned.one?
+
+                disk = owned.first
+                id = disk['DISK_ID'].to_s
+                return unless /\A[1-9]\d*\z/.match?(id)
+                return unless disk['TARGET'] == managed[:target]
+                return unless disks.one? {|entry| entry['DISK_ID'].to_s == id }
+                return unless disks.one? {|entry| entry['TARGET'] == disk['TARGET'] }
+
+                disk
             end
 
             def guest_usage(client, vm_id, mounts)
