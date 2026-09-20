@@ -184,6 +184,33 @@ test('mutation routes and actions require enabled qualification, not read-only v
   assert.doesNotMatch(area, /!createCapability \|\|/)
 })
 
+test('LayerSentry VM create route stays wired to the native guarded create dialog', () => {
+  const capabilities = read('src/client/apps/layersentry/capabilities.js')
+  const portal = read('src/client/apps/layersentry/Portal.js')
+  const sunstoneRoutes = read('src/client/apps/sunstone/routes.js')
+  const router = read('src/client/router/index.js')
+  const vmView = read('etc/sunstone/views/cloud/vm-tab.yaml')
+
+  assert.match(
+    capabilities,
+    /\['\/compute\/create', CAPABILITY_IDS\.VM_CREATE\]/
+  )
+  assert.match(
+    capabilities,
+    /\[CAPABILITY_IDS\.VM_CREATE\]: \['\/vm\/create'\]/
+  )
+  assert.match(portal, /path=\{PRODUCT_PATHS\.COMPUTE_CREATE\}/)
+  assert.match(portal, /legacyPath: '\/vm\/create'/)
+  assert.match(portal, /title: 'Create Virtual Machine'/)
+  assert.match(
+    sunstoneRoutes,
+    /view\?\.actions\[\`\$\{restOfParams\[0\]\}_dialog\`\]/
+  )
+  assert.match(router, /const actionPaths = \['create', 'instantiate'\]/)
+  assert.match(vmView, /resource_name: "VM"/)
+  assert.match(vmView, /create_dialog: true/)
+})
+
 test('native detail routes are not implicitly authorized by inventory capability', () => {
   const capabilities = read('src/client/apps/layersentry/capabilities.js')
 
