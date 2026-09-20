@@ -20,6 +20,9 @@ const {
   getCatalog,
   findBlueprint,
 } = require('server/routes/api/serviceblueprints/catalog')
+const {
+  validateDesiredState,
+} = require('server/routes/api/serviceblueprints/validation')
 
 const { defaultEmptyFunction } = defaults
 const { ok, badRequest, conflict, serviceUnavailable } = httpCodes
@@ -60,7 +63,7 @@ const list = (res = {}, next = defaultEmptyFunction) => {
  * @param {object} params - Requested service tuple
  */
 const preflight = (res = {}, next = defaultEmptyFunction, params = {}) => {
-  const { blueprintId, version, edition, topology } = params
+  const { blueprintId, version, edition, topology, desiredState } = params
 
   if (!blueprintId || !version || !topology) {
     res.locals.httpCode = httpResponse(
@@ -68,6 +71,21 @@ const preflight = (res = {}, next = defaultEmptyFunction, params = {}) => {
       blocked(
         'SERVICE_BLUEPRINT_REQUEST_INVALID',
         'blueprintId, version and topology are required.'
+      )
+    )
+    next()
+
+    return
+  }
+
+  const desiredStateErrors = validateDesiredState(desiredState)
+  if (desiredStateErrors.length > 0) {
+    res.locals.httpCode = httpResponse(
+      badRequest,
+      blocked(
+        'SERVICE_BLUEPRINT_DESIRED_STATE_INVALID',
+        'The requested desired state failed authoritative validation.',
+        { validationErrors: desiredStateErrors }
       )
     )
     next()
