@@ -52,6 +52,7 @@ module.exports = {
         version: { from: postBody },
         edition: { from: postBody },
         topology: { from: postBody },
+        desiredState: { from: postBody },
       },
     },
     [SERVICE_BLUEPRINTS_DEPLOY]: {
