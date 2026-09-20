@@ -1847,6 +1847,7 @@ const ProductionServiceWizard = () => {
           version: draft.version,
           edition: draft.edition || undefined,
           topology: draft.topology,
+          desiredState: sanitizeDesign(draft),
         }),
       })
       const payload = await response.json()
