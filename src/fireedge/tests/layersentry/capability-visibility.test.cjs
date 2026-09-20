@@ -197,7 +197,7 @@ test('LayerSentry VM create route stays wired to the native guarded create dialo
   )
   assert.match(
     capabilities,
-    /\[CAPABILITY_IDS\.VM_CREATE\]: \['\/vm\/create'\]/
+    /\[CAPABILITY_IDS\.VM_CREATE\]: \['\/vm\/create', '\/vm-template\/instantiate'\]/
   )
   assert.match(portal, /path=\{PRODUCT_PATHS\.COMPUTE_CREATE\}/)
   assert.match(portal, /legacyPath: '\/vm\/create'/)
@@ -365,4 +365,18 @@ test('search does not advertise hidden kubernetes capability', () => {
 
   assert.match(shell, /placeholder="Search VMs, storage, networks\.\.\."/)
   assert.doesNotMatch(shell, /placeholder="[^"]*Kubernetes/)
+})
+
+
+test('VM creation requires both selector and instantiate endpoints', () => {
+  const capabilities = read('src/client/apps/layersentry/capabilities.js')
+
+  assert.match(
+    capabilities,
+    /\['\/vm-template\/instantiate', CAPABILITY_IDS\.VM_CREATE\]/
+  )
+  assert.match(
+    capabilities,
+    /\[CAPABILITY_IDS\.VM_CREATE\]: \['\/vm\/create', '\/vm-template\/instantiate'\]/
+  )
 })
