@@ -153,8 +153,19 @@ const CATALOG = Object.freeze([
   ]),
 ])
 
+/**
+ * Return a copy of the runtime production-service catalog.
+ *
+ * @returns {Array<object>} runtime service entries
+ */
 const getCatalog = () => CATALOG.map((entry) => ({ ...entry }))
 
+/**
+ * Find a runtime production-service family by identifier.
+ *
+ * @param {string} id - service family identifier
+ * @returns {object|undefined} matching catalog entry
+ */
 const findBlueprint = (id) => CATALOG.find((entry) => entry.id === id)
 
 module.exports = {
