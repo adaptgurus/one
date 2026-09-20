@@ -659,6 +659,7 @@ test('wizard unwraps FireEdge runtime catalog responses and calls authoritative 
   assert.match(wizard, /\$\{SERVICE_BLUEPRINT_API\}\/preflight/)
   assert.match(wizard, /method: 'POST'/)
   assert.match(wizard, /credentials: 'same-origin'/)
+  assert.match(wizard, /desiredState: sanitizeDesign\(draft\)/)
   assert.match(wizard, /SERVICE_BLUEPRINT_PREFLIGHT_UNAVAILABLE/)
   assert.match(wizard, /Authoritative preflight blocked/)
 })
@@ -697,10 +698,14 @@ test('runtime service-blueprint handlers return catalog and fail closed', () => 
     assert.equal(catalogResponse.data.failClosed, true)
     assert.equal(catalogResponse.data.items.length, 27)
 
+    const postgresql = api.getBlueprintById('postgresql')
+    const validDesiredState = api.sanitizeDesign(makeValid(postgresql))
+
     const blockedPreflight = invoke(handlers.preflight, {
       blueprintId: 'postgresql',
       version: '18',
       topology: '3-node HA',
+      desiredState: validDesiredState,
     })
     assert.equal(blockedPreflight.id, 409)
     assert.equal(blockedPreflight.data.deployable, false)
@@ -713,11 +718,32 @@ test('runtime service-blueprint handlers return catalog and fail closed', () => 
       blueprintId: 'postgresql',
       version: '999',
       topology: '3-node HA',
+      desiredState: validDesiredState,
     })
     assert.equal(badVersion.id, 409)
     assert.equal(
       badVersion.data.blockers[0].code,
       'SERVICE_BLUEPRINT_VERSION_NOT_PUBLISHED'
+    )
+
+    const secretLeak = invoke(handlers.preflight, {
+      blueprintId: 'postgresql',
+      version: '18',
+      topology: '3-node HA',
+      desiredState: {
+        ...validDesiredState,
+        proxyPassword: 'raw-secret-must-never-be-persisted',
+      },
+    })
+    assert.equal(secretLeak.id, 400)
+    assert.equal(
+      secretLeak.data.blockers[0].code,
+      'SERVICE_BLUEPRINT_DESIRED_STATE_INVALID'
+    )
+    assert.ok(
+      secretLeak.data.validationErrors.some(
+        ({ code }) => code === 'DESIRED_STATE_CONTAINS_SECRET'
+      )
     )
 
     const deployResponse = invoke(handlers.deploy, {
