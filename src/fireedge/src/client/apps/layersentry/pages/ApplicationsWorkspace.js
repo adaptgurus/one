@@ -61,7 +61,8 @@ const countNetworks = (resource) => {
   const networks = getBody(resource).networks
 
   if (Array.isArray(networks)) return networks.length
-  if (networks && typeof networks === 'object') return Object.keys(networks).length
+  if (networks && typeof networks === 'object')
+    return Object.keys(networks).length
 
   return 0
 }
