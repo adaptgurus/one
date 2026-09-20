@@ -90,6 +90,7 @@ elif [[ "${MODE}" == "cleanup" ]]; then
 
   oneuser show "${UIDN}" >/dev/null 2>&1 && { echo "User cleanup failed" >&2; exit 5; }
   onegroup show "${GID}" >/dev/null 2>&1 && { echo "Group cleanup failed" >&2; exit 6; }
+  exit 0
 else
   echo "Unknown mode: ${MODE}" >&2
   exit 7
