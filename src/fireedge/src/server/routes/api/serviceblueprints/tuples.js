@@ -53,17 +53,11 @@ const validateTupleDefinition = (tuple = {}) => {
     }
   })
 
-  if (
-    tuple.architecture &&
-    tuple.architecture !== 'x86_64'
-  ) {
+  if (tuple.architecture && tuple.architecture !== 'x86_64') {
     errors.push('V1 production tuples must use x86_64 architecture.')
   }
 
-  if (
-    tuple.qualification &&
-    tuple.qualification !== 'QUALIFIED'
-  ) {
+  if (tuple.qualification && tuple.qualification !== 'QUALIFIED') {
     errors.push('Promoted tuples must have qualification=QUALIFIED.')
   }
 
