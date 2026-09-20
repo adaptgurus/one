@@ -95,7 +95,8 @@ $vmName = "ls-ui-e2e-" + (Get-Date -Format "MMddHHmmss")
 $summary.vmName = $vmName
 
 try {
-  $summary.branchHead = ((Invoke-WslStrict -ArgsList @("git", "-C", $WslWorktree, "rev-parse", "HEAD"))[-1]).Trim()
+  $headOutput = Invoke-WslStrict -ArgsList @("git", "-C", $WslWorktree, "rev-parse", "HEAD")
+  $summary.branchHead = ([string]($headOutput | Select-Object -Last 1)).Trim()
 
   $testRoot = "$WslWorktree/src/fireedge/tests/layersentry/browser"
   foreach ($file in @("live-ui-route-matrix.cjs", "live-vm-create-e2e.cjs")) {
