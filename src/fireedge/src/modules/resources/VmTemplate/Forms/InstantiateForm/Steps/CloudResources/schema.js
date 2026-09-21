@@ -15,7 +15,6 @@
  * ------------------------------------------------------------------------- */
 import { boolean, number, object, string } from 'yup'
 
-import { VnAPI } from '@FeaturesModule'
 import { INPUT_TYPES } from '@ConstantsModule'
 import { getValidationFromFields } from '@UtilsModule'
 
@@ -75,26 +74,22 @@ const STORAGE_IOPS = (vmTemplate) => ({
   grid: { md: 6 },
 })
 
-const NETWORK_ID = {
+const NETWORK_ID = (networks = []) => ({
   name: 'networkId',
   label: 'Network',
   tooltip: 'Choose the LayerSentry network for this VM.',
   type: INPUT_TYPES.AUTOCOMPLETE,
   optionsOnly: true,
-  values: () => {
-    const { data: networks = [] } = VnAPI.useGetVNetworksQuery()
-
-    return [
-      { text: 'Select a network', value: '' },
-      ...networks.map(({ ID, NAME }) => ({
-        text: NAME,
-        value: String(ID),
-      })),
-    ]
-  },
+  values: [
+    { text: 'Select a network', value: '' },
+    ...networks.map(({ ID, NAME }) => ({
+      text: NAME,
+      value: String(ID),
+    })),
+  ],
   validation: string().trim().required('Select a network'),
   grid: { md: 6 },
-}
+})
 
 const IP_ASSIGNMENT = {
   name: 'ipAssignment',
@@ -151,7 +146,7 @@ const NETWORK_SPEED = {
  * @param {object} vmTemplate - Source VM template
  * @returns {object[]} Customer resource form sections
  */
-export const SECTIONS = (vmTemplate = {}) => [
+export const SECTIONS = (vmTemplate = {}, networks = []) => [
   {
     id: 'data-disk',
     legend: 'Additional data disk',
@@ -166,7 +161,7 @@ export const SECTIONS = (vmTemplate = {}) => [
     id: 'network',
     legend: 'Network',
     fields: [
-      NETWORK_ID,
+      NETWORK_ID(networks),
       IP_ASSIGNMENT,
       STATIC_IP,
       NETWORK_QOS_ENABLED,
@@ -182,8 +177,8 @@ export const SECTIONS = (vmTemplate = {}) => [
  * @param {object} vmTemplate - Source VM template
  * @returns {object[]} Customer resource fields
  */
-export const FIELDS = (vmTemplate = {}) =>
-  SECTIONS(vmTemplate).flatMap(({ fields }) => fields)
+export const FIELDS = (vmTemplate = {}, networks = []) =>
+  SECTIONS(vmTemplate, networks).flatMap(({ fields }) => fields)
 
 /**
  * @param vmTemplate
