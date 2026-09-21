@@ -1,0 +1,106 @@
+name: T2 Audit Linux ISO Names
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-audit-linux-iso-names.yml
+      - qualification/t2-audit-linux-iso-names.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-audit-linux-iso-names
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    steps:
+      - name: Bind runner and attach generated ISO to builder
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $builder='ls-iso-builder'
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          if(-not (Test-Path $iso)){throw 'Generated ISO missing'}
+          $vm=Get-VM -Name $builder -ErrorAction Stop
+          if($vm.State -ne 'Running'){Start-VM -Name $builder; Start-Sleep -Seconds 10}
+          $existing=@(Get-VMDvdDrive -VMName $builder -ErrorAction SilentlyContinue)
+          foreach($d in $existing){if($d.Path){throw "Builder already has mounted DVD media: $($d.Path)"}}
+          if($existing.Count -eq 0){Add-VMDvdDrive -VMName $builder -Path $iso | Out-Null}else{Set-VMDvdDrive -VMDvdDrive $existing[0] -Path $iso}
+          Start-Sleep -Seconds 3
+          $dvd=Get-VMDvdDrive -VMName $builder | Where-Object Path -eq $iso | Select-Object -First 1
+          if(-not $dvd){throw 'Generated ISO was not attached to builder'}
+          Write-Host "BUILDER_DVD_ATTACH=PASS path=$($dvd.Path)"
+
+      - name: Prepare runner-private builder key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $source='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & icacls.exe $source /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $private=Join-Path $env:RUNNER_TEMP 't2-linux-iso-audit-key'
+          Copy-Item -LiteralPath $source -Destination $private -Force
+          & icacls.exe $private /grant:r '*S-1-5-18:(F)' | Out-Null
+          & icacls.exe $private /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $private /inheritance:r | Out-Null
+          & icacls.exe $private /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $source /remove:g '*S-1-5-18' | Out-Null
+          "T2_AUDIT_KEY=$private" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Compare generated and base Linux-visible names
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $key=$env:T2_AUDIT_KEY
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $remote=@'
+          set -euo pipefail
+          base=/var/tmp/layersentry-iso/Rocky-9.8-x86_64-dvd.iso
+          target=nbdkit-1.38.5-12.el9.x86_64.rpm
+          echo '=== BASE XORRISO ==='
+          xorriso -indev "$base" -find /AppStream/Packages/n -name "$target" -exec lsdl -- 2>/dev/null || true
+          echo '=== GENERATED BLOCK DEVICE ==='
+          lsblk -o NAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS
+          rom=$(lsblk -dn -o NAME,TYPE | awk '$2=="rom"{print $1;exit}')
+          test -n "$rom" || { echo 'no optical block device' >&2; exit 61; }
+          dev=/dev/$rom
+          mnt=/mnt/t2-generated-iso-audit
+          sudo -n mkdir -p "$mnt"
+          if mountpoint -q "$mnt"; then sudo -n umount "$mnt"; fi
+          sudo -n mount -o ro "$dev" "$mnt"
+          trap 'sudo -n umount "$mnt" >/dev/null 2>&1 || true' EXIT
+          echo '=== GENERATED DIRECTORY ==='
+          find "$mnt/AppStream/Packages/n" -maxdepth 1 -type f -iname 'nbdkit*' -printf '%f %s\n' | sort
+          exact="$mnt/AppStream/Packages/n/$target"
+          if [ -f "$exact" ]; then
+            echo GENERATED_EXACT_NAME=PASS
+            stat -c 'GENERATED_EXACT_BYTES=%s' "$exact"
+            sha256sum "$exact"
+          else
+            echo GENERATED_EXACT_NAME=FAIL
+          fi
+          echo '=== GENERATED XORRISO ==='
+          xorriso -indev "$dev" -find /AppStream/Packages/n -name "$target" -exec lsdl -- 2>/dev/null || true
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remote -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'Linux ISO name audit failed'}
+
+      - name: Cleanup builder DVD and private key
+        if: always()
+        shell: powershell
+        run: |
+          $builder='ls-iso-builder'
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $dvd=Get-VMDvdDrive -VMName $builder -ErrorAction SilentlyContinue | Where-Object Path -eq $iso | Select-Object -First 1
+          if($dvd){Remove-VMDvdDrive -VMDvdDrive $dvd -ErrorAction SilentlyContinue}
+          if($env:T2_AUDIT_KEY -and (Test-Path $env:T2_AUDIT_KEY)){& icacls.exe $env:T2_AUDIT_KEY /grant:r '*S-1-5-18:(F)' | Out-Null; Remove-Item $env:T2_AUDIT_KEY -Force}
