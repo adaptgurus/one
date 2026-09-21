@@ -84,8 +84,6 @@ import {
   validateStep,
 } from 'client/apps/layersentry/serviceBlueprints'
 
-const DEPLOYMENT_ACTION_AVAILABLE = false
-
 const Row = ({ children, columns = 2 }) => (
   <Box
     sx={{
@@ -320,6 +318,11 @@ const ProductionServiceWizard = () => {
     status: 'idle',
     result: null,
   })
+  const [deploymentState, setDeploymentState] = useState({
+    status: 'idle',
+    result: null,
+  })
+  const [deploymentKey, setDeploymentKey] = useState('')
 
   useEffect(() => {
     let active = true
@@ -1861,8 +1864,16 @@ const ProductionServiceWizard = () => {
         status: deployable ? 'passed' : 'blocked',
         result,
       })
+      setDeploymentState({ status: 'idle', result: null })
+      setDeploymentKey(
+        deployable
+          ? 'vm-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+          : ''
+      )
     } catch (error) {
       setValidated(false)
+      setDeploymentKey('')
+      setDeploymentState({ status: 'idle', result: null })
       setPreflightState({
         status: 'error',
         result: {
@@ -1874,6 +1885,58 @@ const ProductionServiceWizard = () => {
                 'Authoritative production-service preflight is unavailable.',
             },
           ],
+        },
+      })
+    }
+  }
+
+  const runAuthoritativeDeploy = async () => {
+    if (
+      !validated ||
+      preflightState.status !== 'passed' ||
+      allErrors.length > 0 ||
+      !deploymentKey
+    ) {
+      return
+    }
+
+    setDeploymentState({ status: 'loading', result: null })
+
+    try {
+      const response = await fetch(`${SERVICE_BLUEPRINT_API}/deploy`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          blueprintId: draft.blueprintId,
+          version: draft.version,
+          edition: draft.edition || undefined,
+          topology: draft.topology,
+          serviceId: draft.serviceName,
+          idempotencyKey: deploymentKey,
+          desiredState: sanitizeDesign(draft),
+          platformDesiredState: compilePlatformDesiredState(draft, blueprint),
+        }),
+      })
+      const payload = await response.json()
+      const result = payload?.data ?? payload
+
+      if (!response.ok || result?.accepted !== true) {
+        throw new Error(
+          result?.message || 'Authoritative deployment admission was rejected.'
+        )
+      }
+
+      setDeploymentState({ status: 'accepted', result })
+    } catch (error) {
+      setDeploymentState({
+        status: 'error',
+        result: {
+          message:
+            error?.message || 'Authoritative deployment admission failed.',
         },
       })
     }
@@ -2078,29 +2141,33 @@ const ProductionServiceWizard = () => {
           <Button
             variant="contained"
             disabled={
-              !DEPLOYMENT_ACTION_AVAILABLE ||
               !validated ||
               preflightState.status !== 'passed' ||
-              allErrors.length > 0
+              allErrors.length > 0 ||
+              deploymentState.status === 'loading' ||
+              deploymentState.status === 'accepted'
             }
             title={
-              !DEPLOYMENT_ACTION_AVAILABLE
-                ? 'Production deployment mutation is not wired yet; validation remains non-destructive.'
-                : preflightState.status !== 'passed'
+              preflightState.status !== 'passed'
                 ? 'The exact tuple must pass authoritative preflight before deployment.'
                 : ''
             }
+            onClick={runAuthoritativeDeploy}
             sx={{ textTransform: 'none' }}
           >
-            Deploy
+            {deploymentState.status === 'loading' ? 'Deploying…' : 'Deploy'}
           </Button>
         </Box>
 
-        {!DEPLOYMENT_ACTION_AVAILABLE && (
-          <Alert severity="info" sx={{ mt: 2 }}>
-            Production deployment is intentionally disabled until the
-            authoritative deployment mutation, operation journal and backend
-            preflight path are wired and qualified.
+        {deploymentState.status === 'accepted' && (
+          <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
+            Deployment accepted. Operation {deploymentState.result?.operation_id}
+            {' · '}stage {deploymentState.result?.stage}.
+          </Alert>
+        )}
+        {deploymentState.status === 'error' && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {deploymentState.result?.message || 'Deployment admission failed.'}
           </Alert>
         )}
         {preflightState.status !== 'passed' && (
