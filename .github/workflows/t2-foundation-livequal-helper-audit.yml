@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - ops/t2-foundation-livequal-20260921
+    paths:
+      - .github/workflows/t2-foundation-livequal-helper-audit.yml
 
 permissions:
   contents: read
