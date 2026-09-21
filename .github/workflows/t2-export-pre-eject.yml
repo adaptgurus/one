@@ -1,0 +1,32 @@
+name: T2 Export Pre-Eject Installer Screen
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-export-pre-eject.yml
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Validate pre-eject framebuffer exists
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $p='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\firstboot-console.png'
+          if(-not (Test-Path $p)){throw 'Pre-eject framebuffer is missing'}
+          Write-Host "PRE_EJECT_SCREEN bytes=$((Get-Item $p).Length) modified=$((Get-Item $p).LastWriteTimeUtc.ToString('o'))"
+
+      - name: Upload pre-eject framebuffer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-pre-eject-installer-screen
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\firstboot-console.png
+          if-no-files-found: error
+          retention-days: 7
