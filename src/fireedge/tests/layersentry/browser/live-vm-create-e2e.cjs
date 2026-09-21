@@ -124,13 +124,7 @@ const main = async () => {
       '[data-cy="layersentry-network-networkId"]'
     )
     await network.waitFor({ timeout: 30000 })
-    await network.click()
-    const option = page
-      .locator('[data-cy^="layersentry-network-networkId-"]')
-      .filter({ hasText: networkName })
-      .first()
-    await option.waitFor({ timeout: 30000 })
-    await option.click()
+    await network.selectOption({ label: networkName })
     await next(page)
 
     await page.getByText('Backup and disaster recovery', { exact: true }).waitFor({
