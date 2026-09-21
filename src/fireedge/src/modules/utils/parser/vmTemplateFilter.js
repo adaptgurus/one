@@ -698,13 +698,18 @@ const filterSingleSection = (
   newExtra,
   key
 ) => {
-  // Check if attribute has changes on the correction map
+  const formExtra = formData?.extra ?? {}
+  const modifiedSection = itemsModifications?.extra?.[section] ?? {}
+
+  // Cloud/self-service forms intentionally omit provider-only "extra"
+  // sections. Treat missing sections as empty rather than applying "in" to
+  // undefined while filtering the source template.
   if (
-    (key in formData.extra || key in itemsModifications.extra[section]) &&
-    itemsModifications.extra[section]?.[key]
+    (key in formExtra || key in modifiedSection) &&
+    modifiedSection[key]
   ) {
     // Get value and copy the section
-    const value = formData.extra[key]
+    const value = formExtra[key]
     const newOtherSection = { ...newExtra[key] }
 
     // Arrays and single values replace the whole value
@@ -716,7 +721,7 @@ const filterSingleSection = (
       newExtra[key] = value
     } else {
       // Objects iterate over each key to check if the key was changed by the user
-      Object.entries(itemsModifications.extra[section]?.[key] || {}).forEach(
+      Object.entries(modifiedSection[key] || {}).forEach(
         ([childrenKey, correction]) => {
           // If the correction is boolean, means that the user changed this value that is a simple value
           // If the correction is an object with an attribute delete means that is a hidden field that was deleted because the user change the value of its parent
@@ -730,15 +735,15 @@ const filterSingleSection = (
           } else if (
             correction &&
             typeof correction === 'boolean' &&
-            childrenKey in formData.extra[key] &&
-            (!_.isEmpty(formData.extra[key][childrenKey]) ||
-              formData.extra[key][childrenKey] !== null)
+            childrenKey in (formExtra[key] ?? {}) &&
+            (!_.isEmpty(formExtra[key][childrenKey]) ||
+              formExtra[key][childrenKey] !== null)
           ) {
-            newOtherSection[childrenKey] = formData.extra[key][childrenKey]
+            newOtherSection[childrenKey] = formExtra[key][childrenKey]
           } else if (
             correction &&
             typeof correction === 'boolean' &&
-            !(childrenKey in formData.extra[key])
+            !(childrenKey in (formExtra[key] ?? {}))
           ) {
             delete newOtherSection[childrenKey]
           }
