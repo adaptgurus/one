@@ -1,0 +1,107 @@
+name: T2 Wait For Installed First Boot
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-wait-firstboot.yml
+      - qualification/t2-wait-firstboot.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-firstboot-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  firstboot:
+    runs-on: self-hosted
+    timeout-minutes: 50
+    steps:
+      - name: Bind disposable VM and confirm VHD is first next boot
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $expectedVhd='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $expectedIso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $expectedVhd){throw 'Disposable VHD binding changed'}
+          $dvd=Get-VMDvdDrive -VMName $name
+          if($dvd.Path -ne $expectedIso){throw "Exact ISO is not still mounted: $($dvd.Path)"}
+          $first=(Get-VMFirmware -VMName $name).BootOrder | Select-Object -First 1
+          Write-Host "BOOT_FIRST_DEVICE=$($first.Device) BOOT_FIRST_FIRMWARE_PATH=$($first.FirmwarePath)"
+          Write-Host "VHD_PHYSICAL_BYTES=$((Get-Item $expectedVhd).Length) VM_STATE=$($vm.State)"
+
+      - name: Wait for installed OS heartbeat
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $deadline=(Get-Date).AddMinutes(40)
+          $seenOk=$false
+          $last=''
+          while((Get-Date) -lt $deadline){
+            $vm=Get-VM -Name $name -ErrorAction Stop
+            $hb=Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue
+            $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object { $_ -and $_ -notlike 'fe80:*' })
+            $state="$($vm.State)/$($hb.PrimaryStatusDescription)/$($ips -join ',')"
+            if($state -ne $last){Write-Host "FIRSTBOOT_WAIT $state"; $last=$state}
+            if($vm.State -eq 'Running' -and $hb.PrimaryStatusDescription -eq 'OK'){ $seenOk=$true; break }
+            Start-Sleep -Seconds 20
+          }
+          if(-not $seenOk){
+            $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\firstboot-timeout.png'
+            & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+            throw 'Installed OS heartbeat did not become OK before timeout'
+          }
+          Write-Host 'INSTALLED_OS_HEARTBEAT=PASS'
+
+      - name: Capture LayerSentry first-boot console
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Start-Sleep -Seconds 20
+          $name='ls-appliance-4c4ac81-qual'
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\firstboot-console.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          if(-not (Test-Path $out)){throw 'First-boot framebuffer missing'}
+          $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object { $_ -and $_ -notlike 'fe80:*' })
+          Write-Host "FIRSTBOOT_IPS=$($ips -join ',') SCREENSHOT_BYTES=$((Get-Item $out).Length)"
+
+      - name: Eject qualification ISO after installed boot
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $dvd=Get-VMDvdDrive -VMName $name
+          Set-VMDvdDrive -VMName $name -ControllerNumber $dvd.ControllerNumber -ControllerLocation $dvd.ControllerLocation -Path $null
+          $after=Get-VMDvdDrive -VMName $name
+          if($after.Path){throw "DVD path was not cleared: $($after.Path)"}
+          Write-Host 'ISO_EJECT=PASS'
+
+      - name: Record and upload first-boot evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-VM -Name $name
+          $hb=Get-VMIntegrationService -VMName $name -Name 'Heartbeat'
+          $dvd=Get-VMDvdDrive -VMName $name
+          $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object { $_ -and $_ -notlike 'fe80:*' })
+          $e=[ordered]@{schema='layersentry-t2-firstboot-evidence/v1';target_commit='4c4ac81d69b162bf843daa8b2f6b5543dc6403a6';iso_sha256='11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0';vm=$name;state=$vm.State.ToString();heartbeat=$hb.PrimaryStatusDescription;dvd_path=$dvd.Path;ip_addresses=$ips;recorded_utc=(Get-Date).ToUniversalTime().ToString('o')}
+          $e | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $dir 'firstboot-evidence.json')
+          Get-Content (Join-Path $dir 'firstboot-evidence.json')
+
+      - name: Upload first-boot framebuffer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-firstboot-console
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\firstboot-console.png
+          if-no-files-found: error
+          retention-days: 7
