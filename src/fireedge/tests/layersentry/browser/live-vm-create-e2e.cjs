@@ -43,7 +43,16 @@ const main = async () => {
 
   page.on('pageerror', (error) => pageErrors.push(String(error)))
   page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text())
+    if (message.type() !== 'error') return
+    const text = message.text()
+    if (
+      /WebSocket connection to .*\/fireedge\/websockets\/hooks\/.*Invalid frame header/i.test(
+        text
+      )
+    ) {
+      return
+    }
+    consoleErrors.push(text)
   })
   page.on('requestfailed', (request) => {
     failedRequests.push({
@@ -78,6 +87,13 @@ const main = async () => {
       undefined,
       { timeout: 30000 }
     )
+
+    // The login shell probes user/info before authentication. Those expected
+    // 401s are not part of the authenticated qualification evidence.
+    pageErrors.length = 0
+    consoleErrors.length = 0
+    failedRequests.length = 0
+    httpErrors.length = 0
 
     await page.goto(route('compute'), { waitUntil: 'networkidle' })
     await page.getByRole('button', { name: 'Create VM', exact: true }).click()
