@@ -476,3 +476,27 @@ test('hidden schema field types never return undefined from FieldComponent', () 
   )
   assert.match(formWithSchema, /if \(isHidden\) return null/)
 })
+
+
+test('cloud network options are resolved from the React resource step', () => {
+  const schema = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources/schema.js'
+    ),
+    'utf8'
+  )
+  const content = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources/index.js'
+    ),
+    'utf8'
+  )
+
+  assert.doesNotMatch(schema, /useGetVNetworksQuery/)
+  assert.match(schema, /const NETWORK_ID = \(networks = \[\]\)/)
+  assert.match(schema, /SECTIONS\(vmTemplate, networks\)/)
+  assert.match(content, /VnAPI\.useGetVNetworksQuery\(\)/)
+  assert.match(content, /SECTIONS\(vmTemplate, networks\)/)
+})
