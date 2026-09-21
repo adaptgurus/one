@@ -75,6 +75,8 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Failed to remove inherited runner-private key ACLs' }
           & icacls.exe $private /grant:r '*S-1-5-18:(R)' | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'Failed to reduce runner-private key ACL to SYSTEM read-only' }
+          & icacls.exe $source /remove:g '*S-1-5-18' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to restore source-key ACL after private copy' }
           Write-Host '=== RUNNER PRIVATE KEY ACL ==='
           icacls $private
           $bytes=[IO.File]::ReadAllBytes($private)
@@ -121,7 +123,11 @@ jobs:
           cat "$out.sha256"
           cat "$out.provenance.json"
           '@
-          & $ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $remote
+          $remote = $remote -replace "`r", ""
+          $remoteBytes = [Text.Encoding]::UTF8.GetBytes($remote)
+          $remoteB64 = [Convert]::ToBase64String($remoteBytes)
+          $invoke = "printf '%s' '$remoteB64' | base64 -d | bash"
+          & $ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $invoke
           if ($LASTEXITCODE -ne 0) { throw 'Exact generic ISO build failed' }
 
       - name: Transfer and verify exact ISO
@@ -162,7 +168,10 @@ jobs:
         if: always()
         shell: powershell
         run: |
-          if ($env:T2_BUILDER_KEY -and (Test-Path $env:T2_BUILDER_KEY)) { Remove-Item -LiteralPath $env:T2_BUILDER_KEY -Force }
+          if ($env:T2_BUILDER_KEY -and (Test-Path $env:T2_BUILDER_KEY)) {
+            & icacls.exe $env:T2_BUILDER_KEY /grant:r '*S-1-5-18:(F)' | Out-Null
+            Remove-Item -LiteralPath $env:T2_BUILDER_KEY -Force
+          }
       - name: Preserve build evidence
         if: always()
         shell: powershell
