@@ -502,17 +502,15 @@ test('cloud network options are resolved from the React resource step', () => {
 })
 
 
-test('controlled dropdown keeps MUI open state synchronized', () => {
-  const dropdown = readFileSync(
+test('native LayerSentry network select avoids autocomplete popup state', () => {
+  const resources = readFileSync(
     resolve(
       __dirname,
-      '../../src/modules/components/primitives/Dropdown/Default/index.js'
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources/schema.js'
     ),
     'utf8'
   )
 
-  assert.match(dropdown, /open=\{open\}/)
-  assert.match(dropdown, /onOpen=\{\(\) => setOpen\(true\)\}/)
-  assert.match(dropdown, /onClose=\{\(\) => setOpen\(false\)\}/)
-  assert.doesNotMatch(dropdown, /setOpen\(\(prev\) => !prev\)/)
+  assert.match(resources, /name: 'networkId'[\s\S]*type: INPUT_TYPES\.SELECT/)
+  assert.doesNotMatch(resources, /name: 'networkId'[\s\S]*optionsOnly: true/)
 })
