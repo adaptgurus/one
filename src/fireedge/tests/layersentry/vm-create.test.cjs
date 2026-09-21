@@ -514,3 +514,22 @@ test('native LayerSentry network select avoids autocomplete popup state', () => 
   assert.match(resources, /name: 'networkId'[\s\S]*type: INPUT_TYPES\.SELECT/)
   assert.doesNotMatch(resources, /name: 'networkId'[\s\S]*optionsOnly: true/)
 })
+
+
+test('cloud submit filter tolerates omitted provider-only extra sections', () => {
+  const source = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/utils/parser/vmTemplateFilter.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(source, /const formExtra = formData\?\.extra \?\? \{\}/)
+  assert.match(
+    source,
+    /const modifiedSection = itemsModifications\?\.extra\?\.\[section\] \?\? \{\}/
+  )
+  assert.doesNotMatch(source, /key in formData\.extra/)
+  assert.doesNotMatch(source, /key in itemsModifications\.extra\[section\]/)
+})
