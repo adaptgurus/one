@@ -1,0 +1,3 @@
+vm=ls-appliance-4c4ac81-qual
+action=send-clean-c-and-enter
+expected_vhd=C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx
