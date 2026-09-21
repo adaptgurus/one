@@ -1,0 +1,112 @@
+name: T2 Foundation ISO Live Boot
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-iso-live.yml
+      - qualification/t2-live.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-foundation-iso-live
+  cancel-in-progress: true
+
+jobs:
+  boot:
+    runs-on: self-hosted
+    timeout-minutes: 30
+    steps:
+      - name: Bind exact Manoj runner and ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          if(-not (Test-Path $iso)){throw 'Exact ISO missing'}
+          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+          if($sha -ne '11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'){throw "ISO SHA mismatch $sha"}
+          Write-Host "LIVE_ISO_BIND=PASS SHA256=$sha"
+
+      - name: Create fresh disposable Gen2 qualification VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $root='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual'
+          $vhd=Join-Path $root 'os.vhdx'
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $switch='layersentry vswtich'
+          $existing=Get-VM -Name $name -ErrorAction SilentlyContinue
+          if($existing){
+            if($existing.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force}
+            Remove-VM -Name $name -Force
+          }
+          if(Test-Path $root){Remove-Item $root -Recurse -Force}
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-VHD -Path $vhd -Dynamic -SizeBytes 80GB | Out-Null
+          New-VM -Name $name -Generation 2 -MemoryStartupBytes 2GB -VHDPath $vhd -SwitchName $switch | Out-Null
+          Set-VMProcessor -VMName $name -Count 2
+          Set-VM -Name $name -AutomaticCheckpointsEnabled $false
+          Set-VMFirmware -VMName $name -EnableSecureBoot On -SecureBootTemplate 'MicrosoftUEFICertificateAuthority'
+          Add-VMDvdDrive -VMName $name -Path $iso
+          $dvd=Get-VMDvdDrive -VMName $name
+          Set-VMFirmware -VMName $name -FirstBootDevice $dvd
+          $vm=Get-VM -Name $name
+          if($vm.Generation -ne 2){throw 'Qualification VM is not Generation 2'}
+          $disk=Get-VMHardDiskDrive -VMName $name | Where-Object ControllerLocation -eq 0
+          if($disk.Path -ne $vhd){throw 'Qualification OS disk binding mismatch'}
+          Write-Host "DISPOSABLE_VM=PASS name=$name vhd=$vhd iso=$iso"
+
+      - name: Boot exact ISO and wait for Anaconda
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          Start-VM -Name $name
+          Start-Sleep -Seconds 90
+          $vm=Get-VM -Name $name
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $hb=Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue
+          Write-Host "VM_STATE=$($vm.State) HEARTBEAT=$($hb.PrimaryStatusDescription)"
+
+      - name: Capture installer framebuffer
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
+          if(-not (Test-Path $script)){throw 'capture_vm_thumbnail.ps1 missing'}
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-disk-gate.png'
+          New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+          & $script -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'Installer screenshot not created'}
+          Write-Host "SCREENSHOT=$out bytes=$((Get-Item $out).Length)"
+
+      - name: Record live boot evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
+          $vm=Get-VM -Name 'ls-appliance-4c4ac81-qual'
+          $dvd=Get-VMDvdDrive -VMName $vm.Name
+          $disk=Get-VMHardDiskDrive -VMName $vm.Name | Where-Object ControllerLocation -eq 0
+          $e=[ordered]@{
+            schema='layersentry-t2-live-boot-evidence/v1'
+            target_commit='4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'
+            iso_sha256='11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'
+            runner=$env:RUNNER_NAME
+            computer=$env:COMPUTERNAME
+            vm=$vm.Name
+            generation=$vm.Generation
+            state=$vm.State.ToString()
+            disk=$disk.Path
+            dvd=$dvd.Path
+            screenshot=(Join-Path $dir 'anaconda-disk-gate.png')
+            recorded_utc=(Get-Date).ToUniversalTime().ToString('o')
+          }
+          $e | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 (Join-Path $dir 'live-boot-evidence.json')
+          Get-Content (Join-Path $dir 'live-boot-evidence.json')
