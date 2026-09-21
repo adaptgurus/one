@@ -1,0 +1,83 @@
+name: T2 Finalize First Boot Evidence
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-finalize-firstboot.yml
+      - qualification/t2-finalize-firstboot.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-finalize-firstboot-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Verify installed VHD boot is live
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $expectedVhd='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $expectedIso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $hb=Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction Stop
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($vm.State -ne 'Running' -or $hb.PrimaryStatusDescription -ne 'OK'){throw "Installed VM not healthy: state=$($vm.State) hb=$($hb.PrimaryStatusDescription)"}
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $expectedVhd){throw 'Installed VHD binding changed'}
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
+          if($dvd -and $dvd.Path -and $dvd.Path -ne $expectedIso){throw "Unexpected DVD media: $($dvd.Path)"}
+          Write-Host "INSTALLED_VHD_LIVE=PASS dvd=$($dvd.Path)"
+
+      - name: Capture current LayerSentry first-boot console
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\firstboot-console-final.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'First-boot framebuffer missing'}
+          Write-Host "FIRSTBOOT_FRAMEBUFFER=$out bytes=$((Get-Item $out).Length)"
+
+      - name: Remove exact qualification DVD device
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $expectedIso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
+          if($dvd){
+            if($dvd.Path -and $dvd.Path -ne $expectedIso){throw "Refusing to remove unexpected DVD media: $($dvd.Path)"}
+            Remove-VMDvdDrive -VMDvdDrive $dvd
+          }
+          $after=@(Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue)
+          if($after.Count -ne 0){throw "DVD device still present: $($after.Count)"}
+          Write-Host 'ISO_EJECT_AND_DVD_REMOVE=PASS'
+
+      - name: Record VHD-only first-boot evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-VM -Name $name
+          $hb=Get-VMIntegrationService -VMName $name -Name 'Heartbeat'
+          $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object { $_ -and $_ -notlike 'fe80:*' })
+          $e=[ordered]@{schema='layersentry-t2-firstboot-evidence/v1';target_commit='4c4ac81d69b162bf843daa8b2f6b5543dc6403a6';iso_sha256='11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0';vm=$name;state=$vm.State.ToString();heartbeat=$hb.PrimaryStatusDescription;dvd_device_count=@(Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue).Count;ip_addresses=$ips;vhd=(Get-VMHardDiskDrive -VMName $name).Path;recorded_utc=(Get-Date).ToUniversalTime().ToString('o')}
+          $e | ConvertTo-Json -Depth 5 | Set-Content -Encoding utf8 (Join-Path $dir 'firstboot-evidence.json')
+          Get-Content (Join-Path $dir 'firstboot-evidence.json')
+
+      - name: Upload first-boot console
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-firstboot-console-final
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\firstboot-console-final.png
+          if-no-files-found: error
+          retention-days: 7
