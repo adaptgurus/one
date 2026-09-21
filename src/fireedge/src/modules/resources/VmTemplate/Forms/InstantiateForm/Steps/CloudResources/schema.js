@@ -78,8 +78,7 @@ const NETWORK_ID = (networks = []) => ({
   name: 'networkId',
   label: 'Network',
   tooltip: 'Choose the LayerSentry network for this VM.',
-  type: INPUT_TYPES.AUTOCOMPLETE,
-  optionsOnly: true,
+  type: INPUT_TYPES.SELECT,
   values: [
     { text: 'Select a network', value: '' },
     ...networks.map(({ ID, NAME }) => ({
