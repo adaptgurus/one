@@ -54,6 +54,11 @@ jobs:
           }
           if (-not $ready) { throw 'ls-iso-builder SSH did not become reachable' }
           Get-VM -Name 'ls-iso-builder' | Select Name,State,ProcessorCount,@{n='MemoryGB';e={[math]::Round($_.MemoryAssigned/1GB,1)}} | Format-List
+          $expectedWork='C:\LayerSentryLab\qualification\builder-ac7e14e-work.vhdx'
+          $work=Get-VMHardDiskDrive -VMName 'ls-iso-builder' | Where-Object { $_.Path -eq $expectedWork }
+          if (-not $work) { throw "Known builder work disk is not attached: $expectedWork" }
+          if ($work.ControllerType -ne 'SCSI' -or $work.ControllerLocation -ne 3) { throw "Builder work disk is not at expected SCSI slot 3" }
+          Write-Host "BUILDER_WORK_VHD=PASS slot=$($work.ControllerLocation) path=$($work.Path)"
 
       - name: Prepare runner-private builder SSH key
         shell: powershell
@@ -109,9 +114,22 @@ jobs:
           echo '=== BUILDER STORAGE ==='
           df -hPT
           lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS
-          min_bytes=18000000000
-          output_root=$(df -P -B1 -x tmpfs -x devtmpfs --output=avail,target | awk -v min="$min_bytes" 'NR>1 && $1>=min {if($1>best){best=$1;target=$2}} END{print target}')
-          test -n "$output_root" || { echo 'no mounted filesystem has >=18GB free for exact ISO build' >&2; exit 40; }
+          work_dev=/dev/sdc
+          work_mount=/mnt/layersentry-iso-work
+          test "$(lsblk -dn -o FSTYPE "$work_dev" | xargs)" = xfs || { echo 'known work disk is not XFS' >&2; exit 40; }
+          scsi_id=$(basename "$(readlink -f /sys/block/sdc/device)")
+          case "$scsi_id" in *:0:0:3) ;; *) echo "work disk SCSI identity mismatch: $scsi_id" >&2; exit 41 ;; esac
+          mounted_by_us=0
+          output_root=$(findmnt -rn -S "$work_dev" -o TARGET || true)
+          if [ -z "$output_root" ]; then
+            sudo -n mkdir -p "$work_mount"
+            sudo -n mount -o rw,nosuid,nodev "$work_dev" "$work_mount"
+            output_root="$work_mount"
+            mounted_by_us=1
+          fi
+          printf '%s\n' "$mounted_by_us" >/home/builder/layersentry-4c4ac81-mounted-by-workflow
+          avail_bytes=$(df -B1 --output=avail "$output_root" | tail -1 | tr -d '[:space:]')
+          test "$avail_bytes" -ge 18000000000 || { echo "known work disk has insufficient free bytes: $avail_bytes" >&2; exit 42; }
           outdir="${output_root%/}/layersentry-4c4ac81-output"
           out="$outdir/LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso"
           mkdir -p "$outdir"
@@ -173,6 +191,16 @@ jobs:
           if ($p.iso_sha256 -ne $localSha) { throw 'Provenance ISO SHA mismatch' }
           Write-Host "ISO_BUILD_AND_TRANSFER=PASS SHA256=$localSha SIZE=$((Get-Item $iso).Length)"
 
+      - name: Restore builder work-disk mount state
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          if (-not $env:T2_BUILDER_KEY -or -not (Test-Path $env:T2_BUILDER_KEY)) { exit 0 }
+          $ssh=(Get-Command ssh.exe).Source
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $cmd='if [ -f /home/builder/layersentry-4c4ac81-mounted-by-workflow ] && [ "$(cat /home/builder/layersentry-4c4ac81-mounted-by-workflow)" = 1 ]; then sudo -n umount /mnt/layersentry-iso-work; fi; rm -f /home/builder/layersentry-4c4ac81-mounted-by-workflow'
+          & $ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BUILDER_KEY builder@10.250.10.40 $cmd
       - name: Remove runner-private SSH key
         if: always()
         shell: powershell
