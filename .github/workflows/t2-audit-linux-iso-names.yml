@@ -69,13 +69,9 @@ jobs:
           xorriso -indev "$base" -find /AppStream/Packages/n -name "$target" -exec lsdl -- 2>/dev/null || true
           echo '=== GENERATED BLOCK DEVICE ==='
           lsblk -o NAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS
-          rom=''
-          for cand in $(lsblk -dn -o NAME,TYPE | awk '$2=="rom"{print $1}'); do
-            label=$(blkid -o value -s LABEL "/dev/$cand" 2>/dev/null || true)
-            echo "ROM /dev/$cand LABEL=$label"
-            if [ "$label" = 'Rocky-9-8-x86_64-dvd' ]; then rom="$cand"; break; fi
-          done
+          rom=$(lsblk -bdn -o NAME,TYPE,SIZE | awk '$2=="rom"{print $1,$3}' | sort -k2,2nr | head -1 | awk '{print $1}')
           test -n "$rom" || { echo 'generated Rocky DVD optical device not found' >&2; exit 61; }
+          echo "SELECTED_GENERATED_ROM=/dev/$rom"
           dev=/dev/$rom
           mnt=/mnt/t2-generated-iso-audit
           sudo -n mkdir -p "$mnt"
