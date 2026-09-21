@@ -1,0 +1,4 @@
+vm=ls-appliance-4c4ac81-qual
+action=inspect-installation-destination
+expected_vhd=C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx
+expected_size_gib=80
