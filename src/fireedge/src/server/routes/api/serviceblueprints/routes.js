@@ -67,6 +67,8 @@ module.exports = {
         topology: { from: postBody },
         desiredState: { from: postBody },
         platformDesiredState: { from: postBody },
+        serviceId: { from: postBody },
+        idempotencyKey: { from: postBody },
       },
     },
   },
