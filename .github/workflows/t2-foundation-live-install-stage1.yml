@@ -1,0 +1,111 @@
+name: T2 Foundation Exact ISO Live Install Stage 1
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-livequal-20260921
+    paths:
+      - .github/workflows/t2-foundation-live-install-stage1.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-foundation-live-install
+  cancel-in-progress: false
+
+jobs:
+  boot:
+    runs-on: self-hosted
+    timeout-minutes: 25
+    steps:
+      - name: Bind exact runner and exact ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          if(-not (Test-Path $iso)){throw 'Exact ISO missing'}
+          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+          if($sha -ne '11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'){throw "ISO digest mismatch: $sha"}
+          Write-Host "EXACT_ISO=PASS SHA=$sha SIZE=$((Get-Item $iso).Length)"
+
+      - name: Gracefully stop builder and create fresh disposable VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $builder=Get-WmiObject -Namespace 'root\virtualization\v2' -Class Msvm_ComputerSystem | Where-Object ElementName -eq 'ls-iso-builder'
+          if($builder -and [uint16]$builder.EnabledState -eq 2){
+            $r=$builder.RequestStateChange(3)
+            if($r.ReturnValue -eq 4096){
+              $j=[WMI]$r.Job
+              for($i=0;$i -lt 120 -and $j.JobState -in 3,4;$i++){Start-Sleep -Milliseconds 500;$j=[WMI]$r.Job}
+              if($j.JobState -ne 7){throw "Builder graceful stop failed: $($j.ErrorDescription)"}
+            } elseif($r.ReturnValue -ne 0){throw "Builder stop rc=$($r.ReturnValue)"}
+          }
+          $name='ls-appliance-4c4ac81-qual'
+          $dir='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual'
+          $vhd=Join-Path $dir 'os.vhdx'
+          $marker=Join-Path $dir 'QUALIFICATION_OWNED.txt'
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          if(Get-VM -Name $name -ErrorAction SilentlyContinue){throw "Disposable VM already exists; refusing implicit reset: $name"}
+          if(Test-Path $dir){throw "Disposable VM directory already exists; refusing overwrite: $dir"}
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          @('owner=LayerSentry-T2-qualification','target_commit=4c4ac81d69b162bf843daa8b2f6b5543dc6403a6','iso_sha256=11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0') | Set-Content -Encoding ascii $marker
+          New-VM -Name $name -Generation 2 -MemoryStartupBytes 3GB -NewVHDPath $vhd -NewVHDSizeBytes 80GB -SwitchName 'layersentry vswtich' | Out-Null
+          Set-VMProcessor -VMName $name -Count 2
+          Set-VMMemory -VMName $name -DynamicMemoryEnabled $false -StartupBytes 3GB
+          Set-VM -Name $name -AutomaticCheckpointsEnabled $false
+          Set-VMFirmware -VMName $name -EnableSecureBoot On -SecureBootTemplate 'MicrosoftUEFICertificateAuthority'
+          Add-VMDvdDrive -VMName $name -ControllerNumber 0 -ControllerLocation 1 -Path $iso
+          $dvd=Get-VMDvdDrive -VMName $name
+          Set-VMFirmware -VMName $name -FirstBootDevice $dvd
+          $vm=Get-VM -Name $name
+          $disk=Get-VMHardDiskDrive -VMName $name
+          $nic=Get-VMNetworkAdapter -VMName $name
+          Write-Host "VM_CREATED=PASS name=$name gen=$($vm.Generation) cpu=$($vm.ProcessorCount) mem=$($vm.MemoryStartup) mac=$($nic.MacAddress) disk=$($disk.Path) dvd=$($dvd.Path)"
+
+      - name: Boot exact ISO and wait for Anaconda hub
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          Start-VM -Name $name
+          Start-Sleep -Seconds 100
+          $vm=Get-VM -Name $name
+          if($vm.State -ne 'Running'){throw "VM not running after ISO boot: $($vm.State)"}
+          Write-Host "ISO_BOOT_RUNNING=PASS uptime=$($vm.Uptime)"
+
+      - name: Capture exact ISO installer screen
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $outDir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\live'
+          New-Item -ItemType Directory -Force -Path $outDir | Out-Null
+          $out=Join-Path $outDir 'stage1-anaconda-hub.png'
+          $ns='root\virtualization\v2';$w=640;$h=480
+          $vmObj=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem -Filter "ElementName='ls-appliance-4c4ac81-qual'"
+          $setting=Get-CimAssociatedInstance -InputObject $vmObj -Namespace $ns -Association Msvm_SettingsDefineState -ResultClassName Msvm_VirtualSystemSettingData | Select-Object -First 1
+          $svc=Get-CimInstance -Namespace $ns -ClassName Msvm_VirtualSystemManagementService
+          $r=Invoke-CimMethod -InputObject $svc -MethodName GetVirtualSystemThumbnailImage -Arguments @{TargetSystem=$setting;WidthPixels=[uint16]$w;HeightPixels=[uint16]$h}
+          if([uint32]$r.ReturnValue -ne 0){throw "thumbnail failed rc=$($r.ReturnValue)"}
+          $data=[byte[]]$r.ImageData;if($data.Length -ne (4+2*$w*$h)){throw "unexpected thumbnail payload $($data.Length)"}
+          Add-Type -AssemblyName System.Drawing
+          $bmp=New-Object System.Drawing.Bitmap $w,$h
+          for($y=0;$y -lt $h;$y++){for($x=0;$x -lt $w;$x++){
+            $i=4+2*($y*$w+$x);$v=[uint16]($data[$i] -bor ($data[$i+1] -shl 8))
+            $rr=[int]((($v-shr 11)-band 31)*255/31);$gg=[int]((($v-shr 5)-band 63)*255/63);$bb=[int](($v-band 31)*255/31)
+            $bmp.SetPixel($x,$y,[System.Drawing.Color]::FromArgb($rr,$gg,$bb))
+          }}
+          $bmp.Save($out,[System.Drawing.Imaging.ImageFormat]::Png);$bmp.Dispose()
+          Copy-Item $out (Join-Path $env:RUNNER_TEMP 'stage1-anaconda-hub.png') -Force
+          Write-Host "SCREEN_CAPTURE=PASS path=$out"
+
+      - name: Upload installer screen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-stage1-anaconda-hub
+          path: ${{ runner.temp }}/stage1-anaconda-hub.png
+          if-no-files-found: error
+          retention-days: 7
