@@ -30,9 +30,8 @@ jobs:
           if(-not (Test-Path $iso)){throw 'Generated ISO missing'}
           $vm=Get-VM -Name $builder -ErrorAction Stop
           if($vm.State -ne 'Running'){Start-VM -Name $builder; Start-Sleep -Seconds 10}
-          $existing=@(Get-VMDvdDrive -VMName $builder -ErrorAction SilentlyContinue)
-          foreach($d in $existing){if($d.Path){throw "Builder already has mounted DVD media: $($d.Path)"}}
-          if($existing.Count -eq 0){Add-VMDvdDrive -VMName $builder -Path $iso | Out-Null}else{Set-VMDvdDrive -VMDvdDrive $existing[0] -Path $iso}
+          $existingGenerated=Get-VMDvdDrive -VMName $builder -ErrorAction SilentlyContinue | Where-Object Path -eq $iso | Select-Object -First 1
+          if(-not $existingGenerated){Add-VMDvdDrive -VMName $builder -Path $iso | Out-Null}
           Start-Sleep -Seconds 3
           $dvd=Get-VMDvdDrive -VMName $builder | Where-Object Path -eq $iso | Select-Object -First 1
           if(-not $dvd){throw 'Generated ISO was not attached to builder'}
@@ -70,8 +69,13 @@ jobs:
           xorriso -indev "$base" -find /AppStream/Packages/n -name "$target" -exec lsdl -- 2>/dev/null || true
           echo '=== GENERATED BLOCK DEVICE ==='
           lsblk -o NAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS
-          rom=$(lsblk -dn -o NAME,TYPE | awk '$2=="rom"{print $1;exit}')
-          test -n "$rom" || { echo 'no optical block device' >&2; exit 61; }
+          rom=''
+          for cand in $(lsblk -dn -o NAME,TYPE | awk '$2=="rom"{print $1}'); do
+            label=$(blkid -o value -s LABEL "/dev/$cand" 2>/dev/null || true)
+            echo "ROM /dev/$cand LABEL=$label"
+            if [ "$label" = 'Rocky-9-8-x86_64-dvd' ]; then rom="$cand"; break; fi
+          done
+          test -n "$rom" || { echo 'generated Rocky DVD optical device not found' >&2; exit 61; }
           dev=/dev/$rom
           mnt=/mnt/t2-generated-iso-audit
           sudo -n mkdir -p "$mnt"
