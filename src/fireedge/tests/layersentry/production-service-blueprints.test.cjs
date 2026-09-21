@@ -275,6 +275,32 @@ test('proxy credentials are optional, proxy URL is validated and password is san
   assert.equal(JSON.stringify(safe).includes('sensitive-value'), false)
 })
 
+
+test('wizard compiles a durable backend desired state without customer OS or host placement', () => {
+  const blueprint = api.getBlueprintById('nginx')
+  const draft = makeValid(blueprint)
+  draft.ipMode = 'Static'
+  draft.staticIps = '10.20.30.41'
+  const desired = api.compilePlatformDesiredState(draft, blueprint)
+
+  assert.equal(desired.blueprint_id, 'nginx')
+  assert.equal(desired.deployment.node_count, 1)
+  assert.equal(desired.network.nodes.length, 1)
+  assert.equal(desired.network.nodes[0].ip, '10.20.30.41')
+  assert.equal(
+    desired.network.nodes[0].fqdn,
+    'nginx-prod-01.prod.example.internal'
+  )
+  assert.equal(desired.package_source.allow_public_fallback, false)
+  assert.equal(Object.hasOwn(desired, 'os_family'), false)
+  assert.equal(Object.hasOwn(desired, 'image_id'), false)
+  assert.equal(
+    Object.hasOwn(desired.network.nodes[0], 'failure_domain'),
+    false
+  )
+  assert.equal(desired.product_options.webMode, draft.webMode)
+})
+
 test('TLS and application credentials use references instead of raw secret fields', () => {
   const blueprint = api.getBlueprintById('postgresql')
   const draft = makeValid(blueprint)
@@ -623,7 +649,9 @@ test('FireEdge registers authenticated production-service catalog, preflight and
     (routesSource.match(/auth: true/g) || []).length >= 3,
     'all production-service API routes must require authentication'
   )
-  assert.match(functionsSource, /SERVICE_BLUEPRINT_TUPLE_NOT_PROMOTED/)
+  assert.match(functionsSource, /platformRequest/)
+  assert.match(functionsSource, /\/v1\/vm-services\/preflight/)
+  assert.doesNotMatch(functionsSource, /findQualifiedTuple/)
   assert.match(functionsSource, /SERVICE_BLUEPRINT_DEPLOYMENT_DISABLED/)
   assert.doesNotMatch(functionsSource, /productionSelectable:\s*true/)
 })
@@ -660,6 +688,10 @@ test('wizard unwraps FireEdge runtime catalog responses and calls authoritative 
   assert.match(wizard, /method: 'POST'/)
   assert.match(wizard, /credentials: 'same-origin'/)
   assert.match(wizard, /desiredState: sanitizeDesign\(draft\)/)
+  assert.match(
+    wizard,
+    /platformDesiredState: compilePlatformDesiredState\(draft, blueprint\)/
+  )
   assert.match(wizard, /SERVICE_BLUEPRINT_PREFLIGHT_UNAVAILABLE/)
   assert.match(wizard, /Authoritative preflight blocked/)
   assert.match(wizard, /preflightState\.status !== 'passed'/)
@@ -670,7 +702,7 @@ test('wizard unwraps FireEdge runtime catalog responses and calls authoritative 
 })
 
 
-test('runtime service-blueprint handlers return catalog and fail closed', () => {
+test('runtime service-blueprint handlers delegate tuple authority and fail closed', async () => {
   const Module = require('node:module')
   const previousNodePath = process.env.NODE_PATH
   process.env.NODE_PATH = [
@@ -681,11 +713,39 @@ test('runtime service-blueprint handlers return catalog and fail closed', () => 
     .join(path.delimiter)
   Module._initPaths()
 
+  const platformPath = path.join(
+    fireedgeRoot,
+    'src/server/routes/api/serviceblueprints/platform.js'
+  )
+  const functionsPath = path.join(
+    fireedgeRoot,
+    'src/server/routes/api/serviceblueprints/functions.js'
+  )
+  const platform = require(platformPath)
+  const originalPlatformRequest = platform.platformRequest
+  let observedPlatformRequest
+
+  platform.platformRequest = async (request) => {
+    observedPlatformRequest = request
+    const error = new Error('tuple not promoted')
+    error.response = {
+      status: 409,
+      data: {
+        deployable: false,
+        blockers: [
+          {
+            code: 'SERVICE_BLUEPRINT_TUPLE_NOT_PROMOTED',
+            message: 'The exact tuple is not promoted.',
+          },
+        ],
+      },
+    }
+    throw error
+  }
+  delete require.cache[require.resolve(functionsPath)]
+
   try {
-    const handlers = require(path.join(
-      fireedgeRoot,
-      'src/server/routes/api/serviceblueprints/functions.js'
-    ))
+    const handlers = require(functionsPath)
 
     const invoke = (handler, params = {}) => {
       const res = { locals: {} }
@@ -697,6 +757,28 @@ test('runtime service-blueprint handlers return catalog and fail closed', () => 
 
       return res.locals.httpCode
     }
+    const invokeAsync = (handler, params = {}) =>
+      new Promise((resolve, reject) => {
+        const res = { locals: {} }
+        let nextCount = 0
+        try {
+          handler(
+            res,
+            () => {
+              nextCount += 1
+              try {
+                assert.equal(nextCount, 1)
+                resolve(res.locals.httpCode)
+              } catch (error) {
+                reject(error)
+              }
+            },
+            params
+          )
+        } catch (error) {
+          reject(error)
+        }
+      })
 
     const catalogResponse = invoke(handlers.list)
     assert.equal(catalogResponse.id, 200)
@@ -704,19 +786,31 @@ test('runtime service-blueprint handlers return catalog and fail closed', () => 
     assert.equal(catalogResponse.data.items.length, 27)
 
     const postgresql = api.getBlueprintById('postgresql')
-    const validDesiredState = api.sanitizeDesign(makeValid(postgresql))
+    const validDraft = makeValid(postgresql)
+    const validDesiredState = api.sanitizeDesign(validDraft)
+    const validPlatformDesiredState = api.compilePlatformDesiredState(
+      validDraft,
+      postgresql
+    )
 
-    const blockedPreflight = invoke(handlers.preflight, {
+    const blockedPreflight = await invokeAsync(handlers.preflight, {
       blueprintId: 'postgresql',
       version: '18',
       topology: '3-node HA',
       desiredState: validDesiredState,
+      platformDesiredState: validPlatformDesiredState,
     })
     assert.equal(blockedPreflight.id, 409)
     assert.equal(blockedPreflight.data.deployable, false)
     assert.equal(
       blockedPreflight.data.blockers[0].code,
       'SERVICE_BLUEPRINT_TUPLE_NOT_PROMOTED'
+    )
+    assert.equal(observedPlatformRequest.method, 'POST')
+    assert.equal(observedPlatformRequest.path, '/v1/vm-services/preflight')
+    assert.deepEqual(
+      observedPlatformRequest.data.desired_state,
+      validPlatformDesiredState
     )
 
     const badVersion = invoke(handlers.preflight, {
@@ -763,11 +857,12 @@ test('runtime service-blueprint handlers return catalog and fail closed', () => 
       'SERVICE_BLUEPRINT_DEPLOYMENT_DISABLED'
     )
   } finally {
+    platform.platformRequest = originalPlatformRequest
+    delete require.cache[require.resolve(functionsPath)]
     process.env.NODE_PATH = previousNodePath
     Module._initPaths()
   }
 })
-
 
 test('exact tuple registry starts empty and validates immutable promotion records', () => {
   const tuples = require(path.join(
