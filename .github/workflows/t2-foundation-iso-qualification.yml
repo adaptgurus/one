@@ -1,0 +1,155 @@
+name: T2 Foundation ISO Qualification
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-foundation-iso-qualification
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: self-hosted
+    timeout-minutes: 120
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME USER=$env:USERNAME"
+          if ($env:RUNNER_NAME -ine 'MANOJ-TEST-INST') { throw "Wrong runner: $env:RUNNER_NAME" }
+          if ($env:COMPUTERNAME -ine 'MANOJ-TEST-INST') { throw "Wrong host: $env:COMPUTERNAME" }
+          Get-Command Get-VM,Start-VM,Save-VM,Stop-VM -ErrorAction Stop | Format-Table Name,Source -AutoSize
+
+      - name: Ensure exact ISO builder is available
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($p in @(
+            'C:\LayerSentryLab\qualification\iso-builder-key',
+            'C:\LayerSentryLab\qualification\known_hosts_builder'
+          )) { if (-not (Test-Path $p)) { throw "Missing required qualification input: $p" } }
+          $builder = Get-VM -Name 'ls-iso-builder' -ErrorAction Stop
+          if ($builder.State -ne 'Running') {
+            foreach ($name in @('ls-appliance-dbe-qual','ls-appliance-qual')) {
+              $v = Get-VM -Name $name -ErrorAction SilentlyContinue
+              if ($v -and $v.State -eq 'Running') { Save-VM -Name $name }
+            }
+            Start-VM -Name 'ls-iso-builder'
+          }
+          $ready = $false
+          for ($i=0; $i -lt 60; $i++) {
+            $c = New-Object Net.Sockets.TcpClient
+            try {
+              $a = $c.BeginConnect('10.250.10.40',22,$null,$null)
+              $ok = $a.AsyncWaitHandle.WaitOne(1000)
+              if ($ok) { $c.EndConnect($a); if ($c.Connected) { $ready=$true; break } }
+            } catch {} finally { $c.Close() }
+            Start-Sleep -Seconds 2
+          }
+          if (-not $ready) { throw 'ls-iso-builder SSH did not become reachable' }
+          Get-VM -Name 'ls-iso-builder' | Select Name,State,ProcessorCount,@{n='MemoryGB';e={[math]::Round($_.MemoryAssigned/1GB,1)}} | Format-List
+
+      - name: Verify exact 4c4ac81 builder inputs
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ssh = (Get-Command ssh.exe).Source
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $cmd='set -euo pipefail; test "$(sha256sum /home/builder/layersentry-platform-4c4ac81.tar.gz | awk ''{print $1}'')" = "f25b2a7b3f4afac3a1e48766ad656052796128cc672f2a3fe84906fb5f55e5d7"; test "$(/home/builder/layersentry-build/4c4ac81/layersentry-host-agent self-test)" = "4c4ac81"; test "$(/home/builder/layersentry-build/4c4ac81/layersentry-host-controller self-test)" = "4c4ac81"; test "$(sha256sum /home/builder/layersentry-build/4c4ac81/layersentry-host-agent | awk ''{print $1}'')" = "5f84b46eb328ee3727444f96e84d9d34a4038fb8d32ca370db1ee7d126dda331"; test "$(sha256sum /home/builder/layersentry-build/4c4ac81/layersentry-host-controller | awk ''{print $1}'')" = "6b2a709bfce3bd1e45b70f449c3a2058cf06fad2a2641adbda07c1d5b2737f1a"; test -f /var/tmp/layersentry-iso/Rocky-9.8-x86_64-dvd.iso; echo EXACT_INPUTS=PASS'
+          & $ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $cmd
+          if ($LASTEXITCODE -ne 0) { throw 'Exact 4c4ac81 builder input verification failed' }
+
+      - name: Build exact generic Rocky 9.8 ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ssh = (Get-Command ssh.exe).Source
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $remote = @'
+          set -euo pipefail
+          src=/home/builder/layersentry-src-4c4ac81
+          q=/home/builder/layersentry-qual-dbeacd5
+          agent=/home/builder/layersentry-build/4c4ac81/layersentry-host-agent
+          outdir=/var/tmp/layersentry-4c4ac81-output
+          out="$outdir/LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso"
+          mkdir -p "$outdir"
+          rm -f "$out" "$out.sha256" "$out.provenance.json"
+          agent_sha=$(sha256sum "$agent" | awk '{print $1}')
+          sudo -n bash "$src/deploy/iso/build-host-iso.sh" --generic \
+            --base-iso /var/tmp/layersentry-iso/Rocky-9.8-x86_64-dvd.iso \
+            --base-sha256 d2bcbb64c2d67511adf80d40cd9543391a33aea5860a355b1d26d7f55236d01f \
+            --agent-binary "$agent" --agent-sha256 "$agent_sha" --agent-version 4c4ac81 \
+            --agent-config "$q/qual-agent.json" --agent-ca "$q/agent-ca.crt" \
+            --agent-signing-key "$q/job-signing.pub.pem" \
+            --source-commit 4c4ac81d69b162bf843daa8b2f6b5543dc6403a6 --output "$out"
+          sudo -n chown builder:builder "$out" "$out.sha256" "$out.provenance.json"
+          stat -c 'ISO_SIZE=%s' "$out"
+          cat "$out.sha256"
+          cat "$out.provenance.json"
+          '@
+          & $ssh -o BatchMode=yes -o ConnectTimeout=10 -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $remote
+          if ($LASTEXITCODE -ne 0) { throw 'Exact generic ISO build failed' }
+
+      - name: Transfer and verify exact ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $scp=(Get-Command scp.exe).Source
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $dest='C:\LayerSentryLab\qualification\4c4ac81'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          $remoteBase='/var/tmp/layersentry-4c4ac81-output/LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $iso=Join-Path $dest 'LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $prov="$iso.provenance.json"
+          $remoteSha=(& $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 "sha256sum $remoteBase | awk '{print `$1}'").Trim().ToLowerInvariant()
+          if (-not ($remoteSha -match '^[0-9a-f]{64}$')) { throw "Invalid remote SHA: $remoteSha" }
+          $needCopy=$true
+          if (Test-Path $iso) {
+            $existing=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+            if ($existing -eq $remoteSha) { $needCopy=$false }
+          }
+          if ($needCopy) {
+            & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key "builder@10.250.10.40:$remoteBase" $iso
+            if ($LASTEXITCODE -ne 0) { throw 'ISO transfer failed' }
+          }
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key "builder@10.250.10.40:$remoteBase.provenance.json" $prov
+          if ($LASTEXITCODE -ne 0) { throw 'Provenance transfer failed' }
+          $localSha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+          if ($localSha -ne $remoteSha) { throw "ISO digest mismatch local=$localSha remote=$remoteSha" }
+          $p=Get-Content $prov -Raw | ConvertFrom-Json
+          if ($p.source_commit -ne '4c4ac81d69b162bf843daa8b2f6b5543dc6403a6') { throw 'Provenance source commit mismatch' }
+          if ($p.mode -ne 'generic-reusable') { throw 'Provenance mode mismatch' }
+          if ($p.iso_sha256 -ne $localSha) { throw 'Provenance ISO SHA mismatch' }
+          Write-Host "ISO_BUILD_AND_TRANSFER=PASS SHA256=$localSha SIZE=$((Get-Item $iso).Length)"
+
+      - name: Preserve build evidence
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $e=[ordered]@{
+            schema='layersentry-t2-iso-build-evidence/v1'
+            target_commit='4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'
+            runner=$env:RUNNER_NAME
+            computer=$env:COMPUTERNAME
+            github_sha=$env:GITHUB_SHA
+            iso_present=(Test-Path $iso)
+            iso_sha256=$(if(Test-Path $iso){(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()}else{$null})
+            iso_size=$(if(Test-Path $iso){(Get-Item $iso).Length}else{$null})
+            recorded_utc=(Get-Date).ToUniversalTime().ToString('o')
+          }
+          $e | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 (Join-Path $dir 'build-evidence.json')
+          Get-Content (Join-Path $dir 'build-evidence.json')
