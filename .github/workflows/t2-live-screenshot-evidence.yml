@@ -1,0 +1,38 @@
+name: T2 Live Screenshot Evidence
+
+on:
+  push:
+    branches:
+      - ops/t2-live-evidence-4c4ac81
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Bind runner and collect live VM facts
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $img='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-disk-gate.png'
+          if(-not (Test-Path $img)){throw 'Captured framebuffer missing'}
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $dvd=Get-VMDvdDrive -VMName $name
+          $disk=Get-VMHardDiskDrive -VMName $name | Where-Object ControllerLocation -eq 0
+          Write-Host "VM=$($vm.Name) STATE=$($vm.State) GEN=$($vm.Generation)"
+          Write-Host "DVD=$($dvd.Path)"
+          Write-Host "DISK=$($disk.Path)"
+          Write-Host "SCREENSHOT_BYTES=$((Get-Item $img).Length)"
+
+      - name: Upload framebuffer evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-anaconda-disk-gate
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-disk-gate.png
+          if-no-files-found: error
+          retention-days: 7
