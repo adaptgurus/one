@@ -106,9 +106,17 @@ jobs:
           src=/home/builder/layersentry-src-4c4ac81
           q=/home/builder/layersentry-qual-dbeacd5
           agent=/home/builder/layersentry-build/4c4ac81/layersentry-host-agent
-          outdir=/var/tmp/layersentry-4c4ac81-output
+          echo '=== BUILDER STORAGE ==='
+          df -hPT
+          lsblk -o NAME,SIZE,FSTYPE,MOUNTPOINTS
+          min_bytes=18000000000
+          output_root=$(df -P -B1 -x tmpfs -x devtmpfs --output=avail,target | awk -v min="$min_bytes" 'NR>1 && $1>=min {if($1>best){best=$1;target=$2}} END{print target}')
+          test -n "$output_root" || { echo 'no mounted filesystem has >=18GB free for exact ISO build' >&2; exit 40; }
+          outdir="${output_root%/}/layersentry-4c4ac81-output"
           out="$outdir/LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso"
           mkdir -p "$outdir"
+          printf '%s\n' "$out" >/home/builder/layersentry-4c4ac81-output.path
+          echo "ISO_OUTPUT=$out"
           rm -f "$out" "$out.sha256" "$out.provenance.json"
           agent_sha=$(sha256sum "$agent" | awk '{print $1}')
           sudo -n bash "$src/deploy/iso/build-host-iso.sh" --generic \
@@ -140,7 +148,8 @@ jobs:
           $known='C:\LayerSentryLab\qualification\known_hosts_builder'
           $dest='C:\LayerSentryLab\qualification\4c4ac81'
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          $remoteBase='/var/tmp/layersentry-4c4ac81-output/LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $remoteBase=(& $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 "cat /home/builder/layersentry-4c4ac81-output.path").Trim()
+          if (-not $remoteBase.StartsWith('/')) { throw "Invalid recorded remote ISO path: $remoteBase" }
           $iso=Join-Path $dest 'LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
           $prov="$iso.provenance.json"
           $remoteSha=(& $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 "sha256sum $remoteBase | awk '{print `$1}'").Trim().ToLowerInvariant()
