@@ -1,0 +1,60 @@
+name: T2 Begin Exact ISO Installation
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-live-qual-20260921
+    paths:
+      - .github/workflows/t2-begin-installation.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-exact-live-vm
+  cancel-in-progress: false
+
+jobs:
+  install:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact disposable disk and ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw 'wrong runner'}
+          $vm=Get-VM -Name 'ls-appliance-dbe-qual' -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $d=Get-VMHardDiskDrive -VMName 'ls-appliance-dbe-qual' -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0
+          if($d.Path -ne 'C:\LayerSentryLab\qualification\ls-appliance-dbe-qual\os-4c4ac81-live.vhdx'){throw 'fresh disk mismatch'}
+          $dvd=Get-VMDvdDrive -VMName 'ls-appliance-dbe-qual'|Select-Object -First 1
+          if($dvd.Path -ne 'C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'){throw 'exact ISO not attached'}
+      - name: Begin installation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ns='root\virtualization\v2'
+          $vm=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem|Where-Object ElementName -eq 'ls-appliance-dbe-qual'
+          $kbd=Get-CimAssociatedInstance -InputObject $vm -Namespace $ns -Association Msvm_SystemDevice -ResultClassName Msvm_Keyboard|Select-Object -First 1
+          if(-not $kbd){throw 'VM keyboard missing'}
+          Invoke-CimMethod -InputObject $kbd -MethodName TypeKey -Arguments @{KeyCode=[uint32][char]'B'}|Out-Null
+          Invoke-CimMethod -InputObject $kbd -MethodName TypeKey -Arguments @{KeyCode=[uint32]0x0D}|Out-Null
+          Write-Host 'INSTALL_BEGIN_SENT=true'
+          Start-Sleep -Seconds 300
+      - name: Capture installation progress
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\live\install-progress-5m.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-dbe-qual' -Out $out
+          $d=Get-Item 'C:\LayerSentryLab\qualification\ls-appliance-dbe-qual\os-4c4ac81-live.vhdx'
+          Write-Host "VM_STATE=$((Get-VM -Name 'ls-appliance-dbe-qual').State) VHD_BYTES=$($d.Length) VHD_LASTWRITE=$($d.LastWriteTimeUtc.ToString('o'))"
+          if(-not(Test-Path $out) -or (Get-Item $out).Length -lt 1000){throw 'progress screenshot missing'}
+      - name: Upload installation progress
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-install-progress-5m
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\live\install-progress-5m.png
+          if-no-files-found: error
+          retention-days: 7
