@@ -1,0 +1,61 @@
+name: T2 Storage Step4 Select LVM
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-storage-step4-select-lvm.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-install-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  select:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Re-bind disposable VM and disk
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $expected='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $expected){throw 'Disposable disk binding changed'}
+
+      - name: Explicitly select LVM scheme
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          $a=$kb.TypeKey([uint32]0x32)
+          Start-Sleep -Milliseconds 250
+          $b=$kb.TypeKey([uint32]0x0D)
+          if($a.ReturnValue -ne 0 -or $b.ReturnValue -ne 0){throw 'LVM selection key injection failed'}
+          Start-Sleep -Seconds 3
+
+      - name: Capture explicit LVM selection
+        shell: powershell
+        run: |
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\storage-step4-lvm-selected.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'LVM-selection screenshot missing'}
+
+      - name: Upload explicit LVM selection
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-storage-step4-lvm-selected
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\storage-step4-lvm-selected.png
+          if-no-files-found: error
+          retention-days: 7
