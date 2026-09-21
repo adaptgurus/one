@@ -204,26 +204,116 @@ const preflight = (
 }
 
 /**
- * Keep deployment hard-disabled until the exact-tuple preflight, operation
- * journal, OpenNebula/OneFlow execution and guest configuration adapters are
- * qualified together.
+ * Admit a production deployment through the durable LayerSentry control plane.
+ * FireEdge never performs provider mutation directly and never selects an
+ * OS/image tuple. The backend repeats exact-tuple validation authoritatively.
  *
  * @param {object} res - HTTP response
  * @param {Function} next - Express stepper
- * @param {object} params - Requested service tuple
+ * @param {object} params - Requested service tuple and durable desired state
+ * @param {object} userData - authenticated FireEdge user data
+ * @param {Function} oneConnection - OpenNebula XML-RPC connection factory
  */
-const deploy = (res = {}, next = defaultEmptyFunction, params = {}) => {
-  const { blueprintId, version, edition, topology } = params
+const deploy = (
+  res = {},
+  next = defaultEmptyFunction,
+  params = {},
+  userData = {},
+  oneConnection
+) => {
+  const {
+    blueprintId,
+    version,
+    topology,
+    desiredState,
+    platformDesiredState,
+    serviceId,
+    idempotencyKey,
+  } = params
 
-  res.locals.httpCode = httpResponse(
-    serviceUnavailable,
-    blocked(
-      'SERVICE_BLUEPRINT_DEPLOYMENT_DISABLED',
-      'Production-service deployment is fail-closed until the exact tuple and execution backend are qualified.',
-      { blueprintId, version, edition, topology }
+  if (!blueprintId || !version || !topology || !serviceId || !idempotencyKey) {
+    res.locals.httpCode = httpResponse(
+      badRequest,
+      blocked(
+        'SERVICE_BLUEPRINT_DEPLOY_REQUEST_INVALID',
+        'blueprintId, version, topology, serviceId and idempotencyKey are required.'
+      )
     )
+    next()
+    return
+  }
+
+  const desiredStateErrors = validateDesiredState(desiredState)
+  if (desiredStateErrors.length > 0) {
+    res.locals.httpCode = httpResponse(
+      badRequest,
+      blocked(
+        'SERVICE_BLUEPRINT_DESIRED_STATE_INVALID',
+        'The requested desired state failed authoritative validation.',
+        { validationErrors: desiredStateErrors }
+      )
+    )
+    next()
+    return
+  }
+
+  if (
+    !platformDesiredState ||
+    typeof platformDesiredState !== 'object' ||
+    Array.isArray(platformDesiredState)
+  ) {
+    res.locals.httpCode = httpResponse(
+      badRequest,
+      blocked(
+        'SERVICE_BLUEPRINT_PLATFORM_DESIRED_STATE_REQUIRED',
+        'A normalized durable desired state is required.'
+      )
+    )
+    next()
+    return
+  }
+
+  platformRequest(
+    {
+      method: 'POST',
+      path: '/v1/vm-services/deploy',
+      idempotencyKey,
+      data: {
+        service_id: serviceId,
+        desired_state: platformDesiredState,
+      },
+    },
+    userData,
+    oneConnection
   )
-  next()
+    .then((platformState = {}) => {
+      res.locals.httpCode = httpResponse(ok, platformState)
+      next()
+    })
+    .catch((error) => {
+      const upstreamStatus = Number(error?.response?.status)
+      const upstreamData = error?.response?.data
+      if (
+        Number.isInteger(upstreamStatus) &&
+        upstreamStatus >= 400 &&
+        upstreamStatus <= 599 &&
+        upstreamData &&
+        typeof upstreamData === 'object'
+      ) {
+        res.locals.httpCode = httpResponse(upstreamStatus, upstreamData)
+        next()
+        return
+      }
+
+      res.locals.httpCode = httpResponse(
+        serviceUnavailable,
+        blocked(
+          'SERVICE_BLUEPRINT_DEPLOYMENT_UNAVAILABLE',
+          'The durable LayerSentry deployment control plane is unavailable.'
+        )
+      )
+      next()
+    })
 }
 
 module.exports = {
