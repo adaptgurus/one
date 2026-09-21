@@ -55,29 +55,34 @@ jobs:
           if (-not $ready) { throw 'ls-iso-builder SSH did not become reachable' }
           Get-VM -Name 'ls-iso-builder' | Select Name,State,ProcessorCount,@{n='MemoryGB';e={[math]::Round($_.MemoryAssigned/1GB,1)}} | Format-List
 
-      - name: Grant runner read-only access to builder SSH material
+      - name: Prepare runner-private builder SSH key
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $source='C:\LayerSentryLab\qualification\iso-builder-key'
           $known='C:\LayerSentryLab\qualification\known_hosts_builder'
-          Write-Host '=== BEFORE KEY ACL ==='
-          icacls $key
-          & icacls.exe $key /grant:r '*S-1-5-18:(R)'
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM read access to builder key' }
-          & icacls.exe $known /grant:r '*S-1-5-18:(R)'
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM read access to known_hosts' }
-          Write-Host '=== AFTER KEY ACL ==='
-          icacls $key
-          $bytes=[IO.File]::ReadAllBytes($key)
-          if ($bytes.Length -lt 100) { throw 'Builder private key is unexpectedly small' }
-          Write-Host "RUNNER_KEY_READ=PASS bytes=$($bytes.Length)"
+          & icacls.exe $source /grant:r '*S-1-5-18:(R)' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM source-key read access' }
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM known_hosts read access' }
+          $private=Join-Path $env:RUNNER_TEMP 't2-iso-builder-key'
+          Copy-Item -LiteralPath $source -Destination $private -Force
+          & icacls.exe $private /inheritance:r | Out-Null
+          & icacls.exe $private /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $private /setowner '*S-1-5-18' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to restrict runner-private SSH key ACL' }
+          Write-Host '=== RUNNER PRIVATE KEY ACL ==='
+          icacls $private
+          $bytes=[IO.File]::ReadAllBytes($private)
+          if ($bytes.Length -lt 100) { throw 'Runner-private builder key is unexpectedly small' }
+          "T2_BUILDER_KEY=$private" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "RUNNER_PRIVATE_KEY=PASS bytes=$($bytes.Length)"
       - name: Verify exact 4c4ac81 builder inputs
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
           $ssh = (Get-Command ssh.exe).Source
-          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $key=$env:T2_BUILDER_KEY
           $known='C:\LayerSentryLab\qualification\known_hosts_builder'
           $cmd='set -euo pipefail; test "$(sha256sum /home/builder/layersentry-platform-4c4ac81.tar.gz | awk ''{print $1}'')" = "f25b2a7b3f4afac3a1e48766ad656052796128cc672f2a3fe84906fb5f55e5d7"; test "$(/home/builder/layersentry-build/4c4ac81/layersentry-host-agent self-test)" = "4c4ac81"; test "$(/home/builder/layersentry-build/4c4ac81/layersentry-host-controller self-test)" = "4c4ac81"; test "$(sha256sum /home/builder/layersentry-build/4c4ac81/layersentry-host-agent | awk ''{print $1}'')" = "5f84b46eb328ee3727444f96e84d9d34a4038fb8d32ca370db1ee7d126dda331"; test "$(sha256sum /home/builder/layersentry-build/4c4ac81/layersentry-host-controller | awk ''{print $1}'')" = "6b2a709bfce3bd1e45b70f449c3a2058cf06fad2a2641adbda07c1d5b2737f1a"; test -f /var/tmp/layersentry-iso/Rocky-9.8-x86_64-dvd.iso; echo EXACT_INPUTS=PASS'
           & $ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $cmd
@@ -88,7 +93,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $ssh = (Get-Command ssh.exe).Source
-          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $key=$env:T2_BUILDER_KEY
           $known='C:\LayerSentryLab\qualification\known_hosts_builder'
           $remote = @'
           set -euo pipefail
@@ -121,7 +126,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $ssh=(Get-Command ssh.exe).Source
           $scp=(Get-Command scp.exe).Source
-          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $key=$env:T2_BUILDER_KEY
           $known='C:\LayerSentryLab\qualification\known_hosts_builder'
           $dest='C:\LayerSentryLab\qualification\4c4ac81'
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
@@ -149,6 +154,11 @@ jobs:
           if ($p.iso_sha256 -ne $localSha) { throw 'Provenance ISO SHA mismatch' }
           Write-Host "ISO_BUILD_AND_TRANSFER=PASS SHA256=$localSha SIZE=$((Get-Item $iso).Length)"
 
+      - name: Remove runner-private SSH key
+        if: always()
+        shell: powershell
+        run: |
+          if ($env:T2_BUILDER_KEY -and (Test-Path $env:T2_BUILDER_KEY)) { Remove-Item -LiteralPath $env:T2_BUILDER_KEY -Force }
       - name: Preserve build evidence
         if: always()
         shell: powershell
