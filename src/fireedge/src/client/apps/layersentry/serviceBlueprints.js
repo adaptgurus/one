@@ -3762,7 +3762,9 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
           : []
 
       return {
-        role: String(item.role || '').toLowerCase().replace(/\s+/g, '_'),
+        role: String(item.role || '')
+          .toLowerCase()
+          .replace(/\s+/g, '_'),
         layout,
         mountpoint: item.mountpoint || '',
         storage_class: item.storagePool || '',
@@ -3821,11 +3823,7 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
       domain,
       nodes: Array.from({ length: nodeCount }, (_, index) => ({
         fqdn:
-          nodeBase +
-          '-' +
-          String(index + 1).padStart(2, '0') +
-          '.' +
-          domain,
+          nodeBase + '-' + String(index + 1).padStart(2, '0') + '.' + domain,
         ip_mode: staticMode ? 'static' : 'auto',
         ip: staticMode ? addresses[index] || '' : '',
       })),
@@ -3844,10 +3842,8 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
       dns: {
         mode: dnsMode,
         zone: dnsMode === 'manual' ? draft.dnsZone || '' : '',
-        record_type:
-          dnsMode === 'manual' ? draft.dnsRecordType || '' : '',
-        ttl_seconds:
-          dnsMode === 'manual' ? Number(draft.dnsTtl) || 0 : 0,
+        record_type: dnsMode === 'manual' ? draft.dnsRecordType || '' : '',
+        ttl_seconds: dnsMode === 'manual' ? Number(draft.dnsTtl) || 0 : 0,
         target:
           dnsMode === 'manual' &&
           draft.dnsTargetMode === 'Specify DNS target now'
