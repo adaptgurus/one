@@ -24,10 +24,7 @@ const {
   validateDesiredState,
 } = require('server/routes/api/serviceblueprints/validation')
 const {
-  findQualifiedTuple,
-} = require('server/routes/api/serviceblueprints/tuples')
-const {
-  platformCapabilities,
+  platformRequest,
 } = require('server/routes/api/serviceblueprints/platform')
 
 const { defaultEmptyFunction } = defaults
@@ -75,7 +72,14 @@ const preflight = (
   userData = {},
   oneConnection
 ) => {
-  const { blueprintId, version, edition, topology, desiredState } = params
+  const {
+    blueprintId,
+    version,
+    edition,
+    topology,
+    desiredState,
+    platformDesiredState,
+  } = params
 
   if (!blueprintId || !version || !topology) {
     res.locals.httpCode = httpResponse(
@@ -133,27 +137,16 @@ const preflight = (
     return
   }
 
-  const qualifiedTuple = findQualifiedTuple({
-    blueprintId,
-    version,
-    edition: edition || '',
-    topology,
-  })
-  if (!qualifiedTuple) {
+  if (
+    !platformDesiredState ||
+    typeof platformDesiredState !== 'object' ||
+    Array.isArray(platformDesiredState)
+  ) {
     res.locals.httpCode = httpResponse(
-      conflict,
+      badRequest,
       blocked(
-        'SERVICE_BLUEPRINT_TUPLE_NOT_PROMOTED',
-        'The exact requested tuple is not production-qualified for deployment.',
-        {
-          blueprintId,
-          version,
-          edition,
-          topology,
-          qualification: 'NOT_PROMOTED',
-          productionSelectable: false,
-          executionBackendQualified: false,
-        }
+        'SERVICE_BLUEPRINT_PLATFORM_DESIRED_STATE_REQUIRED',
+        'A normalized durable desired state is required.'
       )
     )
     next()
@@ -161,24 +154,39 @@ const preflight = (
     return
   }
 
-  // A promoted tuple must also prove that the durable LayerSentry operation
-  // authority is online. This is a read-only bridge: provider mutation remains
-  // disabled until a separately qualified execution adapter is installed.
-  platformCapabilities(userData, oneConnection)
+  // The durable LayerSentry backend is the sole production-tuple authority.
+  // FireEdge performs fast request validation but never promotes or selects an
+  // OS/image tuple from a browser-visible/static registry.
+  platformRequest(
+    {
+      method: 'POST',
+      path: '/v1/vm-services/preflight',
+      data: {
+        desired_state: platformDesiredState,
+      },
+    },
+    userData,
+    oneConnection
+  )
     .then((platformState = {}) => {
-      const capability = platformState.capability || {}
-      if (!capability.durableStoreReady) {
-        res.locals.httpCode = httpResponse(
-          serviceUnavailable,
-          blocked(
-            'SERVICE_BLUEPRINT_JOURNAL_NOT_READY',
-            'The durable VM-service operation journal is not ready.',
-            {
-              tupleId: qualifiedTuple.id,
-              durableStoreReady: false,
-            }
-          )
-        )
+      const deployable = platformState.deployable === true
+      res.locals.httpCode = httpResponse(
+        deployable ? ok : serviceUnavailable,
+        platformState
+      )
+      next()
+    })
+    .catch((error) => {
+      const upstreamStatus = Number(error?.response?.status)
+      const upstreamData = error?.response?.data
+      if (
+        Number.isInteger(upstreamStatus) &&
+        upstreamStatus >= 400 &&
+        upstreamStatus <= 599 &&
+        upstreamData &&
+        typeof upstreamData === 'object'
+      ) {
+        res.locals.httpCode = httpResponse(upstreamStatus, upstreamData)
         next()
 
         return
@@ -187,25 +195,8 @@ const preflight = (
       res.locals.httpCode = httpResponse(
         serviceUnavailable,
         blocked(
-          'SERVICE_BLUEPRINT_EXECUTION_NOT_WIRED',
-          'The exact tuple and durable journal are available, but no enabled execution adapter is qualified.',
-          {
-            tupleId: qualifiedTuple.id,
-            durableStoreReady: true,
-            providerMutationEnabled:
-              capability.providerMutationEnabled === true,
-          }
-        )
-      )
-      next()
-    })
-    .catch(() => {
-      res.locals.httpCode = httpResponse(
-        serviceUnavailable,
-        blocked(
           'SERVICE_BLUEPRINT_CONTROL_PLANE_UNAVAILABLE',
-          'The LayerSentry VM-service control plane is unavailable or not configured.',
-          { tupleId: qualifiedTuple.id }
+          'The LayerSentry VM-service control plane is unavailable or not configured.'
         )
       )
       next()
