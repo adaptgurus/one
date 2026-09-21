@@ -1,0 +1,28 @@
+name: T2 Enrollment Helper Source
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-live-qual-20260921
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-enroll-helper-source
+  cancel-in-progress: true
+
+jobs:
+  read:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Read helper source only
+        shell: powershell
+        run: |
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw 'wrong runner'}
+          $q='C:\LayerSentryLab\qualification'
+          foreach($name in @('vm_enroll_testlab.ps1','vm_full_enroll_testlab.ps1')){
+            Write-Host "===== $name ====="
+            Get-Content (Join-Path $q $name)
+          }
