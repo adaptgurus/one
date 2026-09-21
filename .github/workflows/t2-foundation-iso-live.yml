@@ -86,6 +86,20 @@ jobs:
           if(-not (Test-Path $out)){throw 'Installer screenshot not created'}
           Write-Host "SCREENSHOT=$out bytes=$((Get-Item $out).Length)"
 
+      - name: Verify installer is at local disk-selection gate
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $img='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-disk-gate.png'
+          $ocr='C:\LayerSentryLab\qualification\ocr_once.ps1'
+          if(-not (Test-Path $ocr)){throw 'Qualification OCR helper missing'}
+          $text=& $ocr $img 2>&1 | Out-String
+          Write-Host $text
+          if($text -notmatch '(?i)Installation Destination|Kickstart insufficient|Installation Summary'){
+            throw 'Framebuffer did not prove the Anaconda installation-destination safety gate'
+          }
+          Write-Host 'ANACONDA_DISK_GATE=PASS'
+
       - name: Record live boot evidence
         shell: powershell
         run: |
