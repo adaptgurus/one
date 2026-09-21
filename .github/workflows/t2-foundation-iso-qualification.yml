@@ -55,6 +55,23 @@ jobs:
           if (-not $ready) { throw 'ls-iso-builder SSH did not become reachable' }
           Get-VM -Name 'ls-iso-builder' | Select Name,State,ProcessorCount,@{n='MemoryGB';e={[math]::Round($_.MemoryAssigned/1GB,1)}} | Format-List
 
+      - name: Grant runner read-only access to builder SSH material
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          Write-Host '=== BEFORE KEY ACL ==='
+          icacls $key
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)'
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM read access to builder key' }
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)'
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM read access to known_hosts' }
+          Write-Host '=== AFTER KEY ACL ==='
+          icacls $key
+          $bytes=[IO.File]::ReadAllBytes($key)
+          if ($bytes.Length -lt 100) { throw 'Builder private key is unexpectedly small' }
+          Write-Host "RUNNER_KEY_READ=PASS bytes=$($bytes.Length)"
       - name: Verify exact 4c4ac81 builder inputs
         shell: powershell
         run: |
