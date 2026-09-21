@@ -29,10 +29,24 @@ jobs:
           Write-Host "DISK=$($disk.Path)"
           Write-Host "SCREENSHOT_BYTES=$((Get-Item $img).Length)"
 
+      - name: Wait for media check and recapture installer
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Start-Sleep -Seconds 150
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Qualification VM is not running: $($vm.State)"}
+          $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-disk-gate-after-media-check.png'
+          & $script -VM $name -Out $out
+          if(-not (Test-Path $out)){throw 'Fresh installer framebuffer was not created'}
+          Write-Host "FRESH_SCREENSHOT=$out bytes=$((Get-Item $out).Length)"
+
       - name: Upload framebuffer evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: t2-4c4ac81-anaconda-disk-gate
-          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-disk-gate.png
+          name: t2-4c4ac81-anaconda-disk-gate-after-media-check
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-disk-gate-after-media-check.png
           if-no-files-found: error
           retention-days: 7
