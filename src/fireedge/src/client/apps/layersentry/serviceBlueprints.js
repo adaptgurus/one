@@ -3673,6 +3673,228 @@ export const validateStep = (step, draft, blueprint) => {
 export const validateDraft = (draft, blueprint) =>
   validateStep(WIZARD_STEPS.length - 1, draft, blueprint)
 
+const PLATFORM_STORAGE_LAYOUTS = {
+  'Single disk': 'single',
+  LVM: 'lvm',
+  'Striped managed disks': 'stripe',
+  'Existing SAN / LUN': 'existing_san_lun',
+  'Existing mount': 'existing_mount',
+  'Repository-managed': 'repository',
+}
+
+const PLATFORM_PACKAGE_SOURCES = {
+  'Managed repositories': 'managed_online',
+  'Local repository / mirror': 'local_mirror',
+  'Air-gapped bundle': 'airgapped_bundle',
+}
+
+const platformNodeSlug = (value, fallback = 'service') => {
+  const normalized = String(value || fallback)
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+
+  return normalized || fallback
+}
+
+const platformNodeAddresses = (draft) =>
+  String(draft.staticIps || '')
+    .split(/\n|,/)
+    .map((value) => value.trim())
+    .filter(Boolean)
+
+const platformProductOptions = (draft, blueprint) => {
+  if (!blueprint) return {}
+
+  if (blueprint.id === 'nginx' || blueprint.id === 'apache-httpd') {
+    return {
+      webMode: draft.webMode,
+      webSourceRef: draft.webSourceRef || '',
+    }
+  }
+
+  if (blueprint.id === 'postgresql') {
+    return {
+      pg_stat_statements: draft.pgStatStatements === true,
+      postgis: draft.postgis === true,
+      postgis_databases: draft.postgisDatabases || '',
+      dcs_placement: draft.dcsPlacement,
+      pgbouncer_placement: draft.pgbouncerPlacement,
+      barman_placement: draft.barmanPlacement,
+    }
+  }
+
+  return {}
+}
+
+/**
+ * Compile the customer wizard state into the durable VM-service API schema.
+ *
+ * This contains desired intent only. Exact OS/image/package locks and observed
+ * failure-domain placement remain backend-owned and are never customer inputs.
+ *
+ * @param {object} draft - customer wizard draft
+ * @param {object} blueprint - selected service blueprint
+ * @returns {object} backend desired-state document
+ */
+export const compilePlatformDesiredState = (draft, blueprint) => {
+  const architecture = getArchitecturePlan(draft, blueprint)
+  const nodeCount =
+    Number.isInteger(Number(architecture.mainNodes)) &&
+    Number(architecture.mainNodes) > 0
+      ? Number(architecture.mainNodes)
+      : 1
+  const addresses = platformNodeAddresses(draft)
+  const nodeBase = platformNodeSlug(draft.serviceName, blueprint?.id)
+  const domain = String(draft.domain || '').trim()
+  const staticMode = draft.ipMode === 'Static'
+  const storage = (draft.storage || [])
+    .filter((item) => !item.dependency)
+    .map((item) => {
+      const layout = PLATFORM_STORAGE_LAYOUTS[item.layout] || 'unsupported'
+      const sizeGiB = Number(item.sizeGiB)
+      const disks =
+        ['single', 'lvm'].includes(layout) &&
+        Number.isFinite(sizeGiB) &&
+        sizeGiB > 0
+          ? [{ size_gib: sizeGiB }]
+          : []
+
+      return {
+        role: String(item.role || '').toLowerCase().replace(/\s+/g, '_'),
+        layout,
+        mountpoint: item.mountpoint || '',
+        storage_class: item.storagePool || '',
+        reference: item.attachmentRef || '',
+        disks,
+      }
+    })
+  const endpointMode =
+    draft.endpointMode === 'Existing load balancer'
+      ? 'external_lb'
+      : String(draft.endpointMode || '').includes('managed') ||
+        String(draft.endpointMode || '').includes('Dedicated')
+      ? 'layersentry_managed'
+      : 'product_native'
+  const dnsMode =
+    draft.dnsRegistration === 'Manual DNS records'
+      ? 'manual'
+      : draft.dnsRegistration === 'Existing DNS workflow'
+      ? 'integrated'
+      : 'automatic'
+  const packageSource =
+    PLATFORM_PACKAGE_SOURCES[draft.packageSourceMode] || 'unsupported'
+  const backup = getBackupProfile(blueprint)
+  const hardening =
+    draft.hardeningProfile === 'CIS qualified hardening'
+      ? 'cis-qualified'
+      : draft.hardeningProfile === 'Custom qualified hardening'
+      ? 'custom-qualified'
+      : 'standard-production'
+  const sshAuth =
+    draft.accessMode === 'Username / password'
+      ? 'password_sudo'
+      : draft.accessMode === 'Root bootstrap'
+      ? 'root_bootstrap'
+      : 'ssh_key_sudo'
+
+  return {
+    blueprint_id: draft.blueprintId,
+    edition: draft.edition || '',
+    version: draft.version,
+    deployment: {
+      topology: draft.topology,
+      node_count: nodeCount,
+      workload: String(draft.workload || 'general').toLowerCase(),
+      environment: String(draft.environment || 'production').toLowerCase(),
+    },
+    capacity: {
+      vcpu: Number(draft.vcpu),
+      memory_gib: Number(draft.memoryGiB),
+      expected_data_gib: Number(draft.expectedDataGiB) || 0,
+      annual_growth_percent: Number(draft.expectedGrowthPercent) || 0,
+      expected_connections: Number(draft.expectedConnections) || 0,
+    },
+    storage,
+    network: {
+      domain,
+      nodes: Array.from({ length: nodeCount }, (_, index) => ({
+        fqdn:
+          nodeBase +
+          '-' +
+          String(index + 1).padStart(2, '0') +
+          '.' +
+          domain,
+        ip_mode: staticMode ? 'static' : 'auto',
+        ip: staticMode ? addresses[index] || '' : '',
+      })),
+      endpoint: {
+        mode: endpointMode,
+        fqdn: draft.serviceFqdn,
+        vip:
+          draft.endpointMode === 'Existing load balancer'
+            ? draft.externalEndpoint || ''
+            : '',
+        backend_port:
+          draft.portPolicy === 'Custom qualified port'
+            ? Number(draft.customPort)
+            : Number(blueprint?.defaultPort) || 0,
+      },
+      dns: {
+        mode: dnsMode,
+        zone: dnsMode === 'manual' ? draft.dnsZone || '' : '',
+        record_type:
+          dnsMode === 'manual' ? draft.dnsRecordType || '' : '',
+        ttl_seconds:
+          dnsMode === 'manual' ? Number(draft.dnsTtl) || 0 : 0,
+        target:
+          dnsMode === 'manual' &&
+          draft.dnsTargetMode === 'Specify DNS target now'
+            ? draft.dnsTarget || ''
+            : '',
+        workflow_ref:
+          dnsMode === 'integrated' ? draft.dnsWorkflowRef || '' : '',
+      },
+    },
+    backup: {
+      enabled: draft.backupEnabled === true,
+      engine: backup.engine || '',
+      repository: draft.backupRepositoryRef || '',
+      retention_days: Number(draft.retentionDays) || 0,
+      pitr: draft.pitr === true,
+      pitr_window_hours: Number(draft.pitrWindowHours) || 0,
+    },
+    dr: {
+      enabled: draft.drEnabled === true,
+      target_site: draft.drTarget || '',
+      rpo_minutes: Number(draft.rpoMinutes) || 0,
+      rto_minutes: Number(draft.rtoMinutes) || 0,
+      replication_mode: draft.drEnabled ? 'product_specific' : '',
+    },
+    security: {
+      hardening_profile: hardening,
+      tls: draft.tls === true,
+      certificate_secret_ref: draft.tlsCertificateRef || '',
+      ssh_auth: sshAuth,
+      credential_secret_ref: draft.credentialRef || '',
+    },
+    package_source: {
+      mode: packageSource,
+      repo_url: draft.repoUrl || '',
+      bundle_id: draft.bundleId || '',
+      proxy_url:
+        draft.internetAccess === 'HTTP(S) Proxy' ? draft.proxyUrl || '' : '',
+      no_proxy: String(draft.proxyNoProxy || '')
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean),
+      allow_public_fallback: false,
+    },
+    product_options: platformProductOptions(draft, blueprint),
+  }
+}
+
 export const sanitizeDesign = (draft) => {
   const { proxyPassword, ...safe } = draft
 
