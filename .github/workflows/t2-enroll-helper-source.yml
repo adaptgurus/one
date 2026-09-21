@@ -1,9 +1,7 @@
 name: T2 Enrollment Helper Source
 
 on:
-  push:
-    branches:
-      - ops/t2-foundation-live-qual-20260921
+  workflow_dispatch: {}
 
 permissions:
   contents: read
