@@ -1,0 +1,70 @@
+name: T2 Begin Validated Installation
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-begin-validated-installation.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-install-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  begin:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Re-bind exact disposable VM, disk and ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $expected='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $expected){throw 'Disposable disk binding changed'}
+          $dvd=Get-VMDvdDrive -VMName $name
+          if($dvd.Path -ne $iso){throw "Unexpected ISO binding: $($dvd.Path)"}
+          Set-VMFirmware -VMName $name -FirstBootDevice $disks[0]
+          Write-Host 'VALIDATED_INSTALL_BIND=PASS'
+
+      - name: Begin validated installation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          $a=$kb.TypeKey([uint32]0x42)
+          Start-Sleep -Milliseconds 250
+          $b=$kb.TypeKey([uint32]0x0D)
+          if($a.ReturnValue -ne 0 -or $b.ReturnValue -ne 0){throw 'Begin key injection failed'}
+          Start-Sleep -Seconds 12
+
+      - name: Capture install start
+        shell: powershell
+        run: |
+          $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $out=Join-Path $dir 'validated-install-start.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'Install-start screenshot missing'}
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          Write-Host "VHD_FILE_BYTES=$((Get-Item $vhd).Length)"
+
+      - name: Upload install start
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-validated-install-start
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\validated-install-start.png
+          if-no-files-found: error
+          retention-days: 7
