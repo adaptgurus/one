@@ -1,0 +1,83 @@
+name: T2 Begin Exact Installation
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-begin-install.yml
+      - qualification/t2-begin-install.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-begin-install-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  begin:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Bind exact ISO and disposable disk
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $expectedVhd='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $expectedIso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          $dvd=Get-VMDvdDrive -VMName $name
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $expectedVhd){throw 'Disposable VHD binding changed'}
+          if($dvd.Path -ne $expectedIso){throw "Exact ISO binding changed: $($dvd.Path)"}
+          if((Get-VHD -Path $expectedVhd).Size -ne 85899345920){throw 'Disposable VHD is not 80 GiB'}
+          $sha=(Get-FileHash -Algorithm SHA256 $expectedIso).Hash.ToLowerInvariant()
+          if($sha -ne '11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'){throw "ISO digest changed: $sha"}
+          Write-Host 'INSTALL_BIND=PASS'
+
+      - name: Begin installation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          $r1=$kb.TypeKey([uint32]0x42)
+          Start-Sleep -Milliseconds 300
+          $r2=$kb.TypeKey([uint32]0x0D)
+          if($r1.ReturnValue -ne 0 -or $r2.ReturnValue -ne 0){throw 'Begin-install key injection failed'}
+          Start-Sleep -Seconds 8
+
+      - name: Set next boot to installed VHD
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $disk=Get-VMHardDiskDrive -VMName $name | Select-Object -First 1
+          Set-VMFirmware -VMName $name -FirstBootDevice $disk
+          $first=(Get-VMFirmware -VMName $name).BootOrder | Select-Object -First 1
+          Write-Host "NEXT_BOOT_DEVICE=$($first.Device) FIRMWARE_PATH=$($first.FirmwarePath)"
+
+      - name: Capture installation progress
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Start-Sleep -Seconds 12
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\installation-progress.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'Installation progress framebuffer missing'}
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          Write-Host "VHD_FILE_BYTES=$((Get-Item $vhd).Length) VM_STATE=$((Get-VM -Name 'ls-appliance-4c4ac81-qual').State)"
+
+      - name: Upload installation progress
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-installation-progress
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\installation-progress.png
+          if-no-files-found: error
+          retention-days: 7
