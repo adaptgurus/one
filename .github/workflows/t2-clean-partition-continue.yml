@@ -6,6 +6,7 @@ on:
       - ops/t2-install-4c4ac81
     paths:
       - .github/workflows/t2-clean-partition-continue.yml
+      - qualification/t2-clean-partition-continue.request
 
 permissions:
   contents: read
