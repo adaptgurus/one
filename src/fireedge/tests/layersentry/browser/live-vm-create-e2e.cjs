@@ -124,9 +124,9 @@ const main = async () => {
       '[data-cy="layersentry-network-networkId"]'
     )
     await network.waitFor({ timeout: 30000 })
-    await network.fill(networkName)
+    await network.click()
     const option = page
-      .locator('.dropdown-menu-option')
+      .locator('[data-cy^="layersentry-network-networkId-"]')
       .filter({ hasText: networkName })
       .first()
     await option.waitFor({ timeout: 30000 })
