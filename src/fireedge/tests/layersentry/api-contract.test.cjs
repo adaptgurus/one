@@ -138,6 +138,7 @@ test('LayerSentry client mutations stay bound to the corresponding OpenNebula ac
   const vm = read('src/modules/features/OneApi/vm.js')
   const template = read('src/modules/features/OneApi/vmTemplate.js')
   const image = read('src/modules/features/OneApi/image.js')
+  const network = read('src/modules/features/OneApi/network.js')
   const backup = read('src/modules/features/OneApi/backupjobs.js')
 
   for (const [endpoint, action] of [
@@ -161,6 +162,10 @@ test('LayerSentry client mutations stay bound to the corresponding OpenNebula ac
   expectClientAction(image, 'allocateImage', 'IMAGE_ALLOCATE')
   expectClientAction(image, 'removeImage', 'IMAGE_DELETE')
   expectClientAction(image, 'restoreBackup', 'IMAGE_RESTORE')
+
+  expectClientAction(network, 'getVNetworks', 'VN_POOL_INFO')
+  expectClientAction(network, 'allocateVnet', 'VN_ALLOCATE')
+  expectClientAction(network, 'removeVNet', 'VN_DELETE')
 
   expectClientAction(backup, 'allocateBackupJob', 'BACKUPJOB_ALLOCATE')
   expectClientAction(backup, 'startBackupJob', 'BACKUPJOB_BACKUP')
