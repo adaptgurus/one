@@ -1,0 +1,65 @@
+name: T2 Observe Installed Boot
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-observe-installed-boot.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-install-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: self-hosted
+    timeout-minutes: 12
+    steps:
+      - name: Bind exact disposable guest
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $expected='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $expected){throw 'Disposable disk binding changed'}
+          Write-Host "START state=$($vm.State) vhd_file_bytes=$((Get-Item $expected).Length)"
+
+      - name: Allow installation and reboot to finish
+        shell: powershell
+        run: Start-Sleep -Seconds 240
+
+      - name: Observe post-wait guest
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $hb=(Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue).PrimaryStatusDescription
+          $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object {$_ -match '^\d+\.'})
+          $dvd=Get-VMDvdDrive -VMName $name
+          Write-Host "FINAL state=$($vm.State) uptime=$($vm.Uptime) heartbeat=$hb ips=$($ips -join ',') vhd_file_bytes=$((Get-Item $vhd).Length) dvd=$($dvd.Path)"
+
+      - name: Capture current guest screen
+        shell: powershell
+        run: |
+          $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $out=Join-Path $dir 'installed-boot-observer.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'Installed-boot screenshot missing'}
+
+      - name: Upload installed-boot screen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-installed-boot-observer
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\installed-boot-observer.png
+          if-no-files-found: error
+          retention-days: 7
