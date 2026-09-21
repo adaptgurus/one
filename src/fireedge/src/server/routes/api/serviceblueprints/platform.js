@@ -19,9 +19,7 @@ const https = require('https')
 const { request: axios } = require('axios')
 
 const { getFireedgeConfig } = require('server/utils/yml')
-const {
-  Actions: userActions,
-} = require('server/utils/constants/commands/user')
+const { Actions: userActions } = require('server/utils/constants/commands/user')
 
 const { USER_INFO } = userActions
 
@@ -68,9 +66,7 @@ const validatePlatformUrl = (value) => {
   }
 
   if (url.username || url.password) {
-    throw new Error(
-      'LayerSentry platform URL must not embed credentials.'
-    )
+    throw new Error('LayerSentry platform URL must not embed credentials.')
   }
 
   return url
@@ -85,7 +81,9 @@ const getPlatformConfig = () => {
   const appConfig = getFireedgeConfig()
   const baseURL = validatePlatformUrl(
     appConfig.layersentry_platform_url || DEFAULT_PLATFORM_URL
-  ).toString().replace(/\/$/, '')
+  )
+    .toString()
+    .replace(/\/$/, '')
   const gatewayToken = String(
     appConfig.layersentry_platform_gateway_token || ''
   ).trim()
@@ -132,7 +130,11 @@ const getPlatformConfig = () => {
 const resolvePlatformActor = (userData = {}, oneConnection) =>
   new Promise((resolve, reject) => {
     const { user, password } = userData
-    if (!validIdentity(user) || !password || typeof oneConnection !== 'function') {
+    if (
+      !validIdentity(user) ||
+      !password ||
+      typeof oneConnection !== 'function'
+    ) {
       reject(new Error('Authenticated OpenNebula session is required.'))
 
       return
@@ -245,6 +247,13 @@ const platformRequest = async (
   return response.data
 }
 
+/**
+ * Fetch VM-service capability state from the private LayerSentry control plane.
+ *
+ * @param {object} userData - authenticated FireEdge user data
+ * @param {Function} oneConnection - OpenNebula XML-RPC connection factory
+ * @returns {Promise<object>} capability response body
+ */
 const platformCapabilities = (userData, oneConnection) =>
   platformRequest(
     {
