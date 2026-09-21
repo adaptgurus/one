@@ -1,0 +1,114 @@
+name: T2 Exact ISO Boot Checkpoint
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-live-qual-20260921
+    paths:
+      - .github/workflows/t2-live-boot-checkpoint.yml
+      - qualification/t2-live-boot.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-exact-live-vm
+  cancel-in-progress: false
+
+jobs:
+  boot:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact runner artifact and disposable target
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $ev='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\build-evidence.json'
+          if(-not(Test-Path $iso) -or -not(Test-Path $ev)){throw 'Exact ISO/build evidence missing'}
+          $e=Get-Content $ev -Raw|ConvertFrom-Json
+          if($e.target_commit -ne '4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'){throw 'Target commit mismatch'}
+          if($e.iso_sha256 -ne '11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'){throw 'ISO evidence SHA mismatch'}
+          if((Get-Item $iso).Length -ne 15208218624){throw 'ISO size mismatch'}
+          $vm=Get-VM -Name 'ls-appliance-dbe-qual' -ErrorAction Stop
+          if($vm.Generation -ne 2){throw 'Disposable target is not Generation 2'}
+          $protected=@('ls-fe1','ls-fe2','ls-fe3','ls-kvm1','ls-kvm2')
+          foreach($n in $protected){if(-not(Get-VM -Name $n -ErrorAction SilentlyContinue)){throw "Protected VM unexpectedly missing: $n"}}
+          Write-Host 'BOUND_TARGET=ls-appliance-dbe-qual EXACT_ISO=PASS PROTECTED_SET=PASS'
+
+      - name: Create recoverable fresh 80 GiB qualification disk
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-dbe-qual'
+          $dir='C:\LayerSentryLab\qualification\ls-appliance-dbe-qual'
+          $new=Join-Path $dir 'os-4c4ac81-live.vhdx'
+          $builder=Get-VM -Name 'ls-iso-builder' -ErrorAction SilentlyContinue
+          if($builder -and $builder.State -eq 'Running'){Stop-VM -Name 'ls-iso-builder' -TurnOff -Confirm:$false}
+          $vm=Get-VM -Name $name
+          if($vm.State -eq 'Saved'){Remove-VMSavedState -VMName $name}
+          elseif($vm.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Confirm:$false}
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1){throw "Disposable target must have exactly one disk before replacement; found $($disks.Count)"}
+          $old=$disks[0]
+          if($old.ControllerType -ne 'SCSI' -or $old.ControllerNumber -ne 0 -or $old.ControllerLocation -ne 0){throw 'Unexpected disposable disk controller identity'}
+          if(-not $old.Path.StartsWith($dir,[System.StringComparison]::OrdinalIgnoreCase)){throw "Old disk is outside disposable directory: $($old.Path)"}
+          Write-Host "PRESERVING_OLD_DISK=$($old.Path)"
+          Remove-VMHardDiskDrive -VMName $name -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0
+          if(Test-Path $new){
+            $stamp=(Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
+            $backup=Join-Path $dir "os-4c4ac81-live-prev-$stamp.vhdx"
+            Move-Item -LiteralPath $new -Destination $backup
+            Write-Host "PRESERVED_PREVIOUS_ATTEMPT=$backup"
+          }
+          New-VHD -Path $new -Dynamic -SizeBytes 80GB | Out-Null
+          Add-VMHardDiskDrive -VMName $name -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0 -Path $new
+          $d=Get-VMHardDiskDrive -VMName $name -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0
+          if($d.Path -ne $new){throw 'Fresh disk attachment mismatch'}
+          Write-Host "FRESH_DISK=PASS path=$new size=80GiB"
+
+      - name: Attach exact ISO and boot from DVD
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-dbe-qual'
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue | Select-Object -First 1
+          if(-not $dvd){Add-VMDvdDrive -VMName $name -ControllerNumber 0 -ControllerLocation 1 -Path $iso; $dvd=Get-VMDvdDrive -VMName $name|Select-Object -First 1}
+          else{Set-VMDvdDrive -VMName $name -ControllerNumber $dvd.ControllerNumber -ControllerLocation $dvd.ControllerLocation -Path $iso; $dvd=Get-VMDvdDrive -VMName $name|Select-Object -First 1}
+          if($dvd.Path -ne $iso){throw 'DVD ISO attachment mismatch'}
+          $fw=Get-VMFirmware -VMName $name
+          Write-Host "SECURE_BOOT=$($fw.SecureBoot) TEMPLATE=$($fw.SecureBootTemplate)"
+          Set-VMFirmware -VMName $name -FirstBootDevice $dvd
+          Start-VM -Name $name
+          Start-Sleep -Seconds 100
+          $vm=Get-VM -Name $name
+          if($vm.State -ne 'Running'){throw "VM did not remain running: $($vm.State)"}
+          Write-Host "ISO_BOOT_VM_STATE=$($vm.State)"
+
+      - name: Capture Anaconda safety-gate screen
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $outdir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\live'
+          New-Item -ItemType Directory -Force -Path $outdir|Out-Null
+          $png=Join-Path $outdir 'anaconda-summary.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-dbe-qual' -Out $png
+          if(-not(Test-Path $png) -or (Get-Item $png).Length -lt 1000){throw 'Anaconda screenshot missing or too small'}
+          $state=[ordered]@{schema='layersentry-t2-live-boot/v1';target_commit='4c4ac81d69b162bf843daa8b2f6b5543dc6403a6';iso_sha256='11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0';vm='ls-appliance-dbe-qual';disk='C:\LayerSentryLab\qualification\ls-appliance-dbe-qual\os-4c4ac81-live.vhdx';vm_state=(Get-VM -Name 'ls-appliance-dbe-qual').State.ToString();recorded_utc=(Get-Date).ToUniversalTime().ToString('o')}
+          $state|ConvertTo-Json|Set-Content -Encoding utf8 (Join-Path $outdir 'boot-state.json')
+          Write-Host "BOOT_CHECKPOINT=PASS screenshot=$png"
+
+      - name: Upload boot checkpoint evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-anaconda-checkpoint
+          path: |
+            C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\live\anaconda-summary.png
+            C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\live\boot-state.json
+          if-no-files-found: error
+          retention-days: 7
