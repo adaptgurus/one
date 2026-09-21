@@ -42,8 +42,16 @@ function Invoke-WslAllowFail {
 }
 
 function Test-LiveTunnel {
-  $code = & curl.exe -sS -o NUL -w "%{http_code}" --connect-timeout 2 --max-time 4 $BaseUrl 2>$null
-  return ($LASTEXITCODE -eq 0 -and "$code" -eq "200")
+  $previousEap = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    $code = & curl.exe -sS -o NUL -w "%{http_code}" --connect-timeout 2 --max-time 4 $BaseUrl 2>$null
+    $exitCode = $LASTEXITCODE
+  }
+  finally {
+    $ErrorActionPreference = $previousEap
+  }
+  return ($exitCode -eq 0 -and "$code" -eq "200")
 }
 
 function Invoke-BrowserHarness {
