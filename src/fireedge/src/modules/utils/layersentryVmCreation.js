@@ -284,35 +284,6 @@ export const getLayerSentryDataDiskPolicy = (sourceTemplate = {}) => {
 
 const networkTemplate = (network = {}) => network?.TEMPLATE ?? {}
 
-const supportedIpv4Methods = new Set(['static', 'dhcp', 'skip'])
-
-const networkIpv4Method = (network = {}) => {
-  const template = networkTemplate(network)
-  const explicit = normalized(
-    template?.LAYERSENTRY_IPV4_METHOD ?? template?.METHOD
-  ).toLowerCase()
-  if (supportedIpv4Methods.has(explicit)) return explicit
-
-  const addressRanges = asArray(network?.AR_POOL?.AR)
-  const rangeMethods = [
-    ...new Set(
-      addressRanges
-        .map((range) => normalized(range?.METHOD).toLowerCase())
-        .filter((method) => supportedIpv4Methods.has(method))
-    ),
-  ]
-  if (rangeMethods.length === 1) return rangeMethods[0]
-
-  const hasManagedIpv4Lease = addressRanges.some((range) => {
-    const type = normalized(range?.TYPE).toUpperCase()
-    const ip = normalized(range?.IP)
-
-    return ip && type !== 'ETHER' && type !== 'IP6'
-  })
-
-  return hasManagedIpv4Lease ? 'static' : ''
-}
-
 const networkMode = (network = {}) => {
   const mode = normalized(
     networkTemplate(network)?.LAYERSENTRY_NETWORK_MODE
@@ -426,8 +397,6 @@ export const applyLayerSentryCloudResources = (
       MODEL:
         normalized(networkTemplate(network)?.LAYERSENTRY_NIC_MODEL) || 'virtio',
     }
-    const ipv4Method = staticIp ? 'static' : networkIpv4Method(network)
-    if (ipv4Method) nic.METHOD = ipv4Method
     if (staticIp) nic.IP = staticIp
 
     if (resources.networkQosEnabled) {
