@@ -1,0 +1,54 @@
+name: T2 Observe Installation
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-observe-installation.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-install-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Observe exact disposable guest
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $expected='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $disk=@(Get-VMHardDiskDrive -VMName $name)
+          if($disk.Count -ne 1 -or $disk[0].Path -ne $expected){throw 'Disposable disk binding changed'}
+          $hb=(Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue).PrimaryStatusDescription
+          $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object {$_ -match '^\d+\.'})
+          $vhd=Get-Item $expected
+          $dvd=Get-VMDvdDrive -VMName $name
+          Write-Host "OBSERVE state=$($vm.State) uptime=$($vm.Uptime) heartbeat=$hb ips=$($ips -join ',') vhd_file_bytes=$($vhd.Length) dvd=$($dvd.Path)"
+
+      - name: Capture current framebuffer
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $out=Join-Path $dir 'install-observer.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'Observer framebuffer missing'}
+
+      - name: Upload observer framebuffer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-install-observer
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\install-observer.png
+          if-no-files-found: error
+          retention-days: 7
