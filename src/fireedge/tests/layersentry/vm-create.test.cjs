@@ -500,3 +500,19 @@ test('cloud network options are resolved from the React resource step', () => {
   assert.match(content, /VnAPI\.useGetVNetworksQuery\(\)/)
   assert.match(content, /SECTIONS\(vmTemplate, networks\)/)
 })
+
+
+test('controlled dropdown keeps MUI open state synchronized', () => {
+  const dropdown = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/components/primitives/Dropdown/Default/index.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(dropdown, /open=\{open\}/)
+  assert.match(dropdown, /onOpen=\{\(\) => setOpen\(true\)\}/)
+  assert.match(dropdown, /onClose=\{\(\) => setOpen\(false\)\}/)
+  assert.doesNotMatch(dropdown, /setOpen\(\(prev\) => !prev\)/)
+})
