@@ -1,0 +1,69 @@
+name: T2 Storage Step5 Commit Scheme
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-storage-step5-commit-scheme.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-install-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  commit:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Re-bind disposable VM and disk
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $expected='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $expected){throw 'Disposable disk binding changed'}
+
+      - name: Commit LVM partition scheme
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          $a=$kb.TypeKey([uint32]0x43)
+          Start-Sleep -Milliseconds 250
+          $b=$kb.TypeKey([uint32]0x0D)
+          if($a.ReturnValue -ne 0 -or $b.ReturnValue -ne 0){throw 'Scheme-commit key injection failed'}
+          Start-Sleep -Seconds 12
+
+      - name: Refresh and capture validated summary
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          $a=$kb.TypeKey([uint32]0x52)
+          Start-Sleep -Milliseconds 250
+          $b=$kb.TypeKey([uint32]0x0D)
+          Start-Sleep -Seconds 6
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\storage-step5-summary.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          if(-not (Test-Path $out)){throw 'Validated-summary screenshot missing'}
+
+      - name: Upload validated summary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-storage-step5-summary
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\storage-step5-summary.png
+          if-no-files-found: error
+          retention-days: 7
