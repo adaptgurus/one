@@ -1,0 +1,65 @@
+name: T2 Confirm Installation Destination
+
+on:
+  push:
+    branches:
+      - ops/t2-live-evidence-4c4ac81
+    paths:
+      - .github/workflows/t2-confirm-destination.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-confirm-destination
+  cancel-in-progress: true
+
+jobs:
+  confirm:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Re-bind disposable VM and disk
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $expected='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $expected){throw 'Disposable disk binding changed'}
+          $vhd=Get-VHD -Path $expected
+          if($vhd.Size -ne 85899345920){throw "Unexpected VHD size $($vhd.Size)"}
+          Write-Host 'DESTINATION_CONTINUE_DISK_BIND=PASS'
+
+      - name: Send c and Enter
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          $r1=$kb.TypeKey([uint32]0x43)
+          Start-Sleep -Milliseconds 300
+          $r2=$kb.TypeKey([uint32]0x0D)
+          if($r1.ReturnValue -ne 0 -or $r2.ReturnValue -ne 0){throw 'Continue virtual-key injection failed'}
+          Start-Sleep -Seconds 4
+
+      - name: Capture post-destination summary
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\summary-after-destination.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'Summary framebuffer missing'}
+
+      - name: Upload post-destination summary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-summary-after-destination
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\summary-after-destination.png
+          if-no-files-found: error
+          retention-days: 7
