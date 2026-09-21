@@ -67,10 +67,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM known_hosts read access' }
           $private=Join-Path $env:RUNNER_TEMP 't2-iso-builder-key'
           Copy-Item -LiteralPath $source -Destination $private -Force
-          & icacls.exe $private /inheritance:r | Out-Null
-          & icacls.exe $private /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $private /grant:r '*S-1-5-18:(F)' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM temporary full control' }
           & icacls.exe $private /setowner '*S-1-5-18' | Out-Null
-          if ($LASTEXITCODE -ne 0) { throw 'Failed to restrict runner-private SSH key ACL' }
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to set SYSTEM owner on runner-private key' }
+          & icacls.exe $private /inheritance:r | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to remove inherited runner-private key ACLs' }
+          & icacls.exe $private /grant:r '*S-1-5-18:(R)' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to reduce runner-private key ACL to SYSTEM read-only' }
           Write-Host '=== RUNNER PRIVATE KEY ACL ==='
           icacls $private
           $bytes=[IO.File]::ReadAllBytes($private)
