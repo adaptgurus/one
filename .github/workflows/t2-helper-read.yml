@@ -1,9 +1,7 @@
 name: T2 Qualification Helper Read
 
 on:
-  push:
-    branches:
-      - ops/t2-foundation-live-qual-20260921
+  workflow_dispatch: {}
 
 permissions:
   contents: read
