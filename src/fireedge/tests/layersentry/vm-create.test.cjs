@@ -265,8 +265,8 @@ test('cloud resource request creates only a simple data disk and selected networ
   assert.deepEqual(result.NIC, [{ NETWORK_ID: '0', MODEL: 'virtio' }])
 })
 
-test('managed IPv4 VNet emits explicit guest method while honoring provider DHCP', () => {
-  const staticResult = api.applyLayerSentryCloudResources(
+test('LayerSentry leaves NIC METHOD to native OpenNebula network semantics', () => {
+  const automatic = api.applyLayerSentryCloudResources(
     {},
     { networkId: '0', ipAssignment: 'AUTO', networkQosEnabled: false },
     {
@@ -276,20 +276,25 @@ test('managed IPv4 VNet emits explicit guest method while honoring provider DHCP
       },
     }
   )
-  assert.equal(staticResult.NIC[0].METHOD, 'static')
+  assert.equal(automatic.NIC[0].METHOD, undefined)
 
-  const dhcpResult = api.applyLayerSentryCloudResources(
+  const selectedStatic = api.applyLayerSentryCloudResources(
     {},
-    { networkId: '1', ipAssignment: 'AUTO', networkQosEnabled: false },
+    {
+      networkId: '0',
+      ipAssignment: 'STATIC',
+      staticIp: '10.10.10.141',
+      networkQosEnabled: false,
+    },
     {
       network: {
-        ID: '1',
-        TEMPLATE: { METHOD: 'dhcp' },
-        AR_POOL: { AR: { TYPE: 'IP4', IP: '10.20.0.100' } },
+        ID: '0',
+        AR_POOL: { AR: { TYPE: 'IP4', IP: '10.10.10.100' } },
       },
     }
   )
-  assert.equal(dhcpResult.NIC[0].METHOD, 'dhcp')
+  assert.equal(selectedStatic.NIC[0].IP, '10.10.10.141')
+  assert.equal(selectedStatic.NIC[0].METHOD, undefined)
 })
 
 test('data-disk policy is OS-aware while hiding format and filesystem from customers', () => {
