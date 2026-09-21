@@ -1,0 +1,126 @@
+name: T2 Safe Exact Reinstall
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-safe-reinstall.yml
+      - qualification/t2-safe-reinstall.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-safe-reinstall-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  reinstall:
+    runs-on: self-hosted
+    timeout-minutes: 35
+    steps:
+      - name: Recreate exact disposable Gen2 VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $root='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual'
+          $vhd=Join-Path $root 'os.vhdx'
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $switch='layersentry vswtich'
+          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+          if($sha -ne '11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'){throw "ISO digest mismatch: $sha"}
+          $old=Get-VM -Name $name -ErrorAction SilentlyContinue
+          if($old){if($old.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force}; Remove-VM -Name $name -Force}
+          if(Test-Path $root){Remove-Item $root -Recurse -Force}
+          New-Item -ItemType Directory -Force -Path $root | Out-Null
+          New-VHD -Path $vhd -Dynamic -SizeBytes 80GB | Out-Null
+          New-VM -Name $name -Generation 2 -MemoryStartupBytes 2GB -VHDPath $vhd -SwitchName $switch | Out-Null
+          Set-VMProcessor -VMName $name -Count 2
+          Set-VM -Name $name -AutomaticCheckpointsEnabled $false
+          Set-VMFirmware -VMName $name -EnableSecureBoot On -SecureBootTemplate 'MicrosoftUEFICertificateAuthority'
+          Add-VMDvdDrive -VMName $name -Path $iso
+          $dvd=Get-VMDvdDrive -VMName $name
+          Set-VMFirmware -VMName $name -FirstBootDevice $dvd
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $vhd){throw 'Fresh disposable disk binding invalid'}
+          Write-Host "FRESH_DISPOSABLE_VM=PASS sha=$sha"
+
+      - name: Boot and wait through media validation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Start-VM -Name 'ls-appliance-4c4ac81-qual'
+          Start-Sleep -Seconds 240
+          $vm=Get-VM -Name 'ls-appliance-4c4ac81-qual'
+          if($vm.State -ne 'Running'){throw "VM not running after media-validation wait: $($vm.State)"}
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\safe-reinstall-summary-before-navigation.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $vm.Name -Out $out
+          Write-Host "MEDIA_WAIT_DONE screenshot=$out"
+
+      - name: Configure verified disposable installation destination
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          function Key([uint32]$v){$r=$kb.TypeKey($v); if($r.ReturnValue -ne 0){throw "TypeKey failed: $v"}}
+          Key 0x35; Start-Sleep -Milliseconds 300; Key 0x0D; Start-Sleep -Seconds 3
+          Key 0x43; Start-Sleep -Milliseconds 300; Key 0x0D; Start-Sleep -Seconds 2
+          Key 0x32; Start-Sleep -Milliseconds 300; Key 0x0D; Start-Sleep -Seconds 2
+          Key 0x43; Start-Sleep -Milliseconds 300; Key 0x0D; Start-Sleep -Seconds 2
+          Key 0x43; Start-Sleep -Milliseconds 300; Key 0x0D; Start-Sleep -Seconds 4
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\safe-reinstall-ready-to-begin.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          if(-not (Test-Path $out)){throw 'Ready-to-begin framebuffer missing'}
+          Write-Host "INSTALL_DESTINATION_CONFIGURED=PASS screenshot=$out"
+
+      - name: Begin installation without touching DVD media
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $expectedIso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          $dvd=Get-VMDvdDrive -VMName $name
+          if($dvd.Path -ne $expectedIso){throw 'Exact DVD binding changed before begin'}
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          $r1=$kb.TypeKey([uint32]0x42); Start-Sleep -Milliseconds 300; $r2=$kb.TypeKey([uint32]0x0D)
+          if($r1.ReturnValue -ne 0 -or $r2.ReturnValue -ne 0){throw 'Begin-install key injection failed'}
+          Start-Sleep -Seconds 10
+          $disk=Get-VMHardDiskDrive -VMName $name | Select-Object -First 1
+          Set-VMFirmware -VMName $name -FirstBootDevice $disk
+          $dvdAfter=Get-VMDvdDrive -VMName $name
+          if($dvdAfter.Path -ne $expectedIso){throw 'DVD media changed while setting next boot'}
+          Write-Host 'INSTALL_STARTED_AND_DVD_UNTOUCHED=PASS'
+
+      - name: Wait fixed completion window without media operations
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $expectedIso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          Start-Sleep -Seconds 600
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction Stop
+          if($dvd.Path -ne $expectedIso){throw 'DVD media changed during fixed installation window'}
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\safe-reinstall-after-10min.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          if(-not (Test-Path $out)){throw 'Post-install wait framebuffer missing'}
+          $hb=Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue
+          $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object {$_ -and $_ -notlike 'fe80:*'})
+          Write-Host "POST_WAIT state=$($vm.State) heartbeat=$($hb.PrimaryStatusDescription) ips=$($ips -join ',') vhd_bytes=$((Get-Item 'C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx').Length)"
+
+      - name: Upload safe reinstall checkpoints
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-safe-reinstall-checkpoints
+          path: |
+            C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\safe-reinstall-ready-to-begin.png
+            C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\safe-reinstall-after-10min.png
+          if-no-files-found: error
+          retention-days: 7
