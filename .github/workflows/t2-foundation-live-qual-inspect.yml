@@ -25,9 +25,13 @@ jobs:
           if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
           $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
           if(-not(Test-Path $iso)){throw 'Exact ISO missing'}
-          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
-          if($sha -ne '11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'){throw "ISO SHA mismatch $sha"}
-          Write-Host "EXACT_ISO=PASS $sha"
+          $evidence='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\build-evidence.json'
+          if(-not(Test-Path $evidence)){throw 'Exact build evidence missing'}
+          $e=Get-Content $evidence -Raw | ConvertFrom-Json
+          if($e.target_commit -ne '4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'){throw 'Build evidence target mismatch'}
+          if($e.iso_sha256 -ne '11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'){throw 'Build evidence SHA mismatch'}
+          if((Get-Item $iso).Length -ne 15208218624){throw 'Exact ISO size mismatch'}
+          Write-Host "EXACT_ISO=PASS SHA=$($e.iso_sha256) SIZE=$((Get-Item $iso).Length)"
 
       - name: Bind disposable qualification VMs
         shell: powershell
