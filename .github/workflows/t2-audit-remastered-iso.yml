@@ -1,0 +1,59 @@
+name: T2 Audit Remastered ISO Payload
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-audit-remastered-iso.yml
+      - qualification/t2-audit-remastered-iso.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-audit-remastered-iso
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    steps:
+      - name: Mount and audit exact generated ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          if(-not (Test-Path $iso)){throw 'Generated ISO missing'}
+          $img=Get-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue
+          if(-not $img.Attached){$img=Mount-DiskImage -ImagePath $iso -StorageType ISO -PassThru}
+          Start-Sleep -Seconds 3
+          $vol=$img | Get-Volume | Where-Object DriveLetter | Select-Object -First 1
+          if(-not $vol){throw 'Mounted ISO has no drive letter'}
+          $root="$($vol.DriveLetter):\"
+          Write-Host "ISO_ROOT=$root LABEL=$($vol.FileSystemLabel) SIZE=$($vol.Size)"
+          $matches=@(Get-ChildItem -LiteralPath (Join-Path $root 'AppStream\Packages\n') -Filter 'nbdkit*.rpm' -File -ErrorAction Stop)
+          if($matches.Count -eq 0){throw 'No nbdkit RPM exists in generated ISO AppStream/Packages/n'}
+          foreach($m in $matches){
+            $h=(Get-FileHash -Algorithm SHA256 -LiteralPath $m.FullName).Hash.ToLowerInvariant()
+            Write-Host "RPM name=$($m.Name) bytes=$($m.Length) sha256=$h"
+          }
+          $target=$matches | Where-Object Name -eq 'nbdkit-1.38.5-12.el9.x86_64.rpm' | Select-Object -First 1
+          if(-not $target){throw 'Exact RPM requested by Anaconda is absent from generated ISO'}
+          $fs=[IO.File]::OpenRead($target.FullName)
+          try{
+            $buf=New-Object byte[] 4096
+            $read=$fs.Read($buf,0,$buf.Length)
+            if($read -le 0){throw 'Exact RPM cannot be read'}
+            Write-Host "EXACT_RPM_READ=PASS bytes_read=$read file_bytes=$($target.Length)"
+          }finally{$fs.Dispose()}
+          Write-Host 'GENERATED_ISO_PAYLOAD_AUDIT=PASS'
+
+      - name: Dismount generated ISO
+        if: always()
+        shell: powershell
+        run: |
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          Dismount-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue
