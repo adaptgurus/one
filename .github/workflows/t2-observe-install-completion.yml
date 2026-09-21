@@ -1,0 +1,66 @@
+name: T2 Observe Install Completion
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-observe-install-completion.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-install-4c4ac81
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    runs-on: self-hosted
+    timeout-minutes: 12
+    steps:
+      - name: Bind exact disposable guest
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $vhd){throw 'Disposable disk binding changed'}
+          Write-Host "PREWAIT state=$($vm.State) vhd_file_bytes=$((Get-Item $vhd).Length)"
+
+      - name: Allow Anaconda to finish
+        shell: powershell
+        run: Start-Sleep -Seconds 300
+
+      - name: Observe completion state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-4c4ac81-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $hb=(Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue).PrimaryStatusDescription
+          $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object {$_ -match '^\d+\.'})
+          $dvd=Get-VMDvdDrive -VMName $name
+          $fw=Get-VMFirmware -VMName $name
+          Write-Host "POSTWAIT state=$($vm.State) uptime=$($vm.Uptime) heartbeat=$hb ips=$($ips -join ',') vhd_file_bytes=$((Get-Item $vhd).Length) dvd=$($dvd.Path) firstboot=$($fw.BootOrder[0].BootType)"
+
+      - name: Capture completion framebuffer
+        shell: powershell
+        run: |
+          $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $out=Join-Path $dir 'install-completion-observer.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'Completion framebuffer missing'}
+
+      - name: Upload completion framebuffer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-install-completion-observer
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\install-completion-observer.png
+          if-no-files-found: error
+          retention-days: 7
