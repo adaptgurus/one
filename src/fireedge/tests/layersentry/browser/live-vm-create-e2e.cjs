@@ -38,6 +38,7 @@ const main = async () => {
   const pageErrors = []
   const consoleErrors = []
   const failedRequests = []
+  const httpErrors = []
   const mutationRequests = []
 
   page.on('pageerror', (error) => pageErrors.push(String(error)))
@@ -50,6 +51,10 @@ const main = async () => {
       url: request.url(),
       error: request.failure()?.errorText,
     })
+  })
+  page.on('response', (response) => {
+    if (response.status() < 400 || /favicon/i.test(response.url())) return
+    httpErrors.push({ status: response.status(), url: response.url() })
   })
   page.on('request', (request) => {
     if (request.method() === 'GET') return
@@ -89,12 +94,12 @@ const main = async () => {
     })
     await assertNoCapabilityBlock(page)
 
-    const vmNameInput = page.locator('input[name="general.name"]')
+    const vmNameInput = page.locator('[data-cy="information-name"]')
     await vmNameInput.waitFor({ timeout: 30000 })
     await vmNameInput.fill(vmName)
     await next(page)
 
-    await page.locator('input[name="access.username"]').waitFor({
+    await page.locator('[data-cy="layersentry-vm-access-username"]').waitFor({
       timeout: 30000,
     })
     await next(page)
@@ -143,10 +148,23 @@ const main = async () => {
       pageErrors,
       consoleErrors,
       failedRequests,
+      httpErrors,
     }
     fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2))
     process.stdout.write(JSON.stringify(evidence, null, 2) + '\n')
   } catch (error) {
+    const bodyText = await page.locator('body').innerText().catch(() => '')
+    const inputs = await page
+      .locator('input')
+      .evaluateAll((nodes) =>
+        nodes.slice(0, 80).map((node) => ({
+          name: node.getAttribute('name'),
+          type: node.getAttribute('type'),
+          dataCy: node.getAttribute('data-cy'),
+          visible: Boolean(node.offsetWidth || node.offsetHeight || node.getClientRects().length),
+        }))
+      )
+      .catch(() => [])
     const evidence = {
       status: 'FAIL',
       baseUrl,
@@ -158,6 +176,9 @@ const main = async () => {
       pageErrors,
       consoleErrors,
       failedRequests,
+      httpErrors,
+      bodyText: bodyText.slice(0, 6000),
+      inputs,
       error: String(error?.stack || error),
     }
     fs.writeFileSync(evidencePath, JSON.stringify(evidence, null, 2))
