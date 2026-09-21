@@ -1,0 +1,68 @@
+name: T2 Foundation Live Qualification Inspect
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-live-qual-20260921
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-foundation-live-qualification
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: self-hosted
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj runner and exact ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
+          $iso='C:\LayerSentryLab\qualification\4c4ac81\LayerSentry-Rocky-9.8-4c4ac81-generic-x86_64.iso'
+          if(-not(Test-Path $iso)){throw 'Exact ISO missing'}
+          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+          if($sha -ne '11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'){throw "ISO SHA mismatch $sha"}
+          Write-Host "EXACT_ISO=PASS $sha"
+
+      - name: Bind disposable qualification VMs
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($n in @('ls-appliance-dbe-qual','ls-appliance-qual')){
+            $vm=Get-VM -Name $n -ErrorAction Stop
+            Write-Host "=== $n ==="
+            $vm | Select Name,State,Generation,ProcessorCount,MemoryAssigned,AutomaticCheckpointsEnabled | Format-List
+            Get-VMHardDiskDrive -VMName $n | Select ControllerType,ControllerNumber,ControllerLocation,Path | Format-Table -AutoSize
+            Get-VMDvdDrive -VMName $n | Select ControllerNumber,ControllerLocation,Path | Format-Table -AutoSize
+            Get-VMNetworkAdapter -VMName $n | Select Name,SwitchName,MacAddress,IPAddresses | Format-List
+          }
+          $productionNames=Get-VM | Where-Object {$_.Name -match '^ls-(fe[123]|kvm[12])$'} | Select-Object -ExpandProperty Name
+          Write-Host "PROTECTED_VMS=$($productionNames -join ',')"
+
+      - name: Inventory non-secret qualification helpers
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          $names=@(
+            'capture_vm_thumbnail.ps1',
+            'send_anaconda_command.ps1',
+            'vm_type_cmd.ps1',
+            'vm_type_diag.ps1',
+            'vm_enroll_testlab.ps1',
+            'vm_full_enroll_testlab.ps1',
+            'fix-oneswap-bootorder.ps1'
+          )
+          foreach($name in $names){
+            $p=Join-Path $root $name
+            Write-Host "=== HELPER $name present=$(Test-Path $p) ==="
+            if(Test-Path $p){
+              Get-Item $p | Select FullName,Length,LastWriteTime | Format-List
+              Select-String -Path $p -Pattern 'param\(|SendKey|TypeKey|Msvm_Keyboard|capture|VMName|VM ' -CaseSensitive:$false | Select-Object -First 40 LineNumber,Line | Format-Table -Wrap -AutoSize
+            }
+          }
