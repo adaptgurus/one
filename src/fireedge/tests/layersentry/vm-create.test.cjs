@@ -451,3 +451,28 @@ test('Compute workspace exposes one Create VM action', () => {
   assert.equal((compute.match(/>\s*Create VM\s*</g) || []).length, 1)
   assert.match(compute, /CAPABILITY_IDS\.VM_CREATE/)
 })
+
+
+test('hidden schema field types never return undefined from FieldComponent', () => {
+  const formWithSchema = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/components/composed/Forms/FormWithSchema/index.js'
+    ),
+    'utf8'
+  )
+  const resources = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources/schema.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(resources, /type:\s*storageIopsSupported\(vmTemplate\)\s*\?\s*enabledSwitch\s*:\s*INPUT_TYPES\.HIDDEN/)
+  assert.match(
+    formWithSchema,
+    /type\s*===\s*INPUT_TYPES\.HIDDEN\s*\|\|\s*htmlType\s*===\s*INPUT_TYPES\.HIDDEN/
+  )
+  assert.match(formWithSchema, /if \(isHidden\) return null/)
+})
