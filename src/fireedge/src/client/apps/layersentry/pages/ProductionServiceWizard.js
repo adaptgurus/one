@@ -61,6 +61,7 @@ import {
   LICENSE_NOTICES,
   SERVICE_BLUEPRINT_API,
   WIZARD_STEPS,
+  compilePlatformDesiredState,
   createDraft,
   getArchitecturePlan,
   getBackupProfile,
@@ -1848,6 +1849,7 @@ const ProductionServiceWizard = () => {
           edition: draft.edition || undefined,
           topology: draft.topology,
           desiredState: sanitizeDesign(draft),
+          platformDesiredState: compilePlatformDesiredState(draft, blueprint),
         }),
       })
       const payload = await response.json()
