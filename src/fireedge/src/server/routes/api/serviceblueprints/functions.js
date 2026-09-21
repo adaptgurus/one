@@ -30,6 +30,9 @@ const {
 const { defaultEmptyFunction } = defaults
 const { ok, badRequest, conflict, serviceUnavailable } = httpCodes
 
+const responseForStatus = (status) =>
+  Object.values(httpCodes).find(({ id }) => id === status) || serviceUnavailable
+
 const blocked = (code, message, extra = {}) => ({
   deployable: false,
   blockers: [{ code, message }],
@@ -64,6 +67,8 @@ const list = (res = {}, next = defaultEmptyFunction) => {
  * @param {object} res - HTTP response
  * @param {Function} next - Express stepper
  * @param {object} params - Requested service tuple
+ * @param {object} userData - authenticated FireEdge user data
+ * @param {Function} oneConnection - OpenNebula XML-RPC connection factory
  */
 const preflight = (
   res = {},
@@ -186,7 +191,10 @@ const preflight = (
         upstreamData &&
         typeof upstreamData === 'object'
       ) {
-        res.locals.httpCode = httpResponse(upstreamStatus, upstreamData)
+        res.locals.httpCode = httpResponse(
+          responseForStatus(upstreamStatus),
+          upstreamData
+        )
         next()
 
         return
@@ -240,6 +248,7 @@ const deploy = (
       )
     )
     next()
+
     return
   }
 
@@ -254,6 +263,7 @@ const deploy = (
       )
     )
     next()
+
     return
   }
 
@@ -270,6 +280,7 @@ const deploy = (
       )
     )
     next()
+
     return
   }
 
@@ -300,8 +311,12 @@ const deploy = (
         upstreamData &&
         typeof upstreamData === 'object'
       ) {
-        res.locals.httpCode = httpResponse(upstreamStatus, upstreamData)
+        res.locals.httpCode = httpResponse(
+          responseForStatus(upstreamStatus),
+          upstreamData
+        )
         next()
+
         return
       }
 

@@ -2161,7 +2161,8 @@ const ProductionServiceWizard = () => {
 
         {deploymentState.status === 'accepted' && (
           <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
-            Deployment accepted. Operation {deploymentState.result?.operation_id}
+            Deployment accepted. Operation{' '}
+            {deploymentState.result?.operation_id}
             {' · '}stage {deploymentState.result?.stage}.
           </Alert>
         )}

@@ -279,6 +279,7 @@ test('proxy credentials are optional, proxy URL is validated and password is san
 test('wizard compiles a durable backend desired state without customer OS or host placement', () => {
   const blueprint = api.getBlueprintById('nginx')
   const draft = makeValid(blueprint)
+  draft.topology = 'Standalone'
   draft.ipMode = 'Static'
   draft.staticIps = '10.20.30.41'
   const desired = api.compilePlatformDesiredState(draft, blueprint)
@@ -371,8 +372,9 @@ test('portal routes Applications deploy to the production-service wizard', () =>
   assert.match(wizard, /Required dependency plan/)
   assert.match(wizard, /TLS certificate source/)
   assert.match(wizard, /Proxy password \(optional\)/)
-  assert.match(wizard, /const DEPLOYMENT_ACTION_AVAILABLE = false/)
-  assert.match(wizard, /!DEPLOYMENT_ACTION_AVAILABLE/)
+  assert.match(wizard, /runAuthoritativeDeploy/)
+  assert.match(wizard, /\$\{SERVICE_BLUEPRINT_API\}\/deploy/)
+  assert.match(wizard, /idempotencyKey: deploymentKey/)
   assert.doesNotMatch(wizard, /preferredOs|LayerSentry selected OS|Rocky Linux|Ubuntu 24\.04/)
 })
 
@@ -652,7 +654,8 @@ test('FireEdge registers authenticated production-service catalog, preflight and
   assert.match(functionsSource, /platformRequest/)
   assert.match(functionsSource, /\/v1\/vm-services\/preflight/)
   assert.doesNotMatch(functionsSource, /findQualifiedTuple/)
-  assert.match(functionsSource, /SERVICE_BLUEPRINT_DEPLOYMENT_DISABLED/)
+  assert.match(functionsSource, /\/v1\/vm-services\/deploy/)
+  assert.match(functionsSource, /idempotencyKey/)
   assert.doesNotMatch(functionsSource, /productionSelectable:\s*true/)
 })
 
@@ -727,6 +730,16 @@ test('runtime service-blueprint handlers delegate tuple authority and fail close
 
   platform.platformRequest = async (request) => {
     observedPlatformRequest = request
+    if (request.path === '/v1/vm-services/deploy') {
+      return {
+        accepted: true,
+        replay: false,
+        operation_id: 'op-test',
+        service_id: request.data.service_id,
+        stage: 'DRAFT',
+        status: 'PENDING',
+      }
+    }
     const error = new Error('tuple not promoted')
     error.response = {
       status: 409,
@@ -845,16 +858,25 @@ test('runtime service-blueprint handlers delegate tuple authority and fail close
       )
     )
 
-    const deployResponse = invoke(handlers.deploy, {
+    const deployResponse = await invokeAsync(handlers.deploy, {
       blueprintId: 'postgresql',
       version: '18',
       topology: '3-node HA',
+      serviceId: 'postgres-prod',
+      idempotencyKey: 'idem-test-1',
+      desiredState: validDesiredState,
+      platformDesiredState: validPlatformDesiredState,
     })
-    assert.equal(deployResponse.id, 503)
-    assert.equal(deployResponse.data.deployable, false)
-    assert.equal(
-      deployResponse.data.blockers[0].code,
-      'SERVICE_BLUEPRINT_DEPLOYMENT_DISABLED'
+    assert.equal(deployResponse.id, 200)
+    assert.equal(deployResponse.data.accepted, true)
+    assert.equal(deployResponse.data.operation_id, 'op-test')
+    assert.equal(observedPlatformRequest.method, 'POST')
+    assert.equal(observedPlatformRequest.path, '/v1/vm-services/deploy')
+    assert.equal(observedPlatformRequest.idempotencyKey, 'idem-test-1')
+    assert.equal(observedPlatformRequest.data.service_id, 'postgres-prod')
+    assert.deepEqual(
+      observedPlatformRequest.data.desired_state,
+      validPlatformDesiredState
     )
   } finally {
     platform.platformRequest = originalPlatformRequest
