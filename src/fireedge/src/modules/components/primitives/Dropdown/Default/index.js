@@ -222,7 +222,6 @@ export const Dropdown = forwardRef(
         disabled={isDisabled}
         disableCloseOnSelect={disableCloseOnSelect}
         open={open}
-        onOpen={() => setOpen(true)}
         onClose={() => setOpen(false)}
         ref={ref}
         className="dropdown"
@@ -272,7 +271,7 @@ export const Dropdown = forwardRef(
           <InputField
             onClick={() => {
               if (isDisabled) return
-              setOpen(true)
+              setOpen((prev) => !prev)
             }}
             className={'dropdown-input-wrapper'}
             ref={inputRef}
