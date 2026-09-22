@@ -78,7 +78,7 @@ const ComputeWorkspace = ({ endpoints }) => {
   const vms = toArray(query.data)
   const running = vms.filter(({ STATE }) => String(STATE) === '3').length
   const totalCpu = vms.reduce(
-    (sum, vm) => sum + Number(vm?.TEMPLATE?.CPU ?? vm?.TEMPLATE?.VCPU ?? 0),
+    (sum, vm) => sum + Number(vm?.TEMPLATE?.VCPU ?? vm?.TEMPLATE?.CPU ?? 0),
     0
   )
   const totalMemoryMb = vms.reduce(
