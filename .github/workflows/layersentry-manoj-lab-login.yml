@@ -64,8 +64,13 @@ jobs:
               for candidate in candidates:
                   if not candidate.is_file():
                       continue
-                  password = candidate.read_text(encoding="utf-8").strip()
+                  try:
+                      password = candidate.read_text(encoding="utf-8").strip()
+                  except (OSError, PermissionError):
+                      print(f"CREDENTIAL_UNREADABLE FILE={candidate.name}")
+                      continue
                   if not password:
+                      print(f"CREDENTIAL_EMPTY FILE={candidate.name}")
                       continue
                   client = paramiko.SSHClient()
                   client.set_missing_host_key_policy(paramiko.RejectPolicy())
