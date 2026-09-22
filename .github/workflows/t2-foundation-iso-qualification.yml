@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-iso-qualification.yml
+      - qualification/t2-foundation-runner-probe-20260921.request
 
 permissions:
   contents: read
