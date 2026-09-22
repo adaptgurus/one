@@ -1,0 +1,58 @@
+name: LayerSentry stage independent recovery artifact
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-stage-recovery-artifact.yml
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  stage:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Download exact recovery artifact from qualified run
+        uses: actions/download-artifact@v4
+        with:
+          name: vm220-independent-recovery
+          path: ${{ runner.temp }}\vm220-independent-recovery
+          github-token: ${{ github.token }}
+          repository: adaptgurus/one
+          run-id: 35796341266
+
+      - name: Verify and persist recovery artifact
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $src = Join-Path $env:RUNNER_TEMP 'vm220-independent-recovery'
+          $disk = Join-Path $src 'vm220-dr-recovered.qcow2'
+          $sumFile = Join-Path $src 'vm220-dr-recovered.qcow2.sha256'
+          $manifestFile = Join-Path $src 'vm220-recovery-manifest.json'
+          if (-not (Test-Path $disk)) { throw 'recovered disk missing' }
+          if (-not (Test-Path $sumFile)) { throw 'recovered checksum missing' }
+          if (-not (Test-Path $manifestFile)) { throw 'recovery manifest missing' }
+
+          $expected = ((Get-Content $sumFile -Raw).Trim() -split '\s+')[0].ToLowerInvariant()
+          $manifest = Get-Content $manifestFile -Raw | ConvertFrom-Json
+          $actual = (Get-FileHash $disk -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $expected) { throw 'artifact SHA mismatch' }
+          if ($actual -ne $manifest.disk_sha256) { throw 'manifest SHA mismatch' }
+          if ($manifest.checkpoint_id -ne 'tester-vm220-20260923') { throw 'checkpoint identity mismatch' }
+          if ($manifest.recovery_site -ne 'manoj') { throw 'recovery site mismatch' }
+          if ($manifest.materialization -ne 'recovery_repository_only') { throw 'materialization provenance mismatch' }
+
+          $dest = 'C:\LayerSentryLab\dr-recovery\tester-vm220-20260923'
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item $disk (Join-Path $dest 'vm220-dr-recovered.qcow2') -Force
+          Copy-Item $sumFile (Join-Path $dest 'vm220-dr-recovered.qcow2.sha256') -Force
+          Copy-Item $manifestFile (Join-Path $dest 'vm220-recovery-manifest.json') -Force
+
+          Write-Host 'MANOJ_RECOVERY_ARTIFACT_STAGED=PASS'
+          Write-Host "DISK_SHA256=$actual"
+          Write-Host "STAGED_PATH=$dest"
