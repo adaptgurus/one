@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  continue-install:
+  inspect:
     runs-on: [self-hosted, windows, x64]
-    timeout-minutes: 50
+    timeout-minutes: 10
     steps:
-      - name: Bind existing disposable VM
+      - name: Bind existing disposable VM without mutation
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -27,94 +27,19 @@ jobs:
           if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
           $name='ls-appliance-4c4ac81-qual'
           $vm=Get-VM -Name $name -ErrorAction Stop
-          if($vm.State -ne 'Running'){throw "Qualification VM is not running: $($vm.State)"}
           $fw=Get-VMFirmware -VMName $name
-          if($fw.SecureBoot -ne 'Off'){throw "Secure Boot is not disabled: $($fw.SecureBoot)"}
-          $dvd=Get-VMDvdDrive -VMName $name
-          if(-not $dvd.Path){throw 'Qualification ISO is not mounted'}
-          Write-Host "CONTINUE_BIND=PASS SECURE_BOOT=OFF DVD=$($dvd.Path)"
-
-      - name: Select Anaconda destination and begin installation
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
+          Write-Host "VM_STATE=$($vm.State) UPTIME=$($vm.Uptime) SECURE_BOOT=$($fw.SecureBoot) DVD=$($dvd.Path)"
+          if($fw.SecureBoot -ne 'Off'){throw "Secure Boot is not disabled"}
+      - name: Capture exact current console
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           $name='ls-appliance-4c4ac81-qual'
-          function Get-Keyboard {
-            $vm = Get-CimInstance -Namespace root/virtualization/v2 -ClassName Msvm_ComputerSystem |
-              Where-Object { $_.ElementName -eq $name } | Select-Object -First 1
-            if(-not $vm){throw 'Hyper-V WMI VM object not found'}
-            $kbd = Get-CimAssociatedInstance -InputObject $vm -Namespace root/virtualization/v2 -ResultClassName Msvm_Keyboard | Select-Object -First 1
-            if(-not $kbd){throw 'Hyper-V virtual keyboard not found'}
-            return $kbd
-          }
-          function Send-Text([string]$text){
-            $r=Invoke-CimMethod -InputObject (Get-Keyboard) -MethodName TypeText -Arguments @{asciiText=$text}
-            if([int]$r.ReturnValue -ne 0){throw "TypeText failed rc=$($r.ReturnValue)"}
-          }
-          function Send-Key([uint32]$key){
-            $r=Invoke-CimMethod -InputObject (Get-Keyboard) -MethodName TypeKey -Arguments @{keyCode=$key}
-            if([int]$r.ReturnValue -ne 0){throw "TypeKey $key failed rc=$($r.ReturnValue)"}
-          }
-          function Enter-Line([string]$text){ Send-Text $text; Start-Sleep -Milliseconds 500; Send-Key 13 }
-          function Capture([string]$tag){
-            $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
-            $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
-            New-Item -ItemType Directory -Force -Path $dir | Out-Null
-            $out=Join-Path $dir ($tag + '.png')
-            & $script -VM $name -Out $out
-            if(-not (Test-Path $out)){throw "screenshot failed: $tag"}
-            Write-Host ("SCREENSHOT_"+$tag+"_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
-          }
-
-          Capture '10-ready-menu'
-          Enter-Line '5'
-          Start-Sleep -Seconds 8
-          Capture '11-destination-menu'
-          Enter-Line '1'
-          Start-Sleep -Seconds 4
-          Capture '12-disk-selected'
-          Enter-Line 'c'
-          Start-Sleep -Seconds 12
-          Capture '13-summary-after-disk'
-          Enter-Line 'b'
-          Start-Sleep -Seconds 20
-          Capture '14-install-after-b'
-          Write-Host 'ANACONDA_DESTINATION_SEQUENCE_SUBMITTED=PASS'
-
-      - name: Wait for installation completion and boot installed VHD
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $name='ls-appliance-4c4ac81-qual'
-          $prev=[double](Get-VM -Name $name).Uptime.TotalSeconds
-          $transition=$false
-          for($i=0;$i -lt 420;$i++){
-            Start-Sleep -Seconds 5
-            $vm=Get-VM -Name $name
-            if($vm.State -eq 'Off'){ $transition=$true; Write-Host 'INSTALLER_TRANSITION=VM_OFF'; break }
-            $now=[double]$vm.Uptime.TotalSeconds
-            if($now + 20 -lt $prev){ $transition=$true; Write-Host "INSTALLER_REBOOT_DETECTED previous=$prev current=$now"; break }
-            $prev=$now
-          }
-          if(-not $transition){
-            $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
-            $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-continue-timeout.png'
-            & $script -VM $name -Out $out
-            if(Test-Path $out){Write-Host ("SCREENSHOT_continue_timeout_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))}
-            throw 'Installation did not reach reboot transition within 35 minutes'
-          }
-
-          $vm=Get-VM -Name $name
-          if($vm.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force}
-          $dvd=Get-VMDvdDrive -VMName $name
-          if($dvd){Set-VMDvdDrive -VMName $name -Path $null}
-          $disk=Get-VMHardDiskDrive -VMName $name | Where-Object ControllerLocation -eq 0 | Select-Object -First 1
-          Set-VMFirmware -VMName $name -FirstBootDevice $disk
-          Start-VM -Name $name
-          Start-Sleep -Seconds 120
-          $vm=Get-VM -Name $name
-          if($vm.State -ne 'Running'){throw "Installed VHD did not boot: $($vm.State)"}
-          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\15-installed-firstboot.png'
-          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
-          Write-Host ("SCREENSHOT_15_installed_firstboot_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
-          Write-Host 'INSTALLED_VHD_BOOT=PASS ISO_EJECTED=PASS SECURE_BOOT=OFF'
+          $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\current-anaconda-state.png'
+          New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+          & $script -VM $name -Out $out
+          if(-not (Test-Path $out)){throw 'current console screenshot not created'}
+          Write-Host ("SCREENSHOT_current_anaconda_state_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
+          Write-Host 'CURRENT_CONSOLE_CAPTURE=PASS'
