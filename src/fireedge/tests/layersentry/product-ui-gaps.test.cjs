@@ -97,6 +97,18 @@ test('VM inventory includes storage and live utilization without fabricating mis
   assert.match(bridge, /label="Disk use"/)
 })
 
+test('VM CPU utilization normalizes percent-of-one-CPU by allocated vCPU', () => {
+  const bridge = read(
+    'src/client/apps/layersentry/components/ResourceBridge.js'
+  )
+
+  assert.match(
+    bridge,
+    /Number\.isFinite\(cpuRaw\) \? cpuRaw \/ vcpu : NaN/
+  )
+  assert.doesNotMatch(bridge, /\(cpuRaw \/ vcpu\) \* 100/)
+})
+
 test('Super Admin VM editor keeps resize and details behind separate gates', () => {
   const compute = read('src/client/apps/layersentry/pages/ComputeWorkspace.js')
   const caps = read('src/client/apps/layersentry/capabilities.js')
