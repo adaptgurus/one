@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   firmware:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 15
     steps:
       - name: Inspect and disable Secure Boot
