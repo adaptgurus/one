@@ -1,0 +1,141 @@
+name: T2 Foundation Live Enrollment
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-enroll-live.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-foundation-enroll-live
+  cancel-in-progress: true
+
+jobs:
+  enroll:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind installed disposable appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $fw=Get-VMFirmware -VMName $name
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
+          if($vm.State -ne 'Running'){throw "Installed VM not running: $($vm.State)"}
+          if($fw.SecureBoot -ne 'Off'){throw 'Secure Boot unexpectedly enabled'}
+          if($dvd -and $dvd.Path){throw "Installer ISO is still mounted: $($dvd.Path)"}
+          Write-Host 'INSTALLED_APPLIANCE_BIND=PASS SECURE_BOOT=OFF ISO_EJECTED=PASS'
+
+      - name: Mint fresh one-time enrollment material
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          foreach($p in @(
+            "$q\prepare_fresh_enrollment_safe.py",
+            "$q\admin.token",
+            "$q\agent-ca.crt",
+            "$q\durable-support-current.password",
+            "$q\durable-root-current.password",
+            "$q\qual-support-ac7e14e-ed25519.pub",
+            "$q\vm_full_enroll_testlab.ps1"
+          )){ if(-not (Test-Path $p)){throw "Missing qualification input: $p"}}
+          python "$q\prepare_fresh_enrollment_safe.py"
+          if($LASTEXITCODE -ne 0){throw 'Fresh bootstrap creation failed'}
+          $token="$q\appliance-bootstrap.token"
+          if(-not (Test-Path $token)){throw 'Fresh bootstrap token file missing'}
+          $len=(Get-Item $token).Length
+          if($len -lt 32 -or $len -gt 4096){throw "Fresh bootstrap token length invalid: $len"}
+          Write-Host "FRESH_BOOTSTRAP=PASS bytes=$len site=qualification host=lsappliancequal management_ip=10.250.10.41"
+
+      - name: Enter first-console setup without exposing credentials
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $src=Get-Content -Raw "$q\vm_full_enroll_testlab.ps1"
+          $src=$src.Replace("'ls-appliance-qual'","'ls-appliance-4c4ac81-qual'")
+          $src=$src.Replace('qual-enrollment-ac7e14e.token','appliance-bootstrap.token')
+          $src=$src.Replace('qual-support-ac7e14e.password','durable-support-current.password')
+          $src=$src.Replace('qual-root-ac7e14e.password','durable-root-current.password')
+          $tmp=Join-Path $env:RUNNER_TEMP 't2-full-enroll-current.ps1'
+          Set-Content -LiteralPath $tmp -Value $src -Encoding utf8
+          & $tmp
+          if($LASTEXITCODE -ne 0){throw 'Console enrollment input helper failed'}
+          Remove-Item $tmp -Force
+          Write-Host 'FIRST_CONSOLE_INPUT=PASS secrets_not_logged=true'
+
+      - name: Wait for management network and controller enrollment
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $deadline=(Get-Date).AddMinutes(5)
+          $ipSeen=$false
+          while((Get-Date) -lt $deadline){
+            $ips=(Get-VMNetworkAdapter -VMName 'ls-appliance-4c4ac81-qual').IPAddresses
+            if($ips -contains '10.250.10.41'){$ipSeen=$true; break}
+            Start-Sleep -Seconds 5
+          }
+          if(-not $ipSeen){throw 'Expected management IP 10.250.10.41 was not observed'}
+          Write-Host 'MANAGEMENT_IP=PASS'
+
+          $q='C:\LayerSentryLab\qualification'
+          $py=Join-Path $env:RUNNER_TEMP 't2-enrollment-state.py'
+          @'
+import json, pathlib, ssl, time, urllib.request
+q=pathlib.Path(r"C:\LayerSentryLab\qualification")
+token=q.joinpath("admin.token").read_text(encoding="ascii").strip()
+ctx=ssl.create_default_context(cafile=str(q/"agent-ca.crt"))
+deadline=time.time()+300
+found=None
+while time.time()<deadline:
+    req=urllib.request.Request("https://10.250.10.40:9443/v1/admin/state",method="GET")
+    req.add_header("Authorization","Bearer "+token)
+    try:
+        with urllib.request.urlopen(req,context=ctx,timeout=10) as r:
+            state=json.loads(r.read().decode())
+        found=(state.get("hosts") or {}).get("qualification/lsappliancequal")
+        if found:
+            break
+    except Exception:
+        pass
+    time.sleep(5)
+if not found:
+    raise SystemExit("enrolled host not found in controller state")
+inv=found.get("inventory") or {}
+print("CONTROLLER_ENROLLMENT=PASS")
+print("HOST_SITE="+str(found.get("site")))
+print("HOST_NAME="+str(found.get("host")))
+print("ENROLLMENT_MANAGEMENT_IP="+str(found.get("enrollment_management_ip")))
+print("INVENTORY_SCHEMA="+str(inv.get("schema")))
+print("SEALED="+str(inv.get("sealed")))
+'@ | Set-Content -LiteralPath $py -Encoding utf8
+          python $py
+          if($LASTEXITCODE -ne 0){throw 'Controller enrollment verification failed'}
+          Remove-Item $py -Force
+
+      - name: Verify support SSH and capture completed console
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $known=Join-Path $env:RUNNER_TEMP 't2-appliance-known-hosts'
+          ssh-keyscan.exe -T 10 10.250.10.41 2>$null | Set-Content -LiteralPath $known -Encoding ascii
+          if(-not (Test-Path $known) -or (Get-Item $known).Length -eq 0){throw 'Could not capture appliance SSH host key'}
+          $key="$q\qual-support-ac7e14e-ed25519"
+          if(-not (Test-Path $key)){throw 'Qualification support private key missing'}
+          ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key layersentry@10.250.10.41 "id -u; hostname; test -f /var/lib/layersentry/console-setup.done && echo CONSOLE_SETUP_DONE"
+          if($LASTEXITCODE -ne 0){throw 'Support SSH verification failed'}
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\enrollment-complete.png'
+          & "$q\capture_vm_thumbnail.ps1" -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'Enrollment completion screenshot missing'}
+          Write-Host ("SCREENSHOT_enrollment_complete_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
+          Write-Host 'LIVE_ENROLLMENT=PASS SUPPORT_SSH=PASS'
