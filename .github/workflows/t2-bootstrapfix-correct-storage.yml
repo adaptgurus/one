@@ -6,6 +6,7 @@ on:
       - ops/t2-install-4c4ac81
     paths:
       - .github/workflows/t2-bootstrapfix-correct-storage.yml
+      - qualification/t2-bootstrapfix-correct-storage.request
 
 permissions:
   contents: read
