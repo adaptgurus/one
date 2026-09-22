@@ -61,7 +61,7 @@ jobs:
           done
           echo "FRONTEND_TRUST=$found"
           '@
-          $clean=$script.Replace([char]13,'')
+          $clean=$script -replace "`r",''
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($clean))
           & $ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:LS_BUILDER_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | bash"
           if($LASTEXITCODE -ne 0){throw 'Two-site OpenNebula probe failed'}
