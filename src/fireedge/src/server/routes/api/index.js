@@ -54,6 +54,7 @@ const routes = [
   'oneflow',
   'oneform',
   'oneks',
+  'replicationv2',
   'serviceblueprints',
   'vm',
   'vmpool',
