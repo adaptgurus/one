@@ -1,0 +1,70 @@
+name: T2 Retrieve Qualified Enrollment Fix
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-retrieve-qualified-enrollment-fix.yml
+
+permissions:
+  contents: read
+
+jobs:
+  retrieve:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Prepare builder key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src='C:\LayerSentryLab\qualification\iso-builder-key'; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          foreach($p in @($src,$known)){if(-not(Test-Path $p)){throw "Missing $p"}}
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-retrieve-fix-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_RETRIEVE_KEY=$key" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Retrieve validated artifacts
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $scp=(Get-Command scp.exe).Source; $ssh=(Get-Command ssh.exe).Source
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $dst=Join-Path $env:RUNNER_TEMP 't2-qualified-enrollment-fix'
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          $remote='/home/builder/t2-enrollment-fix-build'
+          & $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_RETRIEVE_KEY builder@10.250.10.40 "test -s $remote/layersentry-host-agent -a -s $remote/layersentry-host-controller -a -s $remote/linux-gofmt.tar.gz && sha256sum $remote/layersentry-host-agent $remote/layersentry-host-controller"
+          if($LASTEXITCODE -ne 0){throw 'Validated builder artifacts missing'}
+          foreach($name in @('layersentry-host-agent','layersentry-host-controller','linux-gofmt.tar.gz')){
+            & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_RETRIEVE_KEY "builder@10.250.10.40:$remote/$name" (Join-Path $dst $name)
+            if($LASTEXITCODE -ne 0){throw "Transfer failed: $name"}
+          }
+          $agent=(Get-FileHash -Algorithm SHA256 (Join-Path $dst 'layersentry-host-agent')).Hash.ToLowerInvariant()
+          $controller=(Get-FileHash -Algorithm SHA256 (Join-Path $dst 'layersentry-host-controller')).Hash.ToLowerInvariant()
+          if($agent -ne 'c8fe6f7a761cba230b9f01ba998d66cd3b6844779b6139acdb2697a43e061f31'){throw "Agent hash mismatch $agent"}
+          if($controller -ne '83a2609fd47163f0dea44e846df1b067ae9693106e6ead9e57f8571487ab04bb'){throw "Controller hash mismatch $controller"}
+          "T2_RETRIEVE_DIR=$dst" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "QUALIFIED_ARTIFACTS=PASS agent=$agent controller=$controller"
+
+      - name: Upload qualified artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-qualified-enrollment-durability
+          path: ${{ env.T2_RETRIEVE_DIR }}
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Remove temporary key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_RETRIEVE_KEY -and(Test-Path $env:T2_RETRIEVE_KEY)){& icacls.exe $env:T2_RETRIEVE_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_RETRIEVE_KEY -Force}
