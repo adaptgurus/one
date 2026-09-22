@@ -1,0 +1,76 @@
+name: LayerSentry two-site OpenNebula frontend probe
+
+on:
+  push:
+    branches:
+      - ops/layersentry-live-qualification-20260919
+    paths:
+      - .github/workflows/layersentry-two-site-opennebula-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj runner and builder key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src='C:\\LayerSentryLab\\qualification\\iso-builder-key'
+          $known='C:\\LayerSentryLab\\qualification\\known_hosts_builder'
+          foreach($p in @($src,$known)){if(-not(Test-Path $p)){throw "Missing $p"}}
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 'ls-two-site-builder-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "LS_BUILDER_KEY=$key" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Probe builder to OpenNebula frontends
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $known='C:\\LayerSentryLab\\qualification\\known_hosts_builder'
+          $script=@'
+          set -euo pipefail
+          echo '=== BUILDER ==='
+          hostname
+          id -un
+          echo '=== BUILDER SSH MATERIAL NAMES ==='
+          find "$HOME/.ssh" -maxdepth 1 -type f -printf '%f %s\n' 2>/dev/null | sort || true
+          echo '=== FRONTEND BATCH SSH ==='
+          found=0
+          for ip in 10.250.10.10 10.250.10.11 10.250.10.13; do
+            for user in oneadmin root opc; do
+              out=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=no -o ConnectTimeout=4 "$user@$ip" 'printf "HOST=%s USER=%s\n" "$(hostname)" "$(id -un)"; command -v onezone || true' 2>/dev/null || true)
+              if [ -n "$out" ]; then
+                echo "$ip $user $out"
+                found=1
+                break
+              fi
+            done
+          done
+          echo "FRONTEND_TRUST=$found"
+          '@
+          $clean=$script.Replace([char]13,'')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($clean))
+          & $ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:LS_BUILDER_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'Two-site OpenNebula probe failed'}
+
+      - name: Remove temporary builder key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:LS_BUILDER_KEY -and(Test-Path $env:LS_BUILDER_KEY)){
+            & icacls.exe $env:LS_BUILDER_KEY /grant:r '*S-1-5-18:(F)' | Out-Null
+            Remove-Item $env:LS_BUILDER_KEY -Force
+          }
