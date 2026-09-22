@@ -32,6 +32,7 @@ test('capabilities fail closed on the full production gate chain', () => {
   assert.match(source, /HIDDEN_INCOMPATIBLE/)
   assert.match(source, /isCapabilityEnabled/)
   assert.match(source, /READ_ONLY_SAFE/)
+  assert.match(source, /CAPABILITY_IDS\.SITE_RECOVERY_DR/)
   assert.match(source, /mutation-safe read-only presentation/)
 })
 
@@ -356,7 +357,8 @@ test('deployment configuration prequalifies only proven read-only core inventori
   assert.ok(config.includes('  COMPUTE:'))
   assert.ok(config.includes('  BLUEPRINTS:'))
   assert.ok(config.includes('  AFFINITY:'))
-  assert.equal((config.match(/readOnly: true/g) ?? []).length, 3)
+  assert.ok(config.includes('  SITE_RECOVERY_DR:'))
+  assert.equal((config.match(/readOnly: true/g) ?? []).length, 4)
 
   for (const forbidden of [
     'VM_CREATE:',
@@ -364,7 +366,6 @@ test('deployment configuration prequalifies only proven read-only core inventori
     'KUBERNETES:',
     'APPLICATIONS_ONEFLOW:',
     'STORAGE_ONBOARDING:',
-    'SITE_RECOVERY_DR:',
   ]) {
     assert.ok(!config.includes(forbidden))
   }

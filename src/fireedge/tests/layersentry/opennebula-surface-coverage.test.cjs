@@ -95,6 +95,27 @@ test('site recovery never presents request metadata as active DR', () => {
   assert.match(recovery, /Ceph RBD mirroring/)
   assert.match(protection, /REQUEST_STATE: 'REQUESTED_NOT_ACTIVE'/)
 })
+
+test('site recovery uses durable Protection Domains and explicit Remote Site entry', () => {
+  const recovery = read(
+    'src/client/apps/layersentry/components/ProtectionDomainPanel.js'
+  )
+  const drClient = read('src/modules/features/OneApi/dr.js')
+  const drRoutes = read('src/server/routes/api/dr/routes.js')
+  const drFunctions = read('src/server/routes/api/dr/functions.js')
+
+  assert.match(recovery, /Protection Domain/)
+  assert.match(recovery, /Remote Site Endpoint/)
+  assert.match(recovery, /recovery_site_endpoint/)
+  assert.match(recovery, /Ship checkpoint now/)
+  assert.match(recovery, /saving the domain does not enable failover/i)
+  assert.match(drClient, /\/api\/dr\/protection-domains/)
+  assert.match(drRoutes, /protection-domains/)
+  assert.match(drFunctions, /X-LayerSentry-Gateway-Token/)
+  assert.match(drFunctions, /maxRedirects: 0/)
+  assert.match(drFunctions, /user !== 'oneadmin'/)
+})
+
 test('cloud-native images and VM blueprints are directly discoverable', () => {
   for (const label of ['Images', 'VM Blueprints']) {
     assert.match(

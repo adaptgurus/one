@@ -20,6 +20,7 @@ import BackupJobAPI from '@modules/features/OneApi/backupjobs'
 import ClusterAPI from '@modules/features/OneApi/cluster'
 import DatastoreAPI from '@modules/features/OneApi/datastore'
 import DriverAPI from '@modules/features/OneApi/driver'
+import DrAPI from '@modules/features/OneApi/dr'
 import GroupAPI from '@modules/features/OneApi/group'
 import HostAPI from '@modules/features/OneApi/host'
 import ImageAPI from '@modules/features/OneApi/image'
@@ -63,6 +64,7 @@ export {
   ClusterAPI,
   DatastoreAPI,
   DriverAPI,
+  DrAPI,
   DOCUMENT,
   DOCUMENT_POOL,
   GroupAPI,
