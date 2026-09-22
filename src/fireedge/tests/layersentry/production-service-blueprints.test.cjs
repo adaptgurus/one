@@ -43,6 +43,17 @@ const makeValid = (blueprint) => {
   draft.domain = 'prod.example.internal'
   draft.serviceFqdn = `${blueprint.id}.prod.example.internal`
   draft.serviceName = `${blueprint.id}-prod`
+  if (draft.endpointMode === 'Existing load balancer') {
+    draft.externalEndpoint = `vip://${blueprint.id}-prod`
+  }
+  const networkProfile = api.getNetworkProfile(draft, blueprint)
+  if (networkProfile.customerTraffic) {
+    draft.tlsCertificateRef = `secret://tests/${blueprint.id}/tls`
+  }
+  const credential = api.getCredentialProfile(blueprint)
+  if (credential.required) {
+    draft.credentialRef = `secret://tests/${blueprint.id}/credential`
+  }
 
   const backup = api.getBackupProfile(blueprint)
   if (backup.mode === 'direct' && draft.backupEnabled) {
@@ -226,7 +237,7 @@ test('backup ownership is product-specific and never genericized', () => {
   }
 })
 
-test('advanced network validation rejects bad static-IP, DNS and port input', () => {
+test('advanced network validation rejects bad static-IP and port input', () => {
   const blueprint = api.getBlueprintById('postgresql')
   const draft = makeValid(blueprint)
 
@@ -240,42 +251,22 @@ test('advanced network validation rejects bad static-IP, DNS and port input', ()
   assert.ok(errors.some(({ message }) => /exactly 3 address/.test(message)))
 
   draft.staticIps = '10.0.0.10,10.0.0.11,10.0.0.12'
-  draft.dnsRegistration = 'Manual DNS records'
-  draft.dnsTargetMode = 'Specify DNS target now'
-  draft.dnsRecordType = 'A/AAAA'
-  draft.dnsZone = 'prod.example.internal'
-  draft.dnsTarget = 'not-an-address'
-  errors = api.validateStep(4, draft, blueprint)
-  assert.ok(errors.some(({ message }) => /A\/AAAA/.test(message)))
-
-  draft.dnsTarget = '10.0.0.50'
   draft.portPolicy = 'Custom qualified port'
   draft.customPort = 70000
   errors = api.validateStep(4, draft, blueprint)
   assert.ok(errors.some(({ message }) => /between 1 and 65535/.test(message)))
 })
 
-test('proxy credentials are optional, proxy URL is validated and password is sanitized', () => {
+test('production wizard exposes only the executable managed-repository package path', () => {
   const blueprint = api.getBlueprintById('postgresql')
   const draft = makeValid(blueprint)
-  draft.internetAccess = 'HTTP(S) Proxy'
-  draft.proxyUrl = 'proxy-without-scheme'
-  let errors = api.validateStep(6, draft, blueprint)
-  assert.ok(errors.some(({ message }) => /valid http:\/\//.test(message)))
-
-  draft.proxyUrl = 'http://proxy.example.internal:3128'
-  draft.proxyUsername = ''
-  draft.proxyPassword = ''
-  errors = api.validateStep(6, draft, blueprint)
-  assert.deepEqual(errors, [])
-
-  draft.proxyPassword = 'sensitive-value'
-  const safe = api.sanitizeDesign(draft)
-  assert.equal(Object.hasOwn(safe, 'proxyPassword'), false)
-  assert.equal(safe.proxyPasswordPresent, true)
-  assert.equal(JSON.stringify(safe).includes('sensitive-value'), false)
+  const compiled = api.compilePlatformDesiredState(draft, blueprint)
+  assert.equal(compiled.package_source.mode, 'managed_online')
+  assert.equal(compiled.package_source.allow_public_fallback, false)
+  assert.equal(compiled.package_source.proxy_url, '')
+  assert.equal(compiled.package_source.repo_url, '')
+  assert.equal(compiled.package_source.bundle_id, '')
 })
-
 
 test('wizard compiles a durable backend desired state without customer OS or host placement', () => {
   const blueprint = api.getBlueprintById('nginx')
@@ -303,23 +294,24 @@ test('wizard compiles a durable backend desired state without customer OS or hos
   assert.equal(desired.product_options.service_role, draft.webMode)
 })
 
-test('TLS and application credentials use references instead of raw secret fields', () => {
+test('TLS and application credentials require existing secret references', () => {
   const blueprint = api.getBlueprintById('postgresql')
   const draft = makeValid(blueprint)
-  const credential = api.getCredentialProfile(blueprint)
 
-  draft.tlsCertificateMode = 'Existing certificate / secret reference'
   draft.tlsCertificateRef = ''
   let errors = api.validateStep(6, draft, blueprint)
-  assert.ok(errors.some(({ message }) => /certificate\/secret reference/.test(message)))
+  assert.ok(errors.some(({ message }) => /secret:\/\/ certificate reference/.test(message)))
 
   draft.tlsCertificateRef = 'secret:tls/postgresql-prod'
-  draft.credentialMode = credential.existing
+  errors = api.validateStep(6, draft, blueprint)
+  assert.ok(errors.some(({ message }) => /secret:\/\/ certificate reference/.test(message)))
+
+  draft.tlsCertificateRef = 'secret://tls/postgresql-prod'
   draft.credentialRef = ''
   errors = api.validateStep(6, draft, blueprint)
-  assert.ok(errors.some(({ message }) => /existing secret reference/.test(message)))
+  assert.ok(errors.some(({ message }) => /secret:\/\/ reference/.test(message)))
 
-  draft.credentialRef = 'secret:service/postgresql-prod'
+  draft.credentialRef = 'secret://service/postgresql-prod'
   assert.deepEqual(api.validateStep(6, draft, blueprint), [])
 })
 
@@ -371,11 +363,12 @@ test('portal routes Applications deploy to the production-service wizard', () =>
   assert.match(portal, /component={ProductionServiceWizard}/)
   assert.match(wizard, /WIZARD_STEPS/)
   assert.match(wizard, /Required dependency plan/)
-  assert.match(wizard, /TLS certificate source/)
-  assert.match(wizard, /Proxy password \(optional\)/)
+  assert.match(wizard, /TLS certificate secret:\/\/ reference/)
+  assert.doesNotMatch(wizard, /Proxy auth secret:\/\/ reference|Local repository \/ mirror|Air-gapped bundle|HTTP\(S\) Proxy/)
   assert.match(wizard, /runAuthoritativeDeploy/)
   assert.match(wizard, /\$\{SERVICE_BLUEPRINT_API\}\/deploy/)
   assert.match(wizard, /idempotencyKey: deploymentKey/)
+  assert.doesNotMatch(wizard, /managed certificate \/ internal PKI|Generate managed service credential/)
   assert.doesNotMatch(wizard, /preferredOs|LayerSentry selected OS|Rocky Linux|Ubuntu 24\.04/)
 })
 
@@ -596,7 +589,7 @@ test('implemented React wizard renders the 27-family catalog and blocks incomple
 
 test('frontend native product-option ownership matches backend contract for all 27 families', () => {
   const expected = {
-    postgresql: ['database_bootstrap','initial_databases','dcs_placement','pgbouncer','pgbouncer_placement','barman_placement','pg_stat_statements','postgis','postgis_target','postgis_databases'],
+    postgresql: ['database_bootstrap','initial_databases','pgbouncer','pgbouncer_placement','pg_stat_statements','postgis','postgis_target','postgis_databases'],
     'mysql-family': ['database_bootstrap','database_name'],
     mariadb: ['database_bootstrap','database_name'],
     'mongodb-community': ['credential_scope_mode','database_name'],
@@ -779,7 +772,7 @@ test('managed storage uses native mountpoints and backup repositories are not gu
       assert.equal(Boolean(item.dependency), false, `${bp.id}: storage dependency belongs in dependency/native option flow`)
       assert.match(item.mountpoint, /^\//, `${bp.id}: ${item.role} missing native mountpoint`)
       assert.equal(forbiddenRoles.test(item.role), false, `${bp.id}: backup target duplicated as guest storage`)
-      assert.ok(['Single disk','LVM','Striped managed disks','Existing SAN / LUN','Existing mount'].includes(item.layout), `${bp.id}: unsupported layout ${item.layout}`)
+      assert.ok(['Single disk','Existing SAN / LUN','Existing mount'].includes(item.layout), `${bp.id}: unsupported layout ${item.layout}`)
     }
   }
 
@@ -808,6 +801,138 @@ test('compiled storage roles are stable machine-safe identifiers', () => {
     for (const volume of compiled.storage) {
       assert.match(volume.role, /^[a-z0-9]+(?:_[a-z0-9]+)*$/, `${id}: ${volume.role}`)
     }
+  }
+})
+
+test('production wizard omits non-functional shared controls', () => {
+  const wizard = fs.readFileSync(
+    path.join(fireedgeRoot, 'src/client/apps/layersentry/pages/ProductionServiceWizard.js'),
+    'utf8'
+  )
+  for (const forbidden of [
+    'label="Environment"',
+    'label="Availability"',
+    'Monitoring enabled',
+    'Central logging enabled',
+    'label="OS access"',
+    'label="Hardening profile"',
+    'LayerSentry managed certificate / internal PKI',
+    'Generate managed service credential',
+    'Proxy username',
+    'Proxy password',
+    'Advanced storage placement',
+    'LVM',
+    'Striped managed disks',
+    'Local repository / mirror',
+    'Air-gapped bundle',
+    'HTTP(S) Proxy',
+    'DNS registration',
+    'Manual DNS records',
+    'Existing DNS workflow',
+  ]) {
+    assert.equal(wizard.includes(forbidden), false, forbidden)
+  }
+  assert.match(wizard, /Managed SSH-key bootstrap/)
+  assert.match(wizard, /standard production hardening/)
+  assert.match(wizard, /tuple-qualified monitoring\/logging/)
+})
+
+test('environment and backend policy are fixed to production semantics', () => {
+  const bp = api.getBlueprintById('nginx')
+  const draft = makeValid(bp)
+  draft.environment = 'Development'
+  const compiled = api.compilePlatformDesiredState(draft, bp)
+  assert.equal(compiled.deployment.environment, 'production')
+  assert.equal(compiled.security.ssh_auth, 'ssh_key_managed')
+  assert.equal(compiled.security.hardening_profile, 'standard-production')
+})
+
+test('Alloy has no customer endpoint, service certificate or firewall port intent', () => {
+  const bp = api.getBlueprintById('alloy')
+  const draft = makeValid(bp)
+  const profile = api.getNetworkProfile(draft, bp)
+  assert.equal(profile.customerTraffic, false)
+  const compiled = api.compilePlatformDesiredState(draft, bp)
+  assert.equal(compiled.network.endpoint.mode, 'none')
+  assert.equal(compiled.network.endpoint.fqdn, '')
+  assert.equal(compiled.network.endpoint.backend_port, 0)
+  assert.equal(compiled.security.tls, false)
+  assert.equal(compiled.security.certificate_secret_ref, '')
+})
+
+test('PostgreSQL workflow does not advertise unimplemented dedicated auxiliary VMs', () => {
+  const bp = api.getBlueprintById('postgresql')
+  const draft = api.createDraft('postgresql')
+  const fields = api.getProductConfigFields(draft, bp)
+  const serialized = JSON.stringify(fields)
+  assert.doesNotMatch(serialized, /Dedicated 3-node etcd|Dedicated HA pair|Dedicated Barman VM/)
+  assert.deepEqual(
+    fields.find(({ key }) => key === 'pgbouncerPlacement').options,
+    ['On PostgreSQL nodes', 'Disabled']
+  )
+  const plan = api.getArchitecturePlan(draft, bp)
+  assert.equal(plan.linkedDedicated, 0)
+  assert.equal(plan.dedicated, 3)
+  assert.ok(plan.shared.some((item) => /etcd DCS/.test(item)))
+})
+
+test('advertised endpoint options are executable or explicit external/native references only', () => {
+  const forbidden = /LayerSentry managed|Dedicated Patroni|MySQL Router HA|MaxScale HA|Pulsar Proxy HA/
+  for (const bp of api.FALLBACK_BLUEPRINTS) {
+    const draft = api.createDraft(bp.id)
+    for (const endpoint of api.getEndpointOptions(draft, bp)) {
+      assert.doesNotMatch(endpoint, forbidden, `${bp.id}: ${endpoint}`)
+    }
+  }
+})
+
+test('native discovery compiles without a synthetic service FQDN or VIP', () => {
+  for (const id of ['mongodb-community','percona-mongodb','redis','valkey','cassandra','yugabytedb','rabbitmq','kafka','pulsar','opensearch']) {
+    const bp = api.getBlueprintById(id)
+    const draft = makeValid(bp)
+    if (id === 'redis' || id === 'valkey') {
+      assert.notEqual(draft.topology, 'Standalone')
+    }
+    const profile = api.getNetworkProfile(draft, bp)
+    assert.equal(profile.nativeDiscovery, true, id)
+    const compiled = api.compilePlatformDesiredState(draft, bp)
+    assert.equal(compiled.network.endpoint.mode, 'native_discovery', id)
+    assert.equal(compiled.network.endpoint.fqdn, '', id)
+    assert.equal(compiled.network.endpoint.vip, '', id)
+    assert.ok(compiled.network.endpoint.backend_port > 0, id)
+  }
+})
+
+test('compiled native storage role IDs match backend blueprint ownership', () => {
+  const expected = {
+    postgresql: ['data', 'wal'],
+    'mysql-family': ['data', 'redo_binlog'],
+    mariadb: ['data', 'redo_binlog'],
+    'mongodb-community': ['data', 'journal'],
+    'percona-mongodb': ['data', 'journal'],
+    redis: ['persistence_data'],
+    valkey: ['persistence_data'],
+    clickhouse: ['data'],
+    cassandra: ['data', 'commit_log'],
+    yugabytedb: ['tablet_data', 'wal', 'master_metadata'],
+    rabbitmq: ['message_data'],
+    kafka: ['broker_data'],
+    pulsar: ['bookkeeper_journal', 'bookkeeper_ledger'],
+    openbao: ['raft_data'],
+    jenkins: ['jenkins_home'],
+    opensearch: ['index_data'],
+    prometheus: ['tsdb'],
+  }
+
+  for (const [id, roles] of Object.entries(expected)) {
+    const bp = api.getBlueprintById(id)
+    const draft = makeValid(bp)
+    const compiled = api.compilePlatformDesiredState(draft, bp)
+    assert.deepEqual(
+      compiled.storage.map(({ role }) => role),
+      roles,
+      id
+    )
   }
 })
 
