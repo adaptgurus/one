@@ -1,0 +1,111 @@
+name: LayerSentry Manoj lab key preflight
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-manoj-key-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Test existing LayerSentry private keys without exposing contents
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          import pathlib
+          import paramiko
+
+          roots = [
+              pathlib.Path(r"C:\LayerSentryLab"),
+              pathlib.Path(r"C:\Users\opc"),
+          ]
+          targets = {
+              "ls-fe1": "10.250.10.11",
+              "ls-kvm1": "10.250.10.20",
+          }
+
+          files = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for p in root.rglob("*"):
+                  try:
+                      if not p.is_file() or p.suffix.lower() in {".pub", ".txt", ".password", ".png", ".json", ".js", ".py", ".ps1"}:
+                          continue
+                      name = p.name.lower()
+                      if any(token in name for token in ("key", "bootstrap", "id_rsa", "id_ed25519")) and p.stat().st_size < 65536:
+                          files.append(p)
+                  except OSError:
+                      pass
+
+          seen = set()
+          candidates = []
+          for p in files:
+              s = str(p)
+              if s not in seen:
+                  seen.add(s)
+                  candidates.append(p)
+
+          print(f"PRIVATE_KEY_CANDIDATES={len(candidates)}")
+          matches = []
+          for candidate in candidates:
+              try:
+                  raw = candidate.read_text(encoding="utf-8", errors="strict")
+              except (OSError, UnicodeError):
+                  continue
+              if "PRIVATE KEY" not in raw and not raw.startswith("PuTTY-User-Key-File"):
+                  continue
+              for name, host in targets.items():
+                  for user in ("root", "oneadmin", "opc"):
+                      client = paramiko.SSHClient()
+                      client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                      try:
+                          pkey = None
+                          key_errors = []
+                          for cls in (paramiko.Ed25519Key, paramiko.RSAKey, paramiko.ECDSAKey):
+                              try:
+                                  pkey = cls.from_private_key_file(str(candidate))
+                                  break
+                              except Exception as exc:
+                                  key_errors.append(exc)
+                          if pkey is None:
+                              break
+                          client.connect(
+                              host,
+                              username=user,
+                              pkey=pkey,
+                              look_for_keys=False,
+                              allow_agent=False,
+                              timeout=5,
+                              banner_timeout=5,
+                              auth_timeout=5,
+                          )
+                          _, stdout, _ = client.exec_command("hostname; id -u", timeout=5)
+                          out = stdout.read().decode("utf-8", "replace").strip().splitlines()
+                          print(f"KEY_MATCH TARGET={name} USER={user} FILE={candidate.name} HOST={out[0] if out else 'unknown'} UID={out[1] if len(out)>1 else 'unknown'}")
+                          matches.append((name, user, candidate))
+                          raise StopIteration
+                      except StopIteration:
+                          client.close()
+                          break
+                      except Exception:
+                          client.close()
+                  else:
+                      continue
+                  break
+
+          if not matches:
+              raise SystemExit("NO_EXISTING_KEY_MATCH")
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'key_preflight.py'
+          Set-Content -Path $path -Value $script -Encoding UTF8
+          python $path
