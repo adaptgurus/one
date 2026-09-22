@@ -21,7 +21,7 @@ jobs:
           $ErrorActionPreference='Stop'
           if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
           $root='C:\LayerSentryLab\qualification'
-          foreach($n in @('vm_tty2_root.ps1','vm_type_cmd.ps1','vm_type_nonsecret.ps1')){
+          foreach($n in @('vm_tty2_root.ps1','vm_type_cmd.ps1','vm_type_nonsecret.ps1','patch_agent_client.py','patch_roothelper_inventory.py','check_agent_env.sh')){
             $p=Join-Path $root $n
             if(-not (Test-Path $p)){throw "Missing helper $n"}
             Write-Host "=== $n ==="
