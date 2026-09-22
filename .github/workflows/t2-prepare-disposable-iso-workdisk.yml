@@ -56,7 +56,7 @@ jobs:
           test -z "$(lsblk -dn -o FSTYPE "$dev" | tr -d ' ')"
           test -z "$(lsblk -dn -o MOUNTPOINT "$dev" | tr -d ' ')"
           if ! sudo -n blkid "$dev" >/dev/null 2>&1; then
-            sudo -n mkfs.xfs -f -L LS_T2_ISO_WORK "$dev" >/dev/null
+            sudo -n mkfs.xfs -f -L LST2ISOWORK "$dev" >/dev/null
           fi
           sudo -n mkdir -p /mnt/t2-durable-iso-work
           if ! mountpoint -q /mnt/t2-durable-iso-work; then sudo -n mount "$dev" /mnt/t2-durable-iso-work; fi
