@@ -1,0 +1,35 @@
+name: T2 Foundation Seal Inspect
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-seal-inspect.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 10
+    steps:
+      - name: Search local qualification sealing helpers
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $root='C:\LayerSentryLab\qualification'
+          Get-ChildItem $root -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object {$_.Extension -in '.ps1','.py','.sh','.json'} |
+            ForEach-Object {
+              $p=$_.FullName
+              $matches=Select-String -Path $p -Pattern 'host\.seal|seal-host|tools\.ensure|management_interface|management_cidr|migration_interface|workload_interface' -ErrorAction SilentlyContinue
+              foreach($m in $matches){
+                $line=$m.Line
+                $line=[regex]::Replace($line,'(?i)((?:password|token|secret|code)\w*\s*[=:]\s*)["'']?[^"'',}\s]+','$1<redacted>')
+                $line=[regex]::Replace($line,'(?<![A-Za-z0-9])[A-Fa-f0-9]{32,}(?![A-Za-z0-9])','<redacted-long-hex>')
+                Write-Host "$p:$($m.LineNumber): $line"
+              }
+            }
