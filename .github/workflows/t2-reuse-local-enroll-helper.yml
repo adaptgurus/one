@@ -1,0 +1,61 @@
+name: T2 Reuse Local Enrollment Helper
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-reuse-local-enroll-helper.yml
+
+permissions:
+  contents: read
+
+jobs:
+  enroll:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Adapt vetted local helper for current disposable VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src='C:\LayerSentryLab\qualification\vm_enroll_testlab.ps1'
+          if(-not(Test-Path $src)){throw 'Vetted local enrollment helper missing'}
+          $dst=Join-Path $env:RUNNER_TEMP 'vm_enroll_4c4ac81.ps1'
+          $c=Get-Content -Raw $src
+          $c=$c.Replace("ls-appliance-qual","ls-appliance-4c4ac81-qual")
+          $c=$c.Replace("qual-enrollment-ac7e14e.token","qual-enrollment-4c4ac81-35685057701.token")
+          $c=$c.Replace("qual-support-ac7e14e.password","qual-support-4c4ac81-35685057701.password")
+          $c=$c.Replace("qual-root-ac7e14e.password","qual-root-4c4ac81-35685057701.password")
+          $old='Key 0x0D; Start-Sleep -Milliseconds 700'
+          $new="Invoke-CimMethod -InputObject `$kbd -MethodName PressKey -Arguments @{KeyCode=[uint32]0x0D}|Out-Null; Start-Sleep -Milliseconds 120; Invoke-CimMethod -InputObject `$kbd -MethodName ReleaseKey -Arguments @{KeyCode=[uint32]0x0D}|Out-Null; Start-Sleep -Milliseconds 900"
+          if(-not $c.Contains($old)){throw 'Expected local helper Enter sequence not found'}
+          $c=$c.Replace($old,$new)
+          Set-Content -LiteralPath $dst -Value $c -Encoding UTF8
+          Write-Host 'LOCAL_ENROLL_HELPER_ADAPTED=PASS secrets=not-read'
+
+      - name: Execute vetted local enrollment helper
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dst=Join-Path $env:RUNNER_TEMP 'vm_enroll_4c4ac81.ps1'
+          & $dst
+          Write-Host 'LOCAL_ENROLL_HELPER_EXECUTED=PASS secrets=REDACTED'
+
+      - name: Wait and capture enrollment result
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Start-Sleep -Seconds 120
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\enrollment-result-local-helper.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not(Test-Path $out)){throw 'Enrollment result framebuffer missing'}
+
+      - name: Upload enrollment result
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-enrollment-result-local-helper
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\enrollment-result-local-helper.png
+          if-no-files-found: error
+          retention-days: 7
