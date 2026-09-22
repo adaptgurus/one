@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   probe:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
       - name: Runner and lab connectivity
