@@ -92,7 +92,7 @@ jobs:
           $ErrorActionPreference='Stop'
           function New-HexSecret([string]$Path){
             $bytes=New-Object byte[] 16
-            [Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
+            $rng=[Security.Cryptography.RandomNumberGenerator]::Create(); try{$rng.GetBytes($bytes)} finally{$rng.Dispose()}
             $value=([BitConverter]::ToString($bytes)).Replace('-','').ToLowerInvariant()
             [IO.File]::WriteAllText($Path,$value,[Text.Encoding]::ASCII)
             & icacls.exe $Path /inheritance:r | Out-Null
