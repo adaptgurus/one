@@ -1,0 +1,65 @@
+name: LayerSentry Manoj independent OpenNebula probe
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-manoj-opennebula-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Probe FE and KVM guests with existing SSH trust
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @(
+            @{Name='ls-fe1';IP='10.250.10.11'},
+            @{Name='ls-fe3-a';IP='10.250.10.10'},
+            @{Name='ls-fe3-b';IP='10.250.10.13'},
+            @{Name='ls-kvm1';IP='10.250.10.20'}
+          )
+          foreach ($target in $targets) {
+            Write-Host "TARGET=$($target.Name) IP=$($target.IP)"
+            foreach ($user in @('root','opc','oneadmin')) {
+              $args = @(
+                '-o','BatchMode=yes',
+                '-o','ConnectTimeout=5',
+                '-o','StrictHostKeyChecking=no',
+                '-o','UserKnownHostsFile=NUL',
+                "$user@$($target.IP)",
+                'hostname; id; cat /etc/os-release | head -3'
+              )
+              & ssh @args
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "SSH_PASS TARGET=$($target.Name) USER=$user"
+                break
+              } else {
+                Write-Host "SSH_FAIL TARGET=$($target.Name) USER=$user RC=$LASTEXITCODE"
+              }
+            }
+          }
+
+      - name: Probe OpenNebula endpoint metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          foreach ($ip in @('10.250.10.11','10.250.10.10','10.250.10.13')) {
+            try {
+              $r = Invoke-WebRequest -Uri "http://$ip:2633/RPC2" -Method Get -TimeoutSec 5 -MaximumRedirection 0
+              Write-Host "ONED_HTTP IP=$ip STATUS=$($r.StatusCode)"
+            } catch {
+              if ($_.Exception.Response) {
+                Write-Host "ONED_HTTP IP=$ip STATUS=$([int]$_.Exception.Response.StatusCode)"
+              } else {
+                Write-Host "ONED_HTTP IP=$ip ERROR=$($_.Exception.Message)"
+              }
+            }
+          }
