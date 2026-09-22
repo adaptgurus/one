@@ -1,0 +1,137 @@
+name: LayerSentry independent DR guest proof
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-independent-dr-guest-proof.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  guest_proof:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Boot recovered image with guest-agent channel and prove userspace
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          import base64
+          import pathlib
+          import time
+          import xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+
+          ENDPOINT = "http://10.250.10.10:2633/RPC2"
+          AUTH_IMAGE = r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img"
+          IMAGE_ID = 1
+
+          target = Target.open(AUTH_IMAGE)
+          auth = target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          if ":" not in auth or len(auth) > 1024:
+              raise SystemExit("invalid recovered OpenNebula auth shape")
+
+          one = ServerProxy(ENDPOINT, allow_none=True)
+          image = one.one.image.info(auth, IMAGE_ID, False)
+          if not image[0]:
+              raise SystemExit("recovery image lookup failed: " + str(image[1])[:300])
+          image_root = ET.fromstring(image[1])
+          if int(image_root.findtext("STATE")) != 1:
+              raise SystemExit("recovery image is not READY")
+          print("RECOVERY_IMAGE_READY=PASS")
+
+          vm_id = None
+          try:
+              template = f'''NAME="ls-dr-vm220-guest-proof"
+          CPU="1"
+          VCPU="1"
+          MEMORY="256"
+          DISK=[IMAGE_ID="{IMAGE_ID}"]
+          FEATURES=[GUEST_AGENT="YES",ACPI="YES"]
+          GRAPHICS=[TYPE="VNC",LISTEN="0.0.0.0"]
+          SCHED_REQUIREMENTS="NAME = \\"ls-kvm1\\""
+          '''
+              alloc = one.one.vm.allocate(auth, template, False)
+              if not alloc[0]:
+                  raise SystemExit("guest-proof VM allocate failed: " + str(alloc[1])[:500])
+              vm_id = int(alloc[1])
+              print("GUEST_PROOF_VM_ID=" + str(vm_id))
+
+              running = False
+              for _ in range(90):
+                  info = one.one.vm.info(auth, vm_id, False)
+                  if not info[0]:
+                      raise SystemExit("guest-proof VM info failed: " + str(info[1])[:300])
+                  root = ET.fromstring(info[1])
+                  state = int(root.findtext("STATE"))
+                  lcm = int(root.findtext("LCM_STATE"))
+                  histories = root.findall("./HISTORY_RECORDS/HISTORY")
+                  host = histories[-1].findtext("HOSTNAME") if histories else ""
+                  if state == 3 and lcm == 3 and host == "ls-kvm1":
+                      running = True
+                      break
+                  if state == 6:
+                      raise SystemExit(f"guest-proof VM failed state={state} lcm={lcm}")
+                  time.sleep(2)
+              if not running:
+                  raise SystemExit("guest-proof VM did not reach RUNNING")
+              print("GUEST_PROOF_VM_RUNNING=PASS")
+
+              # Give the small Alpine guest time to reach userspace and start qemu-ga.
+              time.sleep(15)
+              command = "printf 'LS_GUEST_OK\\n'; cat /etc/os-release | head -3; uname -r; cat /proc/uptime"
+              result = one.one.vm.exec(auth, vm_id, command)
+              if not result[0]:
+                  print("GUEST_EXEC_REQUEST=UNAVAILABLE")
+                  print("GUEST_EXEC_ERROR=" + str(result[1]).replace("\n", " ")[:500])
+                  raise SystemExit(3)
+              print("GUEST_EXEC_REQUEST=PASS")
+
+              final = None
+              for _ in range(45):
+                  info = one.one.vm.info(auth, vm_id, False)
+                  root = ET.fromstring(info[1])
+                  block = root.find("./TEMPLATE/QEMU_GA_EXEC")
+                  if block is not None:
+                      status = (block.findtext("STATUS") or "").strip()
+                      if status in ("DONE", "ERROR", "CANCELLED"):
+                          final = block
+                          break
+                  time.sleep(2)
+              if final is None:
+                  raise SystemExit("guest exec did not reach terminal state")
+              status = (final.findtext("STATUS") or "").strip()
+              rc = (final.findtext("RETURN_CODE") or "").strip()
+              stdout = (final.findtext("STDOUT") or "").strip()
+              stderr = (final.findtext("STDERR") or "").strip()
+              print("GUEST_EXEC_STATUS=" + status)
+              print("GUEST_EXEC_RETURN_CODE=" + rc)
+              if stdout:
+                  decoded = base64.b64decode(stdout).decode("utf-8", "replace")
+                  for line in decoded.splitlines()[:12]:
+                      print("GUEST_STDOUT=" + line[:300])
+              if stderr:
+                  decoded = base64.b64decode(stderr).decode("utf-8", "replace")
+                  for line in decoded.splitlines()[:8]:
+                      print("GUEST_STDERR=" + line[:300])
+              if status != "DONE" or rc != "0":
+                  raise SystemExit("guest exec did not complete successfully")
+              print("INDEPENDENT_DR_GUEST_USERSPACE=PASS")
+          finally:
+              if vm_id is not None:
+                  try:
+                      one.one.vm.action(auth, "terminate-hard", vm_id)
+                      print("GUEST_PROOF_CLEANUP_REQUESTED=PASS")
+                  except Exception as exc:
+                      print("GUEST_PROOF_CLEANUP_WARNING=" + str(exc)[:300])
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'independent_dr_guest_proof.py'
+          Set-Content -Path $path -Value $script -Encoding UTF8
+          & 'C:\LayerSentryLab\tools\Python313\python.exe' $path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
