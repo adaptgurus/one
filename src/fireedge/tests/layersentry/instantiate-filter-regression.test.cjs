@@ -45,6 +45,28 @@ const context = {
 }
 vm.runInNewContext(functionSource, context)
 
+const otherMatch = source.match(
+  /const handleOtherSections = \([\s\S]*?\n\}\n\n\/\*\*\n \* Filter one section/
+)
+
+if (!otherMatch) {
+  throw new Error('handleOtherSections source block not found')
+}
+
+const otherSource = otherMatch[0]
+  .replace(
+    /^const handleOtherSections =/,
+    'globalThis.handleOtherSections ='
+  )
+  .replace(
+    /\n\n\/\*\*\n \* Filter one section[\s\S]*$/,
+    ''
+  )
+
+context.handleNetwork = () => {}
+context.alwaysIncludePci = {}
+vm.runInNewContext(otherSource, context)
+
 test('instantiate filter tolerates an omitted OsCpu modification map', () => {
   const result = {}
   assert.doesNotThrow(() =>
@@ -84,4 +106,34 @@ test('instantiate filter still applies a touched OS child safely', () => {
   )
   assert.equal(result.OS.BOOT, 'disk1')
   assert.equal(result.OS.ARCH, 'x86_64')
+})
+
+
+test('cloud Context filtering tolerates a missing form extra object', () => {
+  const result = {}
+  assert.doesNotThrow(() =>
+    context.handleOtherSections(
+      {},
+      { extra: { Context: { USER_INPUTS: true } } },
+      'Context',
+      result,
+      { Context: ['USER_INPUTS'] },
+      {}
+    )
+  )
+  assert.equal(result.INPUTS_ORDER, undefined)
+})
+
+test('cloud OsCpu filtering tolerates a missing correction extra object', () => {
+  const result = {}
+  assert.doesNotThrow(() =>
+    context.handleOtherSections(
+      {},
+      {},
+      'OsCpu',
+      result,
+      { OsCpu: ['MEMORY_ENCRYPTION'] },
+      {}
+    )
+  )
 })
