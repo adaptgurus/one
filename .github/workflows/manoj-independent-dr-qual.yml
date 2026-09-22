@@ -37,8 +37,11 @@ jobs:
                 'hostname; id; virsh list --all 2>/dev/null || sudo -n virsh list --all 2>/dev/null || true; systemctl is-active libvirtd 2>/dev/null || systemctl is-active virtqemud 2>/dev/null || true'
               }
 
-              $output = & ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=6 $remote $command 2>&1
+              $previousPreference = $ErrorActionPreference
+              $ErrorActionPreference = 'Continue'
+              $output = & ssh.exe -o BatchMode=yes -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ConnectTimeout=6 $remote $command 2>&1
               $code = $LASTEXITCODE
+              $ErrorActionPreference = $previousPreference
               Write-Host "SSH_PROBE ROLE=$($target.Role) IP=$($target.IP) USER=$user EXIT=$code"
               if ($output) { $output | ForEach-Object { Write-Host $_ } }
               if ($code -eq 0) {
