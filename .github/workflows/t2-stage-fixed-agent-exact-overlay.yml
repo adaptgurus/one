@@ -1,0 +1,74 @@
+name: T2 Stage Fixed Agent Exact Overlay
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-stage-fixed-agent-exact-overlay.yml
+      - qualification/t2-2307f95-runtime/**
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Overlay exact 2307f95 agent runtime and build
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $repo='C:\LayerSentryLab\src\layersentry-platform'
+          if((git -C $repo rev-parse HEAD).Trim() -ne '4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'){throw 'Local baseline head changed'}
+          $wt=Join-Path $env:RUNNER_TEMP 'ls-2307-agent-overlay'
+          if(Test-Path $wt){Remove-Item $wt -Recurse -Force}
+          git -C $repo worktree add --detach $wt 4c4ac81d69b162bf843daa8b2f6b5543dc6403a6
+          if($LASTEXITCODE -ne 0){throw 'baseline worktree failed'}
+          $snap=Join-Path $env:GITHUB_WORKSPACE 'qualification\t2-2307f95-runtime'
+          Copy-Item (Join-Path $snap 'client.go') (Join-Path $wt 'deploy\host-agent\internal\client\client.go') -Force
+          Copy-Item (Join-Path $snap 'inventory.go') (Join-Path $wt 'deploy\host-agent\internal\inventory\inventory.go') -Force
+          Copy-Item (Join-Path $snap 'layersentry-host-agent.service') (Join-Path $wt 'deploy\host-agent\packaging\layersentry-host-agent.service') -Force
+          if((Get-FileHash -Algorithm SHA256 (Join-Path $wt 'deploy\host-agent\internal\client\client.go')).Hash -ne (Get-FileHash -Algorithm SHA256 (Join-Path $snap 'client.go')).Hash){throw 'client overlay mismatch'}
+          if((Get-FileHash -Algorithm SHA256 (Join-Path $wt 'deploy\host-agent\internal\inventory\inventory.go')).Hash -ne (Get-FileHash -Algorithm SHA256 (Join-Path $snap 'inventory.go')).Hash){throw 'inventory overlay mismatch'}
+          Push-Location (Join-Path $wt 'deploy\host-agent')
+          go test -count=1 ./internal/client ./internal/inventory
+          if($LASTEXITCODE -ne 0){throw 'exact-overlay focused tests failed'}
+          $env:CGO_ENABLED='0';$env:GOOS='linux';$env:GOARCH='amd64'
+          $agent='C:\LayerSentryLab\qualification\layersentry-host-agent-2307f95-qual'
+          go build -trimpath -ldflags="-s -w -X main.Version=2307f95-qual" -o $agent ./cmd/layersentry-host-agent
+          if($LASTEXITCODE -ne 0){throw 'exact-overlay agent build failed'}
+          Pop-Location
+          Copy-Item (Join-Path $snap 'layersentry-host-agent.service') 'C:\LayerSentryLab\qualification\layersentry-host-agent-2307f95.service' -Force
+          git -C $repo worktree remove --force $wt
+          Write-Host ("EXACT_OVERLAY_AGENT_BUILD=PASS SHA256="+(Get-FileHash -Algorithm SHA256 $agent).Hash.ToLowerInvariant())
+
+      - name: Stage exact fixed payload to guest
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $src=Join-Path $q 'qual-support-ac7e14e-ed25519'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-overlay-support-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          $known=Join-Path $env:RUNNER_TEMP 't2-overlay-known'
+          (cmd.exe /d /c "ssh-keyscan -T 10 10.250.10.41 2>NUL") | Set-Content $known -Encoding ascii
+          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$key)
+          scp.exe @base (Join-Path $q 'layersentry-host-agent-2307f95-qual') 'layersentry@10.250.10.41:/home/layersentry/layersentry-host-agent-2307f95-qual'
+          if($LASTEXITCODE -ne 0){throw 'agent guest stage failed'}
+          scp.exe @base (Join-Path $q 'layersentry-host-agent-2307f95.service') 'layersentry@10.250.10.41:/home/layersentry/layersentry-host-agent-2307f95.service'
+          if($LASTEXITCODE -ne 0){throw 'service guest stage failed'}
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          Remove-Item $key,$known -Force
+          Write-Host 'EXACT_OVERLAY_AGENT_GUEST_STAGE=PASS'
