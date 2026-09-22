@@ -48,6 +48,9 @@ const ProtectionDomainPanel = ({ isAdmin }) => {
   const capabilitiesQuery = DrAPI.useGetDrCapabilitiesQuery(undefined, {
     skip: !isAdmin,
   })
+  const sitesQuery = DrAPI.useGetRemoteSitesQuery(undefined, {
+    skip: !isAdmin,
+  })
   const vmsQuery = VmAPI.useGetVmsQuery({ extended: true }, { skip: !isAdmin })
   const [createDomain, createState] = DrAPI.useCreateProtectionDomainMutation()
   const [runCheckpoint, checkpointState] =
@@ -55,14 +58,15 @@ const ProtectionDomainPanel = ({ isAdmin }) => {
 
   const [name, setName] = useState('')
   const [sourceSite, setSourceSite] = useState('tester')
-  const [remoteSite, setRemoteSite] = useState('manoj')
-  const [remoteEndpoint, setRemoteEndpoint] = useState('')
+  const [remoteSite, setRemoteSite] = useState('')
   const [rpoMinutes, setRpoMinutes] = useState(5)
   const [rtoMinutes, setRtoMinutes] = useState(30)
   const [vmIds, setVmIds] = useState([])
 
   const domains = toArray(domainsQuery.data)
+  const sites = toArray(sitesQuery.data)
   const vms = toArray(vmsQuery.data)
+  const selectedRemoteSite = sites.find((site) => site.id === remoteSite)
   const executionReady =
     capabilitiesQuery.data?.capability?.enabled === true &&
     capabilitiesQuery.data?.runtime?.ready === true &&
@@ -71,11 +75,11 @@ const ProtectionDomainPanel = ({ isAdmin }) => {
   const validationError = useMemo(() => {
     if (!name.trim()) return 'Protection Domain name is required.'
     if (!sourceSite.trim() || !remoteSite.trim())
-      return 'Source Site and Remote Site are required.'
+      return 'Source Site and a registered Remote Site are required.'
     if (sourceSite.trim() === remoteSite.trim())
       return 'Source Site and Remote Site must be different.'
-    if (!/^https:\/\/[^\s/]+(?::\d+)?(?:\/[^\s]*)?$/.test(remoteEndpoint))
-      return 'Remote Site Endpoint must be an HTTPS URL.'
+    if (!selectedRemoteSite?.endpoint)
+      return 'Selected Remote Site is not available from the durable registry.'
     if (vmIds.length === 0) return 'Select at least one virtual machine.'
     if (Number(rpoMinutes) < 1 || Number(rtoMinutes) < 1)
       return 'RPO and RTO must be at least one minute.'
@@ -85,7 +89,7 @@ const ProtectionDomainPanel = ({ isAdmin }) => {
     name,
     sourceSite,
     remoteSite,
-    remoteEndpoint,
+    selectedRemoteSite,
     vmIds,
     rpoMinutes,
     rtoMinutes,
@@ -99,8 +103,8 @@ const ProtectionDomainPanel = ({ isAdmin }) => {
       id: domainId,
       name: name.trim(),
       source_site_id: sourceSite.trim(),
-      recovery_site_id: remoteSite.trim(),
-      recovery_site_endpoint: remoteEndpoint.trim().replace(/\/$/, ''),
+      recovery_site_id: selectedRemoteSite.id,
+      recovery_site_endpoint: selectedRemoteSite.endpoint,
       rpo: Number(rpoMinutes) * NS_PER_MINUTE,
       rto: Number(rtoMinutes) * NS_PER_MINUTE,
       transfer_concurrency: 2,
@@ -125,7 +129,7 @@ const ProtectionDomainPanel = ({ isAdmin }) => {
     domainsQuery.refetch()
 
     setName('')
-    setRemoteEndpoint('')
+    setRemoteSite('')
     setVmIds([])
   }
 
@@ -229,16 +233,29 @@ const ProtectionDomainPanel = ({ isAdmin }) => {
             value={sourceSite}
             onChange={(e) => setSourceSite(e.target.value)}
           />
-          <TextField
-            label="Remote Site"
-            value={remoteSite}
-            onChange={(e) => setRemoteSite(e.target.value)}
-          />
+          <FormControl>
+            <InputLabel id="protection-domain-remote-site-label">
+              Remote Site
+            </InputLabel>
+            <Select
+              labelId="protection-domain-remote-site-label"
+              label="Remote Site"
+              value={remoteSite}
+              onChange={(e) => setRemoteSite(e.target.value)}
+              disabled={sitesQuery.isLoading || sitesQuery.isError}
+            >
+              {sites.map((site) => (
+                <MenuItem key={site.id} value={site.id}>
+                  {site.name || site.id} · {site.cluster_uuid}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
           <TextField
             label="Remote Site Endpoint"
-            placeholder="https://manoj-site.example"
-            value={remoteEndpoint}
-            onChange={(e) => setRemoteEndpoint(e.target.value)}
+            value={selectedRemoteSite?.endpoint ?? ''}
+            InputProps={{ readOnly: true }}
+            helperText="Inherited from the registered Remote Site."
           />
           <TextField
             label="RPO (minutes)"
@@ -290,6 +307,8 @@ const ProtectionDomainPanel = ({ isAdmin }) => {
             Boolean(validationError) ||
             domainsQuery.isError ||
             domainsQuery.isLoading ||
+            sitesQuery.isError ||
+            sitesQuery.isLoading ||
             createState.isLoading
           }
           onClick={submit}
