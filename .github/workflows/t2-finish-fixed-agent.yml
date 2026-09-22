@@ -1,0 +1,83 @@
+name: T2 Finish Fixed Agent
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-finish-fixed-agent.yml
+
+permissions:
+  contents: read
+
+jobs:
+  finish:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 15
+    steps:
+      - name: Complete fixed agent install through approved console helpers
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $q='C:\LayerSentryLab\qualification'
+          $root=(Get-Content -Raw (Join-Path $q 'vm_tty2_root.ps1'))
+          $root=$root.Replace('ls-appliance-qual','ls-appliance-4c4ac81-qual')
+          $root=$root.Replace('qual-root-ac7e14e.password','durable-root-current.password')
+          $rootTmp=Join-Path $env:RUNNER_TEMP 't2-finish-root.ps1'
+          Set-Content $rootTmp $root -Encoding UTF8
+          $cmd=(Get-Content -Raw (Join-Path $q 'vm_type_cmd.ps1')).Replace('ls-appliance-qual','ls-appliance-4c4ac81-qual')
+          $cmdTmp=Join-Path $env:RUNNER_TEMP 't2-finish-cmd.ps1'
+          Set-Content $cmdTmp $cmd -Encoding UTF8
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $rootTmp
+          if($LASTEXITCODE -ne 0){throw 'root console helper failed'}
+          Start-Sleep -Seconds 2
+          $commands=@(
+            'chown root /etc/layersentry/bootstrap-token',
+            'chgrp layersentry-agent /etc/layersentry/bootstrap-token',
+            'chmod 0640 /etc/layersentry/bootstrap-token',
+            'rm -f /var/lib/layersentry/agent/pki/client.key',
+            'rm -f /var/lib/layersentry/agent/pki/client.crt',
+            'systemctl daemon-reload',
+            'systemctl reset-failed layersentry-host-agent.service',
+            'systemctl restart layersentry-host-agent.service'
+          )
+          foreach($line in $commands){
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cmdTmp -Text $line
+            if($LASTEXITCODE -ne 0){throw 'console command helper failed'}
+            Start-Sleep -Milliseconds 900
+          }
+          Remove-Item $rootTmp,$cmdTmp -Force
+          Write-Host 'FIXED_AGENT_FINISH_SENT=PASS'
+
+      - name: Verify fixed agent enrollment
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $src=Join-Path $q 'qual-support-ac7e14e-ed25519'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-finish-support-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          $known=Join-Path $env:RUNNER_TEMP 't2-finish-known'
+          (cmd.exe /d /c "ssh-keyscan -T 10 10.250.10.41 2>NUL") | Set-Content $known -Encoding ascii
+          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$key)
+          $pass=$false
+          for($i=0;$i -lt 60;$i++){
+            $out=ssh.exe @base 'layersentry@10.250.10.41' 'systemctl show layersentry-host-agent.service -p ActiveState -p SubState -p NRestarts --no-pager; test -s /var/lib/layersentry/agent/pki/client.crt && echo CERT_PRESENT=YES || echo CERT_PRESENT=NO; test -s /var/lib/layersentry/agent/pki/client.key && echo KEY_PRESENT=YES || echo KEY_PRESENT=NO; test -e /etc/layersentry/bootstrap-token && echo BOOTSTRAP_TOKEN_PRESENT=YES || echo BOOTSTRAP_TOKEN_PRESENT=NO'
+            $s=$out -join [Environment]::NewLine
+            if($s -match 'ActiveState=active' -and $s -match 'CERT_PRESENT=YES' -and $s -match 'KEY_PRESENT=YES' -and $s -match 'BOOTSTRAP_TOKEN_PRESENT=NO'){
+              $out | Write-Host
+              $pass=$true
+              break
+            }
+            Start-Sleep -Seconds 3
+          }
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          Remove-Item $key,$known -Force
+          if(-not $pass){throw 'fixed agent durable enrollment not observed'}
+          Write-Host 'DURABLE_GUEST_ENROLLMENT=PASS AGENT_ACTIVE=PASS'
