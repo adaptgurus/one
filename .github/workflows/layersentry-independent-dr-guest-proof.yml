@@ -42,9 +42,14 @@ jobs:
           if not image[0]:
               raise SystemExit("recovery image lookup failed: " + str(image[1])[:300])
           image_root = ET.fromstring(image[1])
-          if int(image_root.findtext("STATE")) != 1:
-              raise SystemExit("recovery image is not READY")
-          print("RECOVERY_IMAGE_READY=PASS")
+          image_state = int(image_root.findtext("STATE"))
+          image_persistent = (image_root.findtext("PERSISTENT") or "0").strip()
+          print("RECOVERY_IMAGE_STATE=" + str(image_state))
+          if image_state not in (1, 2):
+              raise SystemExit("recovery image is neither READY nor USED")
+          if image_state == 2 and image_persistent not in ("0", "NO"):
+              raise SystemExit("recovery image is persistent and already in use")
+          print("RECOVERY_IMAGE_USABLE=PASS")
 
           vm_id = None
           try:
