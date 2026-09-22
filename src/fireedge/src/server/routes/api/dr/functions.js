@@ -141,9 +141,7 @@ const action =
 const capabilities = action((_, userData) =>
   proxy({ path: '/v1/dr/capabilities', userData })
 )
-const sites = action((_, userData) =>
-  proxy({ path: '/v1/dr/sites', userData })
-)
+const sites = action((_, userData) => proxy({ path: '/v1/dr/sites', userData }))
 const createSite = action(({ site }, userData) =>
   proxy({
     method: 'POST',
