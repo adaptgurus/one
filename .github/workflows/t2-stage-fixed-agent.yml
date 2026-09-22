@@ -1,0 +1,65 @@
+name: T2 Stage Fixed Agent
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-stage-fixed-agent.yml
+
+permissions:
+  contents: read
+
+jobs:
+  stage:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 15
+    steps:
+      - name: Build fixed agent from exact source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $repo='C:\LayerSentryLab\src\layersentry-platform'
+          $wt=Join-Path $env:RUNNER_TEMP 'ls-2307f95-stage'
+          if(Test-Path $wt){Remove-Item $wt -Recurse -Force}
+          git -C $repo fetch --no-tags origin 2307f95b3d1aad94847eb32328064f5b25ef7c98
+          if($LASTEXITCODE -ne 0){throw 'fetch failed'}
+          git -C $repo worktree add --detach $wt 2307f95b3d1aad94847eb32328064f5b25ef7c98
+          if($LASTEXITCODE -ne 0){throw 'worktree failed'}
+          Push-Location (Join-Path $wt 'deploy\host-agent')
+          go test -count=1 ./internal/client ./internal/controller ./internal/inventory
+          if($LASTEXITCODE -ne 0){throw 'focused tests failed'}
+          $env:CGO_ENABLED='0';$env:GOOS='linux';$env:GOARCH='amd64'
+          $agent='C:\LayerSentryLab\qualification\layersentry-host-agent-2307f95-qual'
+          go build -trimpath -ldflags="-s -w -X main.Version=2307f95-qual" -o $agent ./cmd/layersentry-host-agent
+          if($LASTEXITCODE -ne 0){throw 'build failed'}
+          Pop-Location
+          Copy-Item (Join-Path $wt 'deploy\host-agent\packaging\layersentry-host-agent.service') 'C:\LayerSentryLab\qualification\layersentry-host-agent-2307f95.service' -Force
+          git -C $repo worktree remove --force $wt
+          Write-Host ("FIXED_AGENT_STAGED_LOCAL=PASS SHA256="+(Get-FileHash -Algorithm SHA256 $agent).Hash.ToLowerInvariant())
+
+      - name: Stage fixed payload to guest support home
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $src=Join-Path $q 'qual-support-ac7e14e-ed25519'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-stage-support-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          $known=Join-Path $env:RUNNER_TEMP 't2-stage-known'
+          $scan=cmd.exe /d /c "ssh-keyscan -T 10 10.250.10.41 2>NUL"
+          $scan | Set-Content $known -Encoding ascii
+          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$key)
+          scp.exe @base (Join-Path $q 'layersentry-host-agent-2307f95-qual') 'layersentry@10.250.10.41:/home/layersentry/layersentry-host-agent-2307f95-qual'
+          if($LASTEXITCODE -ne 0){throw 'agent stage failed'}
+          scp.exe @base (Join-Path $q 'layersentry-host-agent-2307f95.service') 'layersentry@10.250.10.41:/home/layersentry/layersentry-host-agent-2307f95.service'
+          if($LASTEXITCODE -ne 0){throw 'service stage failed'}
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          Remove-Item $key,$known -Force
+          Write-Host 'FIXED_AGENT_GUEST_STAGE=PASS'
