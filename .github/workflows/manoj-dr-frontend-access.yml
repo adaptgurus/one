@@ -72,7 +72,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $vmName='ls-fe1'
           $builder='ls-iso-builder'
-          $slot=4
+          $used=@(Get-VMHardDiskDrive -VMName $builder | Where-Object { $_.ControllerType -eq 'SCSI' } | ForEach-Object { [int]$_.ControllerLocation })
+          $slot=(4..31 | Where-Object { $used -notcontains $_ } | Select-Object -First 1)
+          if ($null -eq $slot) { throw 'no free builder SCSI slot is available' }
+          Write-Host "DR_TEMP_SCSI_SLOT=$slot"
           $disk=(Get-VMHardDiskDrive -VMName $vmName | Select-Object -First 1).Path
           if (-not $disk) { throw 'FE1 OS disk not found' }
 
@@ -81,10 +84,6 @@ jobs:
             if ((Get-VM -Name $vmName).State -ne 'Off') {
               Stop-VM -Name $vmName -Force -Confirm:$false
             }
-
-            $existing=Get-VMHardDiskDrive -VMName $builder |
-              Where-Object { $_.ControllerType -eq 'SCSI' -and $_.ControllerLocation -eq $slot }
-            if ($existing) { throw "builder SCSI slot $slot is already occupied" }
 
             Add-VMHardDiskDrive -VMName $builder -ControllerType SCSI -ControllerNumber 0 -ControllerLocation $slot -Path $disk
             $attached=$true
@@ -127,3 +126,21 @@ jobs:
           & ssh.exe -i $env:DR_MAINT_KEY -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL oneadmin@10.250.10.10 'hostname; id; onehost list; onedatastore list; onevm list'
           if ($LASTEXITCODE -ne 0) { throw 'FE1 oneadmin maintenance access failed' }
           Write-Host 'MANOJ_FE1_ONEADMIN_ACCESS=PASS'
+
+      - name: Verify FE HA services recovered
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $bad=@()
+          foreach ($ip in @('10.250.10.10','10.250.10.13')) {
+            $ok=$false
+            for ($i=0; $i -lt 30; $i++) {
+              $tcp=Test-NetConnection -ComputerName $ip -Port 2633 -WarningAction SilentlyContinue
+              if ($tcp.TcpTestSucceeded) { $ok=$true; break }
+              Start-Sleep -Seconds 2
+            }
+            Write-Host "FE_HEALTH IP=$ip ONED_2633=$ok"
+            if (-not $ok) { $bad += $ip }
+          }
+          if ($bad.Count -gt 0) { throw "OpenNebula FE health not restored: $($bad -join ',')" }
