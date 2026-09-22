@@ -1,0 +1,40 @@
+name: T2 Durable Current Screen
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-durable-current-screen.yml
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Capture durable qualification VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-durable-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          Write-Host "VM_STATE=$($vm.State) UPTIME=$($vm.Uptime)"
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
+          Write-Host "DISK_COUNT=$($disks.Count) DISK=$($disks[0].Path) DVD=$($dvd.Path)"
+          $out='C:\LayerSentryLab\evidence\t2-durable-5f3bda7\current-screen.png'
+          New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          if(-not(Test-Path $out)){throw 'Durable screen capture missing'}
+          Write-Host "SCREENSHOT_BYTES=$((Get-Item $out).Length) VHD_FILE_BYTES=$((Get-Item $disks[0].Path).Length)"
+      - name: Upload current screen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-durable-current-screen
+          path: C:\LayerSentryLab\evidence\t2-durable-5f3bda7\current-screen.png
+          if-no-files-found: error
+          retention-days: 7
