@@ -1,0 +1,27 @@
+name: T2 Qualification Helper Inventory
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-qualification-helper-inventory.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 5
+    steps:
+      - name: List relevant qualification helper names
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          Get-ChildItem 'C:\LayerSentryLab\qualification' -File -ErrorAction Stop |
+            Where-Object { $_.Name -match '(?i)(agent|root|recover|update|install|seal|console|enroll|ssh|vm_)' } |
+            Select-Object Name,Length,LastWriteTime |
+            Sort-Object Name |
+            Format-Table -AutoSize
