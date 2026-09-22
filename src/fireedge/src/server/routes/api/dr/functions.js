@@ -141,6 +141,17 @@ const action =
 const capabilities = action((_, userData) =>
   proxy({ path: '/v1/dr/capabilities', userData })
 )
+const sites = action((_, userData) =>
+  proxy({ path: '/v1/dr/sites', userData })
+)
+const createSite = action(({ site }, userData) =>
+  proxy({
+    method: 'POST',
+    path: '/v1/dr/sites',
+    data: site,
+    userData,
+  })
+)
 const domains = action((_, userData) =>
   proxy({ path: '/v1/dr/protection-groups', userData })
 )
@@ -168,6 +179,8 @@ const checkpoint = action(({ id }, userData) =>
 
 module.exports = {
   capabilities,
+  sites,
+  createSite,
   domains,
   createDomain,
   recoveryPoints,
