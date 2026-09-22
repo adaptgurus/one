@@ -461,3 +461,18 @@ test('cloud instantiate flow is customer-only and strips helper data', () => {
   assert.match(instantiate, /delete requestTemplate\.resources/)
   assert.match(instantiate, /delete requestTemplate\.services/)
 })
+
+
+test('form renderer treats dynamic hidden input types as hidden fields', () => {
+  const source = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/components/composed/Forms/FormWithSchema/index.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(source, /type === INPUT_TYPES\.HIDDEN/)
+  assert.match(source, /htmlType === INPUT_TYPES\.HIDDEN/)
+  assert.match(source, /if \(isHidden\) return null/)
+})
