@@ -39,6 +39,10 @@ jobs:
           ps -eo pid,ppid,user,lstart,args | grep '[l]ayersentry-host-controller' || true
           echo '=== PORT ==='
           ss -lnt 2>/dev/null | grep ':9443' || true
+          sudo -n ss -lntp 2>/dev/null | grep ':9443' || true
+          sudo -n fuser -v 9443/tcp 2>&1 || true
+          echo '=== MATCHING PROCESSES ==='
+          ps -eo pid,ppid,user,lstart,args | grep -Ei '[l]ayersentry|[h]ost-controller|[9]443' || true
           echo '=== USER SERVICES ==='
           systemctl --user --no-pager --full status layersentry-host-controller.service 2>&1 || true
           echo '=== SYSTEM SERVICE ==='
