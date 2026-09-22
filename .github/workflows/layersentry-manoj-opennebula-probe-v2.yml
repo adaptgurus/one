@@ -1,0 +1,76 @@
+name: LayerSentry Manoj OpenNebula DR probe v2
+
+on:
+  push:
+    branches:
+      - feat/layersentry-protection-domain-20260923
+    paths:
+      - .github/workflows/layersentry-manoj-opennebula-probe-v2.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Probe SSH and local DR lab metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $targets = @(
+            @{Name='ls-fe1'; IP='10.250.10.10'},
+            @{Name='ls-fe1-alt'; IP='10.250.10.11'},
+            @{Name='ls-fe3'; IP='10.250.10.13'},
+            @{Name='ls-kvm1'; IP='10.250.10.20'}
+          )
+          $users = @('root','oneadmin','opc')
+
+          foreach ($target in $targets) {
+            $authenticated = $false
+            foreach ($user in $users) {
+              $dest = "$user@$($target.IP)"
+              $output = & ssh.exe -o BatchMode=yes -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ConnectTimeout=5 $dest 'printf "HOST=%s USER=%s\n" "$(hostname)" "$(id -un)"; command -v onehost || true; command -v oned || true; systemctl is-active opennebula 2>/dev/null || true; rpm -q opennebula 2>/dev/null || true' 2>&1
+              $rc = $LASTEXITCODE
+              Write-Host "SSH_PROBE NAME=$($target.Name) IP=$($target.IP) USER=$user RC=$rc"
+              if ($rc -eq 0) {
+                $authenticated = $true
+                $output | ForEach-Object { Write-Host "REMOTE $($_)" }
+                break
+              }
+            }
+            Write-Host "SSH_AUTHENTICATED NAME=$($target.Name) RESULT=$authenticated"
+          }
+
+          Write-Host 'LOCAL_DR_AUTH_FILE_NAMES'
+          if (Test-Path 'C:\LayerSentryLab') {
+            Get-ChildItem 'C:\LayerSentryLab' -Recurse -File -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.Name -match '(?i)(auth|credential|secret|token|ssh|key|cloud|kickstart|answer|install)'
+              } |
+              Select-Object -First 100 FullName,Length,LastWriteTime |
+              Format-Table -AutoSize
+          }
+
+      - name: Probe OpenNebula XML-RPC listeners
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          foreach ($ip in @('10.250.10.10','10.250.10.11','10.250.10.13')) {
+            try {
+              $body = '<methodCall><methodName>system.listMethods</methodName><params /></methodCall>'
+              $response = Invoke-WebRequest -UseBasicParsing -Uri "http://$ip:2633/RPC2" -Method Post -ContentType 'text/xml' -Body $body -TimeoutSec 5
+              Write-Host "XMLRPC IP=$ip STATUS=$($response.StatusCode) BYTES=$($response.RawContentLength)"
+              if ($response.Content -match '<methodResponse') {
+                Write-Host "XMLRPC_METHOD_RESPONSE IP=$ip TRUE"
+              }
+            } catch {
+              if ($_.Exception.Response) {
+                Write-Host "XMLRPC IP=$ip HTTP_STATUS=$([int]$_.Exception.Response.StatusCode)"
+              } else {
+                Write-Host "XMLRPC IP=$ip ERROR=$($_.Exception.Message)"
+              }
+            }
+          }
