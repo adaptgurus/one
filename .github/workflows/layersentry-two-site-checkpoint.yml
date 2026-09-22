@@ -1,0 +1,73 @@
+name: LayerSentry two-site checkpoint qualification
+
+on:
+  push:
+    branches:
+      - feat/layersentry-protection-domain-20260923
+    paths:
+      - .github/workflows/layersentry-two-site-checkpoint.yml
+
+permissions:
+  contents: read
+
+jobs:
+  manoj_remote_checkpoint:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+    env:
+      CHECKPOINT_TAG: layersentry-dr-two-site-20260923-0104
+    steps:
+      - name: Identify Manoj site
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host "HOSTNAME=$env:COMPUTERNAME"
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, OsArchitecture
+          Get-PSDrive -PSProvider FileSystem | Format-Table -AutoSize
+
+      - name: Download Tester checkpoint
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $dir = Join-Path $env:RUNNER_TEMP "layersentry-dr-$env:CHECKPOINT_TAG"
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          gh release download $env:CHECKPOINT_TAG --repo $env:GITHUB_REPOSITORY --dir $dir
+          Get-ChildItem $dir | Format-Table Name,Length -AutoSize
+          "CHECKPOINT_DIR=$dir" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Verify and persist checkpoint on Manoj
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $manifestPath = Join-Path $env:CHECKPOINT_DIR 'checkpoint-manifest.json'
+          $archivePath = Join-Path $env:CHECKPOINT_DIR 'checkpoint-vm220-restic.tar.gz'
+          $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
+          if ($manifest.source_site -ne 'tester') { throw 'unexpected source site' }
+          if ($manifest.remote_site -ne 'manoj') { throw 'unexpected remote site' }
+          $actual = (Get-FileHash $archivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actual -ne $manifest.archive_sha256) { throw "checkpoint SHA mismatch: $actual" }
+          $persistent = Join-Path 'C:\LayerSentryLab\dr-checkpoints' $env:CHECKPOINT_TAG
+          New-Item -ItemType Directory -Force -Path $persistent | Out-Null
+          Copy-Item (Join-Path $env:CHECKPOINT_DIR '*') $persistent -Force
+          $verification = [ordered]@{
+            checkpoint_id = $manifest.checkpoint_id
+            source_site = $manifest.source_site
+            remote_site = $manifest.remote_site
+            manoj_host = $env:COMPUTERNAME
+            sha256 = $actual
+            stored_path = $persistent
+            verified_at_utc = [DateTime]::UtcNow.ToString('o')
+          }
+          $verification | ConvertTo-Json | Set-Content (Join-Path $persistent 'manoj-verification.json')
+          Write-Host "MANOJ_CHECKPOINT_VERIFIED=$actual"
+          "MANOJ_PERSISTENT=$persistent" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload checkpoint from Manoj site
+        uses: actions/upload-artifact@v4
+        with:
+          name: manoj-remote-checkpoint
+          path: ${{ env.MANOJ_PERSISTENT }}
+          if-no-files-found: error
+          retention-days: 1
