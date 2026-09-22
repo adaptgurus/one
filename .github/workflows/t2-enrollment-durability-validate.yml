@@ -1,0 +1,124 @@
+name: T2 Enrollment Durability Validate
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-enrollment-durability-validate.yml
+      - qualification/t2-enrollment-fix-mirror/**
+      - qualification/t2-enrollment-durability-validate.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-enrollment-durability-validate
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: self-hosted
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bind exact Manoj runner and pristine base
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $repo='C:\LayerSentryLab\src\layersentry-platform'
+          $git='C:\Program Files\Git\cmd\git.exe'
+          if(-not(Test-Path $repo)){throw 'Local LayerSentry checkout missing'}
+          $head=(& $git -C $repo rev-parse HEAD).Trim()
+          if($head -ne '4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'){throw "Unexpected local base HEAD $head"}
+          if((& $git -C $repo status --porcelain | Out-String).Trim()){throw 'Local LayerSentry checkout is not pristine'}
+          Write-Host "LOCAL_BASE=PASS head=$head"
+
+      - name: Create disposable patched tree
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo='C:\LayerSentryLab\src\layersentry-platform'
+          $git='C:\Program Files\Git\cmd\git.exe'
+          $zip=Join-Path $env:RUNNER_TEMP 'layersentry-4c4ac81.zip'
+          $dst=Join-Path $env:RUNNER_TEMP 'layersentry-enrollment-fix'
+          if(Test-Path $dst){Remove-Item $dst -Recurse -Force}
+          if(Test-Path $zip){Remove-Item $zip -Force}
+          & $git -C $repo archive --format=zip --output=$zip HEAD
+          if($LASTEXITCODE -ne 0){throw 'git archive failed'}
+          Expand-Archive -Path $zip -DestinationPath $dst -Force
+          $mirror=Join-Path $env:GITHUB_WORKSPACE 'qualification\t2-enrollment-fix-mirror'
+          $files=@(
+            'deploy\host-agent\internal\inventory\inventory.go',
+            'deploy\host-agent\internal\client\client.go',
+            'deploy\host-agent\internal\controller\controller.go',
+            'deploy\host-agent\internal\controller\controller_test.go',
+            'deploy\host-agent\internal\client\client_test.go',
+            'deploy\host-agent\internal\inventory\enrollment_test.go',
+            'deploy\host-agent\packaging\layersentry-host-agent.service',
+            'tests\test_iso_appliance.py'
+          )
+          foreach($rel in $files){
+            $src=Join-Path $mirror $rel; $out=Join-Path $dst $rel
+            if(-not(Test-Path $src)){throw "Mirror missing: $rel"}
+            New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+            Copy-Item $src $out -Force
+          }
+          "T2_FIX_TREE=$dst" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Verify exact mirrored Git blobs
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $git='C:\Program Files\Git\cmd\git.exe'
+          $expected=@{
+            'deploy\host-agent\internal\inventory\inventory.go'='334d6e02b9b45a335f5cadd13759105a4cccd872';
+            'deploy\host-agent\internal\client\client.go'='ef5f26d014a526134f7c759311107d244f32b1f8';
+            'deploy\host-agent\internal\controller\controller.go'='316c3fc3ce417530d7a2e6089c3ee0887b943670';
+            'deploy\host-agent\internal\controller\controller_test.go'='2220f2c85ab00bbd041fe231ea4c36f057257e69';
+            'deploy\host-agent\internal\client\client_test.go'='0572d621aa932fb200047db539281b3be77460ff';
+            'deploy\host-agent\internal\inventory\enrollment_test.go'='44d6fbc745f682d02eb8bb077bbdb8fe5de0edb8';
+            'deploy\host-agent\packaging\layersentry-host-agent.service'='959d2c05236c9122b6f6fdf29bc5030d485660a3';
+            'tests\test_iso_appliance.py'='9e9d91e80db2a8a21f46a80dfe570ff9df780e95'
+          }
+          foreach($rel in $expected.Keys){
+            $path=Join-Path $env:T2_FIX_TREE $rel
+            $actual=(& $git hash-object $path).Trim()
+            if($actual -ne $expected[$rel]){throw "Blob mismatch $rel actual=$actual expected=$($expected[$rel])"}
+            Write-Host "BLOB_PASS $rel $actual"
+          }
+
+      - name: Python regression
+        shell: powershell
+        working-directory: ${{ env.T2_FIX_TREE }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $env:PYTHONIOENCODING='utf-8'
+          py -m unittest discover -s tests -p 'test_*.py' -v
+          if($LASTEXITCODE -ne 0){throw 'Python regression failed'}
+
+      - name: Root Go validation
+        shell: powershell
+        working-directory: ${{ env.T2_FIX_TREE }}
+        run: |
+          $ErrorActionPreference='Stop'
+          go test ./...
+          if($LASTEXITCODE -ne 0){throw 'Root go test failed'}
+          go vet ./...
+          if($LASTEXITCODE -ne 0){throw 'Root go vet failed'}
+
+      - name: Host-agent Go validation and build
+        shell: powershell
+        working-directory: ${{ env.T2_FIX_TREE }}\deploy\host-agent
+        run: |
+          $ErrorActionPreference='Stop'
+          gofmt -w .
+          go test ./...
+          if($LASTEXITCODE -ne 0){throw 'Host-agent go test failed'}
+          go vet ./...
+          if($LASTEXITCODE -ne 0){throw 'Host-agent go vet failed'}
+          $env:CGO_ENABLED='0'
+          go build -trimpath -ldflags='-s -w -X main.Version=t2-enrollfix' -o "$env:RUNNER_TEMP\layersentry-host-agent-enrollfix.exe" ./cmd/layersentry-host-agent
+          go build -trimpath -ldflags='-s -w' -o "$env:RUNNER_TEMP\layersentry-host-controller-enrollfix.exe" ./cmd/layersentry-host-controller
+          Write-Host 'T2_ENROLLMENT_DURABILITY_WINDOWS_VALIDATION=PASS'
