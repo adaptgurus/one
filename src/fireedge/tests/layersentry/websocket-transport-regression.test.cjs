@@ -7,12 +7,13 @@ const path = require('node:path')
 const root = path.join(__dirname, '../..')
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), 'utf8')
 
-test('OpenNebula hooks do not advertise the unqualified WebSocket upgrade', () => {
-  const server = read('src/server/routes/websockets/opennebula/index.js')
+test('OpenNebula hook client uses the qualified polling transport', () => {
   const client = read('src/modules/features/OneApi/socket.js')
+  const server = read('src/server/routes/websockets/opennebula/index.js')
 
-  assert.match(server, /allowUpgrades:\s*false/)
-  assert.match(server, /Socket\.IO[\s\S]*long-polling/)
+  assert.match(client, /transports:\s*\['polling'\]/)
+  assert.match(client, /Socket\.IO's authenticated long-polling transport/)
   assert.match(client, /createWebsocket\(SOCKETS\.HOOKS/)
   assert.match(client, /socket\.open\(\)/)
+  assert.doesNotMatch(server, /allowUpgrades:\s*false/)
 })
