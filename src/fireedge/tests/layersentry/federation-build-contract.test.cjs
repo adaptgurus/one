@@ -16,7 +16,7 @@ test('federated remote declarations and production build targets stay in lockste
   )
 
   const declared = new Set(
-    [...remotesConfig.matchAll(/^([A-Za-z][A-Za-z0-9]*Module):\\s*$/gm)].map(
+    [...remotesConfig.matchAll(/^([A-Za-z][A-Za-z0-9]*Module):\s*$/gm)].map(
       ([, name]) => name
     )
   )
