@@ -1,0 +1,151 @@
+name: LayerSentry materialize DR checkpoint
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-materialize-dr-checkpoint.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  materialize:
+    runs-on: [self-hosted, Linux, X64, testser-two-site]
+    timeout-minutes: 30
+    env:
+      CHECKPOINT_DIR: /home/opc/layersentry-live-qual-20260913/two-site-checkpoint-20260923
+      SNAPSHOT_ID: 437ec908e672e074549fc448bcb3e4850421b65f3d9320e9db8e72f32aa8331c
+    steps:
+      - name: Verify source checkpoint archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$CHECKPOINT_DIR"
+          sha256sum -c checkpoint-vm220-restic.tar.gz.sha256
+          python3 - <<'PY'
+          import json, pathlib
+          m=json.loads(pathlib.Path("checkpoint-manifest.json").read_text())
+          assert m["checkpoint_id"]=="tester-vm220-20260923"
+          assert m["source_site"]=="tester"
+          assert m["remote_site"]=="manoj"
+          assert m["source_vm_id"]=="220"
+          assert m["backup_image_id"]=="45"
+          print("CHECKPOINT_MANIFEST_PASS")
+          PY
+
+      - name: Install exact Restic 0.18.1 in runner temp
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/restic-0.18.1"
+          mkdir -p "$work"
+          cd "$work"
+          curl -fsSLO https://github.com/restic/restic/releases/download/v0.18.1/SHA256SUMS
+          curl -fsSLO https://github.com/restic/restic/releases/download/v0.18.1/restic_0.18.1_linux_amd64.bz2
+          grep ' restic_0.18.1_linux_amd64.bz2$' SHA256SUMS | sha256sum -c -
+          bunzip2 -f restic_0.18.1_linux_amd64.bz2
+          chmod 0755 restic_0.18.1_linux_amd64
+          ./restic_0.18.1_linux_amd64 version
+          echo "RESTIC_BIN=$work/restic_0.18.1_linux_amd64" >> "$GITHUB_ENV"
+
+      - name: Extract recovery repository and obtain datastore credential without logging it
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_root="$RUNNER_TEMP/recovery-repo"
+          mkdir -p "$repo_root"
+          tar -xzf "$CHECKPOINT_DIR/checkpoint-vm220-restic.tar.gz" -C "$repo_root"
+          test -d "$repo_root/220"
+          dsxml="$RUNNER_TEMP/ds100.xml"
+          passfile="$RUNNER_TEMP/restic-password"
+          ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 'onedatastore show 100 -x' > "$dsxml"
+          python3 - "$dsxml" "$passfile" <<'PY'
+          import pathlib, sys, xml.etree.ElementTree as ET
+          root=ET.parse(sys.argv[1]).getroot()
+          value=root.findtext("./TEMPLATE/RESTIC_PASSWORD")
+          if not value:
+              raise SystemExit("RESTIC_PASSWORD missing from datastore metadata")
+          pathlib.Path(sys.argv[2]).write_text(value, encoding="utf-8")
+          PY
+          chmod 0600 "$passfile"
+          rm -f "$dsxml"
+          echo "RECOVERY_REPO=$repo_root/220" >> "$GITHUB_ENV"
+          echo "RESTIC_PASSWORD_FILE=$passfile" >> "$GITHUB_ENV"
+
+      - name: Verify and restore recovery-side snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RESTIC_BIN" --repo "$RECOVERY_REPO" --password-file "$RESTIC_PASSWORD_FILE" check
+          "$RESTIC_BIN" --repo "$RECOVERY_REPO" --password-file "$RESTIC_PASSWORD_FILE" snapshots --json > "$RUNNER_TEMP/snapshots.json"
+          python3 - "$RUNNER_TEMP/snapshots.json" "$SNAPSHOT_ID" <<'PY'
+          import json, sys
+          snaps=json.load(open(sys.argv[1],encoding="utf-8"))
+          matches=[x for x in snaps if x.get("id")==sys.argv[2]]
+          assert len(matches)==1, f"expected one snapshot, got {len(matches)}"
+          print("RECOVERY_SNAPSHOT_IDENTITY_PASS")
+          print("RECOVERY_TREE="+matches[0]["tree"])
+          PY
+          restore="$RUNNER_TEMP/restore-vm220"
+          mkdir -p "$restore"
+          "$RESTIC_BIN" --repo "$RECOVERY_REPO" --password-file "$RESTIC_PASSWORD_FILE" restore "$SNAPSHOT_ID" --target "$restore"
+          rm -f "$RESTIC_PASSWORD_FILE"
+          find "$restore" -type f -printf '%p %s bytes\n' | head -50
+          echo "RESTORE_DIR=$restore" >> "$GITHUB_ENV"
+
+      - name: Produce portable verified qcow2
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidate=""
+          while IFS= read -r f; do
+            if qemu-img info --output=json "$f" > "$RUNNER_TEMP/qemu-info.json" 2>/dev/null; then
+              format=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["format"])' "$RUNNER_TEMP/qemu-info.json")
+              if [[ "$format" == "qcow2" ]]; then
+                candidate="$f"
+                break
+              fi
+            fi
+          done < <(find "$RESTORE_DIR" -type f -size +1M -print)
+          test -n "$candidate"
+          qemu-img check "$candidate"
+          out="$RUNNER_TEMP/vm220-dr-recovered.qcow2"
+          qemu-img convert -p -c -O qcow2 "$candidate" "$out"
+          qemu-img check "$out"
+          qemu-img info --output=json "$out" > "$RUNNER_TEMP/vm220-qemu-info.json"
+          sha256sum "$out" > "$RUNNER_TEMP/vm220-dr-recovered.qcow2.sha256"
+          python3 - "$CHECKPOINT_DIR/checkpoint-manifest.json" "$RUNNER_TEMP/vm220-qemu-info.json" "$RUNNER_TEMP/vm220-dr-recovered.qcow2.sha256" "$RUNNER_TEMP/vm220-recovery-manifest.json" <<'PY'
+          import json, pathlib, sys
+          src=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          q=json.loads(pathlib.Path(sys.argv[2]).read_text())
+          digest=pathlib.Path(sys.argv[3]).read_text().split()[0]
+          out={
+            "checkpoint_id": src["checkpoint_id"],
+            "source_site": src["source_site"],
+            "recovery_site": src["remote_site"],
+            "source_vm_id": src["source_vm_id"],
+            "backup_image_id": src["backup_image_id"],
+            "restic_snapshot_id": "437ec908e672e074549fc448bcb3e4850421b65f3d9320e9db8e72f32aa8331c",
+            "disk_sha256": digest,
+            "disk_format": q["format"],
+            "virtual_size": q["virtual-size"],
+            "materialization": "recovery_repository_only"
+          }
+          pathlib.Path(sys.argv[4]).write_text(json.dumps(out,indent=2)+"\n")
+          print("PORTABLE_QCOW2_PASS")
+          print("DISK_SHA256="+digest)
+          PY
+
+      - name: Upload independent recovery artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm220-independent-recovery
+          path: |
+            ${{ runner.temp }}/vm220-dr-recovered.qcow2
+            ${{ runner.temp }}/vm220-dr-recovered.qcow2.sha256
+            ${{ runner.temp }}/vm220-recovery-manifest.json
+          if-no-files-found: error
+          retention-days: 3
