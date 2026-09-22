@@ -1,0 +1,157 @@
+name: T2 Durable Enrollment Retry
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - '.github/workflows/t2-durable-enrollment-retry.yml'
+      - 'qualification/t2-durable-enrollment-retry.request'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-durable-enrollment-retry
+  cancel-in-progress: false
+
+jobs:
+  retry:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind Manoj durable VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $vm=Get-VM -Name 'ls-appliance-durable-qual' -ErrorAction Stop
+          $hb=(Get-VMIntegrationService -VMName $vm.Name -Name 'Heartbeat' -ErrorAction Stop).PrimaryStatusDescription
+          if($vm.State -ne 'Running' -or $hb -ne 'OK'){throw "Durable VM unhealthy state=$($vm.State) heartbeat=$hb"}
+          if(@(Get-VMDvdDrive -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Durable VM is not VHD-only'}
+          Write-Host "DURABLE_RETRY_VM=PASS uptime=$($vm.Uptime)"
+
+      - name: Prepare controller key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\iso-builder-key'; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          foreach($p in @($src,$known)){if(-not(Test-Path $p)){throw "Missing $p"}}
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null; & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-durable-retry-controller-key'; Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null; & icacls.exe $key /setowner '*S-1-5-18' | Out-Null; & icacls.exe $key /inheritance:r | Out-Null; & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_DURABLE_RETRY_CTL_KEY=$key" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Record existing controller state and create fresh bootstrap
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source; $scp=(Get-Command scp.exe).Source; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $remote=@'
+          import json,os,ssl,urllib.request
+          from pathlib import Path
+          q=Path('/home/builder/layersentry-qual')
+          state=json.loads(q.joinpath('state.json').read_text())
+          h=(state.get('hosts') or {}).get('qualification/lsdurable01')
+          if h:
+              safe={k:h.get(k) for k in ['site','host','machine_id','enrolled_at','bootstrap_consumed_at','enrollment_management_ip','last_seen','last_poll_at','disabled']}
+              print('EXISTING_DURABLE_HOST='+json.dumps(safe,sort_keys=True,default=str))
+          else:
+              print('EXISTING_DURABLE_HOST=NONE')
+          admin=q.joinpath('admin.token').read_text(encoding='ascii').strip()
+          ctx=ssl.create_default_context(cafile=str(q/'agent-ca.crt'))
+          payload=json.dumps({'site':'qualification','host':'lsdurable01','management_ip':'10.250.10.42','ttl_seconds':3600}).encode()
+          req=urllib.request.Request('https://10.250.10.40:9443/v1/admin/bootstrap',data=payload,method='POST')
+          req.add_header('Authorization','Bearer '+admin); req.add_header('Content-Type','application/json')
+          with urllib.request.urlopen(req,context=ctx,timeout=10) as r:d=json.loads(r.read().decode())
+          p=q/'durable-retry-bootstrap.token'; p.write_text(d['token'],encoding='ascii'); os.chmod(p,0o600)
+          print('DURABLE_RETRY_BOOTSTRAP=PASS host='+str(d.get('host'))+' ip='+str(d.get('management_ip'))+' expires='+str(d.get('expires_at')))
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remote -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_DURABLE_RETRY_CTL_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | python3"
+          if($LASTEXITCODE -ne 0){throw 'Fresh durable retry bootstrap creation failed'}
+          $local=Join-Path $env:RUNNER_TEMP 'durable-retry-bootstrap.token'
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_DURABLE_RETRY_CTL_KEY builder@10.250.10.40:/home/builder/layersentry-qual/durable-retry-bootstrap.token $local
+          if($LASTEXITCODE -ne 0){throw 'Retry bootstrap transfer failed'}
+          & icacls.exe $local /inheritance:r | Out-Null; & icacls.exe $local /grant:r '*S-1-5-18:(R)' | Out-Null
+          "T2_DURABLE_RETRY_TOKEN=$local" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "DURABLE_RETRY_TOKEN_FILE=PASS length=$((Get-Content -Raw $local).Trim().Length) value=REDACTED"
+
+      - name: Generate retained qualification recovery passwords
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          function New-HexSecret([string]$Path){
+            $bytes=New-Object byte[] 16; $rng=[Security.Cryptography.RandomNumberGenerator]::Create(); try{$rng.GetBytes($bytes)}finally{$rng.Dispose()}
+            $value=([BitConverter]::ToString($bytes)).Replace('-','').ToLowerInvariant(); [IO.File]::WriteAllText($Path,$value,[Text.Encoding]::ASCII)
+            & icacls.exe $Path /inheritance:r | Out-Null; & icacls.exe $Path /grant:r '*S-1-5-18:(R)' | Out-Null
+          }
+          $q='C:\LayerSentryLab\qualification'; New-Item -ItemType Directory -Force -Path $q | Out-Null
+          $support=Join-Path $q 'durable-support-current.password'; $root=Join-Path $q 'durable-root-current.password'
+          New-HexSecret $support; New-HexSecret $root
+          "T2_DURABLE_RETRY_SUPPORT=$support" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "T2_DURABLE_RETRY_ROOT=$root" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'DURABLE_RETRY_PASSWORDS=PASS values=REDACTED retained_for_qualification=true'
+
+      - name: Re-enter durable firstboot sequence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $token=(Get-Content -Raw $env:T2_DURABLE_RETRY_TOKEN).Trim(); $support=(Get-Content -Raw $env:T2_DURABLE_RETRY_SUPPORT).Trim(); $root=(Get-Content -Raw $env:T2_DURABLE_RETRY_ROOT).Trim()
+          $pubParts=((Get-Content -Raw 'C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519.pub').Trim() -split '\s+'); $pub=$pubParts[0]+' '+$pubParts[1]
+          $ns='root\virtualization\v2'; $vm=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem | Where-Object ElementName -eq 'ls-appliance-durable-qual'
+          $kbd=Get-CimAssociatedInstance -InputObject $vm -Namespace $ns -Association Msvm_SystemDevice -ResultClassName Msvm_Keyboard | Select-Object -First 1
+          if(-not $kbd){throw 'Durable VM keyboard missing'}
+          function K([uint32]$k){Invoke-CimMethod -InputObject $kbd -MethodName TypeKey -Arguments @{KeyCode=$k}|Out-Null;Start-Sleep -Milliseconds 35}
+          function SK([uint32]$k){Invoke-CimMethod -InputObject $kbd -MethodName PressKey -Arguments @{KeyCode=[uint32]0x10}|Out-Null;Start-Sleep -Milliseconds 25;K $k;Invoke-CimMethod -InputObject $kbd -MethodName ReleaseKey -Arguments @{KeyCode=[uint32]0x10}|Out-Null}
+          function Enter(){Invoke-CimMethod -InputObject $kbd -MethodName PressKey -Arguments @{KeyCode=[uint32]0x0D}|Out-Null;Start-Sleep -Milliseconds 120;Invoke-CimMethod -InputObject $kbd -MethodName ReleaseKey -Arguments @{KeyCode=[uint32]0x0D}|Out-Null;Start-Sleep -Milliseconds 900}
+          function T([string]$s){foreach($c in $s.ToCharArray()){
+            if($c -ge 'a'-and$c -le 'z'){K ([uint32][char]([string]$c).ToUpperInvariant())}
+            elseif($c -ge 'A'-and$c -le 'Z'){SK ([uint32][char]$c)} elseif($c -ge '0'-and$c -le '9'){K ([uint32][char]$c)}
+            elseif($c -eq ' '){K 0x20}elseif($c -eq '.'){K 0xBE}elseif($c -eq '-'){K 0xBD}elseif($c -eq '/'){K 0xBF}elseif($c -eq ':'){SK 0xBA}elseif($c -eq '_'){SK 0xBD}elseif($c -eq '='){K 0xBB}elseif($c -eq '+'){SK 0xBB}else{throw ('unsupported character '+[int][char]$c)}};Enter}
+          T '1'; T 'lsdurable01'; T 'qualification'; T '10.250.10.40:9443'; T '10.250.10.42/24'; T '10.250.10.1'; T '1.1.1.1'
+          T $token; T $support; T $support; T $root; T $root; T $pub
+          Write-Host 'DURABLE_RETRY_FIRSTBOOT_SEQUENCE=PASS secrets=REDACTED'
+
+      - name: Require enrollment and first mTLS poll
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $remote=@'
+          import json,time
+          from pathlib import Path
+          p=Path('/home/builder/layersentry-qual/state.json'); deadline=time.time()+300
+          while time.time()<deadline:
+              d=json.loads(p.read_text()); h=(d.get('hosts') or {}).get('qualification/lsdurable01')
+              if h and h.get('last_poll_at') and not str(h.get('last_poll_at')).startswith('0001-'):
+                  safe={k:h.get(k) for k in ['site','host','machine_id','enrolled_at','bootstrap_consumed_at','enrollment_management_ip','last_seen','last_poll_at','disabled']}
+                  print('DURABLE_RETRY_HOST='+json.dumps(safe,sort_keys=True,default=str)); print('DURABLE_RETRY_MTLS_POLL=PASS'); raise SystemExit(0)
+              time.sleep(5)
+          print('DURABLE_RETRY_MTLS_POLL=TIMEOUT'); raise SystemExit(2)
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remote -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_DURABLE_RETRY_CTL_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | python3"
+          if($LASTEXITCODE -ne 0){throw 'Durable retry did not complete mTLS poll'}
+
+      - name: Capture retry console
+        if: always()
+        shell: powershell
+        run: |
+          $out='C:\LayerSentryLab\evidence\t2-durable-5f3bda7\retry-result.png'; New-Item -ItemType Directory -Force -Path (Split-Path $out)|Out-Null
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-durable-qual' -Out $out
+      - name: Upload retry console
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-durable-retry-console
+          path: C:\LayerSentryLab\evidence\t2-durable-5f3bda7\retry-result.png
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Cleanup transient credentials
+        if: always()
+        shell: powershell
+        run: |
+          foreach($p in @($env:T2_DURABLE_RETRY_TOKEN,$env:T2_DURABLE_RETRY_CTL_KEY)){if($p -and(Test-Path $p)){& icacls.exe $p /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $p -Force}}
+          Write-Host 'Retained qualification-only support/root recovery files remain ACL-restricted on MANOJ-TEST-INST.'
