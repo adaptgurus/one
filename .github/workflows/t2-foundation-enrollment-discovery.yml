@@ -1,0 +1,55 @@
+name: T2 Foundation Enrollment Discovery
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-enrollment-discovery.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-foundation-enrollment-discovery
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 10
+    steps:
+      - name: Read qualification helper metadata safely
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
+          $root='C:\LayerSentryLab\qualification'
+          $files=@(
+            'vm_full_enroll_testlab.ps1',
+            'vm_enroll_testlab.ps1',
+            'prepare_fresh_enrollment_safe.py',
+            'prepare_fresh_enrollment_8ddb3a3.py',
+            'create_bootstrap_safe.py'
+          )
+          foreach($name in $files){
+            $p=Join-Path $root $name
+            if(-not (Test-Path $p)){continue}
+            Write-Host "=== HELPER $name ==="
+            Get-Content -LiteralPath $p | ForEach-Object {
+              $line=$_
+              if($line -notmatch '(?i)site|host|controller|management|gateway|dns|\bip\b|vmname|vm\s*=|switch|enroll|bootstrap|token|support|root'){return}
+              $line=[regex]::Replace($line,'(?i)((?:password|token|secret|code)\w*\s*=\s*)["''][^"'']*["'']','$1"<redacted>"')
+              $line=[regex]::Replace($line,'(?<![A-Za-z0-9])[A-Fa-f0-9]{32,}(?![A-Za-z0-9])','<redacted-long-hex>')
+              $line=[regex]::Replace($line,'(?<![A-Za-z0-9+/])[A-Za-z0-9+/]{48,}={0,2}(?![A-Za-z0-9+/])','<redacted-long>')
+              Write-Host $line
+            }
+          }
+          Write-Host '=== MATERIAL METADATA ==='
+          Get-ChildItem $root -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Name -match '(?i)qual-enrollment-4c4ac81|durable-root-current|durable-support-current|qual-support-ac7e14e-ed25519.pub'} |
+            ForEach-Object {
+              $hash=(Get-FileHash -Algorithm SHA256 $_.FullName).Hash.ToLowerInvariant()
+              Write-Host "$($_.Name) bytes=$($_.Length) sha256=$hash"
+            }
