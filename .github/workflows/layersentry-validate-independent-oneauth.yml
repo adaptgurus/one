@@ -27,7 +27,10 @@ jobs:
           if not tool.is_file():
               raise SystemExit("validator missing")
 
-          p = subprocess.run([sys.executable, str(tool)], capture_output=True, text=True, timeout=60)
+          python313 = pathlib.Path(r"C:\LayerSentryLab\tools\Python313\python.exe")
+          interpreter = str(python313) if python313.is_file() else sys.executable
+          print("VALIDATOR_INTERPRETER=" + interpreter)
+          p = subprocess.run([interpreter, str(tool)], capture_output=True, text=True, timeout=60)
           combined = (p.stdout or "") + "\n" + (p.stderr or "")
           # Never emit a potential OpenNebula session string or long credential.
           combined = re.sub(r"(?i)(oneadmin|serveradmin|[A-Za-z0-9_.-]{2,32}):[^\s,;]+", r"\1:<redacted>", combined)
