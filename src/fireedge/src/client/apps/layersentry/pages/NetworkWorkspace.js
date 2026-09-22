@@ -67,7 +67,7 @@ const NetworkInventory = () => {
   if (query.isError) {
     return (
       <Alert severity="error">
-        Could not load networks from the OpenNebula API.
+        Could not load networks from the LayerSentry API.
       </Alert>
     )
   }

@@ -39,7 +39,7 @@ const BackupStorageWorkspace = () => {
   return (
     <PageFrame
       title="Backup Storage"
-      description="OpenNebula Backup Datastores used by VM backups and Backup Plans."
+      description="LayerSentry Backup Datastores used by VM backups and Backup Plans."
       actions={
         <Button
           variant="contained"
@@ -95,7 +95,7 @@ const BackupStorageWorkspace = () => {
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
           title="Configured backup storage"
-          description="Capacity and backend information for real OpenNebula Backup Datastores only."
+          description="Capacity and backend information for real LayerSentry Backup Datastores only."
         />
         <Box sx={{ display: 'grid', gap: 1 }}>
           {stores.map((store) => (

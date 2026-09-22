@@ -95,15 +95,13 @@ test('site recovery never presents request metadata as active DR', () => {
   assert.match(recovery, /Ceph RBD mirroring/)
   assert.match(protection, /REQUEST_STATE: 'REQUESTED_NOT_ACTIVE'/)
 })
-test('cloud-native images and VM blueprints are directly discoverable', () => {
-  for (const label of ['Images', 'VM Blueprints']) {
-    assert.match(
-      navigation,
-      new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    )
-  }
-  assert.match(portal, /PRODUCT_PATHS\.STORAGE_IMAGES/)
-  assert.match(portal, /PRODUCT_PATHS\.COMPUTE_BLUEPRINTS/)
+test('customer service catalog exposes DBaaS and APaaS instead of VM Blueprints', () => {
+  assert.match(navigation, /label: 'DBaaS'/)
+  assert.match(navigation, /label: 'APaaS'/)
+  assert.doesNotMatch(navigation, /label: 'VM Blueprints'/)
+  assert.match(portal, /PRODUCT_PATHS\.DBAAS/)
+  assert.match(portal, /PRODUCT_PATHS\.APAAS/)
+  assert.match(portal, /ManagedServicesWorkspace/)
 })
 
 test('network blueprint creation remains administrator-only', () => {

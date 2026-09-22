@@ -447,7 +447,9 @@ const PortalShell = ({ children, endpoints }) => {
             >
               Role
             </Typography>
-            <Typography sx={{ color: colors.text.primary, fontSize: 12, fontWeight: 700 }}>
+            <Typography
+              sx={{ color: colors.text.primary, fontSize: 12, fontWeight: 700 }}
+            >
               {roleLabel(view)}
             </Typography>
           </Box>

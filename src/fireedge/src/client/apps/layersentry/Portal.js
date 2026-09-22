@@ -193,7 +193,7 @@ const Portal = ({ endpoints }) => {
               endpoints,
               title: 'Network Blueprints',
               description:
-                'Reusable OpenNebula network templates for repeatable private-cloud network creation.',
+                'Reusable LayerSentry network templates for repeatable private-cloud network creation.',
               resources: [
                 {
                   label: 'Network Blueprints',
@@ -213,7 +213,7 @@ const Portal = ({ endpoints }) => {
               endpoints,
               title: 'Virtual Routers',
               description:
-                'Operate OpenNebula Virtual Routers for routed networks and highly available endpoint patterns.',
+                'Operate LayerSentry Virtual Routers for routed networks and highly available endpoint patterns.',
               resources: [{ label: 'Virtual Routers', legacyPath: '/vrouter' }],
               createTo: '/vrouter/instantiate',
               createLabel: 'Deploy Virtual Router',
@@ -255,7 +255,7 @@ const Portal = ({ endpoints }) => {
               endpoints,
               title: 'Images',
               description:
-                'Customer-visible OS and disk images with provider ownership and raw attributes hidden by the active OpenNebula view.',
+                'Customer-visible OS and disk images with provider ownership and raw attributes hidden by the active LayerSentry view.',
               resources: [{ label: 'Images', legacyPath: '/image' }],
               createTo: '/image/create',
               createLabel: 'Create Image',
@@ -271,7 +271,7 @@ const Portal = ({ endpoints }) => {
               endpoints,
               title: 'Files',
               description:
-                'Context files, kernels and other OpenNebula file-datastore objects available to this role.',
+                'Context files, kernels and other LayerSentry file-datastore objects available to this role.',
               resources: [{ label: 'Files', legacyPath: '/file' }],
               createTo: '/file/create',
               createLabel: 'Upload File',
@@ -400,7 +400,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Add Compute Host',
                 description:
-                  'Register a compute host using the native OpenNebula host lifecycle.',
+                  'Register a compute host using the native LayerSentry host lifecycle.',
                 legacyPath: '/host/create',
                 returnTo: PRODUCT_PATHS.INFRA_HOSTS,
               })
@@ -455,7 +455,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Create Backup Storage',
                 description:
-                  'Create an OpenNebula Backup Datastore using a qualified Restic, Rsync or custom backup backend.',
+                  'Create an LayerSentry Backup Datastore using a qualified Restic, Rsync or custom backup backend.',
                 legacyPath: '/datastore/create',
                 returnTo: PRODUCT_PATHS.INFRA_BACKUP_STORAGE,
                 steps: ['Type', 'Backend', 'Capacity', 'Validation', 'Review'],
@@ -511,7 +511,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Add Team',
                 description:
-                  'Create an OpenNebula group used as a LayerSentry team or role boundary.',
+                  'Create an LayerSentry group used as a LayerSentry team or role boundary.',
                 legacyPath: '/group/create',
                 returnTo: PRODUCT_PATHS.ACCESS_TEAMS,
               })
@@ -607,7 +607,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Create Marketplace App',
                 description:
-                  'Publish a Marketplace App through the native OpenNebula administrator workflow.',
+                  'Publish a Marketplace App through the native LayerSentry administrator workflow.',
                 legacyPath: '/marketplace-app/create',
                 returnTo: PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS,
               })
@@ -683,7 +683,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Drivers',
                 description:
-                  'Installed OpenNebula infrastructure drivers and integration status.',
+                  'Installed LayerSentry infrastructure drivers and integration status.',
                 resources: [{ label: 'Drivers', legacyPath: '/driver' }],
               })
             }
@@ -781,7 +781,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Roles',
                 description:
-                  'Role membership is mapped to OpenNebula groups and enforced by backend permissions.',
+                  'Role membership is mapped to LayerSentry groups and enforced by backend permissions.',
                 resources: [{ label: 'Roles / Groups', legacyPath: '/group' }],
               })
             }
@@ -905,7 +905,7 @@ const Portal = ({ endpoints }) => {
               area({
                 endpoints,
                 title: 'Router Templates',
-                description: 'Reusable OpenNebula Virtual Router definitions.',
+                description: 'Reusable LayerSentry Virtual Router definitions.',
                 resources: [
                   {
                     label: 'Router Templates',
@@ -927,7 +927,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Marketplaces',
                 description:
-                  'Administrative OpenNebula public and private Marketplace connections.',
+                  'Administrative LayerSentry public and private Marketplace connections.',
                 resources: [
                   { label: 'Marketplaces', legacyPath: '/marketplace' },
                 ],
@@ -946,7 +946,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Marketplace Apps',
                 description:
-                  'Administrative appliance catalog imported from configured OpenNebula Marketplaces.',
+                  'Administrative appliance catalog imported from configured LayerSentry Marketplaces.',
                 resources: [
                   { label: 'Marketplace Apps', legacyPath: '/marketplace-app' },
                 ],

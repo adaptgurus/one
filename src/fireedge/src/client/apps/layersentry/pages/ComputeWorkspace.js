@@ -26,7 +26,14 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { Db, HardDrive, NetworkAlt, Packages, Plus, Server } from 'iconoir-react'
+import {
+  Db,
+  HardDrive,
+  NetworkAlt,
+  Packages,
+  Plus,
+  Server,
+} from 'iconoir-react'
 import { useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
 import { VmAPI, useGeneralApi, useViews } from '@FeaturesModule'
@@ -120,8 +127,7 @@ const ComputeWorkspace = ({ endpoints }) => {
   const isAdmin = view === 'admin'
   const { enqueueSuccess, enqueueError } = useGeneralApi()
   const canResizeVm =
-    isAdmin &&
-    isCapabilityEnabled(CAPABILITY_IDS.VM_RESIZE, capabilityModel)
+    isAdmin && isCapabilityEnabled(CAPABILITY_IDS.VM_RESIZE, capabilityModel)
   const canUpdateVm =
     isAdmin &&
     isCapabilityEnabled(CAPABILITY_IDS.VM_UPDATE_CONFIG, capabilityModel)
@@ -176,10 +182,14 @@ const ComputeWorkspace = ({ endpoints }) => {
         }),
         enforce: true,
       }).unwrap()
-      enqueueSuccess('VM resize requested. Current values will refresh after the infrastructure accepts the change.')
+      enqueueSuccess(
+        'VM resize requested. Current values will refresh after the infrastructure accepts the change.'
+      )
       query.refetch()
     } catch (error) {
-      enqueueError(error?.data?.message ?? error?.message ?? 'Could not resize VM.')
+      enqueueError(
+        error?.data?.message ?? error?.message ?? 'Could not resize VM.'
+      )
     }
   }
 
@@ -202,7 +212,9 @@ const ComputeWorkspace = ({ endpoints }) => {
       enqueueSuccess('VM details updated successfully.')
       query.refetch()
     } catch (error) {
-      enqueueError(error?.data?.message ?? error?.message ?? 'Could not update VM details.')
+      enqueueError(
+        error?.data?.message ?? error?.message ?? 'Could not update VM details.'
+      )
     }
   }
 
@@ -342,14 +354,48 @@ const ComputeWorkspace = ({ endpoints }) => {
                 }}
               >
                 {[
-                  ['Current vCPU', selectedVm?.TEMPLATE?.VCPU ?? selectedVm?.TEMPLATE?.CPU ?? '—'],
-                  ['Current memory', selectedVm?.TEMPLATE?.MEMORY ? Math.round(Number(selectedVm.TEMPLATE.MEMORY) / 1024) + ' GB' : '—'],
-                  ['Attached storage', selectedStorageGb ? Math.round(selectedStorageGb) + ' GB' : '—'],
-                  ['State', String(selectedVm.STATE) === '3' ? 'Running' : String(selectedVm.STATE)],
+                  [
+                    'Current vCPU',
+                    selectedVm?.TEMPLATE?.VCPU ??
+                      selectedVm?.TEMPLATE?.CPU ??
+                      '—',
+                  ],
+                  [
+                    'Current memory',
+                    selectedVm?.TEMPLATE?.MEMORY
+                      ? Math.round(Number(selectedVm.TEMPLATE.MEMORY) / 1024) +
+                        ' GB'
+                      : '—',
+                  ],
+                  [
+                    'Attached storage',
+                    selectedStorageGb
+                      ? Math.round(selectedStorageGb) + ' GB'
+                      : '—',
+                  ],
+                  [
+                    'State',
+                    String(selectedVm.STATE) === '3'
+                      ? 'Running'
+                      : String(selectedVm.STATE),
+                  ],
                 ].map(([label, value]) => (
-                  <Box key={label} sx={{ p: 1.25, border: `1px solid ${colors.border}`, borderRadius: 1.5 }}>
-                    <Typography sx={{ fontSize: 10, color: colors.text.muted }}>{label}</Typography>
-                    <Typography sx={{ mt: 0.25, fontSize: 14, fontWeight: 800 }}>{value}</Typography>
+                  <Box
+                    key={label}
+                    sx={{
+                      p: 1.25,
+                      border: `1px solid ${colors.border}`,
+                      borderRadius: 1.5,
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+                      {label}
+                    </Typography>
+                    <Typography
+                      sx={{ mt: 0.25, fontSize: 14, fontWeight: 800 }}
+                    >
+                      {value}
+                    </Typography>
                   </Box>
                 ))}
               </Box>

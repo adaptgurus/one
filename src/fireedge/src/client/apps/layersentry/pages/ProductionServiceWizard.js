@@ -1366,7 +1366,7 @@ const ProductionServiceWizard = () => {
         Network & Availability
       </Typography>
       <Typography sx={{ color: colors.text.secondary, mb: 2 }}>
-        Define the customer-facing name and availability intent. Raw OpenNebula
+        Define the customer-facing name and availability intent. Raw LayerSentry
         network internals stay hidden from normal users.
       </Typography>
       <Row>

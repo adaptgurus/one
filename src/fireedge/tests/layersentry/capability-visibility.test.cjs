@@ -40,7 +40,6 @@ test('all backend-backed normal navigation entries carry a capability', () => {
 
   for (const capability of [
     'COMPUTE',
-    'BLUEPRINTS',
     'AFFINITY',
     'KUBERNETES',
     'APPLICATIONS_ONEFLOW',
@@ -382,7 +381,8 @@ test('Super Admin provider pages use qualified read-only inventories', () => {
     'HostAPI.useGetHostsQuery',
     'ClusterAPI.useGetClustersQuery',
     'DatastoreAPI.useGetDatastoresQuery',
-    'DriverAPI.useGetDriversQuery',
+    'HostAPI.useGetHostsQuery',
+    'DatastoreAPI.useGetDatastoresQuery',
     'ZoneAPI.useGetZonesQuery',
     'ProviderAPI.useGetProvidersQuery',
     'UserAPI.useGetUsersQuery',

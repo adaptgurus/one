@@ -160,12 +160,22 @@ const vmStateLabel = (state) =>
 const UsageMeter = ({ label, value, detail }) => (
   <Box sx={{ minWidth: 94 }}>
     <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
-      <Typography sx={{ fontSize: 10, color: colors.text.muted }}>{label}</Typography>
+      <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+        {label}
+      </Typography>
       <Typography sx={{ fontSize: 10, fontWeight: 750 }}>
         {value === undefined ? 'N/A' : Math.round(value) + '%'}
       </Typography>
     </Box>
-    <Box sx={{ mt: 0.35, height: 5, borderRadius: 8, backgroundColor: colors.surfaceMuted, overflow: 'hidden' }}>
+    <Box
+      sx={{
+        mt: 0.35,
+        height: 5,
+        borderRadius: 8,
+        backgroundColor: colors.surfaceMuted,
+        overflow: 'hidden',
+      }}
+    >
       <Box
         sx={{
           height: '100%',
@@ -176,7 +186,9 @@ const UsageMeter = ({ label, value, detail }) => (
       />
     </Box>
     {detail && (
-      <Typography sx={{ mt: 0.25, fontSize: 9, color: colors.text.muted }}>{detail}</Typography>
+      <Typography sx={{ mt: 0.25, fontSize: 9, color: colors.text.muted }}>
+        {detail}
+      </Typography>
     )}
   </Box>
 )
@@ -194,7 +206,9 @@ const VmUtilization = ({ vm }) => {
   const memoryKb = Number(vm?.MONITORING?.MEMORY)
   const configuredStorage = vmStorageMb(vm)
   const observedStorage = monitoredStorageMb(vm)
-  const cpu = clampPercent(Number.isFinite(cpuRaw) ? (cpuRaw / vcpu) * 100 : NaN)
+  const cpu = clampPercent(
+    Number.isFinite(cpuRaw) ? (cpuRaw / vcpu) * 100 : NaN
+  )
   const ram = clampPercent(
     Number.isFinite(memoryKb) && configuredMemoryMb > 0
       ? (memoryKb / 1024 / configuredMemoryMb) * 100
@@ -213,7 +227,9 @@ const VmUtilization = ({ vm }) => {
       <UsageMeter
         label="Disk use"
         value={storage}
-        detail={storage === undefined ? 'guest usage unavailable' : 'backend observed'}
+        detail={
+          storage === undefined ? 'guest usage unavailable' : 'backend observed'
+        }
       />
     </Box>
   )
@@ -246,10 +262,14 @@ const VmInventory = () => {
           label: 'Attached storage',
           render: (vm) => {
             const size = vmStorageMb(vm)
+
             return size ? `${Math.max(1, Math.round(size / 1024))} GB` : '—'
           },
         },
-        { label: 'Current utilization', render: (vm) => <VmUtilization vm={vm} /> },
+        {
+          label: 'Current utilization',
+          render: (vm) => <VmUtilization vm={vm} />,
+        },
       ]}
     />
   )
@@ -394,12 +414,19 @@ const DriverInventory = () => {
       inventory.push({
         ID: 'ds-' + store.ID,
         NAME: store.NAME || 'Storage ' + store.ID,
-        CATEGORY: String(store.TYPE) === 'BACKUP_DS' || store.DS_MAD === 'restic' ? 'Backup storage' : 'Storage',
-        STATE: String(store.STATE ?? '').toLowerCase() === '1' ? 'Available' : 'Available',
+        CATEGORY:
+          String(store.TYPE) === 'BACKUP_DS' || store.DS_MAD === 'restic'
+            ? 'Backup storage'
+            : 'Storage',
+        STATE:
+          String(store.STATE ?? '').toLowerCase() === '1'
+            ? 'Available'
+            : 'Available',
         COUNT: 1,
         TECHNOLOGY: technology || 'native',
       })
     })
+
     return inventory
   }, [hosts.data, datastores.data])
   const query = {

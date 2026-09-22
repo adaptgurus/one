@@ -1,5 +1,17 @@
 /* ------------------------------------------------------------------------- *
  * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
@@ -7,7 +19,10 @@ import { Box, Button, Chip, TextField, Typography } from '@mui/material'
 import { Db, NavArrowRight, Packages } from 'iconoir-react'
 import { useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
-import { PageFrame, Surface } from 'client/apps/layersentry/components/Primitives'
+import {
+  PageFrame,
+  Surface,
+} from 'client/apps/layersentry/components/Primitives'
 import { FALLBACK_BLUEPRINTS } from 'client/apps/layersentry/serviceBlueprints'
 import { colors } from 'client/apps/layersentry/theme/tokens'
 
@@ -31,7 +46,12 @@ const ManagedServicesWorkspace = ({ mode }) => {
         const needle = search.trim().toLowerCase()
         if (!needle) return true
 
-        return [item.name, item.category, item.description, ...(item.workloads || [])]
+        return [
+          item.name,
+          item.category,
+          item.description,
+          ...(item.workloads || []),
+        ]
           .filter(Boolean)
           .join(' ')
           .toLowerCase()
@@ -73,9 +93,13 @@ const ManagedServicesWorkspace = ({ mode }) => {
         >
           <Box sx={{ flex: 1 }}>
             <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
-              {dbaas ? 'Database service catalog' : 'Application service catalog'}
+              {dbaas
+                ? 'Database service catalog'
+                : 'Application service catalog'}
             </Typography>
-            <Typography sx={{ mt: 0.35, fontSize: 12, color: colors.text.secondary }}>
+            <Typography
+              sx={{ mt: 0.35, fontSize: 12, color: colors.text.secondary }}
+            >
               Choose a service to open its LayerSentry production workflow. The
               wizard validates topology, VM footprint, storage, dependencies,
               DNS, proxy, credentials, backup and recovery before deployment.
@@ -116,7 +140,9 @@ const ManagedServicesWorkspace = ({ mode }) => {
                 minHeight: 248,
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}>
+              <Box
+                sx={{ display: 'flex', alignItems: 'flex-start', gap: 1.25 }}
+              >
                 <Box
                   sx={{
                     width: 38,
@@ -136,21 +162,35 @@ const ManagedServicesWorkspace = ({ mode }) => {
                   <Typography sx={{ fontSize: 14, fontWeight: 850 }}>
                     {service.name}
                   </Typography>
-                  <Typography sx={{ mt: 0.25, fontSize: 11, color: colors.text.muted }}>
+                  <Typography
+                    sx={{ mt: 0.25, fontSize: 11, color: colors.text.muted }}
+                  >
                     {service.category}
                   </Typography>
                 </Box>
               </Box>
 
               <Typography
-                sx={{ mt: 1.4, fontSize: 12, color: colors.text.secondary, flex: 1 }}
+                sx={{
+                  mt: 1.4,
+                  fontSize: 12,
+                  color: colors.text.secondary,
+                  flex: 1,
+                }}
               >
                 {service.description}
               </Typography>
 
-              <Box sx={{ mt: 1.3, display: 'flex', flexWrap: 'wrap', gap: 0.6 }}>
+              <Box
+                sx={{ mt: 1.3, display: 'flex', flexWrap: 'wrap', gap: 0.6 }}
+              >
                 {(service.versions || []).slice(0, 3).map((version) => (
-                  <Chip key={version} label={version} size="small" variant="outlined" />
+                  <Chip
+                    key={version}
+                    label={version}
+                    size="small"
+                    variant="outlined"
+                  />
                 ))}
                 {service.recommendedTopology && (
                   <Chip

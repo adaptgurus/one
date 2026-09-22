@@ -114,7 +114,8 @@ test('non-Kubernetes workspaces have dedicated LayerSentry product surfaces', ()
     'StorageWorkspace',
     'NetworkWorkspace',
     'ProtectionWorkspace',
-    'ApplicationsWorkspace',
+    'ManagedServicesWorkspace',
+    'ProductionServiceWizard',
     'OperationsWorkspace',
   ]) {
     assert.match(portal, new RegExp(component))

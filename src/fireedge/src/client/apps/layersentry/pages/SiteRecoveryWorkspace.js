@@ -72,13 +72,13 @@ const SiteRecoveryWorkspace = () => {
   return (
     <PageFrame
       title="Site Recovery / DR"
-      description="Disaster-recovery readiness for the OpenNebula cloud. Real failover and failback stay disabled until the selected recovery architecture is qualified."
+      description="Disaster-recovery readiness for the LayerSentry cloud. Real failover and failback stay disabled until the selected recovery architecture is qualified."
     >
       <Alert severity={evidenceReady ? 'info' : 'warning'} sx={{ mt: 2 }}>
         {isAdmin && evidenceReady
           ? 'Multiple zones and Ceph-backed storage are visible, but Ceph RBD mirroring state and failover/failback are not exposed by the current FireEdge API. Treat DR as not qualified until runtime evidence is bound.'
           : isAdmin
-          ? 'DR is not configured in this lab. OpenNebula DR requires a qualified recovery architecture; the current VM protection request metadata does not activate replication or failover.'
+          ? 'DR is not configured in this lab. LayerSentry DR requires a qualified recovery architecture; the current VM protection request metadata does not activate replication or failover.'
           : 'Site Recovery is provider-managed. A protection request is not proof that replication, failover or failback is active. LayerSentry will show an active DR state only when the provider publishes verified runtime evidence.'}
       </Alert>
       {isAdmin && (
@@ -172,7 +172,7 @@ const SiteRecoveryWorkspace = () => {
         <Surface sx={{ mt: 2, p: 2.5 }}>
           <SectionHeader
             title="Configure prerequisites"
-            description="These pages expose the underlying OpenNebula resources. They do not by themselves certify DR."
+            description="These pages expose the underlying LayerSentry resources. They do not by themselves certify DR."
           />
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             <Button

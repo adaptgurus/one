@@ -93,7 +93,7 @@ const BackupPlanInventory = () => {
   if (query.isError) {
     return (
       <Alert severity="error">
-        Could not load backup plans from the OpenNebula API.
+        Could not load backup plans from the LayerSentry API.
       </Alert>
     )
   }
@@ -148,7 +148,7 @@ const RecoveryPointInventory = () => {
   if (query.isError) {
     return (
       <Alert severity="error">
-        Could not load recovery points from the OpenNebula API.
+        Could not load recovery points from the LayerSentry API.
       </Alert>
     )
   }
@@ -299,15 +299,15 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
             ) : undefined
           }
         >
-          No OpenNebula Backup Datastore is configured. Backup Plans and restore
-          require qualified backup storage such as Restic or Rsync before they
-          can execute successfully.
+          No LayerSentry Backup Datastore is configured. Backup Plans and
+          restore require qualified backup storage such as Restic or Rsync
+          before they can execute successfully.
         </Alert>
       )}
       {!isAdmin && (
         <Alert severity="info" sx={{ mt: 2 }}>
           Backup storage is provider-managed. Your Backup Plan form will show
-          only storage targets that OpenNebula authorizes for your account.
+          only storage targets that LayerSentry authorizes for your account.
         </Alert>
       )}
       <Alert severity="info" sx={{ mt: 2 }}>
