@@ -33,10 +33,10 @@ jobs:
           if($head -ne '4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'){throw "Unexpected base $head"}
           & $git -C $repo diff --quiet; if($LASTEXITCODE -ne 0){throw 'Tracked base changes'}
           & $git -C $repo diff --cached --quiet; if($LASTEXITCODE -ne 0){throw 'Staged base changes'}
-          $zip=Join-Path $env:RUNNER_TEMP 't2-enrollment-fix-source.zip'
+          $archive=Join-Path $env:RUNNER_TEMP 't2-enrollment-fix-source.tar.gz'
           $dst=Join-Path $env:RUNNER_TEMP 't2-enrollment-fix-linux'
           if(Test-Path $dst){Remove-Item $dst -Recurse -Force}
-          if(Test-Path $zip){Remove-Item $zip -Force}
+          if(Test-Path $archive){Remove-Item $archive -Force}
           $basezip=Join-Path $env:RUNNER_TEMP 't2-base.zip'
           & $git -C $repo archive --format=zip --output=$basezip HEAD
           if($LASTEXITCODE -ne 0){throw 'base archive failed'}
@@ -53,9 +53,10 @@ jobs:
             'tests\test_iso_appliance.py'
           )
           foreach($rel in $files){Copy-Item (Join-Path $mirror $rel) (Join-Path $dst $rel) -Force}
-          Compress-Archive -Path (Join-Path $dst '*') -DestinationPath $zip -CompressionLevel Optimal -Force
-          "T2_FIX_ZIP=$zip" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host "PATCH_ARCHIVE_SHA256=$((Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant())"
+          & tar.exe -C $dst -czf $archive .
+          if($LASTEXITCODE -ne 0){throw 'patched tar archive failed'}
+          "T2_FIX_ARCHIVE=$archive" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "PATCH_ARCHIVE_SHA256=$((Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant())"
 
       - name: Prepare runner-private builder SSH key
         shell: powershell
@@ -81,7 +82,7 @@ jobs:
           $ErrorActionPreference='Stop'
           $scp=(Get-Command scp.exe).Source
           $known='C:\LayerSentryLab\qualification\known_hosts_builder'
-          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_FIX_BUILDER_KEY $env:T2_FIX_ZIP builder@10.250.10.40:/home/builder/t2-enrollment-fix-source.zip
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_FIX_BUILDER_KEY $env:T2_FIX_ARCHIVE builder@10.250.10.40:/home/builder/t2-enrollment-fix-source.tar.gz
           if($LASTEXITCODE -ne 0){throw 'patched source transfer failed'}
 
       - name: Linux race vet vulnerability and static build
@@ -96,7 +97,7 @@ jobs:
           out=/home/builder/t2-enrollment-fix-build
           rm -rf "$src" "$out"
           mkdir -p "$src" "$out"
-          python3 -m zipfile -e /home/builder/t2-enrollment-fix-source.zip "$src"
+          tar -xzf /home/builder/t2-enrollment-fix-source.tar.gz -C "$src"
           echo '=== GO ==='
           go version
           echo '=== GOFMT ==='
