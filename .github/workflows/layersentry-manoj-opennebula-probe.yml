@@ -19,24 +19,22 @@ jobs:
       - name: Probe existing Manoj OpenNebula site
         shell: powershell
         run: |
-          $ErrorActionPreference = 'Stop'
+          $ErrorActionPreference = 'Continue'
           $targets = @('10.250.10.10','10.250.10.11','10.250.10.13','10.250.10.20')
+          $users = @('root','oneadmin','opc')
           foreach ($ip in $targets) {
             Write-Host "=== $ip ==="
-            $ssh = Test-NetConnection -ComputerName $ip -Port 22 -WarningAction SilentlyContinue
-            Write-Host "SSH=$($ssh.TcpTestSucceeded)"
-            if (-not $ssh.TcpTestSucceeded) { continue }
-
-            $known = Join-Path $env:RUNNER_TEMP 'known_hosts'
-            ssh-keyscan -H $ip 2>$null | Out-File -FilePath $known -Append -Encoding ascii
-            $users = @('root','oneadmin','opc')
+            $tcp = Test-NetConnection -ComputerName $ip -Port 22 -WarningAction SilentlyContinue
+            Write-Host "SSH_TCP=$($tcp.TcpTestSucceeded)"
+            if (-not $tcp.TcpTestSucceeded) { continue }
             foreach ($user in $users) {
-              Write-Host "-- TRY $user@$ip --"
-              $result = & ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "$user@$ip" "hostname; id; command -v oneversion || true; command -v onehost || true; command -v onedatastore || true; systemctl is-active opennebula 2>/dev/null || true" 2>&1
-              $result | ForEach-Object { Write-Host $_ }
-              if ($LASTEXITCODE -eq 0) {
-                Write-Host "SSH_AUTH_SUCCESS=$user@$ip"
-                break
-              }
+              $dest = "$user@$ip"
+              Write-Host "-- TRY $dest --"
+              $outFile = Join-Path $env:RUNNER_TEMP ("ssh-" + ($ip -replace '\.','-') + "-" + $user + ".out")
+              $errFile = Join-Path $env:RUNNER_TEMP ("ssh-" + ($ip -replace '\.','-') + "-" + $user + ".err")
+              $p = Start-Process -FilePath ssh.exe -ArgumentList @('-o','BatchMode=yes','-o','StrictHostKeyChecking=no','-o','UserKnownHostsFile=NUL','-o','ConnectTimeout=5',$dest,'hostname; id -un; command -v onehost || true; command -v oned || true; systemctl is-active opennebula 2>/dev/null || true; rpm -q opennebula 2>/dev/null || true') -NoNewWindow -Wait -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+              Write-Host "SSH_PROBE IP=$ip USER=$user RC=$($p.ExitCode)"
+              if (Test-Path $outFile) { Get-Content $outFile | ForEach-Object { Write-Host "REMOTE $_" } }
+              if ($p.ExitCode -eq 0) { Write-Host "SSH_AUTH_SUCCESS=$dest"; break }
             }
           }
