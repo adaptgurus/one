@@ -20,18 +20,18 @@ lsblk -o NAME,SIZE,FSTYPE,TYPE "$dev"
 
 part=$(lsblk -lnpo NAME,TYPE,FSTYPE "$dev" | awk '$2=="part" && $3=="LVM2_member" {print $1; exit}')
 test -n "$part"
-vg=$(sudo -n pvs --noheadings -o vg_name "$part" | xargs)
+vg=$(sudo -n pvs --devices "$part" --noheadings -o vg_name "$part" | xargs)
 test -n "$vg"
-sudo -n vgchange -ay "$vg" >/dev/null
+sudo -n vgchange --devices "$part" -ay "$vg" >/dev/null
 
-rootlv=$(sudo -n lvs --noheadings -o lv_path "$vg" | awk '/root/ {print $1; exit}')
+rootlv=$(sudo -n lvs --devices "$part" --noheadings -o lv_path "$vg" | awk '/root/ {print $1; exit}')
 test -n "$rootlv"
 
 mnt=/mnt/layersentry-dr-fe1
 sudo -n mkdir -p "$mnt"
 cleanup() {
   sudo -n umount "$mnt" 2>/dev/null || true
-  sudo -n vgchange -an "$vg" >/dev/null 2>&1 || true
+  sudo -n vgchange --devices "$part" -an "$vg" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
