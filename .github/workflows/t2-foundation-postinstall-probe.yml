@@ -1,0 +1,71 @@
+name: T2 Foundation Postinstall Probe
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-postinstall-probe.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-foundation-postinstall-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
+          Write-Host 'RUNNER_BIND=PASS'
+
+      - name: Inspect installed VM without mutation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $fw=Get-VMFirmware -VMName $name
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
+          $disk=Get-VMHardDiskDrive -VMName $name | Where-Object ControllerLocation -eq 0 | Select-Object -First 1
+          $net=Get-VMNetworkAdapter -VMName $name
+          Write-Host "VM_STATE=$($vm.State) UPTIME=$($vm.Uptime) SECURE_BOOT=$($fw.SecureBoot)"
+          Write-Host "DVD_PATH=$($dvd.Path)"
+          Write-Host "OS_DISK=$($disk.Path)"
+          Write-Host ("IP_ADDRESSES=" + (($net.IPAddresses | Where-Object {$_}) -join ','))
+          $hb=Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue
+          if($hb){Write-Host "HEARTBEAT=$($hb.PrimaryStatusDescription)"}
+          if($fw.SecureBoot -ne 'Off'){throw "Secure Boot unexpectedly enabled: $($fw.SecureBoot)"}
+
+      - name: Capture current console
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
+          if(-not (Test-Path $script)){throw 'capture_vm_thumbnail.ps1 missing'}
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\postinstall-probe.png'
+          New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+          & $script -VM 'ls-appliance-4c4ac81-qual' -Out $out
+          if(-not (Test-Path $out)){throw 'postinstall screenshot not created'}
+          Write-Host "POSTINSTALL_SCREENSHOT=$out bytes=$((Get-Item $out).Length)"
+
+      - name: Enumerate qualification material names only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          Get-ChildItem -Path $root -File -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '(?i)enroll|bootstrap|support|recovery|password|code|token' } |
+            Select-Object FullName,Length,LastWriteTime |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 40 |
+            Format-Table -AutoSize
+          Write-Host 'QUALIFICATION_MATERIAL_NAMES_ENUMERATED=PASS'
