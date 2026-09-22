@@ -38,6 +38,17 @@ const drApi = oneApi.injectEndpoints({
     getDrCapabilities: builder.query({
       queryFn: () => request({ url: '/api/dr/capabilities' }),
     }),
+    getRemoteSites: builder.query({
+      queryFn: () => request({ url: '/api/dr/sites' }),
+    }),
+    createRemoteSite: builder.mutation({
+      queryFn: (site) =>
+        request({
+          url: '/api/dr/sites',
+          method: 'POST',
+          data: { site },
+        }),
+    }),
     getProtectionDomains: builder.query({
       queryFn: () => request({ url: '/api/dr/protection-domains' }),
     }),
@@ -71,6 +82,8 @@ const drApi = oneApi.injectEndpoints({
 
 const {
   useGetDrCapabilitiesQuery,
+  useGetRemoteSitesQuery,
+  useCreateRemoteSiteMutation,
   useGetProtectionDomainsQuery,
   useCreateProtectionDomainMutation,
   useGetProtectionDomainRecoveryPointsQuery,
@@ -79,6 +92,8 @@ const {
 
 export default {
   useGetDrCapabilitiesQuery,
+  useGetRemoteSitesQuery,
+  useCreateRemoteSiteMutation,
   useGetProtectionDomainsQuery,
   useCreateProtectionDomainMutation,
   useGetProtectionDomainRecoveryPointsQuery,
