@@ -1,0 +1,39 @@
+name: Manoj DR maintenance bridge capability
+
+on:
+  push:
+    branches:
+      - qual/manoj-dr-opennebula-20260923
+    paths:
+      - .github/workflows/manoj-dr-maintenance-bridge.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Prepare scoped builder key
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $source='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          foreach ($p in @($source,$known)) { if (-not (Test-Path $p)) { throw "Missing $p" } }
+          $private=Join-Path $env:RUNNER_TEMP 'dr-builder-key'
+          Copy-Item -LiteralPath $source -Destination $private -Force
+          & icacls.exe $private /inheritance:r | Out-Null
+          & icacls.exe $private /grant:r '*S-1-5-18:(R)' | Out-Null
+          "DR_BUILDER_KEY=$private" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Inspect builder maintenance tooling
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $cmd='set -euo pipefail; hostname; id; for x in virt-customize guestfish guestmount qemu-nbd qemu-img lsblk lvs vgs pvs vgchange xfs_repair mount; do printf "%s=" "$x"; command -v "$x" || true; done; sudo -n true && echo SUDO_N=PASS; lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINTS'
+          & ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:DR_BUILDER_KEY builder@10.250.10.40 $cmd
+          if ($LASTEXITCODE -ne 0) { throw 'Builder maintenance capability probe failed' }
