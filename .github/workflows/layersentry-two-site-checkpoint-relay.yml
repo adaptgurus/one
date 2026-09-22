@@ -1,0 +1,87 @@
+name: LayerSentry two-site checkpoint relay
+
+on:
+  push:
+    branches:
+      - ops/layersentry-live-qualification-20260919
+    paths:
+      - .github/workflows/layersentry-two-site-checkpoint-relay.yml
+
+permissions:
+  contents: read
+
+jobs:
+  package-tester:
+    runs-on: [self-hosted, Linux, X64, testser-two-site]
+    timeout-minutes: 15
+    steps:
+      - name: Verify Tester checkpoint package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME}" = 'TESTSER-TWOSITE-ONE'
+          image=/var/tmp/layersentry-20260922-twosite.qcow2
+          manifest=/var/tmp/layersentry-20260922-twosite.manifest.json
+          test -s "$image"
+          test -s "$manifest"
+          actual=$(sha256sum "$image" | awk '{print $1}')
+          expected=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$manifest")
+          test "$actual" = "$expected"
+          out="$RUNNER_TEMP/layersentry-checkpoint"
+          rm -rf "$out"
+          mkdir -p "$out"
+          cp "$image" "$out/checkpoint.qcow2"
+          cp "$manifest" "$out/checkpoint.manifest.json"
+          echo "TESTER_CHECKPOINT_SHA256=$actual"
+          qemu-img check "$out/checkpoint.qcow2"
+
+      - name: Upload verified checkpoint
+        uses: actions/upload-artifact@v4
+        with:
+          name: layersentry-tester-to-manoj-checkpoint
+          path: |
+            ${{ runner.temp }}/layersentry-checkpoint/checkpoint.qcow2
+            ${{ runner.temp }}/layersentry-checkpoint/checkpoint.manifest.json
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
+  receive-manoj:
+    needs: package-tester
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+
+      - name: Download checkpoint
+        uses: actions/download-artifact@v4
+        with:
+          name: layersentry-tester-to-manoj-checkpoint
+          path: ${{ runner.temp }}\layersentry-checkpoint
+
+      - name: Verify and stage Manoj checkpoint
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src=Join-Path $env:RUNNER_TEMP 'layersentry-checkpoint'
+          $image=Join-Path $src 'checkpoint.qcow2'
+          $manifest=Join-Path $src 'checkpoint.manifest.json'
+          if(-not(Test-Path $image)){throw 'Checkpoint image missing'}
+          if(-not(Test-Path $manifest)){throw 'Checkpoint manifest missing'}
+          $meta=Get-Content -LiteralPath $manifest -Raw | ConvertFrom-Json
+          $actual=(Get-FileHash -Algorithm SHA256 -LiteralPath $image).Hash.ToLowerInvariant()
+          $expected=([string]$meta.sha256).ToLowerInvariant()
+          if($actual -ne $expected){throw "Checkpoint SHA mismatch"}
+          if([string]$meta.source_site_id -ne 'tester'){throw 'Unexpected source site'}
+          if([string]$meta.recovery_site_id -ne 'manoj'){throw 'Unexpected recovery site'}
+          $dst='C:\LayerSentryLab\qualification\two-site\tester-to-manoj'
+          New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          Copy-Item -LiteralPath $image -Destination (Join-Path $dst 'checkpoint.qcow2') -Force
+          Copy-Item -LiteralPath $manifest -Destination (Join-Path $dst 'checkpoint.manifest.json') -Force
+          Write-Host "MANOJ_CHECKPOINT_SHA256=$actual"
+          Write-Host "MANOJ_CHECKPOINT_MARKER=$($meta.marker)"
+          Get-ChildItem -LiteralPath $dst | Select-Object Name,Length | Format-Table -AutoSize
