@@ -60,12 +60,10 @@ jobs:
           qemu-nbd --read-only --connect="$dev" /var/lib/one/datastores/0/220/disk.0
           connected=1
           sleep 1
-          mount -o ro "$dev" "$mnt"
-          echo "QGA_LOG_PRESENT=$(test -f "$mnt/var/log/qemu-ga.log" && echo YES || echo NO)"
-          if [[ -f "$mnt/var/log/qemu-ga.log" ]]; then
-            tail -80 "$mnt/var/log/qemu-ga.log" | sed -E 's/(password|secret|token|auth)=?[^ ]*/\1=<redacted>/Ig'
-          fi
-          echo "QGA_RUNLEVEL_LINK=$(readlink "$mnt/etc/runlevels/default/qemu-guest-agent" 2>/dev/null || true)"
+          echo "QGA_LOG_BEGIN"
+          debugfs -R 'cat /var/log/qemu-ga.log' "$dev" 2>/dev/null | tail -80 | sed -E 's/(password|secret|token|auth)=?[^ ]*/\1=<redacted>/Ig' || true
+          echo "QGA_LOG_END"
+          debugfs -R 'stat /etc/runlevels/default/qemu-guest-agent' "$dev" 2>/dev/null | head -20 || true
           REMOTE
 
           ssh rocky-01 "onevm resume $VM_ID"
