@@ -26,7 +26,7 @@ test('federated remote declarations and production build targets stay in lockste
     if (!name.startsWith('build:') || name === 'build:remotes') continue
 
     const match = String(command).match(
-      /dist\\/modules\\/([A-Za-z][A-Za-z0-9]*Module)/
+      /dist\/modules\/([A-Za-z][A-Za-z0-9]*Module)/
     )
 
     if (match) built.add(match[1])
@@ -43,7 +43,7 @@ test('federated remote declarations and production build targets stay in lockste
 
   for (const [name, command] of Object.entries(packageJson.scripts ?? {})) {
     if (!name.startsWith('build:') || name === 'build:remotes') continue
-    if (!/dist\\/modules\\/[A-Za-z][A-Za-z0-9]*Module/.test(String(command))) {
+    if (!/dist\/modules\/[A-Za-z][A-Za-z0-9]*Module/.test(String(command))) {
       continue
     }
 
