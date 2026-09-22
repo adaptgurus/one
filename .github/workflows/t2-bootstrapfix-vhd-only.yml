@@ -1,0 +1,80 @@
+name: T2 Bootstrap-Fix VHD-Only Boot
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-bootstrapfix-vhd-only.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-bootstrapfix-final-install
+  cancel-in-progress: true
+
+jobs:
+  vhdonly:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind exact final VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-bootstrapfix-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-bootstrapfix-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $vhd){throw 'Final VHD binding changed'}
+          if((Get-VHD -Path $vhd).Size -ne 85899345920){throw 'Final VHD virtual size changed'}
+          $fw=Get-VMFirmware -VMName $name
+          if($fw.SecureBoot -ne 'Off'){throw "Secure Boot is not Off: $($fw.SecureBoot)"}
+          Write-Host "FINAL_VHD_BIND=PASS state=$($vm.State) secureboot=$($fw.SecureBoot) vhd_file_bytes=$((Get-Item $vhd).Length)"
+
+      - name: Eject ISO and set VHD first boot
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-bootstrapfix-qual'
+          $vm=Get-VM -Name $name
+          if($vm.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force}
+          $dvd=@(Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue)
+          foreach($d in $dvd){Remove-VMDvdDrive -VMName $name -ControllerNumber $d.ControllerNumber -ControllerLocation $d.ControllerLocation}
+          if(@(Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue).Count -ne 0){throw 'DVD device still attached'}
+          $disk=Get-VMHardDiskDrive -VMName $name | Select-Object -First 1
+          Set-VMFirmware -VMName $name -FirstBootDevice $disk
+          $fw=Get-VMFirmware -VMName $name
+          if($fw.SecureBoot -ne 'Off'){throw 'Secure Boot changed during VHD-only transition'}
+          Write-Host 'FINAL_ISO_EJECT=PASS'
+
+      - name: Boot installed VHD only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-bootstrapfix-qual'
+          Start-VM -Name $name
+          Start-Sleep -Seconds 120
+          $vm=Get-VM -Name $name
+          if($vm.State -ne 'Running'){throw "VHD-only VM not running: $($vm.State)"}
+          $fw=Get-VMFirmware -VMName $name
+          if($fw.SecureBoot -ne 'Off'){throw 'Secure Boot unexpectedly enabled after VHD-only boot'}
+          if(@(Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue).Count -ne 0){throw 'DVD present after VHD-only boot'}
+          Write-Host "FINAL_VHD_ONLY_BOOT=PASS uptime=$($vm.Uptime)"
+
+      - name: Capture VHD-only firstboot
+        shell: powershell
+        run: |
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\vhd-only-firstboot-secureboot-off.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-bootstrapfix-qual' -Out $out
+          if(-not(Test-Path $out)){throw 'VHD-only framebuffer missing'}
+
+      - name: Upload VHD-only evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-bootstrapfix-db8ef17-vhd-only-secureboot-off
+          path: C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\vhd-only-firstboot-secureboot-off.png
+          if-no-files-found: error
+          retention-days: 7
