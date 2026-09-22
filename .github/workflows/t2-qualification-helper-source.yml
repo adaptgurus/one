@@ -1,0 +1,29 @@
+name: T2 Qualification Helper Source
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-qualification-helper-source.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 5
+    steps:
+      - name: Show approved console helper source only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $root='C:\LayerSentryLab\qualification'
+          foreach($n in @('vm_tty2_root.ps1','vm_type_cmd.ps1','vm_type_nonsecret.ps1')){
+            $p=Join-Path $root $n
+            if(-not (Test-Path $p)){throw "Missing helper $n"}
+            Write-Host "=== $n ==="
+            Get-Content -LiteralPath $p
+          }
