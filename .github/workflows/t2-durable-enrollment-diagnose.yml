@@ -13,7 +13,7 @@ permissions:
 
 jobs:
   diagnose:
-    runs-on: MANOJ-TEST-INST
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 12
     steps:
       - name: Bind Manoj runner and network state
