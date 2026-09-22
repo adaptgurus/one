@@ -1,0 +1,85 @@
+name: T2 Foundation Seal Complete
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-seal-complete.yml
+      - qualification/t2-live-seal-complete.py
+
+permissions:
+  contents: read
+
+jobs:
+  seal:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Verify fixed agent is active before sealing
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $q='C:\LayerSentryLab\qualification'
+          $src=Join-Path $q 'qual-support-ac7e14e-ed25519'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-seal-support-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          $known=Join-Path $env:RUNNER_TEMP 't2-seal-guest-known'
+          (cmd.exe /d /c "ssh-keyscan -T 10 10.250.10.41 2>NUL") | Set-Content $known -Encoding ascii
+          $out=ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key layersentry@10.250.10.41 'systemctl show layersentry-host-agent.service -p ActiveState --no-pager; test -s /var/lib/layersentry/agent/pki/client.crt && echo CERT_PRESENT=YES || echo CERT_PRESENT=NO'
+          $s=$out -join [Environment]::NewLine
+          $out | Write-Host
+          if($s -notmatch 'ActiveState=active' -or $s -notmatch 'CERT_PRESENT=YES'){throw 'fixed agent is not ready for sealing'}
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          Remove-Item $key,$known -Force
+          Write-Host 'PRE_SEAL_AGENT_READY=PASS'
+
+      - name: Execute typed tooling and host seal
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $src=Join-Path $q 'iso-builder-key'
+          $known=Join-Path $q 'known_hosts_builder'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-seal-builder-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$key)
+          scp.exe @base (Join-Path $env:GITHUB_WORKSPACE 'qualification\t2-live-seal-complete.py') 'builder@10.250.10.40:/home/builder/t2-live-seal-complete.py'
+          if($LASTEXITCODE -ne 0){throw 'seal helper stage failed'}
+          $out=ssh.exe @base 'builder@10.250.10.40' 'python3 /home/builder/t2-live-seal-complete.py'
+          $out | Write-Host
+          if($LASTEXITCODE -ne 0){throw 'typed tooling/seal workflow failed'}
+          $s=$out -join [Environment]::NewLine
+          if($s -notmatch 'HOST_SEALED=PASS' -or $s -notmatch 'HARDENING_FIREWALLD_ACTIVE=true' -or $s -notmatch 'HARDENING_FAPOLICYD_ACTIVE=true' -or $s -notmatch 'HARDENING_ROOT_SSH_DISABLED=true' -or $s -notmatch 'HARDENING_SUPPORT_NO_SUDO=true' -or $s -notmatch 'HARDENING_SELINUX_ENFORCING=true'){throw 'hardening PASS markers incomplete'}
+          ssh.exe @base 'builder@10.250.10.40' 'rm -f /home/builder/t2-live-seal-complete.py' 2>$null
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          Remove-Item $key -Force
+
+      - name: Verify management reachability after sealing
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ok=$false
+          for($i=0;$i -lt 20;$i++){
+            $c=New-Object Net.Sockets.TcpClient
+            try{$a=$c.BeginConnect('10.250.10.41',22,$null,$null);if($a.AsyncWaitHandle.WaitOne(1000)){$c.EndConnect($a);if($c.Connected){$ok=$true;break}}}catch{}finally{$c.Close()}
+            Start-Sleep -Seconds 2
+          }
+          if(-not $ok){throw 'management SSH not reachable after sealing'}
+          Write-Host 'POST_SEAL_MANAGEMENT_TCP22=PASS'
