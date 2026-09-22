@@ -1,4 +1,5 @@
 name: T2 Qualification Helper Inventory
+# trigger: helper inventory qualification
 
 on:
   push:
