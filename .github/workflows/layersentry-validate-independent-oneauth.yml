@@ -1,0 +1,45 @@
+name: LayerSentry validate independent OpenNebula API auth
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-validate-independent-oneauth.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Run existing read-only one_auth validator
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $wrapper = @'
+          import pathlib, re, subprocess, sys
+
+          tool = pathlib.Path(r"C:\LayerSentryLab\tools\validate-one-auth.py")
+          if not tool.is_file():
+              raise SystemExit("validator missing")
+
+          p = subprocess.run([sys.executable, str(tool)], capture_output=True, text=True, timeout=60)
+          combined = (p.stdout or "") + "\n" + (p.stderr or "")
+          # Never emit a potential OpenNebula session string or long credential.
+          combined = re.sub(r"(?i)(oneadmin|serveradmin|[A-Za-z0-9_.-]{2,32}):[^\s,;]+", r"\1:<redacted>", combined)
+          combined = re.sub(r"(?i)(auth|password|passwd|secret|token)\s*[=:]\s*[^\s,;]+", r"\1=<redacted>", combined)
+          for line in combined.splitlines():
+              if line.strip():
+                  print("VALIDATOR_OUTPUT=" + line[:500])
+          print("VALIDATOR_EXIT_CODE=" + str(p.returncode))
+          if p.returncode != 0:
+              raise SystemExit(p.returncode)
+          print("INDEPENDENT_OPENNEBULA_AUTH=PASS")
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'validate_oneauth_wrapper.py'
+          Set-Content -Path $path -Value $wrapper -Encoding UTF8
+          python $path
