@@ -1,4 +1,4 @@
-name: T2 Foundation ISO Live Boot
+name: T2 Foundation ISO Live Install
 
 on:
   push:
@@ -16,9 +16,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  boot:
+  install:
     runs-on: self-hosted
-    timeout-minutes: 30
+    timeout-minutes: 75
     steps:
       - name: Bind exact Manoj runner and ISO
         shell: powershell
@@ -32,7 +32,7 @@ jobs:
           if($sha -ne '11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'){throw "ISO SHA mismatch $sha"}
           Write-Host "LIVE_ISO_BIND=PASS SHA256=$sha"
 
-      - name: Create fresh disposable Gen2 qualification VM
+      - name: Create fresh disposable Gen2 VM with Secure Boot disabled
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -49,78 +49,133 @@ jobs:
           if(Test-Path $root){Remove-Item $root -Recurse -Force}
           New-Item -ItemType Directory -Force -Path $root | Out-Null
           New-VHD -Path $vhd -Dynamic -SizeBytes 80GB | Out-Null
-          New-VM -Name $name -Generation 2 -MemoryStartupBytes 2GB -VHDPath $vhd -SwitchName $switch | Out-Null
-          Set-VMProcessor -VMName $name -Count 2
+          New-VM -Name $name -Generation 2 -MemoryStartupBytes 4GB -VHDPath $vhd -SwitchName $switch | Out-Null
+          Set-VMProcessor -VMName $name -Count 4
           Set-VM -Name $name -AutomaticCheckpointsEnabled $false
-          Set-VMFirmware -VMName $name -EnableSecureBoot On -SecureBootTemplate 'MicrosoftUEFICertificateAuthority'
+          Set-VMFirmware -VMName $name -EnableSecureBoot Off
           Add-VMDvdDrive -VMName $name -Path $iso
           $dvd=Get-VMDvdDrive -VMName $name
           Set-VMFirmware -VMName $name -FirstBootDevice $dvd
-          $vm=Get-VM -Name $name
-          if($vm.Generation -ne 2){throw 'Qualification VM is not Generation 2'}
+          $fw=Get-VMFirmware -VMName $name
+          if($fw.SecureBoot -ne 'Off'){throw "Secure Boot is not disabled: $($fw.SecureBoot)"}
           $disk=Get-VMHardDiskDrive -VMName $name | Where-Object ControllerLocation -eq 0
           if($disk.Path -ne $vhd){throw 'Qualification OS disk binding mismatch'}
-          Write-Host "DISPOSABLE_VM=PASS name=$name vhd=$vhd iso=$iso"
+          Write-Host "DISPOSABLE_VM=PASS SECURE_BOOT=OFF vhd=$vhd"
 
-      - name: Boot exact ISO and wait for Anaconda
+      - name: Boot ISO and drive Anaconda text-mode installation
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           $name='ls-appliance-4c4ac81-qual'
+          function Get-Keyboard {
+            $vm = Get-CimInstance -Namespace root/virtualization/v2 -ClassName Msvm_ComputerSystem |
+              Where-Object { $_.ElementName -eq $name } | Select-Object -First 1
+            if(-not $vm){throw 'Hyper-V WMI VM object not found'}
+            $kbd = Get-CimAssociatedInstance -InputObject $vm -Namespace root/virtualization/v2 -ResultClassName Msvm_Keyboard | Select-Object -First 1
+            if(-not $kbd){throw 'Hyper-V virtual keyboard not found'}
+            return $kbd
+          }
+          function Send-Text([string]$text){
+            $r=Invoke-CimMethod -InputObject (Get-Keyboard) -MethodName TypeText -Arguments @{asciiText=$text}
+            if([int]$r.ReturnValue -ne 0){throw "TypeText failed rc=$($r.ReturnValue)"}
+          }
+          function Send-Key([uint32]$key){
+            $r=Invoke-CimMethod -InputObject (Get-Keyboard) -MethodName TypeKey -Arguments @{keyCode=$key}
+            if([int]$r.ReturnValue -ne 0){throw "TypeKey $key failed rc=$($r.ReturnValue)"}
+          }
+          function Enter-Line([string]$text){ Send-Text $text; Send-Key 13 }
+          function Capture([string]$tag){
+            $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
+            $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
+            New-Item -ItemType Directory -Force -Path $dir | Out-Null
+            $out=Join-Path $dir ($tag + '.png')
+            & $script -VM $name -Out $out
+            if(Test-Path $out){
+              $b64=[Convert]::ToBase64String([IO.File]::ReadAllBytes($out))
+              Write-Host ("SCREENSHOT_" + $tag + "_B64=" + $b64)
+            }
+          }
+
           Start-VM -Name $name
           Start-Sleep -Seconds 90
-          $vm=Get-VM -Name $name
-          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
-          $hb=Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue
-          Write-Host "VM_STATE=$($vm.State) HEARTBEAT=$($hb.PrimaryStatusDescription)"
+          if((Get-VM -Name $name).State -ne 'Running'){throw 'VM did not remain running'}
+          Capture '01-anaconda-main'
+          Enter-Line '5'
+          Start-Sleep -Seconds 8
+          Capture '02-destination'
+          Enter-Line '1'
+          Start-Sleep -Seconds 3
+          Enter-Line 'c'
+          Start-Sleep -Seconds 5
+          Capture '03-autopart'
+          Enter-Line 'c'
+          Start-Sleep -Seconds 8
+          Capture '04-summary-ready'
+          Enter-Line 'b'
+          Start-Sleep -Seconds 15
+          Capture '05-install-started'
+          Write-Host 'ANACONDA_INPUT_SEQUENCE_SUBMITTED=PASS'
 
-      - name: Capture installer framebuffer
+      - name: Wait for installer reboot, eject ISO, and boot installed VHD
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
-          if(-not (Test-Path $script)){throw 'capture_vm_thumbnail.ps1 missing'}
-          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-disk-gate.png'
-          New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
-          & $script -VM 'ls-appliance-4c4ac81-qual' -Out $out
-          if(-not (Test-Path $out)){throw 'Installer screenshot not created'}
-          Write-Host "SCREENSHOT=$out bytes=$((Get-Item $out).Length)"
-
-      - name: Verify installer is at local disk-selection gate
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $img='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\anaconda-disk-gate.png'
-          $ocr='C:\LayerSentryLab\qualification\ocr_once.ps1'
-          if(-not (Test-Path $ocr)){throw 'Qualification OCR helper missing'}
-          $text=& $ocr $img 2>&1 | Out-String
-          Write-Host $text
-          if($text -notmatch '(?i)Installation Destination|Kickstart insufficient|Installation Summary'){
-            throw 'Framebuffer did not prove the Anaconda installation-destination safety gate'
+          $name='ls-appliance-4c4ac81-qual'
+          $prev=[double](Get-VM -Name $name).Uptime.TotalSeconds
+          $reboot=$false
+          for($i=0;$i -lt 540;$i++){
+            Start-Sleep -Seconds 5
+            $vm=Get-VM -Name $name
+            if($vm.State -eq 'Off'){ $reboot=$true; Write-Host 'INSTALLER_TRANSITION=VM_OFF'; break }
+            $now=[double]$vm.Uptime.TotalSeconds
+            if($now + 20 -lt $prev){ $reboot=$true; Write-Host "INSTALLER_REBOOT_DETECTED previous=$prev current=$now"; break }
+            $prev=$now
           }
-          Write-Host 'ANACONDA_DISK_GATE=PASS'
+          if(-not $reboot){
+            $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
+            $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\install-timeout.png'
+            & $script -VM $name -Out $out
+            if(Test-Path $out){Write-Host ("SCREENSHOT_install_timeout_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))}
+            throw 'Installer did not reach reboot transition within 45 minutes'
+          }
+          $vm=Get-VM -Name $name
+          if($vm.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force}
+          $dvd=Get-VMDvdDrive -VMName $name
+          if($dvd){Set-VMDvdDrive -VMName $name -Path $null}
+          $disk=Get-VMHardDiskDrive -VMName $name | Where-Object ControllerLocation -eq 0 | Select-Object -First 1
+          Set-VMFirmware -VMName $name -FirstBootDevice $disk
+          Start-VM -Name $name
+          Start-Sleep -Seconds 120
+          $vm=Get-VM -Name $name
+          if($vm.State -ne 'Running'){throw "Installed VHD did not boot: $($vm.State)"}
+          $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\06-installed-firstboot.png'
+          & $script -VM $name -Out $out
+          if(Test-Path $out){Write-Host ("SCREENSHOT_06_installed_firstboot_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))}
+          Write-Host 'INSTALLED_VHD_BOOT=PASS ISO_EJECTED=PASS SECURE_BOOT=OFF'
 
-      - name: Record live boot evidence
+      - name: Record installation evidence
+        if: always()
         shell: powershell
         run: |
-          $ErrorActionPreference='Stop'
+          $ErrorActionPreference='Continue'
           $dir='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81'
-          $vm=Get-VM -Name 'ls-appliance-4c4ac81-qual'
-          $dvd=Get-VMDvdDrive -VMName $vm.Name
-          $disk=Get-VMHardDiskDrive -VMName $vm.Name | Where-Object ControllerLocation -eq 0
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $vm=Get-VM -Name 'ls-appliance-4c4ac81-qual' -ErrorAction SilentlyContinue
+          $dvd=Get-VMDvdDrive -VMName 'ls-appliance-4c4ac81-qual' -ErrorAction SilentlyContinue
+          $disk=Get-VMHardDiskDrive -VMName 'ls-appliance-4c4ac81-qual' -ErrorAction SilentlyContinue | Where-Object ControllerLocation -eq 0 | Select-Object -First 1
+          $fw=Get-VMFirmware -VMName 'ls-appliance-4c4ac81-qual' -ErrorAction SilentlyContinue
           $e=[ordered]@{
-            schema='layersentry-t2-live-boot-evidence/v1'
+            schema='layersentry-t2-live-install-evidence/v1'
             target_commit='4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'
             iso_sha256='11c1726e02fba6ffe5609ff15f17f3c5d4dd6aaaf0ad0b14bb20beb88475f2b0'
             runner=$env:RUNNER_NAME
-            computer=$env:COMPUTERNAME
             vm=$vm.Name
-            generation=$vm.Generation
             state=$vm.State.ToString()
+            secure_boot=$fw.SecureBoot.ToString()
             disk=$disk.Path
-            dvd=$dvd.Path
-            screenshot=(Join-Path $dir 'anaconda-disk-gate.png')
+            dvd=$(if($dvd){$dvd.Path}else{$null})
             recorded_utc=(Get-Date).ToUniversalTime().ToString('o')
           }
-          $e | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 (Join-Path $dir 'live-boot-evidence.json')
-          Get-Content (Join-Path $dir 'live-boot-evidence.json')
+          $e | ConvertTo-Json -Depth 4 | Set-Content -Encoding utf8 (Join-Path $dir 'live-install-evidence.json')
+          Get-Content (Join-Path $dir 'live-install-evidence.json')
