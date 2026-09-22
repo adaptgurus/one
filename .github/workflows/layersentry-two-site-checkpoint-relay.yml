@@ -1,4 +1,5 @@
 name: LayerSentry two-site checkpoint relay
+# retry after TESTSER-local checkpoint staging
 
 on:
   push:
