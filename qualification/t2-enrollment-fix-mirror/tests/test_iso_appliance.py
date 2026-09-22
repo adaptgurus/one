@@ -58,9 +58,9 @@ class ISOApplianceTests(unittest.TestCase):
     def test_agent_sandbox_allows_netlink_inventory(self):
         self.assertIn(
             "RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK",
-            "TimeoutStartSec=5min",
             self.agent_service,
         )
+        self.assertIn("TimeoutStartSec=5min", self.agent_service)
 
 
 if __name__ == "__main__":
