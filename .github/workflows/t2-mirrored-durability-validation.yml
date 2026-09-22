@@ -25,11 +25,14 @@ jobs:
           cache: false
       - name: Prove mirror target
         run: |
-          echo 'SOURCE=adaptgurus/layersentry-platform@263361e21c9898047781cf8d2351742877441771'
+          echo 'SOURCE=adaptgurus/layersentry-platform@db8ef1727de54784136a471e07aaae0b40941ea4'
           test -f qualification/t2-durability-mirror/deploy/host-agent/go.mod
           grep -q 'TimeoutStartSec=5min' qualification/t2-durability-mirror/deploy/host-agent/packaging/layersentry-host-agent.service
           grep -q 'CollectEnrollment(ctx)' qualification/t2-durability-mirror/deploy/host-agent/internal/client/client.go
           grep -q 'CommitEnrollment' qualification/t2-durability-mirror/deploy/host-agent/internal/controller/controller.go
+          grep -q 'case "enroll"' qualification/t2-durability-mirror/deploy/host-agent/cmd/layersentry-host-agent/main.go
+          grep -q 'runuser -u layersentry-agent -- "$CURRENT" enroll --config "$CONFIG"' qualification/t2-durability-mirror/deploy/host-agent/packaging/layersentry-agent-wrapper.sh
+          grep -q 'rm -f -- "$BOOTSTRAP"' qualification/t2-durability-mirror/deploy/host-agent/packaging/layersentry-agent-wrapper.sh
       - name: Go format
         working-directory: qualification/t2-durability-mirror/deploy/host-agent
         run: |
@@ -46,6 +49,8 @@ jobs:
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
           govulncheck ./...
+      - name: Wrapper shell syntax
+        run: bash -n qualification/t2-durability-mirror/deploy/host-agent/packaging/layersentry-agent-wrapper.sh
       - name: Static Linux builds
         working-directory: qualification/t2-durability-mirror/deploy/host-agent
         run: |
