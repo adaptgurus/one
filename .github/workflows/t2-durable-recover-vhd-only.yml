@@ -1,0 +1,103 @@
+name: T2 Durable Recover VHD Only Boot
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-durable-recover-vhd-only.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-durable-live-install
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Bind completed durable VHD
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-durable-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-durable-qual\os.vhdx'
+          $iso='C:\LayerSentryLab\qualification\durable-5f3bda7\LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $vhd){throw 'Durable VHD binding changed'}
+          if((Get-Item $vhd).Length -lt 3500000000){throw 'Durable VHD unexpectedly small'}
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
+          if($dvd -and $dvd.Path -and $dvd.Path -ne $iso){throw "Unexpected DVD path: $($dvd.Path)"}
+          Write-Host "DURABLE_RECOVERY_BIND=PASS state=$($vm.State) vhd_bytes=$((Get-Item $vhd).Length) dvd=$($dvd.Path)"
+
+      - name: Exit completed installer if still live
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-durable-qual'
+          $vm=Get-VM -Name $name
+          if($vm.State -eq 'Running'){
+            $wmi=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+            $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($wmi.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+            if($kb){$null=$kb.TypeKey([uint32]0x0D)}
+            Start-Sleep -Seconds 20
+          }
+          Write-Host 'DURABLE_INSTALLER_EXIT_ATTEMPT=PASS'
+
+      - name: Power off disposable VM and remove DVD
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-durable-qual'
+          $vm=Get-VM -Name $name
+          if($vm.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force}
+          for($i=0;$i -lt 30;$i++){if((Get-VM -Name $name).State -eq 'Off'){break};Start-Sleep -Seconds 1}
+          if((Get-VM -Name $name).State -ne 'Off'){throw 'Durable VM did not power off'}
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
+          if($dvd){Remove-VMDvdDrive -VMDvdDrive $dvd}
+          if(@(Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Durable DVD device still present'}
+          $disk=Get-VMHardDiskDrive -VMName $name | Select-Object -First 1
+          Set-VMFirmware -VMName $name -FirstBootDevice $disk
+          Write-Host 'DURABLE_DVD_REMOVED=PASS VHD_FIRST=PASS'
+
+      - name: Boot installed durable VHD only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-durable-qual'
+          Start-VM -Name $name
+          $deadline=(Get-Date).AddMinutes(4)
+          $ok=$false
+          while((Get-Date) -lt $deadline){
+            $vm=Get-VM -Name $name -ErrorAction Stop
+            $hb=(Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue).PrimaryStatusDescription
+            $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object {$_ -match '^\d+\.'})
+            Write-Host "VHD_BOOT_WAIT state=$($vm.State) heartbeat=$hb ips=$($ips -join ',') uptime=$($vm.Uptime)"
+            if($vm.State -eq 'Running' -and $hb -eq 'OK'){ $ok=$true; break }
+            Start-Sleep -Seconds 10
+          }
+          if(-not $ok){throw 'Durable installed VHD did not reach heartbeat OK'}
+          if(@(Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue).Count -ne 0){throw 'DVD device returned after VHD-only boot'}
+          Write-Host 'DURABLE_VHD_ONLY_BOOT=PASS'
+
+      - name: Capture durable VHD-only first boot
+        shell: powershell
+        run: |
+          $dir='C:\LayerSentryLab\evidence\t2-durable-5f3bda7'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $out=Join-Path $dir 'recovered-vhd-only-boot.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-durable-qual' -Out $out
+          if(-not(Test-Path $out)){throw 'Durable VHD-only screenshot missing'}
+
+      - name: Upload durable VHD-only evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-durable-recovered-vhd-only-boot
+          path: C:\LayerSentryLab\evidence\t2-durable-5f3bda7\recovered-vhd-only-boot.png
+          if-no-files-found: error
+          retention-days: 7
