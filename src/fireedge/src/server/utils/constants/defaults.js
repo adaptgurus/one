@@ -183,6 +183,7 @@ const defaults = {
   defaultSunstoneConfig: `${appNameSunstone}-server.conf`,
   defaultApiTimeout: 45000,
   protectedConfigData: {
+    [appName]: ['layersentry_platform_gateway_token'],
     [appNameSunstone]: [
       'support_url',
       'sunstone_prepend',

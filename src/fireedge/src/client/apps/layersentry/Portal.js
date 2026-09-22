@@ -33,7 +33,8 @@ import KubernetesWorkspace from 'client/apps/layersentry/pages/KubernetesWorkspa
 import OperationsWorkspace from 'client/apps/layersentry/pages/OperationsWorkspace'
 import ProtectionWorkspace from 'client/apps/layersentry/pages/ProtectionWorkspace'
 import ComputeWorkspace from 'client/apps/layersentry/pages/ComputeWorkspace'
-import ApplicationsWorkspace from 'client/apps/layersentry/pages/ApplicationsWorkspace'
+import ManagedServicesWorkspace from 'client/apps/layersentry/pages/ManagedServicesWorkspace'
+import ProductionServiceWizard from 'client/apps/layersentry/pages/ProductionServiceWizard'
 import SiteRecoveryWorkspace from 'client/apps/layersentry/pages/SiteRecoveryWorkspace'
 import BackupStorageWorkspace from 'client/apps/layersentry/pages/BackupStorageWorkspace'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
@@ -45,7 +46,7 @@ const LEGACY_REDIRECTS = Object.freeze({
   '/dashboard': PRODUCT_PATHS.OVERVIEW,
   '/vm': PRODUCT_PATHS.COMPUTE,
   '/vm/create': PRODUCT_PATHS.COMPUTE_CREATE,
-  '/vm-template': PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
+  '/vm-template': PRODUCT_PATHS.DBAAS,
   '/vm-group': PRODUCT_PATHS.COMPUTE_AFFINITY,
   '/image': PRODUCT_PATHS.STORAGE_IMAGES,
   '/file': PRODUCT_PATHS.STORAGE_FILES,
@@ -58,8 +59,8 @@ const LEGACY_REDIRECTS = Object.freeze({
   '/backupjobs': PRODUCT_PATHS.PROTECTION_BACKUP_PLANS,
   '/backupjobs/create': '/protection/create',
   '/backup': PRODUCT_PATHS.PROTECTION_RECOVERY_POINTS,
-  '/service': PRODUCT_PATHS.APPLICATIONS,
-  '/service-template': PRODUCT_PATHS.APPLICATIONS,
+  '/service': PRODUCT_PATHS.APAAS,
+  '/service-template': PRODUCT_PATHS.APAAS,
   '/attention': PRODUCT_PATHS.OPERATIONS,
 })
 
@@ -132,17 +133,7 @@ const Portal = ({ endpoints }) => {
         <Route
           exact
           path={PRODUCT_PATHS.COMPUTE_BLUEPRINTS}
-          render={() =>
-            area({
-              endpoints,
-              title: 'VM Blueprints',
-              description:
-                'Browse approved virtual-machine blueprints and instantiate them through the backend-authorized workflow.',
-              resources: [
-                { label: 'VM Blueprints', legacyPath: '/vm-template' },
-              ],
-            })
-          }
+          render={() => <Redirect to={PRODUCT_PATHS.DBAAS} />}
         />
 
         <Route
@@ -232,29 +223,23 @@ const Portal = ({ endpoints }) => {
 
         <Route
           exact
+          path={PRODUCT_PATHS.DBAAS}
+          render={() => <ManagedServicesWorkspace mode="dbaas" />}
+        />
+        <Route
+          exact
+          path={PRODUCT_PATHS.APAAS}
+          render={() => <ManagedServicesWorkspace mode="apaas" />}
+        />
+        <Route
+          exact
           path={PRODUCT_PATHS.APPLICATIONS_DEPLOY}
-          render={() =>
-            create({
-              endpoints,
-              title: 'Deploy Application',
-              description:
-                'Choose a published application definition and provide only the deployment inputs exposed by that definition.',
-              legacyPath: '/service-template/instantiate/',
-              returnTo: PRODUCT_PATHS.APPLICATIONS,
-              steps: [
-                'Application',
-                'Inputs',
-                'Resources',
-                'Network',
-                'Review',
-              ],
-            })
-          }
+          component={ProductionServiceWizard}
         />
         <Route
           exact
           path={PRODUCT_PATHS.APPLICATIONS}
-          render={() => <ApplicationsWorkspace endpoints={endpoints} />}
+          render={() => <Redirect to={PRODUCT_PATHS.APAAS} />}
         />
 
         <Route
