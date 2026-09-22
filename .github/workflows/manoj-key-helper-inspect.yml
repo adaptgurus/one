@@ -1,0 +1,27 @@
+name: Manoj frontend key helper inspect
+
+on:
+  push:
+    branches:
+      - qual/manoj-dr-opennebula-20260923
+    paths:
+      - .github/workflows/manoj-key-helper-inspect.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Print audited helper
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'C:\LayerSentryLab\authorize_frontend_keys.sh'
+          if (-not (Test-Path $path)) { throw 'frontend key helper is missing' }
+          $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne 'a6f82eed64135a3cdc3c10a2080a65145cdb8757e498e553602f4a1f28ab1c0d') { throw 'frontend key helper changed since audit' }
+          Get-Content $path | ForEach-Object { Write-Host $_ }
