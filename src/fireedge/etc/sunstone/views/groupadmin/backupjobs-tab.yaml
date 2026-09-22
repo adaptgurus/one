@@ -1,0 +1,54 @@
+---
+# LayerSentry project-admin backup job view.
+#
+# This view exists so group administrators can read their project's backup-job
+# inventory through the native FireEdge endpoint without inheriting provider or
+# mutation controls. LayerSentry mutation capabilities remain separately gated.
+resource_name: "BACKUPJOBS"
+
+actions:
+  create_dialog: false
+  update_dialog: false
+  delete: false
+  chown: false
+  chgrp: false
+  lock: false
+  unlock: false
+  start: false
+  cancel: false
+  edit_labels: false
+
+filters:
+
+info-tabs:
+  info:
+    enabled: true
+    information_panel:
+      enabled: true
+      actions:
+        rename: false
+        priority: false
+    permissions_panel:
+      enabled: false
+      actions:
+        chmod: false
+    ownership_panel:
+      enabled: false
+      actions:
+        chown: false
+        chgrp: false
+    attributes_panel:
+      enabled: false
+      actions:
+        copy: false
+        add: false
+        edit: false
+        delete: false
+  vms:
+    enabled: true
+  sched_actions:
+    enabled: true
+    actions:
+      sched_action_create: false
+      sched_action_update: false
+      sched_action_delete: false
