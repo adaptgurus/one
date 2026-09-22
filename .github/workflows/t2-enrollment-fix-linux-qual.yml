@@ -1,0 +1,131 @@
+name: T2 Enrollment Fix Linux Qualification
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-enrollment-fix-linux-qual.yml
+      - qualification/t2-enrollment-fix-mirror/**
+      - qualification/t2-enrollment-fix-linux-qual.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-enrollment-fix-linux-qual
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    runs-on: self-hosted
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bind runner and assemble exact patched tree
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $repo='C:\LayerSentryLab\src\layersentry-platform'
+          $git='C:\Program Files\Git\cmd\git.exe'
+          $head=(& $git -C $repo rev-parse HEAD).Trim()
+          if($head -ne '4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'){throw "Unexpected base $head"}
+          & $git -C $repo diff --quiet; if($LASTEXITCODE -ne 0){throw 'Tracked base changes'}
+          & $git -C $repo diff --cached --quiet; if($LASTEXITCODE -ne 0){throw 'Staged base changes'}
+          $zip=Join-Path $env:RUNNER_TEMP 't2-enrollment-fix-source.zip'
+          $dst=Join-Path $env:RUNNER_TEMP 't2-enrollment-fix-linux'
+          if(Test-Path $dst){Remove-Item $dst -Recurse -Force}
+          if(Test-Path $zip){Remove-Item $zip -Force}
+          $basezip=Join-Path $env:RUNNER_TEMP 't2-base.zip'
+          & $git -C $repo archive --format=zip --output=$basezip HEAD
+          if($LASTEXITCODE -ne 0){throw 'base archive failed'}
+          Expand-Archive $basezip $dst -Force
+          $mirror=Join-Path $env:GITHUB_WORKSPACE 'qualification\t2-enrollment-fix-mirror'
+          $files=@(
+            'deploy\host-agent\internal\inventory\inventory.go',
+            'deploy\host-agent\internal\client\client.go',
+            'deploy\host-agent\internal\controller\controller.go',
+            'deploy\host-agent\internal\controller\controller_test.go',
+            'deploy\host-agent\internal\client\client_test.go',
+            'deploy\host-agent\internal\inventory\enrollment_test.go',
+            'deploy\host-agent\packaging\layersentry-host-agent.service',
+            'tests\test_iso_appliance.py'
+          )
+          foreach($rel in $files){Copy-Item (Join-Path $mirror $rel) (Join-Path $dst $rel) -Force}
+          Compress-Archive -Path (Join-Path $dst '*') -DestinationPath $zip -CompressionLevel Optimal -Force
+          "T2_FIX_ZIP=$zip" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "PATCH_ARCHIVE_SHA256=$((Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant())"
+
+      - name: Prepare runner-private builder SSH key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          foreach($p in @($src,$known)){if(-not(Test-Path $p)){throw "Missing $p"}}
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-enrollfix-builder-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_FIX_BUILDER_KEY=$key" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Transfer exact patched tree
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $scp=(Get-Command scp.exe).Source
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_FIX_BUILDER_KEY $env:T2_FIX_ZIP builder@10.250.10.40:/home/builder/t2-enrollment-fix-source.zip
+          if($LASTEXITCODE -ne 0){throw 'patched source transfer failed'}
+
+      - name: Linux race vet vulnerability and static build
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $remote=@'
+          set -euo pipefail
+          src=/home/builder/t2-enrollment-fix-src
+          out=/home/builder/t2-enrollment-fix-build
+          rm -rf "$src" "$out"
+          mkdir -p "$src" "$out"
+          unzip -q /home/builder/t2-enrollment-fix-source.zip -d "$src"
+          echo '=== GO ==='
+          go version
+          echo '=== GOFMT ==='
+          test -z "$(gofmt -l "$src/deploy/host-agent")" || { gofmt -l "$src/deploy/host-agent"; exit 51; }
+          echo '=== ROOT ==='
+          cd "$src"
+          go test -race -count=1 ./...
+          go vet ./...
+          /home/builder/go-bin/govulncheck ./...
+          echo '=== HOST AGENT ==='
+          cd "$src/deploy/host-agent"
+          go test -race -count=1 ./...
+          go vet ./...
+          /home/builder/go-bin/govulncheck ./...
+          export CGO_ENABLED=0
+          go build -trimpath -ldflags '-s -w -X main.Version=t2-enrollfix' -o "$out/layersentry-host-agent" ./cmd/layersentry-host-agent
+          go build -trimpath -ldflags '-s -w' -o "$out/layersentry-host-controller" ./cmd/layersentry-host-controller
+          "$out/layersentry-host-agent" self-test
+          sha256sum "$out/layersentry-host-agent" "$out/layersentry-host-controller"
+          file "$out/layersentry-host-agent" "$out/layersentry-host-controller"
+          echo T2_ENROLLMENT_FIX_LINUX_QUALIFICATION=PASS
+          '@
+          $remote=$remote -replace "`r",''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
+          & $ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_FIX_BUILDER_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'Linux qualification failed'}
+
+      - name: Remove runner-private builder key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_FIX_BUILDER_KEY -and(Test-Path $env:T2_FIX_BUILDER_KEY)){& icacls.exe $env:T2_FIX_BUILDER_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_FIX_BUILDER_KEY -Force}
