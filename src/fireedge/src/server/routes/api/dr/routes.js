@@ -23,6 +23,8 @@ const { GET, POST } = httpMethod
 const { resource, postBody } = fromData
 
 const CAPABILITIES = 'dr.capabilities'
+const SITES = 'dr.sites'
+const SITE_CREATE = 'dr.site.create'
 const DOMAINS = 'dr.domains'
 const DOMAIN_CREATE = 'dr.domain.create'
 const RECOVERY_POINTS = 'dr.recovery.points'
@@ -30,6 +32,8 @@ const CHECKPOINT = 'dr.checkpoint'
 
 const Actions = {
   CAPABILITIES,
+  SITES,
+  SITE_CREATE,
   DOMAINS,
   DOMAIN_CREATE,
   RECOVERY_POINTS,
@@ -43,6 +47,17 @@ module.exports = {
       path: `${basepath}/capabilities`,
       httpMethod: GET,
       auth: true,
+    },
+    [SITES]: {
+      path: `${basepath}/sites`,
+      httpMethod: GET,
+      auth: true,
+    },
+    [SITE_CREATE]: {
+      path: `${basepath}/sites`,
+      httpMethod: POST,
+      auth: true,
+      params: { site: { from: postBody } },
     },
     [DOMAINS]: {
       path: `${basepath}/protection-domains`,
