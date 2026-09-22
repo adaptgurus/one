@@ -43,7 +43,7 @@ test('groupadmin backup jobs endpoint exists but remains mutation-safe', () => {
   ]) {
     assert.match(
       view,
-      new RegExp(String.raw`\b${action}:\\s*false\b`),
+      new RegExp(String.raw`\b${action}:\s*false\b`),
       `${action} must remain disabled for groupadmin backup jobs`
     )
   }
