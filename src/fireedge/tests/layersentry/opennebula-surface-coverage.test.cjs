@@ -96,21 +96,37 @@ test('site recovery never presents request metadata as active DR', () => {
   assert.match(protection, /REQUEST_STATE: 'REQUESTED_NOT_ACTIVE'/)
 })
 
-test('site recovery uses durable Protection Domains and explicit Remote Site entry', () => {
+test('site recovery binds Protection Domains to the durable Remote Site registry', () => {
   const recovery = read(
     'src/client/apps/layersentry/components/ProtectionDomainPanel.js'
+  )
+  const remoteSites = read(
+    'src/client/apps/layersentry/components/RemoteSitePanel.js'
   )
   const drClient = read('src/modules/features/OneApi/dr.js')
   const drRoutes = read('src/server/routes/api/dr/routes.js')
   const drFunctions = read('src/server/routes/api/dr/functions.js')
 
+  assert.match(remoteSites, /Register Remote Site/)
+  assert.match(remoteSites, /cluster_uuid/)
+  assert.match(remoteSites, /tls_fingerprint_sha256/)
+  assert.match(remoteSites, /RESTIC_CHECKPOINT/)
+  assert.match(remoteSites, /OPENNEBULA_RECOVERY/)
+  assert.match(remoteSites, /Registration alone does not certify failover/)
+
   assert.match(recovery, /Protection Domain/)
-  assert.match(recovery, /Remote Site Endpoint/)
-  assert.match(recovery, /recovery_site_endpoint/)
+  assert.match(recovery, /useGetRemoteSitesQuery/)
+  assert.match(recovery, /selectedRemoteSite/)
+  assert.match(recovery, /recovery_site_id: selectedRemoteSite\.id/)
+  assert.match(recovery, /recovery_site_endpoint: selectedRemoteSite\.endpoint/)
   assert.match(recovery, /Ship checkpoint now/)
   assert.match(recovery, /saving the domain does not enable failover/i)
+
+  assert.match(drClient, /\/api\/dr\/sites/)
   assert.match(drClient, /\/api\/dr\/protection-domains/)
+  assert.match(drRoutes, /\$\{basepath\}\/sites/)
   assert.match(drRoutes, /protection-domains/)
+  assert.match(drFunctions, /\/v1\/dr\/sites/)
   assert.match(drFunctions, /X-LayerSentry-Gateway-Token/)
   assert.match(drFunctions, /maxRedirects: 0/)
   assert.match(drFunctions, /user !== 'oneadmin'/)
