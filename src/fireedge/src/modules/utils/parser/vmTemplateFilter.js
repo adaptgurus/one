@@ -645,7 +645,7 @@ const handleOtherSections = (
     tabFormMap[section].forEach((key) => {
       // Scheduled actions special case
       if (key === 'SCHED_ACTION') {
-        newExtra[key] = formData?.extra[key]
+        newExtra[key] = formData?.extra?.[key]
       } else if (key === 'PCI') {
         handleNetwork(
           formData,
@@ -662,7 +662,7 @@ const handleOtherSections = (
           newExtra[key] = { ...formData.extra[key] }
         }
         // If form doesn't have MEMORY_ENCRYPTION but corrections do, process normally
-        else if (correctionMap.extra[section]?.[key]) {
+        else if (correctionMap?.extra?.[section]?.[key]) {
           filterSingleSection(formData, correctionMap, section, newExtra, key)
         }
       } else {
@@ -672,10 +672,11 @@ const handleOtherSections = (
         if (
           section === 'Context' &&
           key === 'USER_INPUTS' &&
-          correctionMap.extra.Context.USER_INPUTS
+          correctionMap?.extra?.Context?.USER_INPUTS
         ) {
-          // Keep CONTEXT.INPUTS_ORDER because it's not a form by himself, depends on CONTEXT.USER_INPUTS
-          newExtra.INPUTS_ORDER = formData.extra.INPUTS_ORDER
+          // Keep CONTEXT.INPUTS_ORDER because it's not a form by himself, depends on CONTEXT.USER_INPUTS.
+          const inputsOrder = formData?.extra?.INPUTS_ORDER
+          if (inputsOrder !== undefined) newExtra.INPUTS_ORDER = inputsOrder
         }
       }
     })
