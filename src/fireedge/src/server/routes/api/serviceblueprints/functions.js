@@ -47,14 +47,62 @@ const blocked = (code, message, extra = {}) => ({
  *
  * @param {object} res - HTTP response
  * @param {Function} next - Express stepper
+ * @param {object} _params - unused request parameters
+ * @param {object} userData - authenticated FireEdge user data
+ * @param {Function} oneConnection - OpenNebula XML-RPC connection factory
  */
-const list = (res = {}, next = defaultEmptyFunction) => {
-  res.locals.httpCode = httpResponse(ok, {
-    items: getCatalog(),
-    source: 'fireedge-runtime-catalog',
-    failClosed: true,
-  })
-  next()
+const list = (
+  res = {},
+  next = defaultEmptyFunction,
+  _params = {},
+  userData = {},
+  oneConnection
+) => {
+  const writeCatalog = (capabilities = {}) => {
+    const supportedBlueprints = Array.isArray(capabilities.supportedBlueprints)
+      ? capabilities.supportedBlueprints
+      : []
+    const supported = new Set(supportedBlueprints)
+    const available = capabilities.available === true
+
+    res.locals.httpCode = httpResponse(ok, {
+      items: getCatalog().map((entry) => ({
+        ...entry,
+        sourceRoleAvailable: available && supported.has(entry.id),
+      })),
+      capabilities: {
+        available,
+        durableStoreReady: capabilities.durableStoreReady === true,
+        providerMutationEnabled: capabilities.providerMutationEnabled === true,
+        deploymentEnabled: capabilities.deploymentEnabled === true,
+        supportedBlueprints,
+      },
+      source: 'fireedge-runtime-catalog',
+      failClosed: true,
+    })
+    next()
+  }
+
+  platformRequest(
+    {
+      method: 'GET',
+      path: '/v1/vm-services/capabilities',
+    },
+    userData,
+    oneConnection
+  )
+    .then((capabilities = {}) =>
+      writeCatalog({
+        ...capabilities,
+        available: true,
+      })
+    )
+    .catch(() =>
+      writeCatalog({
+        available: false,
+        supportedBlueprints: [],
+      })
+    )
 }
 
 /**

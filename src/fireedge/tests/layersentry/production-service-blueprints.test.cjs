@@ -652,6 +652,7 @@ test('FireEdge registers authenticated production-service catalog, preflight and
     'all production-service API routes must require authentication'
   )
   assert.match(functionsSource, /platformRequest/)
+  assert.match(functionsSource, /\/v1\/vm-services\/capabilities/)
   assert.match(functionsSource, /\/v1\/vm-services\/preflight/)
   assert.doesNotMatch(functionsSource, /findQualifiedTuple/)
   assert.match(functionsSource, /\/v1\/vm-services\/deploy/)
@@ -697,6 +698,9 @@ test('wizard unwraps FireEdge runtime catalog responses and calls authoritative 
   )
   assert.match(wizard, /SERVICE_BLUEPRINT_PREFLIGHT_UNAVAILABLE/)
   assert.match(wizard, /Authoritative preflight blocked/)
+  assert.match(wizard, /Ansible role available/)
+  assert.match(wizard, /sourceRoleAvailable/)
+  assert.match(wizard, /supportedBlueprints/)
   assert.match(wizard, /preflightState\.status !== 'passed'/)
   assert.doesNotMatch(
     wizard,
@@ -730,6 +734,14 @@ test('runtime service-blueprint handlers delegate tuple authority and fail close
 
   platform.platformRequest = async (request) => {
     observedPlatformRequest = request
+    if (request.path === '/v1/vm-services/capabilities') {
+      return {
+        durableStoreReady: true,
+        providerMutationEnabled: true,
+        deploymentEnabled: true,
+        supportedBlueprints: api.FALLBACK_BLUEPRINTS.map(({ id }) => id),
+      }
+    }
     if (request.path === '/v1/vm-services/deploy') {
       return {
         accepted: true,
@@ -793,10 +805,17 @@ test('runtime service-blueprint handlers delegate tuple authority and fail close
         }
       })
 
-    const catalogResponse = invoke(handlers.list)
+    const catalogResponse = await invokeAsync(handlers.list)
     assert.equal(catalogResponse.id, 200)
     assert.equal(catalogResponse.data.failClosed, true)
     assert.equal(catalogResponse.data.items.length, 27)
+    assert.equal(catalogResponse.data.capabilities.available, true)
+    assert.equal(catalogResponse.data.capabilities.supportedBlueprints.length, 27)
+    assert.ok(
+      catalogResponse.data.items.every(
+        ({ sourceRoleAvailable }) => sourceRoleAvailable === true
+      )
+    )
 
     const postgresql = api.getBlueprintById('postgresql')
     const validDraft = makeValid(postgresql)

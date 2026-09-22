@@ -192,6 +192,31 @@ const AdvancedSection = ({
   </Accordion>
 )
 
+const getRuntimeCapabilities = (payload) => {
+  const responseData = payload?.data ?? payload
+  const capabilities = responseData?.capabilities
+
+  if (!capabilities || typeof capabilities !== 'object') {
+    return {
+      available: false,
+      durableStoreReady: false,
+      providerMutationEnabled: false,
+      deploymentEnabled: false,
+      supportedBlueprints: [],
+    }
+  }
+
+  return {
+    available: capabilities.available === true,
+    durableStoreReady: capabilities.durableStoreReady === true,
+    providerMutationEnabled: capabilities.providerMutationEnabled === true,
+    deploymentEnabled: capabilities.deploymentEnabled === true,
+    supportedBlueprints: Array.isArray(capabilities.supportedBlueprints)
+      ? capabilities.supportedBlueprints
+      : [],
+  }
+}
+
 const mergeRuntimeCatalog = (payload) => {
   const responseData = payload?.data ?? payload
   const items = Array.isArray(responseData)
@@ -201,6 +226,8 @@ const mergeRuntimeCatalog = (payload) => {
     : Array.isArray(responseData?.blueprints)
     ? responseData.blueprints
     : []
+  const capabilities = getRuntimeCapabilities(payload)
+  const supported = new Set(capabilities.supportedBlueprints)
 
   if (!items.length) return null
 
@@ -211,7 +238,15 @@ const mergeRuntimeCatalog = (payload) => {
         item.blueprintId === fallback.id ||
         item.name === fallback.name
     )
-    if (!runtime) return fallback
+    if (!runtime) {
+      return {
+        ...fallback,
+        controlPlaneAvailable: capabilities.available,
+        sourceRoleAvailable:
+          capabilities.available && supported.has(fallback.id),
+        deploymentBackendEnabled: capabilities.deploymentEnabled,
+      }
+    }
 
     return {
       ...fallback,
@@ -225,6 +260,11 @@ const mergeRuntimeCatalog = (payload) => {
           : fallback.topologies,
       qualification: runtime.qualification || fallback.qualification,
       productionSelectable: runtime.productionSelectable === true,
+      sourceRoleAvailable:
+        runtime.sourceRoleAvailable === true ||
+        (capabilities.available && supported.has(fallback.id)),
+      controlPlaneAvailable: capabilities.available,
+      deploymentBackendEnabled: capabilities.deploymentEnabled,
       runtime: true,
     }
   })
@@ -309,6 +349,9 @@ const ProductionServiceWizard = () => {
   const history = useHistory()
   const [catalog, setCatalog] = useState(FALLBACK_BLUEPRINTS)
   const [catalogState, setCatalogState] = useState('fallback')
+  const [capabilityState, setCapabilityState] = useState(() =>
+    getRuntimeCapabilities(null)
+  )
   const [step, setStep] = useState(0)
   const [draft, setDraft] = useState(() => createDraft('postgresql'))
   const [attemptedStep, setAttemptedStep] = useState(null)
@@ -342,6 +385,7 @@ const ProductionServiceWizard = () => {
         if (merged) {
           setCatalog(merged)
           setCatalogState('runtime')
+          setCapabilityState(getRuntimeCapabilities(payload))
           setDraft((current) => {
             const runtime = getBlueprintById(current.blueprintId, merged)
             if (!runtime) return current
@@ -356,7 +400,10 @@ const ProductionServiceWizard = () => {
         }
       })
       .catch(() => {
-        if (active) setCatalogState('fallback')
+        if (active) {
+          setCatalogState('fallback')
+          setCapabilityState(getRuntimeCapabilities(null))
+        }
       })
 
     return () => {
@@ -735,6 +782,20 @@ const ProductionServiceWizard = () => {
           Choose the application. Guest OS, image digest and low-level tuning
           remain qualification-controlled and are intentionally hidden.
         </Typography>
+        {catalogState === 'runtime' && capabilityState.available && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            VM-service backend reports source-role coverage for{' '}
+            {capabilityState.supportedBlueprints.length} of 27 families. Source
+            coverage does not make an exact tuple production-selectable.
+          </Alert>
+        )}
+        {catalogState === 'runtime' && !capabilityState.available && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            The application catalog is available, but VM-service capability
+            state could not be read. You can design a configuration, but
+            authoritative preflight must succeed before Deploy is enabled.
+          </Alert>
+        )}
         {LICENSE_NOTICES[draft.blueprintId] && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             {LICENSE_NOTICES[draft.blueprintId]}
@@ -807,10 +868,35 @@ const ProductionServiceWizard = () => {
                     >
                       {item.description}
                     </Typography>
-                    <StatusPill
-                      label={item.qualification}
-                      tone={item.productionSelectable ? 'success' : 'warning'}
-                    />
+                    <Box
+                      sx={{
+                        display: 'flex',
+                        gap: 0.75,
+                        flexWrap: 'wrap',
+                        mt: 1,
+                      }}
+                    >
+                      <StatusPill
+                        label={
+                          item.controlPlaneAvailable
+                            ? item.sourceRoleAvailable
+                              ? 'Ansible role available'
+                              : 'Role not available'
+                            : 'Role status unknown'
+                        }
+                        tone={
+                          item.controlPlaneAvailable
+                            ? item.sourceRoleAvailable
+                              ? 'success'
+                              : 'warning'
+                            : 'info'
+                        }
+                      />
+                      <StatusPill
+                        label={item.qualification}
+                        tone={item.productionSelectable ? 'success' : 'warning'}
+                      />
+                    </Box>
                   </Surface>
                 ))}
             </Box>
@@ -1982,6 +2068,17 @@ const ProductionServiceWizard = () => {
               'Application configuration',
               getProductSummary(draft, blueprint),
               'Product-specific inputs were validated independently of VM settings.',
+            ],
+            [
+              'Execution source',
+              blueprint?.sourceRoleAvailable
+                ? 'Application Ansible role available'
+                : blueprint?.controlPlaneAvailable
+                ? 'Application role unavailable'
+                : 'Backend role status unavailable',
+              blueprint?.productionSelectable
+                ? 'The selected family reports a production-selectable runtime entry.'
+                : 'Exact tuple promotion and capability evidence are still required before deployment.',
             ],
             [
               'Dependencies',
