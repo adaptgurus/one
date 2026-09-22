@@ -69,7 +69,8 @@ const RemoteSitePanel = ({ isAdmin }) => {
     if (!id) return 'Remote Site ID is required.'
     if (!/^https:\/\/[^\s/]+(?::\d+)?(?:\/[^\s]*)?$/.test(endpoint.trim()))
       return 'Remote Site Endpoint must be an HTTPS URL.'
-    if (!clusterUuid.trim()) return 'Remote LayerSentry cluster UUID is required.'
+    if (!clusterUuid.trim())
+      return 'Remote LayerSentry cluster UUID is required.'
     if (
       tlsFingerprint.trim() &&
       !/^(?:sha256:)?[a-fA-F0-9]{64}$/.test(tlsFingerprint.trim())
@@ -193,7 +194,9 @@ const RemoteSitePanel = ({ isAdmin }) => {
           sx={{ gridColumn: { md: '1 / -1' } }}
         />
         <FormControl sx={{ gridColumn: { md: '1 / -1' } }}>
-          <InputLabel id="remote-site-capabilities-label">Capabilities</InputLabel>
+          <InputLabel id="remote-site-capabilities-label">
+            Capabilities
+          </InputLabel>
           <Select
             labelId="remote-site-capabilities-label"
             label="Capabilities"
