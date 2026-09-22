@@ -50,7 +50,7 @@ const OperationsWorkspace = ({ endpoints }) => {
               Audit trail
             </Typography>
             <Alert severity="info">
-              Resource events remain authoritative in OpenNebula and OneKS. A
+              Resource events remain authoritative in LayerSentry and OneKS. A
               global audit API is not exposed by the current FireEdge backend,
               so LayerSentry does not invent audit records. Resource-specific
               event tabs remain available from their detail pages.

@@ -43,6 +43,8 @@ export const PRODUCT_PATHS = Object.freeze({
   COMPUTE_BLUEPRINTS: '/compute/blueprints',
   KUBERNETES: '/kubernetes',
   KUBERNETES_CREATE: '/kubernetes/create',
+  DBAAS: '/dbaas',
+  APAAS: '/apaas',
   APPLICATIONS: '/applications',
   APPLICATIONS_DEPLOY: '/applications/deploy',
   STORAGE: '/storage',
@@ -99,12 +101,6 @@ const cloudWorkloads = [
     capability: CAPABILITY_IDS.COMPUTE,
   },
   {
-    label: 'VM Blueprints',
-    path: PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
-    icon: Packages,
-    capability: CAPABILITY_IDS.BLUEPRINTS,
-  },
-  {
     label: 'Affinity Groups',
     path: PRODUCT_PATHS.COMPUTE_AFFINITY,
     icon: Group,
@@ -117,10 +113,16 @@ const cloudWorkloads = [
     capability: CAPABILITY_IDS.KUBERNETES,
   },
   {
-    label: 'Applications',
-    path: PRODUCT_PATHS.APPLICATIONS,
+    label: 'DBaaS',
+    path: PRODUCT_PATHS.DBAAS,
+    icon: Db,
+    always: true,
+  },
+  {
+    label: 'APaaS',
+    path: PRODUCT_PATHS.APAAS,
     icon: Packages,
-    capability: CAPABILITY_IDS.APPLICATIONS_ONEFLOW,
+    always: true,
   },
   {
     label: 'Storage',

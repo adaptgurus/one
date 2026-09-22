@@ -15,17 +15,15 @@ test('Compute exposes first-class LayerSentry navigation and gates VM creation',
   assert.match(source, /CAPABILITY_IDS\.VM_CREATE/)
   assert.match(source, /isCapabilityVisible\(/)
   assert.match(source, /PRODUCT_PATHS\.COMPUTE_CREATE/)
-  assert.match(source, /CAPABILITY_IDS\.BLUEPRINTS/)
+  assert.match(source, /PRODUCT_PATHS\.DBAAS/)
+  assert.match(source, /PRODUCT_PATHS\.APAAS/)
   assert.match(source, /CAPABILITY_IDS\.AFFINITY/)
-  assert.match(source, /CAPABILITY_IDS\.STORAGE_IMAGES/)
   assert.match(source, /CAPABILITY_IDS\.NETWORK/)
-  assert.match(source, /PRODUCT_PATHS\.COMPUTE_BLUEPRINTS/)
   assert.match(source, /PRODUCT_PATHS\.COMPUTE_AFFINITY/)
-  assert.match(source, /PRODUCT_PATHS\.STORAGE_IMAGES/)
   assert.match(source, /PRODUCT_PATHS\.NETWORK/)
 })
 
-test('Compute keeps OpenNebula authoritative while unqualified VM mutations stay hidden', () => {
+test('Compute keeps LayerSentry infrastructure authoritative while unqualified VM mutations stay hidden', () => {
   assert.match(source, /ResourceBridge endpoints={endpoints} legacyPath="\/vm"/)
   assert.match(source, /Read-only authoritative inventory/)
   assert.match(

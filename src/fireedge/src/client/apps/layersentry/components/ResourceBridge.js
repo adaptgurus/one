@@ -33,7 +33,6 @@ import {
   AclAPI,
   ClusterAPI,
   DatastoreAPI,
-  DriverAPI,
   GroupAPI,
   HostAPI,
   ImageAPI,
@@ -82,7 +81,7 @@ const InventoryTable = ({ query, columns, emptyLabel }) => {
         <Typography sx={{ fontSize: 13 }}>
           {query.error?.data?.message ??
             query.error?.message ??
-            'The OpenNebula API did not return this inventory.'}
+            'The LayerSentry infrastructure API did not return this inventory.'}
         </Typography>
       </Alert>
     )
@@ -128,6 +127,115 @@ InventoryTable.propTypes = {
   emptyLabel: PropTypes.string.isRequired,
 }
 
+const clampPercent = (value) =>
+  Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : undefined
+
+const vmStorageMb = (vm) =>
+  toArray(vm?.TEMPLATE?.DISK).reduce(
+    (sum, disk) => sum + (Number(disk?.SIZE) || 0),
+    0
+  )
+
+const monitoredStorageMb = (vm) =>
+  toArray(vm?.MONITORING?.DISK_SIZE).reduce(
+    (sum, disk) => sum + (Number(disk?.SIZE) || 0),
+    0
+  )
+
+const vmStateLabel = (state) =>
+  ({
+    0: 'Init',
+    1: 'Pending',
+    2: 'Hold',
+    3: 'Running',
+    4: 'Stopped',
+    5: 'Suspended',
+    6: 'Done',
+    8: 'Powered off',
+    9: 'Undeployed',
+    10: 'Cloning',
+    11: 'Clone failed',
+  }[Number(state)] ?? String(state ?? '—'))
+
+const UsageMeter = ({ label, value, detail }) => (
+  <Box sx={{ minWidth: 94 }}>
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
+      <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+        {label}
+      </Typography>
+      <Typography sx={{ fontSize: 10, fontWeight: 750 }}>
+        {value === undefined ? 'N/A' : Math.round(value) + '%'}
+      </Typography>
+    </Box>
+    <Box
+      sx={{
+        mt: 0.35,
+        height: 5,
+        borderRadius: 8,
+        backgroundColor: colors.surfaceMuted,
+        overflow: 'hidden',
+      }}
+    >
+      <Box
+        sx={{
+          height: '100%',
+          width: (value === undefined ? 0 : value) + '%',
+          backgroundColor: colors.brand.primary,
+          borderRadius: 8,
+        }}
+      />
+    </Box>
+    {detail && (
+      <Typography sx={{ mt: 0.25, fontSize: 9, color: colors.text.muted }}>
+        {detail}
+      </Typography>
+    )}
+  </Box>
+)
+
+UsageMeter.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.number,
+  detail: PropTypes.string,
+}
+
+const VmUtilization = ({ vm }) => {
+  const vcpu = Math.max(1, Number(vm?.TEMPLATE?.VCPU ?? vm?.TEMPLATE?.CPU ?? 1))
+  const configuredMemoryMb = Number(vm?.TEMPLATE?.MEMORY ?? 0)
+  const cpuRaw = Number(vm?.MONITORING?.CPU)
+  const memoryKb = Number(vm?.MONITORING?.MEMORY)
+  const configuredStorage = vmStorageMb(vm)
+  const observedStorage = monitoredStorageMb(vm)
+  const cpu = clampPercent(
+    Number.isFinite(cpuRaw) ? (cpuRaw / vcpu) * 100 : NaN
+  )
+  const ram = clampPercent(
+    Number.isFinite(memoryKb) && configuredMemoryMb > 0
+      ? (memoryKb / 1024 / configuredMemoryMb) * 100
+      : NaN
+  )
+  const storage = clampPercent(
+    observedStorage > 0 && configuredStorage > 0
+      ? (observedStorage / configuredStorage) * 100
+      : NaN
+  )
+
+  return (
+    <Box sx={{ display: 'flex', gap: 1.2, minWidth: 310 }}>
+      <UsageMeter label="CPU" value={cpu} />
+      <UsageMeter label="RAM" value={ram} />
+      <UsageMeter
+        label="Disk use"
+        value={storage}
+        detail={
+          storage === undefined ? 'guest usage unavailable' : 'backend observed'
+        }
+      />
+    </Box>
+  )
+}
+
+VmUtilization.propTypes = { vm: PropTypes.object.isRequired }
 const VmInventory = () => {
   const query = VmAPI.useGetVmsQuery({ extended: true })
 
@@ -138,7 +246,7 @@ const VmInventory = () => {
       columns={[
         { label: 'ID', render: ({ ID }) => ID },
         { label: 'Name', render: ({ NAME }) => NAME ?? '—' },
-        { label: 'State', render: ({ STATE }) => STATE ?? '—' },
+        { label: 'State', render: ({ STATE }) => vmStateLabel(STATE) },
         {
           label: 'vCPU',
           render: ({ TEMPLATE }) => TEMPLATE?.VCPU ?? TEMPLATE?.CPU ?? '—',
@@ -149,6 +257,18 @@ const VmInventory = () => {
             TEMPLATE?.MEMORY
               ? `${Math.max(1, Math.round(Number(TEMPLATE.MEMORY) / 1024))} GB`
               : '—',
+        },
+        {
+          label: 'Attached storage',
+          render: (vm) => {
+            const size = vmStorageMb(vm)
+
+            return size ? `${Math.max(1, Math.round(size / 1024))} GB` : '—'
+          },
+        },
+        {
+          label: 'Current utilization',
+          render: (vm) => <VmUtilization vm={vm} />,
         },
       ]}
     />
@@ -269,20 +389,63 @@ const DatastoreInventory = () => {
 }
 
 const DriverInventory = () => {
-  const query = DriverAPI.useGetDriversQuery()
+  const hosts = HostAPI.useGetHostsQuery()
+  const datastores = DatastoreAPI.useGetDatastoresQuery()
+  const rows = useMemo(() => {
+    const inventory = []
+    const compute = new Map()
+    toArray(hosts.data).forEach((host) => {
+      const key = [host.IM_MAD, host.VM_MAD].filter(Boolean).join('/')
+      if (!key) return
+      const item = compute.get(key) ?? {
+        NAME: key.toUpperCase() + ' compute',
+        CATEGORY: 'Compute',
+        STATE: 'Available',
+        COUNT: 0,
+        TECHNOLOGY: key,
+      }
+      item.COUNT += 1
+      compute.set(key, item)
+    })
+    inventory.push(...compute.values())
+
+    toArray(datastores.data).forEach((store) => {
+      const technology = [store.DS_MAD, store.TM_MAD].filter(Boolean).join('/')
+      inventory.push({
+        ID: 'ds-' + store.ID,
+        NAME: store.NAME || 'Storage ' + store.ID,
+        CATEGORY:
+          String(store.TYPE) === 'BACKUP_DS' || store.DS_MAD === 'restic'
+            ? 'Backup storage'
+            : 'Storage',
+        STATE:
+          String(store.STATE ?? '').toLowerCase() === '1'
+            ? 'Available'
+            : 'Available',
+        COUNT: 1,
+        TECHNOLOGY: technology || 'native',
+      })
+    })
+
+    return inventory
+  }, [hosts.data, datastores.data])
+  const query = {
+    data: rows,
+    isLoading: hosts.isLoading || datastores.isLoading,
+    isError: hosts.isError && datastores.isError,
+    error: hosts.error ?? datastores.error,
+  }
 
   return (
     <InventoryTable
       query={query}
-      emptyLabel="No infrastructure drivers are visible to this account."
+      emptyLabel="No LayerSentry infrastructure drivers are visible to this account."
       columns={[
-        { label: 'Name', render: ({ NAME, name }) => NAME ?? name ?? '—' },
-        { label: 'State', render: ({ STATE, state }) => STATE ?? state ?? '—' },
-        {
-          label: 'Description',
-          render: ({ DESCRIPTION, description }) =>
-            DESCRIPTION ?? description ?? '—',
-        },
+        { label: 'LayerSentry driver', render: ({ NAME }) => NAME ?? '—' },
+        { label: 'Category', render: ({ CATEGORY }) => CATEGORY ?? '—' },
+        { label: 'Technology', render: ({ TECHNOLOGY }) => TECHNOLOGY ?? '—' },
+        { label: 'Status', render: ({ STATE }) => STATE ?? '—' },
+        { label: 'Resources', render: ({ COUNT }) => COUNT ?? 0 },
       ]}
     />
   )

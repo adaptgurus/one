@@ -33,7 +33,8 @@ import KubernetesWorkspace from 'client/apps/layersentry/pages/KubernetesWorkspa
 import OperationsWorkspace from 'client/apps/layersentry/pages/OperationsWorkspace'
 import ProtectionWorkspace from 'client/apps/layersentry/pages/ProtectionWorkspace'
 import ComputeWorkspace from 'client/apps/layersentry/pages/ComputeWorkspace'
-import ApplicationsWorkspace from 'client/apps/layersentry/pages/ApplicationsWorkspace'
+import ManagedServicesWorkspace from 'client/apps/layersentry/pages/ManagedServicesWorkspace'
+import ProductionServiceWizard from 'client/apps/layersentry/pages/ProductionServiceWizard'
 import SiteRecoveryWorkspace from 'client/apps/layersentry/pages/SiteRecoveryWorkspace'
 import BackupStorageWorkspace from 'client/apps/layersentry/pages/BackupStorageWorkspace'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
@@ -45,7 +46,7 @@ const LEGACY_REDIRECTS = Object.freeze({
   '/dashboard': PRODUCT_PATHS.OVERVIEW,
   '/vm': PRODUCT_PATHS.COMPUTE,
   '/vm/create': PRODUCT_PATHS.COMPUTE_CREATE,
-  '/vm-template': PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
+  '/vm-template': PRODUCT_PATHS.DBAAS,
   '/vm-group': PRODUCT_PATHS.COMPUTE_AFFINITY,
   '/image': PRODUCT_PATHS.STORAGE_IMAGES,
   '/file': PRODUCT_PATHS.STORAGE_FILES,
@@ -58,8 +59,8 @@ const LEGACY_REDIRECTS = Object.freeze({
   '/backupjobs': PRODUCT_PATHS.PROTECTION_BACKUP_PLANS,
   '/backupjobs/create': '/protection/create',
   '/backup': PRODUCT_PATHS.PROTECTION_RECOVERY_POINTS,
-  '/service': PRODUCT_PATHS.APPLICATIONS,
-  '/service-template': PRODUCT_PATHS.APPLICATIONS,
+  '/service': PRODUCT_PATHS.APAAS,
+  '/service-template': PRODUCT_PATHS.APAAS,
   '/attention': PRODUCT_PATHS.OPERATIONS,
 })
 
@@ -132,17 +133,7 @@ const Portal = ({ endpoints }) => {
         <Route
           exact
           path={PRODUCT_PATHS.COMPUTE_BLUEPRINTS}
-          render={() =>
-            area({
-              endpoints,
-              title: 'VM Blueprints',
-              description:
-                'Browse approved virtual-machine blueprints and instantiate them through the backend-authorized workflow.',
-              resources: [
-                { label: 'VM Blueprints', legacyPath: '/vm-template' },
-              ],
-            })
-          }
+          render={() => <Redirect to={PRODUCT_PATHS.DBAAS} />}
         />
 
         <Route
@@ -202,7 +193,7 @@ const Portal = ({ endpoints }) => {
               endpoints,
               title: 'Network Blueprints',
               description:
-                'Reusable OpenNebula network templates for repeatable private-cloud network creation.',
+                'Reusable LayerSentry network templates for repeatable private-cloud network creation.',
               resources: [
                 {
                   label: 'Network Blueprints',
@@ -222,7 +213,7 @@ const Portal = ({ endpoints }) => {
               endpoints,
               title: 'Virtual Routers',
               description:
-                'Operate OpenNebula Virtual Routers for routed networks and highly available endpoint patterns.',
+                'Operate LayerSentry Virtual Routers for routed networks and highly available endpoint patterns.',
               resources: [{ label: 'Virtual Routers', legacyPath: '/vrouter' }],
               createTo: '/vrouter/instantiate',
               createLabel: 'Deploy Virtual Router',
@@ -232,29 +223,23 @@ const Portal = ({ endpoints }) => {
 
         <Route
           exact
+          path={PRODUCT_PATHS.DBAAS}
+          render={() => <ManagedServicesWorkspace mode="dbaas" />}
+        />
+        <Route
+          exact
+          path={PRODUCT_PATHS.APAAS}
+          render={() => <ManagedServicesWorkspace mode="apaas" />}
+        />
+        <Route
+          exact
           path={PRODUCT_PATHS.APPLICATIONS_DEPLOY}
-          render={() =>
-            create({
-              endpoints,
-              title: 'Deploy Application',
-              description:
-                'Choose a published application definition and provide only the deployment inputs exposed by that definition.',
-              legacyPath: '/service-template/instantiate/',
-              returnTo: PRODUCT_PATHS.APPLICATIONS,
-              steps: [
-                'Application',
-                'Inputs',
-                'Resources',
-                'Network',
-                'Review',
-              ],
-            })
-          }
+          component={ProductionServiceWizard}
         />
         <Route
           exact
           path={PRODUCT_PATHS.APPLICATIONS}
-          render={() => <ApplicationsWorkspace endpoints={endpoints} />}
+          render={() => <Redirect to={PRODUCT_PATHS.APAAS} />}
         />
 
         <Route
@@ -270,7 +255,7 @@ const Portal = ({ endpoints }) => {
               endpoints,
               title: 'Images',
               description:
-                'Customer-visible OS and disk images with provider ownership and raw attributes hidden by the active OpenNebula view.',
+                'Customer-visible OS and disk images with provider ownership and raw attributes hidden by the active LayerSentry view.',
               resources: [{ label: 'Images', legacyPath: '/image' }],
               createTo: '/image/create',
               createLabel: 'Create Image',
@@ -286,7 +271,7 @@ const Portal = ({ endpoints }) => {
               endpoints,
               title: 'Files',
               description:
-                'Context files, kernels and other OpenNebula file-datastore objects available to this role.',
+                'Context files, kernels and other LayerSentry file-datastore objects available to this role.',
               resources: [{ label: 'Files', legacyPath: '/file' }],
               createTo: '/file/create',
               createLabel: 'Upload File',
@@ -415,7 +400,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Add Compute Host',
                 description:
-                  'Register a compute host using the native OpenNebula host lifecycle.',
+                  'Register a compute host using the native LayerSentry host lifecycle.',
                 legacyPath: '/host/create',
                 returnTo: PRODUCT_PATHS.INFRA_HOSTS,
               })
@@ -470,7 +455,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Create Backup Storage',
                 description:
-                  'Create an OpenNebula Backup Datastore using a qualified Restic, Rsync or custom backup backend.',
+                  'Create an LayerSentry Backup Datastore using a qualified Restic, Rsync or custom backup backend.',
                 legacyPath: '/datastore/create',
                 returnTo: PRODUCT_PATHS.INFRA_BACKUP_STORAGE,
                 steps: ['Type', 'Backend', 'Capacity', 'Validation', 'Review'],
@@ -526,7 +511,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Add Team',
                 description:
-                  'Create an OpenNebula group used as a LayerSentry team or role boundary.',
+                  'Create an LayerSentry group used as a LayerSentry team or role boundary.',
                 legacyPath: '/group/create',
                 returnTo: PRODUCT_PATHS.ACCESS_TEAMS,
               })
@@ -622,7 +607,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Create Marketplace App',
                 description:
-                  'Publish a Marketplace App through the native OpenNebula administrator workflow.',
+                  'Publish a Marketplace App through the native LayerSentry administrator workflow.',
                 legacyPath: '/marketplace-app/create',
                 returnTo: PRODUCT_PATHS.PLATFORM_MARKETPLACE_APPS,
               })
@@ -698,7 +683,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Drivers',
                 description:
-                  'Installed OpenNebula infrastructure drivers and integration status.',
+                  'Installed LayerSentry infrastructure drivers and integration status.',
                 resources: [{ label: 'Drivers', legacyPath: '/driver' }],
               })
             }
@@ -796,7 +781,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Roles',
                 description:
-                  'Role membership is mapped to OpenNebula groups and enforced by backend permissions.',
+                  'Role membership is mapped to LayerSentry groups and enforced by backend permissions.',
                 resources: [{ label: 'Roles / Groups', legacyPath: '/group' }],
               })
             }
@@ -920,7 +905,7 @@ const Portal = ({ endpoints }) => {
               area({
                 endpoints,
                 title: 'Router Templates',
-                description: 'Reusable OpenNebula Virtual Router definitions.',
+                description: 'Reusable LayerSentry Virtual Router definitions.',
                 resources: [
                   {
                     label: 'Router Templates',
@@ -942,7 +927,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Marketplaces',
                 description:
-                  'Administrative OpenNebula public and private Marketplace connections.',
+                  'Administrative LayerSentry public and private Marketplace connections.',
                 resources: [
                   { label: 'Marketplaces', legacyPath: '/marketplace' },
                 ],
@@ -961,7 +946,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Marketplace Apps',
                 description:
-                  'Administrative appliance catalog imported from configured OpenNebula Marketplaces.',
+                  'Administrative appliance catalog imported from configured LayerSentry Marketplaces.',
                 resources: [
                   { label: 'Marketplace Apps', legacyPath: '/marketplace-app' },
                 ],

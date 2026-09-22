@@ -50,7 +50,7 @@ const SettingsPage = ({ endpoints }) => {
         <Surface sx={{ mt: 2, p: 2.5 }}>
           <SectionHeader
             title="Advanced tools"
-            description="Use the native OpenNebula administration interface only for advanced troubleshooting."
+            description="Use the native LayerSentry administration interface only for advanced troubleshooting."
           />
           <Box
             sx={{

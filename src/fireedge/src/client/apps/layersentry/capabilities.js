@@ -19,6 +19,8 @@ import { SERVER_CONFIG } from '@ConstantsModule'
 export const CAPABILITY_IDS = Object.freeze({
   COMPUTE: 'COMPUTE',
   VM_CREATE: 'VM_CREATE',
+  VM_RESIZE: 'VM_RESIZE',
+  VM_UPDATE_CONFIG: 'VM_UPDATE_CONFIG',
   BLUEPRINTS: 'BLUEPRINTS',
   AFFINITY: 'AFFINITY',
   AFFINITY_CREATE: 'AFFINITY_CREATE',
@@ -133,6 +135,8 @@ const SOURCE_UNIMPLEMENTED = new Set([CAPABILITY_IDS.SITE_RECOVERY_DR])
 
 const MUTATING_CAPABILITIES = new Set([
   CAPABILITY_IDS.VM_CREATE,
+  CAPABILITY_IDS.VM_RESIZE,
+  CAPABILITY_IDS.VM_UPDATE_CONFIG,
   CAPABILITY_IDS.AFFINITY_CREATE,
   CAPABILITY_IDS.KUBERNETES_CREATE,
   CAPABILITY_IDS.APPLICATIONS_DEPLOY,
@@ -250,6 +254,10 @@ const ALWAYS_AVAILABLE_PATHS = new Set([
   '/search',
   '/support',
   '/settings',
+  '/dbaas',
+  '/apaas',
+  '/applications',
+  '/applications/deploy',
 ])
 
 const hidden = (visibility, reason) => ({
@@ -261,6 +269,8 @@ const hidden = (visibility, reason) => ({
 const CAPABILITY_ENDPOINT_REQUIREMENTS = Object.freeze({
   [CAPABILITY_IDS.COMPUTE]: ['/vm'],
   [CAPABILITY_IDS.VM_CREATE]: ['/vm/create', '/vm-template/instantiate'],
+  [CAPABILITY_IDS.VM_RESIZE]: ['/vm'],
+  [CAPABILITY_IDS.VM_UPDATE_CONFIG]: ['/vm'],
   [CAPABILITY_IDS.BLUEPRINTS]: ['/vm-template'],
   [CAPABILITY_IDS.AFFINITY]: ['/vm-group'],
   [CAPABILITY_IDS.AFFINITY_CREATE]: ['/vm-group/create'],
