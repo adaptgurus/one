@@ -1,0 +1,47 @@
+name: T2 Bootstrap-Fix Observe Install
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-bootstrapfix-observe-install.yml
+
+permissions:
+  contents: read
+
+jobs:
+  observe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Observe final install after completion window
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-bootstrapfix-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-bootstrapfix-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Final VM not running before observation: $($vm.State)"}
+          $fw=Get-VMFirmware -VMName $name
+          if($fw.SecureBoot -ne 'Off'){throw "Secure Boot changed: $($fw.SecureBoot)"}
+          $before=(Get-Item $vhd).Length
+          if($before -lt 100000000){throw "Install had not started: $before"}
+          Write-Host "FINAL_OBSERVE_START_VHD_BYTES=$before secureboot=$($fw.SecureBoot)"
+          Start-Sleep -Seconds 480
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $after=(Get-Item $vhd).Length
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\install-observe-8min-secureboot-off.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          if(-not(Test-Path $out)){throw 'Final install observation screenshot missing'}
+          Write-Host "FINAL_OBSERVE_END_STATE=$($vm.State) VHD_BYTES=$after SCREENSHOT_BYTES=$((Get-Item $out).Length)"
+          if($after -lt 2000000000){throw "Final VHD did not reach expected installed size: $after"}
+
+      - name: Upload install observation
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-bootstrapfix-db8ef17-install-observe-8min
+          path: C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\install-observe-8min-secureboot-off.png
+          if-no-files-found: error
+          retention-days: 7
