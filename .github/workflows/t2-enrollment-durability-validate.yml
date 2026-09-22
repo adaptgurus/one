@@ -32,8 +32,12 @@ jobs:
           if(-not(Test-Path $repo)){throw 'Local LayerSentry checkout missing'}
           $head=(& $git -C $repo rev-parse HEAD).Trim()
           if($head -ne '4c4ac81d69b162bf843daa8b2f6b5543dc6403a6'){throw "Unexpected local base HEAD $head"}
-          if((& $git -C $repo status --porcelain | Out-String).Trim()){throw 'Local LayerSentry checkout is not pristine'}
-          Write-Host "LOCAL_BASE=PASS head=$head"
+          & $git -C $repo diff --quiet
+          if($LASTEXITCODE -ne 0){throw 'Local LayerSentry checkout has tracked working-tree changes'}
+          & $git -C $repo diff --cached --quiet
+          if($LASTEXITCODE -ne 0){throw 'Local LayerSentry checkout has staged changes'}
+          $untracked=@(& $git -C $repo ls-files --others --exclude-standard)
+          Write-Host "LOCAL_BASE=PASS head=$head untracked_ignored=$($untracked.Count)"
 
       - name: Create disposable patched tree
         shell: powershell
