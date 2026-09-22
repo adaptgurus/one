@@ -1,0 +1,33 @@
+name: T2 Enrollment Fix Local Probe
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-enrollment-fix-local-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Probe local LayerSentry checkout
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $repo='C:\LayerSentryLab\src\layersentry-platform'
+          if(-not(Test-Path $repo)){throw "Local checkout missing: $repo"}
+          $git='C:\Program Files\Git\cmd\git.exe'
+          if(-not(Test-Path $git)){throw 'Git for Windows missing'}
+          & $git -C $repo status --short --branch
+          & $git -C $repo remote -v
+          & $git -C $repo rev-parse HEAD
+          & $git -C $repo fetch origin fix/t2-enrollment-durability-20260922
+          if($LASTEXITCODE -ne 0){throw 'Fetch of fix branch failed'}
+          & $git -C $repo rev-parse FETCH_HEAD
+          Write-Host 'LOCAL_FIX_FETCH=PASS'
