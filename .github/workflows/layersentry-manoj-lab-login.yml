@@ -1,0 +1,111 @@
+name: LayerSentry Manoj lab authenticated probe
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-manoj-lab-login.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Authenticate with existing local lab credentials only
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          import base64
+          import hashlib
+          import json
+          import pathlib
+          import socket
+          import sys
+          import paramiko
+
+          targets = [
+              ("ls-fe1", "10.250.10.11"),
+              ("ls-fe3", "10.250.10.13"),
+              ("ls-kvm1", "10.250.10.20"),
+          ]
+          candidates = [
+              pathlib.Path(r"C:\LayerSentryLab\qualification\durable-root-current.password"),
+              pathlib.Path(r"C:\LayerSentryLab\qualification\qual-root-password.txt"),
+              pathlib.Path(r"C:\LayerSentryLab\qualification\qual-root-ac7e14e.password"),
+              pathlib.Path(r"C:\LayerSentryLab\qualification\qual-root-4c4ac81-35685057701.password"),
+              pathlib.Path(r"C:\LayerSentryLab\migration-source\ls-hv-migration-source2\qualification_password.txt"),
+          ]
+
+          commands = {
+              "ls-fe1": "hostname; id; cat /etc/redhat-release; systemctl is-active opennebula || true; grep -E '^\\s*SERVER_ID' /etc/one/oned.conf || true; ip -br -4 addr",
+              "ls-fe3": "hostname; id; cat /etc/redhat-release; systemctl is-active opennebula || true; grep -E '^\\s*SERVER_ID' /etc/one/oned.conf || true; ip -br -4 addr",
+              "ls-kvm1": "hostname; id; cat /etc/redhat-release; test -e /dev/kvm && echo KVM_DEVICE=PRESENT; systemctl is-active libvirtd || systemctl is-active virtqemud || true; ip -br -4 addr",
+          }
+
+          def server_fingerprint(host):
+              sock = socket.create_connection((host, 22), timeout=5)
+              transport = paramiko.Transport(sock)
+              transport.start_client(timeout=5)
+              key = transport.get_remote_server_key()
+              digest = base64.b64encode(hashlib.sha256(key.asbytes()).digest()).decode()
+              transport.close()
+              return key.get_name(), "SHA256:" + digest
+
+          for name, host in targets:
+              key_type, fingerprint = server_fingerprint(host)
+              print(f"HOSTKEY TARGET={name} TYPE={key_type} FINGERPRINT={fingerprint}")
+              authenticated = False
+              for candidate in candidates:
+                  if not candidate.is_file():
+                      continue
+                  password = candidate.read_text(encoding="utf-8").strip()
+                  if not password:
+                      continue
+                  client = paramiko.SSHClient()
+                  client.set_missing_host_key_policy(paramiko.RejectPolicy())
+                  hostkeys = client.get_host_keys()
+                  raw_sock = socket.create_connection((host, 22), timeout=5)
+                  transport = paramiko.Transport(raw_sock)
+                  transport.start_client(timeout=5)
+                  server_key = transport.get_remote_server_key()
+                  transport.close()
+                  hostkeys.add(host, server_key.get_name(), server_key)
+                  try:
+                      client.connect(
+                          hostname=host,
+                          username="root",
+                          password=password,
+                          timeout=5,
+                          auth_timeout=5,
+                          banner_timeout=5,
+                          look_for_keys=False,
+                          allow_agent=False,
+                      )
+                  except Exception:
+                      client.close()
+                      print(f"AUTH_FAIL TARGET={name} CREDENTIAL_FILE={candidate.name}")
+                      continue
+                  print(f"AUTH_PASS TARGET={name} CREDENTIAL_FILE={candidate.name}")
+                  stdin, stdout, stderr = client.exec_command(commands[name], timeout=20)
+                  out = stdout.read().decode("utf-8", "replace")
+                  err = stderr.read().decode("utf-8", "replace")
+                  print(f"BEGIN_REMOTE_OUTPUT TARGET={name}")
+                  print(out.rstrip())
+                  if err.strip():
+                      print("REMOTE_STDERR=" + err.strip().replace("\n", " | "))
+                  print(f"END_REMOTE_OUTPUT TARGET={name}")
+                  client.close()
+                  authenticated = True
+                  break
+              if not authenticated:
+                  print(f"AUTH_NONE TARGET={name}")
+          '@
+          $scriptPath = Join-Path $env:RUNNER_TEMP 'probe_lab.py'
+          Set-Content -Path $scriptPath -Value $script -Encoding UTF8
+          python $scriptPath
