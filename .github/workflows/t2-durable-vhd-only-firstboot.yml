@@ -1,0 +1,100 @@
+name: T2 Durable VHD Only First Boot
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-durable-vhd-only-firstboot.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-durable-live-install
+  cancel-in-progress: false
+
+jobs:
+  boot:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Re-bind completed durable installation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-durable-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-durable-qual\os.vhdx'
+          $iso='C:\LayerSentryLab\qualification\durable-5f3bda7\LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Durable VM not running: $($vm.State)"}
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $vhd){throw 'Durable VHD binding changed'}
+          if((Get-Item $vhd).Length -lt 3500000000){throw 'Durable installed VHD unexpectedly small'}
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction Stop
+          if($dvd.Path -ne $iso){throw "Unexpected durable DVD path: $($dvd.Path)"}
+          Set-VMFirmware -VMName $name -FirstBootDevice $disks[0]
+          Write-Host "DURABLE_COMPLETED_INSTALL_BIND=PASS vhd_bytes=$((Get-Item $vhd).Length)"
+
+      - name: Eject durable ISO and exit Anaconda
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-durable-qual'
+          Set-VMDvdDrive -VMName $name -Path $null
+          if((Get-VMDvdDrive -VMName $name).Path){throw 'Durable ISO did not eject'}
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          $r=$kb.TypeKey([uint32]0x0D)
+          if($r.ReturnValue -ne 0){throw 'Enter key injection failed'}
+          Write-Host 'DURABLE_ANACONDA_EXIT=PASS ISO_EJECT=PASS'
+
+      - name: Ensure installed VHD boot
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-durable-qual'
+          $deadline=(Get-Date).AddSeconds(180)
+          $seenOff=$false
+          $healthy=$false
+          while((Get-Date) -lt $deadline){
+            $vm=Get-VM -Name $name -ErrorAction Stop
+            $hb=(Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue).PrimaryStatusDescription
+            Write-Host "BOOT_WAIT state=$($vm.State) heartbeat=$hb uptime=$($vm.Uptime)"
+            if($vm.State -eq 'Off'){ $seenOff=$true; Start-Sleep -Seconds 3; Start-VM -Name $name; Start-Sleep -Seconds 10; continue }
+            if($vm.State -eq 'Running' -and $hb -eq 'OK'){ $healthy=$true; break }
+            Start-Sleep -Seconds 10
+          }
+          if(-not $healthy){
+            Write-Host 'Installed heartbeat not observed; performing one disposable-VM recovery power cycle'
+            $vm=Get-VM -Name $name
+            if($vm.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force}
+            Start-Sleep -Seconds 3
+            Start-VM -Name $name
+            Start-Sleep -Seconds 120
+            $vm=Get-VM -Name $name
+            $hb=(Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue).PrimaryStatusDescription
+            if($vm.State -ne 'Running' -or $hb -ne 'OK'){throw "Durable VHD-only boot failed state=$($vm.State) heartbeat=$hb"}
+          }
+          if((Get-VMDvdDrive -VMName $name).Path){throw 'DVD unexpectedly populated after durable VHD-only boot'}
+          $ips=@((Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object {$_ -match '^\d+\.'})
+          Write-Host "DURABLE_VHD_ONLY_BOOT=PASS state=$((Get-VM -Name $name).State) heartbeat=$((Get-VMIntegrationService -VMName $name -Name 'Heartbeat').PrimaryStatusDescription) ips=$($ips -join ',')"
+
+      - name: Capture durable first boot
+        shell: powershell
+        run: |
+          $dir='C:\LayerSentryLab\evidence\t2-durable-5f3bda7'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          $out=Join-Path $dir 'vhd-only-first-boot.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-durable-qual' -Out $out
+          if(-not(Test-Path $out)){throw 'Durable first-boot screenshot missing'}
+
+      - name: Upload durable VHD-only boot evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-durable-vhd-only-first-boot
+          path: C:\LayerSentryLab\evidence\t2-durable-5f3bda7\vhd-only-first-boot.png
+          if-no-files-found: error
+          retention-days: 7
