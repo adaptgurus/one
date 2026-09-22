@@ -1,0 +1,48 @@
+name: LayerSentry Manoj lab access preflight
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-manoj-access-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Locate existing credential files without reading them
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $roots = @('C:\LayerSentryLab','C:\Users\opc')
+          foreach ($root in $roots) {
+            if (-not (Test-Path $root)) { continue }
+            Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.Name -match '(?i)(root|pass|cred)' -and
+                $_.Length -lt 65536
+              } |
+              Select-Object FullName,Length,LastWriteTime |
+              Format-Table -AutoSize
+          }
+
+      - name: Check non-interactive SSH tooling
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          foreach ($tool in @('python','python3','py','plink','sshpass','ssh')) {
+            $cmd = Get-Command $tool -ErrorAction SilentlyContinue
+            if ($cmd) { Write-Host "TOOL=$tool PATH=$($cmd.Source)" }
+          }
+          foreach ($python in @('python','python3','py')) {
+            $cmd = Get-Command $python -ErrorAction SilentlyContinue
+            if (-not $cmd) { continue }
+            & $python -c "import sys; print(sys.version)"
+            & $python -c "import importlib.util; print('PARAMIKO=' + str(importlib.util.find_spec('paramiko') is not None))"
+          }
