@@ -1,0 +1,37 @@
+name: Manoj OpenNebula public health probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-dr-opennebula-20260923
+    paths:
+      - .github/workflows/manoj-opennebula-public-health.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Probe XML-RPC service without credentials
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($ip in @('10.250.10.10','10.250.10.11','10.250.10.13')) {
+            $tcp = Test-NetConnection -ComputerName $ip -Port 2633 -WarningAction SilentlyContinue
+            Write-Host "ONED_TCP IP=$ip OPEN=$($tcp.TcpTestSucceeded)"
+            if (-not $tcp.TcpTestSucceeded) { continue }
+            try {
+              $body = '<methodCall><methodName>system.listMethods</methodName><params /></methodCall>'
+              $resp = Invoke-WebRequest -UseBasicParsing -Uri "http://$ip:2633/RPC2" -Method Post -ContentType 'text/xml' -Body $body -TimeoutSec 5
+              Write-Host "ONED_XMLRPC IP=$ip STATUS=$($resp.StatusCode) BYTES=$($resp.RawContentLength)"
+            } catch {
+              if ($_.Exception.Response) {
+                Write-Host "ONED_XMLRPC IP=$ip HTTP=$([int]$_.Exception.Response.StatusCode)"
+              } else {
+                Write-Host "ONED_XMLRPC IP=$ip ERROR=$($_.Exception.Message)"
+              }
+            }
+          }
