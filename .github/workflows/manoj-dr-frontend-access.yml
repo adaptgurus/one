@@ -53,8 +53,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $key='C:\LayerSentryLab\qualification\dr-maint-key'
           if (-not (Test-Path $key)) {
-            & ssh-keygen.exe -q -t ed25519 -N '' -C 'layersentry-dr-qualification-20260923' -f $key
-            if ($LASTEXITCODE -ne 0) { throw 'failed to create DR maintenance key' }
+            $proc = Start-Process -FilePath ssh-keygen.exe -ArgumentList @(
+              '-q','-t','ed25519','-N','""',
+              '-C','layersentry-dr-qualification-20260923',
+              '-f',$key
+            ) -NoNewWindow -Wait -PassThru
+            if ($proc.ExitCode -ne 0) { throw 'failed to create DR maintenance key' }
           }
           & icacls.exe $key /inheritance:r | Out-Null
           & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
