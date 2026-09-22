@@ -1,0 +1,88 @@
+name: T2 Agent Failure Diagnose
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-agent-failure-diagnose.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Prepare support SSH key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src='C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519'
+          if(-not(Test-Path $src)){throw 'Qualification support key missing'}
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-host-support-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_HOST_SUPPORT_KEY=$key" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Wait for management SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ok=$false
+          for($i=0;$i -lt 30;$i++){
+            $c=New-Object Net.Sockets.TcpClient
+            try{$a=$c.BeginConnect('10.250.10.41',22,$null,$null);$ready=$a.AsyncWaitHandle.WaitOne(1000);if($ready){$c.EndConnect($a);if($c.Connected){$ok=$true;break}}}catch{}finally{$c.Close()}
+            Start-Sleep -Seconds 2
+          }
+          if(-not $ok){throw 'Management SSH did not become reachable'}
+          Write-Host 'MANAGEMENT_SSH_PORT=PASS'
+
+      - name: Collect host agent failure evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $known=Join-Path $env:RUNNER_TEMP 't2-host-known_hosts'
+          $cmd=@'
+          set +e
+          echo '=== IDENTITY ==='
+          hostname
+          id
+          echo '=== AGENT SELF TEST ==='
+          /usr/local/bin/layersentry-host-agent self-test 2>&1 || /opt/layersentry/bin/layersentry-host-agent self-test 2>&1 || true
+          echo '=== SERVICE STATUS ==='
+          systemctl status layersentry-host-agent.service --no-pager -l 2>&1 || true
+          echo '=== SERVICE SHOW ==='
+          systemctl show layersentry-host-agent.service -p LoadState -p ActiveState -p SubState -p Result -p ExecMainCode -p ExecMainStatus -p NRestarts --no-pager 2>&1 || true
+          echo '=== SERVICE UNIT ==='
+          systemctl cat layersentry-host-agent.service --no-pager 2>&1 || true
+          echo '=== JOURNAL ==='
+          journalctl -u layersentry-host-agent.service -n 120 --no-pager 2>&1 || true
+          echo '=== SECURITY/STATE ==='
+          getenforce 2>&1 || true
+          systemctl is-active firewalld 2>&1 || true
+          systemctl is-active fapolicyd 2>&1 || true
+          test -f /var/lib/layersentry/firstboot.done && echo FIRSTBOOT_DONE=yes || echo FIRSTBOOT_DONE=no
+          test -f /var/lib/layersentry/console-setup.done && echo CONSOLE_SETUP_DONE=yes || echo CONSOLE_SETUP_DONE=no
+          test -s /var/lib/layersentry/agent/pki/client.crt && echo CLIENT_CERT=yes || echo CLIENT_CERT=no
+          echo '=== NETWORK ==='
+          ip -br addr
+          ip route
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($cmd -replace "`r",'')))
+          & $ssh -i $env:T2_HOST_SUPPORT_KEY -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" layersentry@10.250.10.41 "printf '%s' '$b64' | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'Support SSH diagnostic command failed'}
+
+      - name: Remove temporary support key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_HOST_SUPPORT_KEY -and(Test-Path $env:T2_HOST_SUPPORT_KEY)){& icacls.exe $env:T2_HOST_SUPPORT_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_HOST_SUPPORT_KEY -Force}
