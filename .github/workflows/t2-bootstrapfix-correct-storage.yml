@@ -1,0 +1,75 @@
+name: T2 Bootstrap-Fix Correct Storage
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-bootstrapfix-correct-storage.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-bootstrapfix-final-install
+  cancel-in-progress: true
+
+jobs:
+  correct:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Re-bind final VM disk and ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-bootstrapfix-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-bootstrapfix-qual\os.vhdx'
+          $iso='C:\LayerSentryLab\qualification\bootstrapfix-db8ef17\LayerSentry-Rocky-9.8-bootstrapfix-db8ef17-generic-x86_64.iso'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $vhd){throw 'Final VHD binding changed'}
+          $vhdi=Get-VHD -Path $vhd
+          if($vhdi.Size -ne 85899345920){throw "Unexpected VHD virtual size $($vhdi.Size)"}
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction Stop
+          if($dvd.Path -ne $iso){throw "Unexpected final ISO binding $($dvd.Path)"}
+          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+          if($sha -ne 'f5c2166e1b38130b9f2e51ac7f377522fa28518f8c4e96873a9a66dbff5b0311'){throw "Final ISO hash changed $sha"}
+          Write-Host "FINAL_STORAGE_REBIND=PASS iso_sha=$sha"
+
+      - name: Replay proven storage sequence exactly
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-bootstrapfix-qual'
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          function K([uint32]$v,[int]$wait=250){$r=$kb.TypeKey($v);if($r.ReturnValue -ne 0){throw "TypeKey failed $v"};Start-Sleep -Milliseconds $wait}
+          K 0x35; K 0x0D; Start-Sleep -Seconds 4
+          K 0x43; K 0x0D; Start-Sleep -Seconds 5
+          K 0x43; K 0x0D; Start-Sleep -Seconds 5
+          K 0x32; K 0x0D; Start-Sleep -Seconds 3
+          K 0x43; K 0x0D; Start-Sleep -Seconds 12
+          K 0x52; K 0x0D; Start-Sleep -Seconds 6
+          Write-Host 'FINAL_PROVEN_STORAGE_SEQUENCE=PASS'
+
+      - name: Capture corrected installation summary
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\summary-corrected-final.png'
+          New-Item -ItemType Directory -Force -Path (Split-Path $out)|Out-Null
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-bootstrapfix-qual' -Out $out
+          if(-not(Test-Path $out)){throw 'Corrected final summary capture missing'}
+          Write-Host "FINAL_CORRECTED_SUMMARY_BYTES=$((Get-Item $out).Length)"
+
+      - name: Upload corrected summary
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-bootstrapfix-db8ef17-summary-corrected
+          path: C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\summary-corrected-final.png
+          if-no-files-found: error
+          retention-days: 7
