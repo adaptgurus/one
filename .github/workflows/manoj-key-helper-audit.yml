@@ -1,0 +1,44 @@
+name: Manoj frontend key helper audit
+
+on:
+  push:
+    branches:
+      - qual/manoj-dr-opennebula-20260923
+    paths:
+      - .github/workflows/manoj-key-helper-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Audit helper without exposing contents
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $path = 'C:\LayerSentryLab\authorize_frontend_keys.sh'
+          if (-not (Test-Path $path)) { throw 'frontend key helper is missing' }
+          $item = Get-Item $path
+          $hash = (Get-FileHash $path -Algorithm SHA256).Hash.ToLowerInvariant()
+          $text = Get-Content $path -Raw
+          Write-Host "HELPER_BYTES=$($item.Length)"
+          Write-Host "HELPER_SHA256=$hash"
+          $patterns = @(
+            'authorized_keys','ssh-copy-id','ssh-keygen','virt-customize',
+            'guestmount','guestfish','mount','wsl','qemu-nbd','Mount-VHD',
+            'password','secret','PRIVATE KEY','PUBLIC KEY','cloud-init',
+            'oneadmin','root','opc'
+          )
+          foreach ($pattern in $patterns) {
+            $present = $text -match [regex]::Escape($pattern)
+            Write-Host "HELPER_CAPABILITY NAME=$pattern PRESENT=$present"
+          }
+          $first = (Get-Content $path -TotalCount 1)
+          if ($first -match '^#!') {
+            Write-Host "HELPER_HAS_SHEBANG=True"
+          } else {
+            Write-Host "HELPER_HAS_SHEBANG=False"
+          }
