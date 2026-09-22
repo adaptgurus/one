@@ -349,6 +349,80 @@ test('known blank core inventories bypass route-dependent embedded pages', () =>
   assert.match(bridge, /Could not load inventory/)
 })
 
+test('Super Admin provider pages use qualified read-only inventories', () => {
+  const capabilities = read('src/client/apps/layersentry/capabilities.js')
+  const bridge = read('src/client/apps/layersentry/components/ResourceBridge.js')
+  const readOnlySafe = capabilities.match(
+    /const READ_ONLY_SAFE = new Set\(\[([\s\S]*?)\]\)/
+  )?.[1]
+
+  for (const capability of [
+    'INFRA_HOSTS',
+    'INFRA_CLUSTERS',
+    'INFRA_STORAGE',
+    'INFRA_DRIVERS',
+    'INFRA_ZONES',
+    'PROVIDERS_ONEFORM',
+    'ACCESS_USERS',
+    'ACCESS_TEAMS',
+    'ACCESS_PROJECTS',
+    'ACCESS_ROLES',
+    'ACCESS_LIMITS',
+    'ACCESS_RULES',
+    'PLATFORM_IMAGES',
+    'PLATFORM_TEMPLATES',
+    'PLATFORM_ROUTER_TEMPLATES',
+    'MARKETPLACES',
+    'MARKETPLACE_APPS',
+  ]) {
+    assert.match(readOnlySafe, new RegExp(`CAPABILITY_IDS\\.${capability}`))
+  }
+
+  for (const hook of [
+    'HostAPI.useGetHostsQuery',
+    'ClusterAPI.useGetClustersQuery',
+    'DatastoreAPI.useGetDatastoresQuery',
+    'DriverAPI.useGetDriversQuery',
+    'ZoneAPI.useGetZonesQuery',
+    'ProviderAPI.useGetProvidersQuery',
+    'UserAPI.useGetUsersQuery',
+    'GroupAPI.useGetGroupsQuery',
+    'VdcAPI.useGetVDCsQuery',
+    'AclAPI.useGetAclsExtendedQuery',
+    'ImageAPI.useGetImagesQuery',
+    'VrTemplateAPI.useGetVrTemplatesQuery',
+    'MarketplaceAPI.useGetMarketplacesQuery',
+    'MarketplaceAppAPI.useGetMarketplaceAppsQuery',
+  ]) {
+    assert.ok(bridge.includes(hook), `missing read-only inventory hook ${hook}`)
+  }
+
+  for (const path of [
+    '/host',
+    '/cluster',
+    '/datastore',
+    '/driver',
+    '/zone',
+    '/provider',
+    '/user',
+    '/group',
+    '/virtual-data-center',
+    '/acl',
+    '/image',
+    '/vrouter-template',
+    '/marketplace',
+    '/marketplace-app',
+  ]) {
+    assert.match(bridge, new RegExp(`'${path.replaceAll('/', '\\/')}':`))
+  }
+
+  assert.match(bridge, /data-layersentry-native-inventory/)
+  assert.doesNotMatch(bridge, /useRemove.*Mutation/)
+  assert.doesNotMatch(bridge, /useDelete.*Mutation/)
+  assert.doesNotMatch(bridge, /useEnable.*Mutation/)
+  assert.doesNotMatch(bridge, /useDisable.*Mutation/)
+})
+
 test('deployment configuration prequalifies only proven read-only core inventories', () => {
   const config = read('etc/sunstone/sunstone-server.conf')
 
