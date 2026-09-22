@@ -1,0 +1,32 @@
+name: T2 Runner GitHub Auth Probe
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-runner-gh-auth-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Check existing gh auth without exposing credentials
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $gh=(Get-Command gh.exe -ErrorAction SilentlyContinue)
+          if(-not $gh){Write-Host 'GH_CLI=ABSENT'; exit 0}
+          Write-Host "GH_CLI=$($gh.Source)"
+          & $gh.Source auth status --hostname github.com 2>&1
+          $auth=$LASTEXITCODE
+          Write-Host "GH_AUTH_STATUS_RC=$auth"
+          if($auth -eq 0){
+            & $gh.Source repo view adaptgurus/layersentry-platform --json nameWithOwner,visibility 2>&1
+            Write-Host "GH_PRIVATE_REPO_VIEW_RC=$LASTEXITCODE"
+          }
