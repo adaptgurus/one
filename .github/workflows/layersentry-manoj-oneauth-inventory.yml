@@ -1,0 +1,43 @@
+name: LayerSentry Manoj OpenNebula credential inventory
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-manoj-oneauth-inventory.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Locate OpenNebula recovery credential references without reading values
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($root in @('C:\LayerSentryLab','C:\Users\opc')) {
+            if (-not (Test-Path $root)) { continue }
+            Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.Name -match '(?i)(one_auth|oneauth|oneadmin|opennebula.*auth|auth.*opennebula)' -and
+                $_.Length -lt 1048576
+              } |
+              Select-Object FullName,Length,LastWriteTime |
+              Format-Table -AutoSize
+          }
+
+      - name: Locate scripts that reference FE management addresses
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $patterns = @('10.250.10.11','10.250.10.12','10.250.10.13','one_auth')
+          Get-ChildItem -Path 'C:\LayerSentryLab' -Recurse -File -Include *.ps1,*.py,*.sh,*.txt -ErrorAction SilentlyContinue |
+            Select-String -Pattern $patterns -List -ErrorAction SilentlyContinue |
+            Select-Object Path |
+            Sort-Object Path -Unique |
+            Format-Table -AutoSize
