@@ -184,6 +184,26 @@ test('mutation routes and actions require enabled qualification, not read-only v
   assert.doesNotMatch(area, /!createCapability \|\|/)
 })
 
+test('Super Admin Projects use the native virtual-data-center route', () => {
+  const capabilities = read('src/client/apps/layersentry/capabilities.js')
+  const portal = read('src/client/apps/layersentry/Portal.js')
+
+  assert.match(
+    capabilities,
+    /\[CAPABILITY_IDS\.ACCESS_PROJECTS\]: \['\/virtual-data-center'\]/
+  )
+  assert.match(
+    capabilities,
+    /\[CAPABILITY_IDS\.ACCESS_PROJECTS_CREATE\]: \['\/virtual-data-center\/create'\]/
+  )
+  assert.match(portal, /legacyPath: '\/virtual-data-center'/)
+  assert.match(portal, /legacyPath: '\/virtual-data-center\/create'/)
+  assert.doesNotMatch(
+    capabilities,
+    /\[CAPABILITY_IDS\.ACCESS_PROJECTS(?:_CREATE)?\]: \['\/vdc/
+  )
+})
+
 test('LayerSentry VM create route stays wired to the native guarded create dialog', () => {
   const capabilities = read('src/client/apps/layersentry/capabilities.js')
   const portal = read('src/client/apps/layersentry/Portal.js')

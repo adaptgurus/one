@@ -133,6 +133,19 @@ test('Kubernetes remains OneKS-backed and gates cluster creation independently',
   assert.doesNotMatch(workspace, /Harbor|Argo CD|OpenEverest/)
 })
 
+test('LayerSentry presents the native admin view as Super Admin', () => {
+  const shell = read('src/client/apps/layersentry/components/PortalShell.js')
+  const navigation = read('src/client/apps/layersentry/navigation.js')
+  const portal = read('src/client/apps/layersentry/Portal.js')
+
+  assert.match(shell, /admin: 'Super Admin'/)
+  assert.match(navigation, /isPlatformAdminView = \(view\) => view === 'admin'/)
+  assert.match(navigation, /label: 'Infrastructure'/)
+  assert.match(navigation, /label: 'Access'/)
+  assert.match(navigation, /label: 'Platform'/)
+  assert.match(portal, /const isAdmin = view === 'admin'/)
+})
+
 test('portal shell is responsive and exposes operations help and settings controls', () => {
   const shell = read('src/client/apps/layersentry/components/PortalShell.js')
   assert.match(shell, /Open navigation/)
