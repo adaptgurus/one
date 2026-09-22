@@ -1,0 +1,46 @@
+name: LayerSentry independent OpenNebula read-only audit
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-independent-one-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Run existing read-only OpenNebula audit
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $wrapper = @'
+          import pathlib, re, subprocess
+
+          py = pathlib.Path(r"C:\LayerSentryLab\tools\Python313\python.exe")
+          tool = pathlib.Path(r"C:\LayerSentryLab\tools\one-readonly-audit.py")
+          if not py.is_file() or not tool.is_file():
+              raise SystemExit("audit toolchain missing")
+
+          p = subprocess.run([str(py), str(tool)], capture_output=True, text=True, timeout=90)
+          output=(p.stdout or "")+"\n"+(p.stderr or "")
+          output=re.sub(r"(?i)(oneadmin|serveradmin|[A-Za-z0-9_.-]{2,32}):[^\s,;]+",r"\1:<redacted>",output)
+          output=re.sub(r"(?i)(password|passwd|secret|token|auth)\s*[=:]\s*[^\s,;]+",r"\1=<redacted>",output)
+          output=re.sub(r"[A-Za-z0-9+/]{48,}={0,2}","<redacted-long-value>",output)
+          for line in output.splitlines():
+              if line.strip():
+                  print(line[:1000])
+          print("READONLY_AUDIT_EXIT_CODE="+str(p.returncode))
+          if p.returncode != 0:
+              raise SystemExit(p.returncode)
+          print("INDEPENDENT_OPENNEBULA_AUDIT=PASS")
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'audit_one_wrapper.py'
+          Set-Content -Path $path -Value $wrapper -Encoding UTF8
+          python $path
