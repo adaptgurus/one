@@ -189,7 +189,7 @@ const ComputeWorkspace = ({ endpoints }) => {
       <Surface sx={{ mt: 2, p: 2 }}>
         <SectionHeader
           title="Virtual machines"
-          description="Read-only authoritative inventory. VM Day-2 controls remain hidden until each mutation path has API, readback, RBAC and recovery evidence."
+          description="Read-only authoritative inventory. OpenNebula remains authoritative for power, console, resize, disk, network, snapshot, backup and delete operations. VM Day-2 controls remain hidden until each mutation path has API, readback, RBAC and recovery evidence."
         />
         <ResourceBridge endpoints={endpoints} legacyPath="/vm" />
       </Surface>

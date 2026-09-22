@@ -49,13 +49,16 @@ const ApplicationsWorkspace = ({ endpoints }) => {
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
           title="Production service blueprints"
-          description="LayerSentry guides sizing, storage, DNS, HA, backup, DR, hardening and offline package sources. Exact versions and operating systems remain qualification-controlled."
+          description="LayerSentry guides application sizing, VM footprint, dependencies, storage, DNS, HA, backup, DR, security and offline package access. Exact deployable tuples remain qualification-controlled."
         />
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
           {[
             ['Catalog', 'Published and qualification-gated service blueprints'],
             ['Deployments', 'Running OneFlow-backed service instances'],
-            ['Safe lifecycle', 'Validate, revise, recover and remove through authoritative backends'],
+            [
+              'Safe lifecycle',
+              'Validate, revise, recover and remove through authoritative backends',
+            ],
           ].map(([title, description]) => (
             <Box
               key={title}

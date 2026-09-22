@@ -34,6 +34,7 @@ import OperationsWorkspace from 'client/apps/layersentry/pages/OperationsWorkspa
 import ProtectionWorkspace from 'client/apps/layersentry/pages/ProtectionWorkspace'
 import ComputeWorkspace from 'client/apps/layersentry/pages/ComputeWorkspace'
 import ApplicationsWorkspace from 'client/apps/layersentry/pages/ApplicationsWorkspace'
+import ProductionServiceWizard from 'client/apps/layersentry/pages/ProductionServiceWizard'
 import SiteRecoveryWorkspace from 'client/apps/layersentry/pages/SiteRecoveryWorkspace'
 import BackupStorageWorkspace from 'client/apps/layersentry/pages/BackupStorageWorkspace'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
@@ -229,23 +230,7 @@ const Portal = ({ endpoints }) => {
         <Route
           exact
           path={PRODUCT_PATHS.APPLICATIONS_DEPLOY}
-          render={() =>
-            create({
-              endpoints,
-              title: 'Deploy Application',
-              description:
-                'Choose a published application definition and provide only the deployment inputs exposed by that definition.',
-              legacyPath: '/service-template/instantiate/',
-              returnTo: PRODUCT_PATHS.APPLICATIONS,
-              steps: [
-                'Application',
-                'Inputs',
-                'Resources',
-                'Network',
-                'Review',
-              ],
-            })
-          }
+          component={ProductionServiceWizard}
         />
         <Route
           exact
