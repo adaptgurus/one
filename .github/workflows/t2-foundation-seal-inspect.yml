@@ -30,6 +30,6 @@ jobs:
                 $line=$m.Line
                 $line=[regex]::Replace($line,'(?i)((?:password|token|secret|code)\w*\s*[=:]\s*)["'']?[^"'',}\s]+','$1<redacted>')
                 $line=[regex]::Replace($line,'(?<![A-Za-z0-9])[A-Fa-f0-9]{32,}(?![A-Za-z0-9])','<redacted-long-hex>')
-                Write-Host "$p:$($m.LineNumber): $line"
+                Write-Host "${p}:$($m.LineNumber): $line"
               }
             }
