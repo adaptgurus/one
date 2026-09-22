@@ -1,0 +1,14 @@
+[Unit]
+Description=LayerSentry approved host package maintenance
+After=network-online.target layersentry-host-agent.service
+Wants=network-online.target
+ConditionPathExists=/etc/layersentry/host-sealed.json
+
+[Service]
+Type=oneshot
+ExecStart=/opt/layersentry/agent/current/layersentry-host-agent update --scheduled --config /etc/layersentry/host-agent.json
+UMask=0077
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+TimeoutStartSec=2h
