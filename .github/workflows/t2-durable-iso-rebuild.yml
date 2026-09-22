@@ -1,0 +1,98 @@
+name: T2 Durable ISO Rebuild
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-durable-iso-rebuild.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-durable-iso-rebuild
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: self-hosted
+    timeout-minutes: 120
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          foreach($p in @('C:\LayerSentryLab\qualification\iso-builder-key','C:\LayerSentryLab\qualification\known_hosts_builder')){if(-not(Test-Path $p)){throw "Missing $p"}}
+
+      - name: Prepare builder key and verify qualified fixed agent
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\iso-builder-key'; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null; & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-durable-iso-key'; Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null; & icacls.exe $key /setowner '*S-1-5-18' | Out-Null; & icacls.exe $key /inheritance:r | Out-Null; & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_DURABLE_ISO_KEY=$key" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          $ssh=(Get-Command ssh.exe).Source
+          & $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 "test -s /home/builder/t2-enrollment-fix-build/layersentry-host-agent; test -d /home/builder/t2-enrollment-fix-src; test \"`$(sha256sum /home/builder/t2-enrollment-fix-build/layersentry-host-agent | awk '{print `$1}')\" = c8fe6f7a761cba230b9f01ba998d66cd3b6844779b6139acdb2697a43e061f31; echo DURABLE_INPUTS=PASS"
+          if($LASTEXITCODE -ne 0){throw 'Durable build inputs failed validation'}
+
+      - name: Build generic durable ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $remote=@'
+          set -euo pipefail
+          src=/home/builder/t2-enrollment-fix-src
+          q=/home/builder/layersentry-qual-dbeacd5
+          agent=/home/builder/t2-enrollment-fix-build/layersentry-host-agent
+          outdir=/var/tmp/layersentry-durable-5f3bda7
+          out="$outdir/LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso"
+          mkdir -p "$outdir"
+          rm -f "$out" "$out.sha256" "$out.provenance.json"
+          agent_sha=$(sha256sum "$agent" | awk '{print $1}')
+          test "$agent_sha" = c8fe6f7a761cba230b9f01ba998d66cd3b6844779b6139acdb2697a43e061f31
+          sudo -n bash "$src/deploy/iso/build-host-iso.sh" --generic \
+            --base-iso /var/tmp/layersentry-iso/Rocky-9.8-x86_64-dvd.iso \
+            --base-sha256 d2bcbb64c2d67511adf80d40cd9543391a33aea5860a355b1d26d7f55236d01f \
+            --agent-binary "$agent" --agent-sha256 "$agent_sha" --agent-version t2-enrollfix \
+            --agent-config "$q/qual-agent.json" --agent-ca "$q/agent-ca.crt" \
+            --agent-signing-key "$q/job-signing.pub.pem" \
+            --source-commit 5f3bda7f84c5bbce85351460c333ec1e34ce07bf --output "$out"
+          sudo -n chown builder:builder "$out" "$out.sha256" "$out.provenance.json"
+          stat -c 'ISO_SIZE=%s' "$out"
+          cat "$out.sha256"
+          cat "$out.provenance.json"
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remote -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_DURABLE_ISO_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'Durable ISO build failed'}
+
+      - name: Transfer durable ISO and provenance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source; $scp=(Get-Command scp.exe).Source; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $dst='C:\LayerSentryLab\qualification\durable-5f3bda7'; New-Item -ItemType Directory -Force -Path $dst | Out-Null
+          $remote='/var/tmp/layersentry-durable-5f3bda7/LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso'
+          $iso=Join-Path $dst 'LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso'
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_DURABLE_ISO_KEY "builder@10.250.10.40:$remote" $iso
+          if($LASTEXITCODE -ne 0){throw 'Durable ISO transfer failed'}
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_DURABLE_ISO_KEY "builder@10.250.10.40:$remote.provenance.json" "$iso.provenance.json"
+          if($LASTEXITCODE -ne 0){throw 'Durable provenance transfer failed'}
+          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+          $p=Get-Content "$iso.provenance.json" -Raw | ConvertFrom-Json
+          if($p.source_commit -ne '5f3bda7f84c5bbce85351460c333ec1e34ce07bf'){throw 'Durable provenance source mismatch'}
+          if($p.iso_sha256 -ne $sha){throw 'Durable provenance SHA mismatch'}
+          if($p.agent_sha256 -ne 'c8fe6f7a761cba230b9f01ba998d66cd3b6844779b6139acdb2697a43e061f31'){throw 'Durable provenance agent mismatch'}
+          Write-Host "DURABLE_ISO=PASS SHA256=$sha SIZE=$((Get-Item $iso).Length)"
+
+      - name: Remove temporary key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_DURABLE_ISO_KEY -and(Test-Path $env:T2_DURABLE_ISO_KEY)){& icacls.exe $env:T2_DURABLE_ISO_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_DURABLE_ISO_KEY -Force}
