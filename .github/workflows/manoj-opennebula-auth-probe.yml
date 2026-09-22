@@ -1,0 +1,70 @@
+name: Manoj OpenNebula existing auth qualification
+
+on:
+  push:
+    branches:
+      - qual/manoj-dr-opennebula-20260923
+    paths:
+      - .github/workflows/manoj-opennebula-auth-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Locate and validate existing OpenNebula auth without disclosure
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $roots = @('C:\LayerSentryLab', (Join-Path $env:USERPROFILE '.one'))
+          $files = @()
+          foreach ($root in $roots) {
+            if (Test-Path $root) {
+              $files += Get-ChildItem $root -File -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.Length -gt 0 -and $_.Length -lt 65536 }
+            }
+          }
+          $candidates = @()
+          foreach ($file in @($files | Sort-Object FullName -Unique)) {
+            try {
+              $text = (Get-Content $file.FullName -Raw -ErrorAction Stop).Trim()
+              $nameHint = $file.Name -match '(?i)one[_-]?auth|credential|secret|opennebula|oneadmin'
+              $contentHint = $text -match '(?im)^oneadmin:'
+              if (($nameHint -or $contentHint) -and $text -match '^[A-Za-z0-9._-]+:.{1,512}$') {
+                $candidates += [pscustomobject]@{Path=$file.FullName;Session=$text}
+              }
+            } catch {}
+          }
+          Write-Host "ONE_AUTH_CANDIDATE_COUNT=$($candidates.Count)"
+          $success = $false
+          foreach ($candidate in $candidates) {
+            foreach ($ip in @('10.250.10.10','10.250.10.11','10.250.10.13')) {
+              $escaped = [System.Security.SecurityElement]::Escape($candidate.Session)
+              $body = "<methodCall><methodName>one.system.version</methodName><params><param><value><string>$escaped</string></value></param></params></methodCall>"
+              try {
+                $uri = "http://${ip}:2633/RPC2"
+                $resp = Invoke-WebRequest -UseBasicParsing -Uri $uri -Method Post -ContentType 'text/xml' -Body $body -TimeoutSec 5
+                $ok = $resp.StatusCode -eq 200 -and $resp.Content -match '<boolean>1</boolean>'
+                Write-Host "ONE_AUTH_PROBE FE=$ip FILE=$($candidate.Path) SUCCESS=$ok"
+                if ($ok) {
+                  $success = $true
+                  "ONE_AUTH_FILE=$($candidate.Path)" | Out-File -FilePath $env:GITHUB_ENV -Append
+                  "ONE_FE=$ip" | Out-File -FilePath $env:GITHUB_ENV -Append
+                  break
+                }
+              } catch {
+                Write-Host "ONE_AUTH_PROBE FE=$ip FILE=$($candidate.Path) SUCCESS=False"
+              }
+            }
+            if ($success) { break }
+          }
+          if (-not $success) { throw 'No existing Manoj lab OpenNebula auth token was found or accepted' }
+
+      - name: Record authenticated endpoint only
+        shell: powershell
+        run: |
+          Write-Host "MANOJ_ONE_AUTH=PASS FE=$env:ONE_FE FILE=$env:ONE_AUTH_FILE"
