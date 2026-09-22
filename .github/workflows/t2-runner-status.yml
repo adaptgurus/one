@@ -1,0 +1,23 @@
+name: T2 Runner Status
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-runner-status.yml
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  status:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Show self-hosted runner status
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          curl --fail-with-body -sS -L             -H "Accept: application/vnd.github+json"             -H "Authorization: Bearer $GH_TOKEN"             -H "X-GitHub-Api-Version: 2022-11-28"             https://api.github.com/repos/adaptgurus/one/actions/runners |
+            python3 -c 'import json,sys; d=json.load(sys.stdin); print([(r["name"],r["status"],r["busy"],[x["name"] for x in r["labels"]]) for r in d.get("runners",[])])'
