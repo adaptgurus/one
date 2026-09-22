@@ -1,0 +1,74 @@
+name: LayerSentry VM220 QGA diagnostic
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-vm220-qga-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Linux, X64, testser-two-site]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect qemu-ga guest log safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          VM_ID=220
+
+          state() {
+            ssh rocky-01 "onevm show $VM_ID -x" | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE"))'
+          }
+          wait_state() {
+            local wanted="$1"
+            for _ in $(seq 1 60); do
+              [[ "$(state)" == "$wanted" ]] && return 0
+              sleep 2
+            done
+            return 1
+          }
+          resume_if_needed() {
+            set +e
+            s="$(state 2>/dev/null)"
+            if [[ "$s" == "8" ]]; then ssh rocky-01 "onevm resume $VM_ID" >/dev/null 2>&1; fi
+          }
+          trap resume_if_needed EXIT
+
+          ssh rocky-01 "onevm poweroff $VM_ID --hard"
+          wait_state 8
+
+          ssh rocky-01 "ssh rocky-02 'sudo bash -s'" <<'REMOTE'
+          set -euo pipefail
+          dev=/dev/nbd15
+          mnt=/mnt/ls-vm220-qga
+          connected=0
+          cleanup() {
+            set +e
+            mountpoint -q "$mnt" && umount "$mnt"
+            [[ "$connected" == 1 ]] && qemu-nbd --disconnect "$dev" >/dev/null 2>&1
+            rmdir "$mnt" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          modprobe nbd max_part=8
+          mkdir -p "$mnt"
+          qemu-nbd --read-only --connect="$dev" /var/lib/one/datastores/0/220/disk.0
+          connected=1
+          sleep 1
+          mount -o ro "$dev" "$mnt"
+          echo "QGA_LOG_PRESENT=$(test -f "$mnt/var/log/qemu-ga.log" && echo YES || echo NO)"
+          if [[ -f "$mnt/var/log/qemu-ga.log" ]]; then
+            tail -80 "$mnt/var/log/qemu-ga.log" | sed -E 's/(password|secret|token|auth)=?[^ ]*/\1=<redacted>/Ig'
+          fi
+          echo "QGA_RUNLEVEL_LINK=$(readlink "$mnt/etc/runlevels/default/qemu-guest-agent" 2>/dev/null || true)"
+          REMOTE
+
+          ssh rocky-01 "onevm resume $VM_ID"
+          wait_state 3
+          trap - EXIT
+          echo "VM220_QGA_DIAGNOSTIC_COMPLETE=PASS"
