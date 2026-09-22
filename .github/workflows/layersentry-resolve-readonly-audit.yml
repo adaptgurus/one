@@ -1,0 +1,47 @@
+name: LayerSentry resolve read-only OpenNebula audit targets
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-resolve-readonly-audit.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resolve:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Resolve only safe path and endpoint literals
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          import ast, pathlib, re
+          for path in [
+              pathlib.Path(r"C:\LayerSentryLab\tools\check-fe2-auth.py"),
+              pathlib.Path(r"C:\LayerSentryLab\tools\validate-one-auth.py"),
+              pathlib.Path(r"C:\LayerSentryLab\tools\one-readonly-audit.py"),
+          ]:
+              print("FILE="+str(path))
+              tree=ast.parse(path.read_text(encoding="utf-8"))
+              values=[]
+              for node in ast.walk(tree):
+                  if not isinstance(node, ast.Constant) or not isinstance(node.value,str):
+                      continue
+                  value=node.value
+                  low=value.lower()
+                  if any(x in low for x in ["password","passwd","token","secret"]):
+                      continue
+                  if value.startswith("C:\\") or value.startswith("http://") or value.startswith("https://") or value.startswith("/var/"):
+                      values.append(value)
+              for value in sorted(set(values)):
+                  print("SAFE_LITERAL="+value)
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'resolve_audit.py'
+          Set-Content -Path $path -Value $script -Encoding UTF8
+          python $path
