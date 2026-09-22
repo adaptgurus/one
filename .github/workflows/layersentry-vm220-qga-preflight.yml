@@ -1,0 +1,94 @@
+name: LayerSentry VM220 QGA preflight
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-vm220-qga-preflight.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qga:
+    runs-on: [self-hosted, Linux, X64, testser-two-site]
+    timeout-minutes: 15
+    steps:
+      - name: Enable guest-agent channel and verify in-guest mutation path
+        shell: bash
+        run: |
+          set -euo pipefail
+          VM_ID=220
+
+          vm_state() {
+            ssh rocky-01 "onevm show $VM_ID -x" | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE"))'
+          }
+
+          wait_state() {
+            local wanted="$1"
+            for _ in $(seq 1 90); do
+              state="$(vm_state)"
+              if [[ "$state" == "$wanted" ]]; then return 0; fi
+              sleep 2
+            done
+            echo "VM $VM_ID did not reach state $wanted" >&2
+            return 1
+          }
+
+          ensure_running() {
+            set +e
+            state="$(vm_state 2>/dev/null)"
+            if [[ "$state" == "8" || "$state" == "4" || "$state" == "5" || "$state" == "9" ]]; then
+              ssh rocky-01 "onevm resume $VM_ID" >/dev/null 2>&1
+            fi
+          }
+          trap ensure_running EXIT
+
+          cat <<'CONF' | ssh rocky-01 "onevm updateconf $VM_ID"
+          FEATURES=[GUEST_AGENT="YES",ACPI="YES"]
+          BACKUP_CONFIG=[MODE="INCREMENT",FS_FREEZE="NONE",INCREMENT_MODE="CBT",BACKUP_VOLATILE="NO",KEEP_LAST="3"]
+          CONF
+
+          ssh rocky-01 "onevm poweroff $VM_ID --hard"
+          wait_state 8
+          ssh rocky-01 "onevm resume $VM_ID"
+          wait_state 3
+
+          sleep 15
+          ssh rocky-01 "onevm exec $VM_ID \"sh -c 'printf LS_QGA_OK; uname -s'\""
+
+          for _ in $(seq 1 60); do
+            ssh rocky-01 "onevm show $VM_ID -x" > "$RUNNER_TEMP/vm220.xml"
+            status="$(python3 - "$RUNNER_TEMP/vm220.xml" <<'PY'
+          import sys,xml.etree.ElementTree as E
+          root=E.parse(sys.argv[1]).getroot()
+          print(root.findtext("./TEMPLATE/QEMU_GA_EXEC/STATUS") or "")
+          PY
+          )"
+            if [[ "$status" == "DONE" || "$status" == "ERROR" || "$status" == "CANCELLED" ]]; then
+              break
+            fi
+            sleep 2
+          done
+
+          python3 - "$RUNNER_TEMP/vm220.xml" <<'PY'
+          import base64,sys,xml.etree.ElementTree as E
+          root=E.parse(sys.argv[1]).getroot()
+          q=root.find("./TEMPLATE/QEMU_GA_EXEC")
+          if q is None:
+              raise SystemExit("QEMU_GA_EXEC missing")
+          status=(q.findtext("STATUS") or "").strip()
+          rc=(q.findtext("RETURN_CODE") or "").strip()
+          raw=(q.findtext("STDOUT") or "").strip()
+          out=base64.b64decode(raw).decode("utf-8","replace") if raw else ""
+          print("QGA_STATUS="+status)
+          print("QGA_RETURN_CODE="+rc)
+          print("QGA_OUTPUT="+out.replace("\n"," ")[:200])
+          if status!="DONE" or rc!="0" or "LS_QGA_OK" not in out:
+              raise SystemExit("guest agent command did not complete successfully")
+          print("VM220_QGA_PREFLIGHT=PASS")
+          PY
+
+          ssh rocky-01 "onevm show $VM_ID -x" | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); b=r.find("./BACKUPS/BACKUP_CONFIG"); print("KEEP_LAST="+(b.findtext("KEEP_LAST") if b is not None else "")); f=r.find("./TEMPLATE/FEATURES"); print("GUEST_AGENT="+(f.findtext("GUEST_AGENT") if f is not None else ""))'
