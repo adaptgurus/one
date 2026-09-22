@@ -1,0 +1,149 @@
+name: T2 Bootstrap-Fix Clean Install
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - '.github/workflows/t2-bootstrapfix-clean-install.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-bootstrapfix-clean-install
+  cancel-in-progress: true
+
+jobs:
+  install:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 40
+    steps:
+      - name: Bind final ISO and provenance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $iso='C:\LayerSentryLab\qualification\bootstrapfix-db8ef17\LayerSentry-Rocky-9.8-bootstrapfix-db8ef17-generic-x86_64.iso'
+          $prov="$iso.provenance.json"
+          foreach($p in @($iso,$prov)){if(-not(Test-Path $p)){throw "Missing final artifact: $p"}}
+          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+          $meta=Get-Content $prov -Raw|ConvertFrom-Json
+          if($meta.source_commit -ne 'db8ef1727de54784136a471e07aaae0b40941ea4'){throw 'Final ISO source provenance mismatch'}
+          if($meta.agent_sha256 -ne '1d994f68e581d8d068e09b833a64553bc4317e71636871be0e5fcaf5c1527d2e'){throw 'Final ISO agent provenance mismatch'}
+          if($meta.iso_sha256 -ne $sha){throw 'Final ISO SHA mismatch'}
+          Write-Host "FINAL_ISO_BIND=PASS sha=$sha size=$((Get-Item $iso).Length)"
+
+      - name: Create fresh final qualification VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-bootstrapfix-qual'
+          $root='C:\LayerSentryLab\qualification\ls-appliance-bootstrapfix-qual'
+          $vhd=Join-Path $root 'os.vhdx'
+          $iso='C:\LayerSentryLab\qualification\bootstrapfix-db8ef17\LayerSentry-Rocky-9.8-bootstrapfix-db8ef17-generic-x86_64.iso'
+          $switch='layersentry vswtich'
+          $old=Get-VM -Name $name -ErrorAction SilentlyContinue
+          if($old){if($old.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force};Remove-VM -Name $name -Force}
+          if(Test-Path $root){Remove-Item $root -Recurse -Force}
+          New-Item -ItemType Directory -Force -Path $root|Out-Null
+          New-VHD -Path $vhd -Dynamic -SizeBytes 80GB|Out-Null
+          New-VM -Name $name -Generation 2 -MemoryStartupBytes 2GB -VHDPath $vhd -SwitchName $switch|Out-Null
+          Set-VMProcessor -VMName $name -Count 2
+          Set-VM -Name $name -AutomaticCheckpointsEnabled $false
+          Set-VMFirmware -VMName $name -EnableSecureBoot On -SecureBootTemplate 'MicrosoftUEFICertificateAuthority'
+          Add-VMDvdDrive -VMName $name -Path $iso
+          $dvd=Get-VMDvdDrive -VMName $name;Set-VMFirmware -VMName $name -FirstBootDevice $dvd
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $vhd){throw 'Fresh final VM disk binding invalid'}
+          Write-Host 'FINAL_VM_CREATE=PASS'
+
+      - name: Boot through media verification
+        shell: powershell
+        run: |
+          Start-VM -Name 'ls-appliance-bootstrapfix-qual'
+          Start-Sleep -Seconds 240
+          $vm=Get-VM -Name 'ls-appliance-bootstrapfix-qual'
+          if($vm.State -ne 'Running'){throw "Final VM not running: $($vm.State)"}
+          Write-Host "FINAL_MEDIA_WAIT=PASS uptime=$($vm.Uptime)"
+
+      - name: Configure proven disposable LVM storage
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-bootstrapfix-qual'
+          $wmi=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem|Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($wmi.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          function K([uint32]$v){$r=$kb.TypeKey($v);if($r.ReturnValue -ne 0){throw "TypeKey failed $v"};Start-Sleep -Milliseconds 300}
+          K 0x35;K 0x0D;Start-Sleep -Seconds 3
+          K 0x43;K 0x0D;Start-Sleep -Seconds 3
+          K 0x32;K 0x0D;Start-Sleep -Seconds 3
+          K 0x43;K 0x0D;Start-Sleep -Seconds 3
+          K 0x32;K 0x0D;Start-Sleep -Seconds 3
+          K 0x43;K 0x0D;Start-Sleep -Seconds 12
+          K 0x52;K 0x0D;Start-Sleep -Seconds 6
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\summary-ready.png'
+          New-Item -ItemType Directory -Force -Path (Split-Path $out)|Out-Null
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          Write-Host 'FINAL_STORAGE_SEQUENCE=PASS'
+
+      - name: Begin installation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-bootstrapfix-qual'
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1){throw 'Unexpected final VM disk count'}
+          Set-VMFirmware -VMName $name -FirstBootDevice $disks[0]
+          $wmi=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem|Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($wmi.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          $a=$kb.TypeKey([uint32]0x42);Start-Sleep -Milliseconds 300;$b=$kb.TypeKey([uint32]0x0D)
+          if($a.ReturnValue -ne 0 -or $b.ReturnValue -ne 0){throw 'Begin-install key injection failed'}
+          Start-Sleep -Seconds 20
+          Write-Host 'FINAL_INSTALL_STARTED=PASS'
+
+      - name: Wait for completed installation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Start-Sleep -Seconds 600
+          $name='ls-appliance-bootstrapfix-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-bootstrapfix-qual\os.vhdx'
+          if((Get-Item $vhd).Length -lt 3500000000){throw "Final VHD too small: $((Get-Item $vhd).Length)"}
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\install-complete-window.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          Write-Host "FINAL_INSTALL_WAIT=PASS vhd_bytes=$((Get-Item $vhd).Length)"
+
+      - name: Eject ISO and prove VHD-only boot
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-bootstrapfix-qual'
+          $vm=Get-VM -Name $name
+          if($vm.State -eq 'Running'){
+            $wmi=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem|Where-Object ElementName -eq $name
+            $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($wmi.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+            if($kb){$null=$kb.TypeKey([uint32]0x0D)}
+            Start-Sleep -Seconds 20
+          }
+          $vm=Get-VM -Name $name;if($vm.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force}
+          for($i=0;$i -lt 30;$i++){if((Get-VM -Name $name).State -eq 'Off'){break};Start-Sleep 1}
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue;if($dvd){Remove-VMDvdDrive -VMDvdDrive $dvd}
+          if(@(Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue).Count -ne 0){throw 'DVD still present'}
+          $disk=Get-VMHardDiskDrive -VMName $name|Select-Object -First 1;Set-VMFirmware -VMName $name -FirstBootDevice $disk
+          Start-VM -Name $name
+          $deadline=(Get-Date).AddMinutes(4);$ok=$false
+          while((Get-Date)-lt $deadline){$vm=Get-VM -Name $name;$hb=(Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction SilentlyContinue).PrimaryStatusDescription;if($vm.State -eq 'Running' -and $hb -eq 'OK'){$ok=$true;break};Start-Sleep 10}
+          if(-not $ok){throw 'Final installed VHD did not reach heartbeat OK'}
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\vhd-only-firstboot.png';& 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          Write-Host 'FINAL_VHD_ONLY_BOOT=PASS'
+
+      - name: Upload final install evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-bootstrapfix-db8ef17-install
+          path: C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\*.png
+          if-no-files-found: warn
+          retention-days: 7
