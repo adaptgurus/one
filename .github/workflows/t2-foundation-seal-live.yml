@@ -6,7 +6,6 @@ on:
       - ops/t2-foundation-iso-qualification-20260921
     paths:
       - .github/workflows/t2-foundation-seal-live.yml
-      - qualification/t2-live-seal.py
 
 permissions:
   contents: read
@@ -16,77 +15,38 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  seal:
+  inspect-state:
     runs-on: [self-hosted, windows, x64]
-    timeout-minutes: 35
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
 
-      - name: Bind qualification host and prepare builder access
+      - name: Inspect controller job state without mutation
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
-          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
           $q='C:\LayerSentryLab\qualification'
           $source=Join-Path $q 'iso-builder-key'
           $known=Join-Path $q 'known_hosts_builder'
-          foreach($p in @($source,$known)){if(-not (Test-Path $p)){throw "Missing qualification input: $p"}}
           & icacls.exe $source /grant:r '*S-1-5-18:(R)' | Out-Null
           & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
-          $key=Join-Path $env:RUNNER_TEMP 't2-seal-builder-key'
+          $key=Join-Path $env:RUNNER_TEMP 't2-state-builder-key'
           Copy-Item -LiteralPath $source -Destination $key -Force
           & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
           & icacls.exe $key /inheritance:r | Out-Null
           & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
           & icacls.exe $source /remove:g '*S-1-5-18' | Out-Null
-          "T2_SEAL_KEY=$key" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          Write-Host 'SEAL_BUILDER_ACCESS=PASS'
-
-      - name: Queue tooling and platform hardening seal
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $q='C:\LayerSentryLab\qualification'
-          $known=Join-Path $q 'known_hosts_builder'
           $ssh=(Get-Command ssh.exe).Source
           $scp=(Get-Command scp.exe).Source
-          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$env:T2_SEAL_KEY)
-          $local=Join-Path $env:GITHUB_WORKSPACE 'qualification\t2-live-seal.py'
-          if(-not (Test-Path $local)){throw 'Auditable live seal helper missing from checkout'}
-          & $scp @base $local 'builder@10.250.10.40:/home/builder/t2-live-seal.py'
-          if($LASTEXITCODE -ne 0){throw 'Could not stage live seal helper'}
-          $out=& $ssh @base 'builder@10.250.10.40' 'python3 /home/builder/t2-live-seal.py'
-          $out | Write-Host
-          if($LASTEXITCODE -ne 0){throw 'Live tooling/seal qualification failed'}
-          if(($out -join [Environment]::NewLine) -notmatch 'HOST_SEALED=PASS'){throw 'Host seal PASS marker missing'}
-          & $ssh @base 'builder@10.250.10.40' 'rm -f /home/builder/t2-live-seal.py' 2>$null
-
-      - name: Verify management reachability after sealing
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $tcp=$false
-          for($i=0;$i -lt 20;$i++){
-            $c=New-Object Net.Sockets.TcpClient
-            try{$a=$c.BeginConnect('10.250.10.41',22,$null,$null);if($a.AsyncWaitHandle.WaitOne(1000)){$c.EndConnect($a);if($c.Connected){$tcp=$true;break}}}catch{}finally{$c.Close()}
-            Start-Sleep -Seconds 2
-          }
-          if(-not $tcp){throw 'Management SSH not reachable after sealing'}
-          Write-Host 'POST_SEAL_MANAGEMENT_TCP22=PASS'
-          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\post-seal.png'
-          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $out
-          if(Test-Path $out){Write-Host "POST_SEAL_SCREENSHOT=$out bytes=$((Get-Item $out).Length)"}
-
-      - name: Remove temporary builder key
-        if: always()
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Continue'
-          if($env:T2_SEAL_KEY -and (Test-Path $env:T2_SEAL_KEY)){
-            & icacls.exe $env:T2_SEAL_KEY /grant:r '*S-1-5-18:(F)' | Out-Null
-            Remove-Item -LiteralPath $env:T2_SEAL_KEY -Force
-          }
-          Write-Host 'TEMP_SEAL_KEY_RETIRED=PASS'
+          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$key)
+          $local=Join-Path $env:GITHUB_WORKSPACE 'qualification\t2-live-state.py'
+          & $scp @base $local 'builder@10.250.10.40:/home/builder/t2-live-state.py'
+          if($LASTEXITCODE -ne 0){throw 'Could not stage state helper'}
+          & $ssh @base 'builder@10.250.10.40' 'python3 /home/builder/t2-live-state.py'
+          if($LASTEXITCODE -ne 0){throw 'Controller state probe failed'}
+          & $ssh @base 'builder@10.250.10.40' 'rm -f /home/builder/t2-live-state.py' 2>$null
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          Remove-Item -LiteralPath $key -Force
