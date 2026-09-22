@@ -1,0 +1,149 @@
+name: T2 Bootstrap Retirement ISO Rebuild
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - '.github/workflows/t2-bootstrap-retirement-iso.yml'
+      - 'qualification/t2-bootstrap-retirement-iso.request'
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: t2-bootstrap-retirement-iso
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 120
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          foreach($p in @('C:\LayerSentryLab\qualification\iso-builder-key','C:\LayerSentryLab\qualification\known_hosts_builder')){if(-not(Test-Path $p)){throw "Missing $p"}}
+
+      - name: Download exact qualified binaries
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir=Join-Path $env:RUNNER_TEMP 't2-bootstrapfix-artifact'; New-Item -ItemType Directory -Force -Path $dir|Out-Null
+          $zip=Join-Path $env:RUNNER_TEMP 't2-bootstrapfix.zip'
+          $headers=@{Authorization="Bearer $env:GH_TOKEN";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
+          Invoke-WebRequest -Uri 'https://api.github.com/repos/adaptgurus/one/actions/artifacts/10709296491/zip' -Headers $headers -OutFile $zip
+          Expand-Archive -LiteralPath $zip -DestinationPath $dir -Force
+          $agent=Join-Path $dir 'layersentry-host-agent'; $ctl=Join-Path $dir 'layersentry-host-controller'
+          foreach($p in @($agent,$ctl)){if(-not(Test-Path $p)){throw "Artifact member missing: $p"}}
+          $agentSha=(Get-FileHash -Algorithm SHA256 $agent).Hash.ToLowerInvariant(); $ctlSha=(Get-FileHash -Algorithm SHA256 $ctl).Hash.ToLowerInvariant()
+          if($agentSha -ne '1d994f68e581d8d068e09b833a64553bc4317e71636871be0e5fcaf5c1527d2e'){throw "Agent SHA mismatch $agentSha"}
+          if($ctlSha -ne 'deb0ac896e45fa9c03a77798d64bed3028ee2c3f06e0ff20a8c3e0d9b4450391'){throw "Controller SHA mismatch $ctlSha"}
+          "T2_BOOTSTRAPFIX_AGENT=$agent"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "T2_BOOTSTRAPFIX_CONTROLLER=$ctl"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "QUALIFIED_BINARIES=PASS agent=$agentSha controller=$ctlSha"
+
+      - name: Retrieve exact root wrapper from qualification mirror
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $api='https://api.github.com/repos/adaptgurus/one/contents/qualification/t2-durability-mirror/deploy/host-agent/packaging/layersentry-agent-wrapper.sh?ref=qual/t2-durability-mirror-20260922'
+          $headers=@{Authorization="Bearer $env:GH_TOKEN";Accept='application/vnd.github+json';'X-GitHub-Api-Version'='2022-11-28'}
+          $obj=Invoke-RestMethod -Uri $api -Headers $headers
+          $wrapper=Join-Path $env:RUNNER_TEMP 'layersentry-agent-wrapper.sh'
+          [IO.File]::WriteAllBytes($wrapper,[Convert]::FromBase64String(($obj.content -replace '\s','')))
+          $git='C:\Program Files\Git\cmd\git.exe'; $blob=(& $git hash-object $wrapper).Trim()
+          if($blob -ne '9cd78cf1a649f66795e22968cd28d5f74983eeda'){throw "Wrapper blob mismatch $blob"}
+          "T2_BOOTSTRAPFIX_WRAPPER=$wrapper"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "WRAPPER=PASS blob=$blob"
+
+      - name: Prepare builder key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\iso-builder-key'; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)'|Out-Null; & icacls.exe $known /grant:r '*S-1-5-18:(R)'|Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-bootstrapfix-builder-key';Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)'|Out-Null;& icacls.exe $key /setowner '*S-1-5-18'|Out-Null;& icacls.exe $key /inheritance:r|Out-Null;& icacls.exe $key /grant:r '*S-1-5-18:(R)'|Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18'|Out-Null
+          "T2_BOOTSTRAPFIX_KEY=$key"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Stage exact qualified inputs on Linux builder
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $scp=(Get-Command scp.exe).Source;$ssh=(Get-Command ssh.exe).Source;$known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          foreach($pair in @(@($env:T2_BOOTSTRAPFIX_AGENT,'/home/builder/t2-bootstrapfix/layersentry-host-agent'),@($env:T2_BOOTSTRAPFIX_CONTROLLER,'/home/builder/t2-bootstrapfix/layersentry-host-controller'),@($env:T2_BOOTSTRAPFIX_WRAPPER,'/home/builder/t2-bootstrapfix/layersentry-agent-wrapper.sh'))){
+            & $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BOOTSTRAPFIX_KEY builder@10.250.10.40 'mkdir -p /home/builder/t2-bootstrapfix'
+            & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BOOTSTRAPFIX_KEY $pair[0] "builder@10.250.10.40:$($pair[1])"
+            if($LASTEXITCODE -ne 0){throw "Stage failed: $($pair[1])"}
+          }
+          $remote=@'
+          set -euo pipefail
+          test "$(sha256sum /home/builder/t2-bootstrapfix/layersentry-host-agent|awk '{print $1}')" = 1d994f68e581d8d068e09b833a64553bc4317e71636871be0e5fcaf5c1527d2e
+          test "$(sha256sum /home/builder/t2-bootstrapfix/layersentry-host-controller|awk '{print $1}')" = deb0ac896e45fa9c03a77798d64bed3028ee2c3f06e0ff20a8c3e0d9b4450391
+          test "$(git hash-object /home/builder/t2-bootstrapfix/layersentry-agent-wrapper.sh)" = 9cd78cf1a649f66795e22968cd28d5f74983eeda
+          cp /home/builder/t2-bootstrapfix/layersentry-agent-wrapper.sh /home/builder/t2-enrollment-fix-src/deploy/host-agent/packaging/layersentry-agent-wrapper.sh
+          bash -n /home/builder/t2-enrollment-fix-src/deploy/host-agent/packaging/layersentry-agent-wrapper.sh
+          /home/builder/t2-bootstrapfix/layersentry-host-agent self-test | grep -Fx t2-durable
+          echo BUILDER_STAGE=PASS
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remote -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BOOTSTRAPFIX_KEY builder@10.250.10.40 "printf '%s' '$b64'|base64 -d|bash"
+          if($LASTEXITCODE -ne 0){throw 'Builder staging validation failed'}
+
+      - name: Build bootstrap-retirement generic ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source;$known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $remote=@'
+          set -euo pipefail
+          src=/home/builder/t2-enrollment-fix-src
+          q=/home/builder/layersentry-qual-dbeacd5
+          agent=/home/builder/t2-bootstrapfix/layersentry-host-agent
+          outdir=/mnt/t2-durable-iso-work/layersentry-bootstrapfix-db8ef17
+          out="$outdir/LayerSentry-Rocky-9.8-bootstrapfix-db8ef17-generic-x86_64.iso"
+          mkdir -p "$outdir";rm -f "$out" "$out.sha256" "$out.provenance.json"
+          sudo -n bash "$src/deploy/iso/build-host-iso.sh" --generic \
+            --base-iso /var/tmp/layersentry-iso/Rocky-9.8-x86_64-dvd.iso \
+            --base-sha256 d2bcbb64c2d67511adf80d40cd9543391a33aea5860a355b1d26d7f55236d01f \
+            --agent-binary "$agent" --agent-sha256 1d994f68e581d8d068e09b833a64553bc4317e71636871be0e5fcaf5c1527d2e --agent-version t2-bootstrapfix \
+            --agent-config "$q/qual-agent.json" --agent-ca "$q/agent-ca.crt" --agent-signing-key "$q/job-signing.pub.pem" \
+            --source-commit db8ef1727de54784136a471e07aaae0b40941ea4 --output "$out"
+          sudo -n chown builder:builder "$out" "$out.sha256" "$out.provenance.json"
+          stat -c 'ISO_SIZE=%s' "$out";cat "$out.sha256";cat "$out.provenance.json"
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remote -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BOOTSTRAPFIX_KEY builder@10.250.10.40 "printf '%s' '$b64'|base64 -d|bash"
+          if($LASTEXITCODE -ne 0){throw 'Bootstrap-retirement ISO build failed'}
+
+      - name: Transfer and verify new ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $scp=(Get-Command scp.exe).Source;$known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $dst='C:\LayerSentryLab\qualification\bootstrapfix-db8ef17';New-Item -ItemType Directory -Force -Path $dst|Out-Null
+          $remote='/mnt/t2-durable-iso-work/layersentry-bootstrapfix-db8ef17/LayerSentry-Rocky-9.8-bootstrapfix-db8ef17-generic-x86_64.iso'
+          $iso=Join-Path $dst 'LayerSentry-Rocky-9.8-bootstrapfix-db8ef17-generic-x86_64.iso'
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BOOTSTRAPFIX_KEY "builder@10.250.10.40:$remote" $iso
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BOOTSTRAPFIX_KEY "builder@10.250.10.40:$remote.provenance.json" "$iso.provenance.json"
+          if($LASTEXITCODE -ne 0){throw 'Bootstrap-retirement ISO transfer failed'}
+          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant();$p=Get-Content "$iso.provenance.json" -Raw|ConvertFrom-Json
+          if($p.source_commit -ne 'db8ef1727de54784136a471e07aaae0b40941ea4'){throw 'ISO provenance source mismatch'}
+          if($p.agent_sha256 -ne '1d994f68e581d8d068e09b833a64553bc4317e71636871be0e5fcaf5c1527d2e'){throw 'ISO provenance agent mismatch'}
+          if($p.iso_sha256 -ne $sha){throw 'ISO provenance digest mismatch'}
+          Write-Host "BOOTSTRAPFIX_ISO=PASS SHA256=$sha SIZE=$((Get-Item $iso).Length)"
+
+      - name: Cleanup temporary builder key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_BOOTSTRAPFIX_KEY -and(Test-Path $env:T2_BOOTSTRAPFIX_KEY)){& icacls.exe $env:T2_BOOTSTRAPFIX_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_BOOTSTRAPFIX_KEY -Force}
