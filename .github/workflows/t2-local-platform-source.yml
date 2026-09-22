@@ -1,0 +1,32 @@
+name: T2 Local Platform Source
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-local-platform-source.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 5
+    steps:
+      - name: Verify local platform source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src='C:\LayerSentryLab\src\layersentry-platform'
+          if(-not (Test-Path (Join-Path $src '.git'))){throw 'Local platform checkout missing'}
+          Push-Location $src
+          Write-Host ("LOCAL_PLATFORM_HEAD="+(git rev-parse HEAD).Trim())
+          Write-Host ("LOCAL_PLATFORM_BRANCH="+(git branch --show-current).Trim())
+          git status --short
+          go version
+          Select-String -Path 'deploy\host-agent\internal\client\client.go' -Pattern 'loadOrCreateEnrollmentKey|CollectEnrollment'
+          Select-String -Path 'deploy\host-agent\packaging\layersentry-host-agent.service' -Pattern 'TimeoutStartSec'
+          Pop-Location
