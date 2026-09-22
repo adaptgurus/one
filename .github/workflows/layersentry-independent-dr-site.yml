@@ -1,0 +1,101 @@
+name: LayerSentry independent DR site inventory
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-independent-dr-site.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tester_source:
+    runs-on: [self-hosted, Linux, X64, testser-two-site]
+    timeout-minutes: 10
+    steps:
+      - name: Confirm Tester source control plane
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "HOSTNAME=$(hostname)"
+          ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 'onehost list; onedatastore list; onevm list'
+
+  manoj_inventory:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Inspect existing Manoj FE and KVM lab
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @('ls-fe1','ls-fe2','ls-fe3','ls-kvm1','ls-kvm2')
+          $rows = @()
+          foreach ($name in $targets) {
+            $vm = Get-VM -Name $name -ErrorAction SilentlyContinue
+            if ($null -eq $vm) {
+              $rows += [pscustomobject]@{Name=$name;Present=$false}
+              continue
+            }
+            $cpu = Get-VMProcessor -VMName $name
+            $memory = Get-VMMemory -VMName $name
+            $nics = @(Get-VMNetworkAdapter -VMName $name)
+            $disks = @(Get-VMHardDiskDrive -VMName $name)
+            $macs = @($nics.MacAddress | Where-Object { $_ } | ForEach-Object {
+              ($_ -replace '[:-]', '').ToUpperInvariant()
+            })
+            $reportedIPv4 = @($nics.IPAddresses | Where-Object {
+              $_ -match '^\d+\.\d+\.\d+\.\d+$' -and $_ -notmatch '^169\.254\.'
+            })
+            $neighborIPv4 = @(
+              Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                Where-Object {
+                  $_.IPAddress -match '^\d+\.\d+\.\d+\.\d+$' -and
+                  $_.LinkLayerAddress -and
+                  $macs -contains (($_.LinkLayerAddress -replace '[:-]', '').ToUpperInvariant())
+                } |
+                Select-Object -ExpandProperty IPAddress -Unique
+            )
+            $ipv4 = @($reportedIPv4 + $neighborIPv4 | Sort-Object -Unique)
+            $rows += [pscustomobject]@{
+              Name=$name
+              Present=$true
+              State=[string]$vm.State
+              CPU=$cpu.Count
+              ExposeVirtualizationExtensions=$cpu.ExposeVirtualizationExtensions
+              StartupMemoryBytes=$memory.Startup
+              Switches=@($nics.SwitchName)
+              MacAddresses=$macs
+              IPv4=$ipv4
+              DiskPaths=@($disks.Path)
+            }
+          }
+
+          Write-Host 'HOST_NETWORK'
+          Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPAddress -notmatch '^169\.254\.' } |
+            Select-Object InterfaceAlias,IPAddress,PrefixLength |
+            Format-Table -AutoSize
+
+          Write-Host 'VM_INVENTORY'
+          $rows | ConvertTo-Json -Depth 6 |
+            Tee-Object -FilePath "$env:RUNNER_TEMP\independent-dr-site.json"
+
+          foreach ($row in $rows | Where-Object { $_.Present -and $_.State -eq 'Running' }) {
+            foreach ($ip in @($row.IPv4)) {
+              foreach ($port in @(22,2633,9869)) {
+                $probe = Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
+                Write-Host "PROBE VM=$($row.Name) IP=$ip PORT=$port TCP=$($probe.TcpTestSucceeded)"
+              }
+            }
+          }
+
+      - name: Upload inventory
+        uses: actions/upload-artifact@v4
+        with:
+          name: independent-dr-site-inventory
+          path: ${{ runner.temp }}\independent-dr-site.json
+          if-no-files-found: error
+          retention-days: 3
