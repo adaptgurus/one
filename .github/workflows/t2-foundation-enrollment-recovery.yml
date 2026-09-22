@@ -1,0 +1,184 @@
+name: T2 Foundation Enrollment Recovery
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-enrollment-recovery.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-foundation-enrollment-recovery
+  cancel-in-progress: true
+
+jobs:
+  recover:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.7'
+          cache: false
+
+      - name: Prepare exact fixed source worktree
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
+          $repo='C:\LayerSentryLab\src\layersentry-platform'
+          $wt=Join-Path $env:RUNNER_TEMP 'layersentry-platform-2307f95'
+          if(Test-Path $wt){Remove-Item $wt -Recurse -Force}
+          git -C $repo fetch --no-tags origin 2307f95b3d1aad94847eb32328064f5b25ef7c98
+          if($LASTEXITCODE -ne 0){throw 'Could not fetch fixed enrollment commit'}
+          git -C $repo worktree add --detach $wt 2307f95b3d1aad94847eb32328064f5b25ef7c98
+          if($LASTEXITCODE -ne 0){throw 'Could not create exact fixed worktree'}
+          if((git -C $wt rev-parse HEAD).Trim() -ne '2307f95b3d1aad94847eb32328064f5b25ef7c98'){throw 'Fixed worktree head mismatch'}
+          "T2_FIXED_WT=$wt" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'FIXED_SOURCE_WORKTREE=PASS HEAD=2307f95b'
+
+      - name: Build and test fixed Linux agent
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Push-Location (Join-Path $env:T2_FIXED_WT 'deploy\host-agent')
+          go test -count=1 ./internal/client ./internal/controller ./internal/inventory
+          if($LASTEXITCODE -ne 0){throw 'Focused enrollment tests failed'}
+          $env:CGO_ENABLED='0'; $env:GOOS='linux'; $env:GOARCH='amd64'
+          $out=Join-Path $env:RUNNER_TEMP 'layersentry-host-agent-2307f95'
+          go build -trimpath -ldflags="-s -w -X main.Version=2307f95-qual" -o $out ./cmd/layersentry-host-agent
+          if($LASTEXITCODE -ne 0){throw 'Fixed agent build failed'}
+          Pop-Location
+          Write-Host ("FIXED_AGENT_BUILD=PASS SHA256="+(Get-FileHash -Algorithm SHA256 $out).Hash.ToLowerInvariant())
+
+      - name: Mint fresh enrollment and stage recovery payloads
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $builderSource=Join-Path $q 'iso-builder-key'
+          $builderKnown=Join-Path $q 'known_hosts_builder'
+          $bootstrapHelper=Join-Path $q 'prepare_fresh_enrollment_safe.py'
+          $supportSource=Join-Path $q 'qual-support-ac7e14e-ed25519'
+          foreach($p in @($builderSource,$builderKnown,$bootstrapHelper,$supportSource)){if(-not (Test-Path $p)){throw "Missing qualification input: $p"}}
+
+          & icacls.exe $builderSource /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $builderKnown /grant:r '*S-1-5-18:(R)' | Out-Null
+          $builderKey=Join-Path $env:RUNNER_TEMP 't2-recover-builder-key'
+          Copy-Item $builderSource $builderKey -Force
+          & icacls.exe $builderKey /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $builderKey /inheritance:r | Out-Null
+          & icacls.exe $builderKey /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $builderSource /remove:g '*S-1-5-18' | Out-Null
+          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$builderKnown",'-i',$builderKey)
+          scp.exe @base $bootstrapHelper 'builder@10.250.10.40:/home/builder/t2-recover-bootstrap.py'
+          if($LASTEXITCODE -ne 0){throw 'Could not stage bootstrap helper'}
+          $safe=ssh.exe @base 'builder@10.250.10.40' 'python3 /home/builder/t2-recover-bootstrap.py'
+          if($LASTEXITCODE -ne 0){throw 'Fresh bootstrap creation failed'}
+          if(($safe -join [Environment]::NewLine) -notmatch 'BOOTSTRAP_READY'){throw 'Bootstrap-ready marker missing'}
+          $token=Join-Path $env:RUNNER_TEMP 't2-recover-bootstrap.token'
+          scp.exe @base 'builder@10.250.10.40:/home/builder/layersentry-qual/appliance-bootstrap.token' $token
+          if($LASTEXITCODE -ne 0){throw 'Could not retrieve fresh bootstrap token'}
+
+          & icacls.exe $supportSource /grant:r '*S-1-5-18:(R)' | Out-Null
+          $supportKey=Join-Path $env:RUNNER_TEMP 't2-recover-support-key'
+          Copy-Item $supportSource $supportKey -Force
+          & icacls.exe $supportKey /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $supportKey /inheritance:r | Out-Null
+          & icacls.exe $supportKey /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $supportSource /remove:g '*S-1-5-18' | Out-Null
+          $guestKnown=Join-Path $env:RUNNER_TEMP 't2-recover-guest-known'
+          $scan=cmd.exe /d /c "ssh-keyscan -T 10 10.250.10.41 2>NUL"
+          $scan | Set-Content -LiteralPath $guestKnown -Encoding ascii
+          if((Get-Item $guestKnown).Length -eq 0){throw 'Could not obtain guest host key'}
+          $guestBase=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$guestKnown",'-i',$supportKey)
+          scp.exe @guestBase (Join-Path $env:RUNNER_TEMP 'layersentry-host-agent-2307f95') 'layersentry@10.250.10.41:/home/layersentry/layersentry-host-agent-2307f95'
+          if($LASTEXITCODE -ne 0){throw 'Could not stage fixed agent to guest'}
+          scp.exe @guestBase (Join-Path $env:T2_FIXED_WT 'deploy\host-agent\packaging\layersentry-host-agent.service') 'layersentry@10.250.10.41:/home/layersentry/layersentry-host-agent.service'
+          if($LASTEXITCODE -ne 0){throw 'Could not stage fixed service unit'}
+          scp.exe @guestBase $token 'layersentry@10.250.10.41:/home/layersentry/bootstrap-token-2307f95'
+          if($LASTEXITCODE -ne 0){throw 'Could not stage fresh bootstrap to guest'}
+          "T2_BUILDER_KEY=$builderKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "T2_SUPPORT_KEY=$supportKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "T2_GUEST_KNOWN=$guestKnown" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "T2_TOKEN_FILE=$token" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'RECOVERY_PAYLOAD_STAGED=PASS'
+
+      - name: Install fixed agent through approved local console helpers
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $rootHelper=(Get-Content -Raw (Join-Path $q 'vm_tty2_root.ps1'))
+          $rootHelper=$rootHelper.Replace('ls-appliance-qual','ls-appliance-4c4ac81-qual')
+          $rootHelper=$rootHelper.Replace('qual-root-ac7e14e.password','durable-root-current.password')
+          $rootTemp=Join-Path $env:RUNNER_TEMP 't2-root-current.ps1'
+          Set-Content $rootTemp $rootHelper -Encoding UTF8
+
+          $cmdHelper=(Get-Content -Raw (Join-Path $q 'vm_type_cmd.ps1')).Replace('ls-appliance-qual','ls-appliance-4c4ac81-qual')
+          $cmdTemp=Join-Path $env:RUNNER_TEMP 't2-cmd-current.ps1'
+          Set-Content $cmdTemp $cmdHelper -Encoding UTF8
+
+          powershell.exe -NoProfile -ExecutionPolicy Bypass -File $rootTemp
+          if($LASTEXITCODE -ne 0){throw 'Approved TTY2 root helper failed'}
+          Start-Sleep -Seconds 2
+          $commands=@(
+            'systemctl stop layersentry-host-agent.service',
+            'install -d -o root -g root -m 0755 /opt/layersentry/agent/releases/2307f95-qual',
+            'install -o root -g root -m 0755 /home/layersentry/layersentry-host-agent-2307f95 /opt/layersentry/agent/releases/2307f95-qual/layersentry-host-agent',
+            'ln -sfn /opt/layersentry/agent/releases/2307f95-qual /opt/layersentry/agent/current',
+            'install -o root -g root -m 0644 /home/layersentry/layersentry-host-agent.service /etc/systemd/system/layersentry-host-agent.service',
+            'install -o root -g layersentry-agent -m 0640 /home/layersentry/bootstrap-token-2307f95 /etc/layersentry/bootstrap-token',
+            'rm -f /var/lib/layersentry/agent/pki/client.key',
+            'rm -f /var/lib/layersentry/agent/pki/client.crt',
+            'systemctl daemon-reload',
+            'systemctl reset-failed layersentry-host-agent.service',
+            'systemctl restart layersentry-host-agent.service'
+          )
+          foreach($cmd in $commands){
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File $cmdTemp -Text $cmd
+            if($LASTEXITCODE -ne 0){throw "Console command injection failed"}
+            Start-Sleep -Milliseconds 900
+          }
+          Remove-Item $rootTemp,$cmdTemp -Force
+          Write-Host 'FIXED_AGENT_CONSOLE_INSTALL_SENT=PASS'
+
+      - name: Verify fixed enrollment and active agent
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$env:T2_GUEST_KNOWN",'-i',$env:T2_SUPPORT_KEY)
+          $pass=$false
+          for($i=0;$i -lt 60;$i++){
+            $out=ssh.exe @base 'layersentry@10.250.10.41' 'systemctl show layersentry-host-agent.service -p ActiveState -p SubState -p NRestarts --no-pager; test -s /var/lib/layersentry/agent/pki/client.crt && echo CERT_PRESENT=YES || echo CERT_PRESENT=NO; test -s /var/lib/layersentry/agent/pki/client.key && echo KEY_PRESENT=YES || echo KEY_PRESENT=NO; test -e /etc/layersentry/bootstrap-token && echo BOOTSTRAP_TOKEN_PRESENT=YES || echo BOOTSTRAP_TOKEN_PRESENT=NO'
+            $joined=$out -join [Environment]::NewLine
+            if($joined -match 'ActiveState=active' -and $joined -match 'CERT_PRESENT=YES' -and $joined -match 'KEY_PRESENT=YES' -and $joined -match 'BOOTSTRAP_TOKEN_PRESENT=NO'){
+              $out | Write-Host
+              $pass=$true
+              break
+            }
+            Start-Sleep -Seconds 3
+          }
+          if(-not $pass){throw 'Fixed durable enrollment was not observed'}
+          Write-Host 'DURABLE_ENROLLMENT_RECOVERY=PASS AGENT_ACTIVE=PASS'
+
+      - name: Cleanup temporary material
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          if($env:T2_BUILDER_KEY -and (Test-Path $env:T2_BUILDER_KEY)){
+            $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+            ssh.exe -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BUILDER_KEY builder@10.250.10.40 'rm -f /home/builder/layersentry-qual/appliance-bootstrap.token /home/builder/t2-recover-bootstrap.py' 2>$null
+          }
+          foreach($p in @($env:T2_BUILDER_KEY,$env:T2_SUPPORT_KEY,$env:T2_GUEST_KNOWN,$env:T2_TOKEN_FILE)){
+            if($p -and (Test-Path $p)){& icacls.exe $p /grant:r '*S-1-5-18:(F)' | Out-Null; Remove-Item $p -Force}
+          }
+          if($env:T2_FIXED_WT -and (Test-Path $env:T2_FIXED_WT)){
+            git -C 'C:\LayerSentryLab\src\layersentry-platform' worktree remove --force $env:T2_FIXED_WT 2>$null
+          }
+          Write-Host 'RECOVERY_TEMP_CLEANUP=PASS'
