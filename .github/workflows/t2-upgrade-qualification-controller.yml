@@ -1,0 +1,100 @@
+name: T2 Upgrade Qualification Controller
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-upgrade-qualification-controller.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-qualification-controller-mutation
+  cancel-in-progress: false
+
+jobs:
+  upgrade:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Prepare builder key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src='C:\LayerSentryLab\qualification\iso-builder-key'; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          foreach($p in @($src,$known)){if(-not(Test-Path $p)){throw "Missing $p"}}
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null; & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-controller-upgrade-key'; Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null; & icacls.exe $key /setowner '*S-1-5-18' | Out-Null; & icacls.exe $key /inheritance:r | Out-Null; & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_CTL_UPGRADE_KEY=$key" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Upgrade controller with rollback
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $remote=@'
+          set -euo pipefail
+          ctl=/usr/local/libexec/layersentry-qual-controller
+          new=/home/builder/t2-enrollment-fix-build/layersentry-host-controller
+          q=/home/builder/layersentry-qual
+          expected=83a2609fd47163f0dea44e846df1b067ae9693106e6ead9e57f8571487ab04bb
+          test "$(sha256sum "$new" | awk '{print $1}')" = "$expected"
+          oldsha=$(sha256sum "$ctl" | awk '{print $1}')
+          pid=$(sudo -n fuser 9443/tcp 2>/dev/null | awk '{print $1}')
+          test -n "$pid"
+          test "$(cat /proc/$pid/comm)" = "layersentry-qua"
+          backup="$q/controller-backup-$oldsha"
+          cp -p "$ctl" "$backup"
+          start_controller() {
+            nohup "$ctl" --listen=:9443 --state="$q/state.json" --tls-cert="$q/server.crt" --tls-key="$q/server.key" --ca-cert="$q/agent-ca.crt" --ca-key="$q/agent-ca.key" --signing-key="$q/job-signing.key" --admin-token-file="$q/admin.token" --client-cert-ttl=24h >"$q/controller-t2.log" 2>&1 </dev/null &
+            echo $!
+          }
+          rollback() {
+            echo 'CONTROLLER_ROLLBACK=START'
+            sudo -n install -m 0755 "$backup" "$ctl"
+            rp=$(start_controller)
+            sleep 2
+            kill -0 "$rp"
+            echo 'CONTROLLER_ROLLBACK=PASS'
+          }
+          trap 'rollback' ERR
+          kill -TERM "$pid"
+          for i in $(seq 1 20); do if ! kill -0 "$pid" 2>/dev/null; then break; fi; sleep 0.25; done
+          ! kill -0 "$pid" 2>/dev/null
+          sudo -n install -m 0755 "$new" "$ctl"
+          test "$(sha256sum "$ctl" | awk '{print $1}')" = "$expected"
+          newpid=$(start_controller)
+          sleep 2
+          kill -0 "$newpid"
+          ss -lnt | grep -q ':9443'
+          python3 - <<'PY'
+          import json, ssl, urllib.request
+          from pathlib import Path
+          q=Path('/home/builder/layersentry-qual')
+          admin=q.joinpath('admin.token').read_text(encoding='ascii').strip()
+          ctx=ssl.create_default_context(cafile=str(q/'agent-ca.crt'))
+          req=urllib.request.Request('https://10.250.10.40:9443/v1/admin/enrollment-self-test')
+          req.add_header('Authorization','Bearer '+admin)
+          with urllib.request.urlopen(req,context=ctx,timeout=10) as r: data=json.loads(r.read().decode())
+          keys=('wrong_site_rejected','wrong_host_rejected','wrong_management_ip_rejected','correct_token_consumed','token_replay_rejected','expired_token_rejected')
+          if not all(data.get(k) is True for k in keys): raise SystemExit('controller enrollment self-test failed')
+          state=json.loads(q.joinpath('state.json').read_text())
+          print('CONTROLLER_SELF_TEST=PASS hosts='+str(len(state.get('hosts') or {})))
+          PY
+          trap - ERR
+          echo "CONTROLLER_UPGRADE=PASS old=$oldsha new=$expected pid=$newpid"
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remote -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_CTL_UPGRADE_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'Qualification controller upgrade failed'}
+
+      - name: Remove key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_CTL_UPGRADE_KEY -and(Test-Path $env:T2_CTL_UPGRADE_KEY)){& icacls.exe $env:T2_CTL_UPGRADE_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_CTL_UPGRADE_KEY -Force}
