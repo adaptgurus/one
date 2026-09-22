@@ -146,6 +146,20 @@ test('LayerSentry presents the native admin view as Super Admin', () => {
   assert.match(portal, /const isAdmin = view === 'admin'/)
 })
 
+test('compute summary reports OpenNebula VCPU before CPU share', () => {
+  const compute = read('src/client/apps/layersentry/pages/ComputeWorkspace.js')
+
+  assert.match(
+    compute,
+    /TEMPLATE\?\.VCPU \?\? vm\?\.TEMPLATE\?\.CPU/
+  )
+  assert.doesNotMatch(
+    compute,
+    /TEMPLATE\?\.CPU \?\? vm\?\.TEMPLATE\?\.VCPU/
+  )
+  assert.match(compute, /label="Allocated vCPU"/)
+})
+
 test('portal shell is responsive and exposes operations help and settings controls', () => {
   const shell = read('src/client/apps/layersentry/components/PortalShell.js')
   assert.match(shell, /Open navigation/)
