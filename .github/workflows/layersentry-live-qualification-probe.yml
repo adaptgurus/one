@@ -22,6 +22,28 @@ jobs:
           hostname
           Get-NetIPConfiguration | Select-Object InterfaceAlias,IPv4Address,IPv4DefaultGateway | Format-List
           Get-NetRoute -AddressFamily IPv4 | Sort-Object DestinationPrefix | Select-Object DestinationPrefix,NextHop,InterfaceAlias,RouteMetric | Format-Table -AutoSize
+          Write-Host '=== HYPER-V INVENTORY ==='
+          Get-VM | Select-Object Name,State,CPUUsage,MemoryAssigned,Uptime | Format-Table -AutoSize
+          Write-Host '=== HYPER-V NETWORK ==='
+          Get-VMNetworkAdapter -All | Select-Object VMName,Name,SwitchName,Status,IPAddresses,MacAddress | Format-List
+          Write-Host '=== LOCAL LISTENERS ==='
+          Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue |
+            Where-Object { $_.LocalPort -in @(22,2616,2633) } |
+            Select-Object LocalAddress,LocalPort,OwningProcess | Sort-Object LocalPort | Format-Table -AutoSize
+          Write-Host '=== TESTER TCP ==='
+          foreach ($ip in @('10.10.10.21','10.10.10.22','10.10.10.23')) {
+            $open = @()
+            foreach ($p in @(22,2616,2633)) {
+              $c = New-Object System.Net.Sockets.TcpClient
+              try {
+                $a = $c.BeginConnect($ip,$p,$null,$null)
+                $ok = $a.AsyncWaitHandle.WaitOne(800)
+                if ($ok) { $c.EndConnect($a) }
+                if ($c.Connected) { $open += $p }
+              } catch {} finally { $c.Close() }
+            }
+            Write-Host "$ip OPEN=$($open -join ',')"
+          }
           Write-Host '=== SSH MATERIAL (filenames only) ==='
           $sshDir = Join-Path $env:USERPROFILE '.ssh'
           if (Test-Path $sshDir) {
@@ -60,3 +82,4 @@ jobs:
           } else {
             Write-Host 'SSH_NOT_INSTALLED'
           }
+          exit 0
