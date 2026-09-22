@@ -1,0 +1,25 @@
+name: T2 Root Transport Probe
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-root-transport-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: self-hosted
+    timeout-minutes: 5
+    steps:
+      - name: Probe Python SSH transport
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          py -c "import sys,paramiko; print('PYTHON='+sys.version.split()[0]); print('PARAMIKO='+paramiko.__version__)"
+          if($LASTEXITCODE -ne 0){throw 'Paramiko unavailable'}
+          Write-Host 'ROOT_TRANSPORT_PREREQ=PASS'
