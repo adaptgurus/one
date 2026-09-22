@@ -455,7 +455,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Create Backup Storage',
                 description:
-                  'Create an LayerSentry Backup Datastore using a qualified Restic, Rsync or custom backup backend.',
+                  'Create a LayerSentry Backup Datastore using a qualified Restic, Rsync or custom backup backend.',
                 legacyPath: '/datastore/create',
                 returnTo: PRODUCT_PATHS.INFRA_BACKUP_STORAGE,
                 steps: ['Type', 'Backend', 'Capacity', 'Validation', 'Review'],
@@ -511,7 +511,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Add Team',
                 description:
-                  'Create an LayerSentry group used as a LayerSentry team or role boundary.',
+                  'Create a LayerSentry group used as a LayerSentry team or role boundary.',
                 legacyPath: '/group/create',
                 returnTo: PRODUCT_PATHS.ACCESS_TEAMS,
               })
