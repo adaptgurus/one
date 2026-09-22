@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   correct:
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 15
     steps:
       - name: Re-bind final VM disk and ISO
