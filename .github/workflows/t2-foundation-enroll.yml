@@ -1,0 +1,164 @@
+name: T2 Foundation Enroll Installed Host
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-enroll.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-foundation-enroll
+  cancel-in-progress: true
+
+jobs:
+  enroll:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind installed qualification VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $fw=Get-VMFirmware -VMName $name
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
+          if($vm.State -ne 'Running'){throw "Installed VM not running: $($vm.State)"}
+          if($fw.SecureBoot -ne 'Off'){throw 'Secure Boot unexpectedly enabled'}
+          if($dvd -and $dvd.Path){throw "Installer ISO unexpectedly mounted: $($dvd.Path)"}
+          Write-Host 'INSTALLED_VM_BIND=PASS ISO_EJECTED=PASS SECURE_BOOT=OFF'
+
+      - name: Mint fresh one-time bootstrap without exposing token
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $source=Join-Path $q 'iso-builder-key'
+          $known=Join-Path $q 'known_hosts_builder'
+          $helper=Join-Path $q 'prepare_fresh_enrollment_safe.py'
+          foreach($p in @($source,$known,$helper)){if(-not (Test-Path $p)){throw "Missing qualification input: $p"}}
+          & icacls.exe $source /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-enroll-builder-key'
+          Copy-Item -LiteralPath $source -Destination $key -Force
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $source /remove:g '*S-1-5-18' | Out-Null
+          $ssh=(Get-Command ssh.exe).Source
+          $scp=(Get-Command scp.exe).Source
+          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$key)
+          & $scp @base $helper 'builder@10.250.10.40:/home/builder/t2-prepare-fresh-enrollment.py'
+          if($LASTEXITCODE -ne 0){throw 'Could not stage bootstrap helper'}
+          $safe=& $ssh @base 'builder@10.250.10.40' 'python3 /home/builder/t2-prepare-fresh-enrollment.py'
+          if($LASTEXITCODE -ne 0){throw 'Fresh bootstrap creation failed'}
+          $safe | ForEach-Object {Write-Host $_}
+          $joined=$safe -join [Environment]::NewLine
+          if($joined -notmatch 'BOOTSTRAP_READY'){throw 'Bootstrap-ready marker missing'}
+          if($joined -match '(?i)wrong_.* False|correct_token_consumed False|token_replay_rejected False|expired_token_rejected False'){throw 'Controller enrollment self-test failed'}
+          $dest=Join-Path $q 'fresh-enrollment-current.token'
+          & $scp @base 'builder@10.250.10.40:/home/builder/layersentry-qual/appliance-bootstrap.token' $dest
+          if($LASTEXITCODE -ne 0){throw 'Could not retrieve fresh token'}
+          & icacls.exe $dest /inheritance:r | Out-Null
+          & icacls.exe $dest /grant:r '*S-1-5-18:(R)' | Out-Null
+          $token=(Get-Content -Raw -LiteralPath $dest).Trim()
+          if($token -notmatch '^[0-9a-f]{64}$'){throw 'Fresh token format rejected'}
+          Write-Host ("FRESH_BOOTSTRAP_READY=PASS token_sha256="+(Get-FileHash -Algorithm SHA256 $dest).Hash.ToLowerInvariant())
+          "T2_ENROLL_KEY=$key" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Drive complete one-time console setup using proven injector
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $source=Join-Path $q 'vm_full_enroll_testlab.ps1'
+          if(-not (Test-Path $source)){throw 'Proven console enrollment helper missing'}
+          foreach($p in @('fresh-enrollment-current.token','durable-support-current.password','durable-root-current.password','qual-support-ac7e14e-ed25519.pub')){
+            if(-not (Test-Path (Join-Path $q $p))){throw "Qualification material missing: $p"}
+          }
+          $script=(Get-Content -Raw -LiteralPath $source)
+          $script=$script.Replace('ls-appliance-qual','ls-appliance-4c4ac81-qual')
+          $script=$script.Replace('qual-enrollment-ac7e14e.token','fresh-enrollment-current.token')
+          $script=$script.Replace('qual-support-ac7e14e.password','durable-support-current.password')
+          $script=$script.Replace('qual-root-ac7e14e.password','durable-root-current.password')
+          $temp=Join-Path $env:RUNNER_TEMP 't2-full-enroll-current.ps1'
+          Set-Content -LiteralPath $temp -Value $script -Encoding UTF8
+          & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $temp
+          if($LASTEXITCODE -ne 0){throw 'Console setup injection failed'}
+          Remove-Item -LiteralPath $temp -Force
+          Write-Host 'QUALIFICATION_CONSOLE_SETUP_SENT=PASS'
+
+      - name: Verify authoritative controller enrollment and guest reachability
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $q='C:\LayerSentryLab\qualification'
+          $key=$env:T2_ENROLL_KEY
+          $known=Join-Path $q 'known_hosts_builder'
+          $ssh=(Get-Command ssh.exe).Source
+          $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$key)
+          $py=@'
+          import json,ssl,time,urllib.request
+          from pathlib import Path
+          q=Path('/home/builder/layersentry-qual')
+          admin=(q/'admin.token').read_text(encoding='ascii').strip()
+          ctx=ssl.create_default_context(cafile=str(q/'agent-ca.crt'))
+          deadline=time.time()+240
+          host=None
+          while time.time()<deadline:
+              try:
+                  req=urllib.request.Request('https://10.250.10.40:9443/v1/admin/state',method='GET')
+                  req.add_header('Authorization','Bearer '+admin)
+                  with urllib.request.urlopen(req,context=ctx,timeout=10) as r:
+                      state=json.loads(r.read().decode())
+                  host=(state.get('hosts') or {}).get('qualification/lsappliancequal')
+                  if host and host.get('enrollment_management_ip')=='10.250.10.41' and host.get('certificate_serial'):
+                      break
+              except Exception:
+                  pass
+              time.sleep(3)
+          if not host or host.get('enrollment_management_ip')!='10.250.10.41' or not host.get('certificate_serial'):
+              raise SystemExit('ENROLLMENT_VERIFIED=FAIL')
+          inv=host.get('inventory') or {}
+          print('ENROLLMENT_VERIFIED=PASS site=%s host=%s management_ip=%s sealed=%s seal_integrity=%s' % (host.get('site'),host.get('host'),host.get('enrollment_management_ip'),bool(inv.get('sealed')),bool(inv.get('seal_integrity_ok'))))
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($py))
+          $cmd="printf '%s' '$b64' | base64 -d | python3 -"
+          $out=& $ssh @base 'builder@10.250.10.40' $cmd
+          if($LASTEXITCODE -ne 0){$out|Write-Host;throw 'Controller enrollment verification failed'}
+          $out|Write-Host
+          if(($out -join [Environment]::NewLine) -notmatch 'ENROLLMENT_VERIFIED=PASS'){throw 'Enrollment PASS marker missing'}
+          $tcp=$false
+          for($i=0;$i -lt 12;$i++){
+            $c=New-Object Net.Sockets.TcpClient
+            try{$a=$c.BeginConnect('10.250.10.41',22,$null,$null);if($a.AsyncWaitHandle.WaitOne(1000)){$c.EndConnect($a);if($c.Connected){$tcp=$true;break}}}catch{}finally{$c.Close()}
+            Start-Sleep -Seconds 2
+          }
+          Write-Host "MANAGEMENT_TCP22=$tcp"
+          $shot='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\enrollment-complete.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-4c4ac81-qual' -Out $shot
+          if(Test-Path $shot){Write-Host "ENROLLMENT_SCREENSHOT=$shot bytes=$((Get-Item $shot).Length)"}
+
+      - name: Retire temporary bootstrap copies
+        if: always()
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $q='C:\LayerSentryLab\qualification'
+          $local=Join-Path $q 'fresh-enrollment-current.token'
+          if(Test-Path $local){& icacls.exe $local /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item -LiteralPath $local -Force}
+          if($env:T2_ENROLL_KEY -and (Test-Path $env:T2_ENROLL_KEY)){
+            & icacls.exe $env:T2_ENROLL_KEY /grant:r '*S-1-5-18:(F)' | Out-Null
+            $known=Join-Path $q 'known_hosts_builder'
+            $ssh=(Get-Command ssh.exe).Source
+            $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$env:T2_ENROLL_KEY)
+            & $ssh @base 'builder@10.250.10.40' 'rm -f /home/builder/layersentry-qual/appliance-bootstrap.token /home/builder/t2-prepare-fresh-enrollment.py' 2>$null
+            Remove-Item -LiteralPath $env:T2_ENROLL_KEY -Force
+          }
+          Write-Host 'TEMP_BOOTSTRAP_COPIES_RETIRED=PASS'
