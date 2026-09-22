@@ -23,6 +23,7 @@ jobs:
           $script = @'
           import functools
           import http.server
+          import os
           import pathlib
           import socketserver
           import threading
@@ -63,7 +64,7 @@ jobs:
           thread.start()
           print("RECOVERY_HTTP_SOURCE=READY")
 
-          image_name = "ls-dr-vm220-recovery-20260923"
+          image_name = "ls-dr-vm220-recovery-" + os.environ.get("GITHUB_RUN_ID", "manual")
           image_template = f'''NAME="{image_name}"
           PATH="http://{HOST_HTTP_IP}:{HTTP_PORT}/{DISK.name}"
           TYPE="OS"
@@ -72,7 +73,8 @@ jobs:
           '''
           alloc = proxy.one.image.allocate(auth, image_template, DATASTORE_ID)
           if not alloc[0]:
-              raise SystemExit("image allocate failed code=" + str(alloc[2]))
+              message = str(alloc[1]).replace("\r", " ").replace("\n", " ")[:800]
+              raise SystemExit("image allocate failed code=" + str(alloc[2]) + " message=" + message)
           image_id = int(alloc[1])
           print("DR_IMAGE_ID=" + str(image_id))
 
@@ -139,4 +141,11 @@ jobs:
           '@
           $scriptPath = Join-Path $env:RUNNER_TEMP 'independent_dr_import.py'
           Set-Content -Path $scriptPath -Value $script -Encoding UTF8
-          & 'C:\LayerSentryLab\tools\Python313\python.exe' $scriptPath
+          $ruleName = "LayerSentry-DR-Import-$env:GITHUB_RUN_ID"
+          try {
+            New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort 18080 -RemoteAddress 10.250.10.0/24 -Profile Any | Out-Null
+            & 'C:\LayerSentryLab\tools\Python313\python.exe' $scriptPath
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+          }
