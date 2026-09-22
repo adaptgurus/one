@@ -1,0 +1,78 @@
+name: T2 Bootstrap-Fix Disable Secure Boot
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-bootstrapfix-disable-secureboot.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-bootstrapfix-final-install
+  cancel-in-progress: true
+
+jobs:
+  firmware:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Inspect and disable Secure Boot
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-bootstrapfix-qual'
+          $iso='C:\LayerSentryLab\qualification\bootstrapfix-db8ef17\LayerSentry-Rocky-9.8-bootstrapfix-db8ef17-generic-x86_64.iso'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-bootstrapfix-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $fw=Get-VMFirmware -VMName $name
+          Write-Host "SECURE_BOOT_BEFORE=$($fw.SecureBoot) VM_STATE=$($vm.State)"
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $vhd){throw 'Qualification VHD binding changed'}
+          if((Get-VHD -Path $vhd).Size -ne 85899345920){throw 'Qualification VHD virtual size changed'}
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction Stop
+          if($dvd.Path -ne $iso){throw "Unexpected ISO binding: $($dvd.Path)"}
+          $sha=(Get-FileHash -Algorithm SHA256 $iso).Hash.ToLowerInvariant()
+          if($sha -ne 'f5c2166e1b38130b9f2e51ac7f377522fa28518f8c4e96873a9a66dbff5b0311'){throw "Final ISO SHA changed: $sha"}
+          if($vm.State -ne 'Off'){Stop-VM -Name $name -TurnOff -Force}
+          Set-VMFirmware -VMName $name -EnableSecureBoot Off
+          $fw=Get-VMFirmware -VMName $name
+          Write-Host "SECURE_BOOT_AFTER=$($fw.SecureBoot)"
+          if($fw.SecureBoot -ne 'Off'){throw "Secure Boot did not disable: $($fw.SecureBoot)"}
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction Stop
+          Set-VMFirmware -VMName $name -FirstBootDevice $dvd
+          Write-Host "SECURE_BOOT_DISABLE=PASS iso_sha=$sha"
+
+      - name: Boot final ISO with Secure Boot disabled
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-bootstrapfix-qual'
+          Start-VM -Name $name
+          Start-Sleep -Seconds 240
+          $vm=Get-VM -Name $name
+          if($vm.State -ne 'Running'){throw "VM not running after firmware retry: $($vm.State)"}
+          $fw=Get-VMFirmware -VMName $name
+          if($fw.SecureBoot -ne 'Off'){throw 'Secure Boot unexpectedly re-enabled'}
+          Write-Host "FINAL_NO_SECUREBOOT_BOOT=PASS uptime=$($vm.Uptime)"
+
+      - name: Capture installer after firmware retry
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\secureboot-off-installer.png'
+          New-Item -ItemType Directory -Force -Path (Split-Path $out)|Out-Null
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-bootstrapfix-qual' -Out $out
+          if(-not(Test-Path $out)){throw 'SecureBoot-off installer screenshot missing'}
+          Write-Host "SECUREBOOT_OFF_SCREENSHOT=$out bytes=$((Get-Item $out).Length)"
+
+      - name: Upload firmware retry evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-bootstrapfix-db8ef17-secureboot-off
+          path: C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\secureboot-off-installer.png
+          if-no-files-found: error
+          retention-days: 7
