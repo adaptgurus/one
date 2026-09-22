@@ -1,0 +1,43 @@
+name: T2 Builder Space Audit
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-builder-space-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Audit ISO builder storage
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src='C:\LayerSentryLab\qualification\iso-builder-key'; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null; & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-space-audit-key'; Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null; & icacls.exe $key /setowner '*S-1-5-18' | Out-Null; & icacls.exe $key /inheritance:r | Out-Null; & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          $ssh=(Get-Command ssh.exe).Source
+          $remote=@'
+          set -euo pipefail
+          echo '=== DF ==='
+          df -hT /var/tmp /home/builder
+          echo '=== LAYERSENTRY VAR TMP ==='
+          find /var/tmp -maxdepth 1 -mindepth 1 -name 'layersentry*' -printf '%f\n' | sort
+          echo '=== SIZES ==='
+          du -sh /var/tmp/layersentry* 2>/dev/null | sort -h || true
+          echo '=== BUILDER HOME LARGE DIRS ==='
+          du -sh /home/builder/* 2>/dev/null | sort -h | tail -20 || true
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remote -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'Builder space audit failed'}
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null; Remove-Item $key -Force
