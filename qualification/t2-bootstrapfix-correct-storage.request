@@ -1,0 +1,4 @@
+vm=ls-appliance-bootstrapfix-qual
+secure_boot=off
+iso_sha=f5c2166e1b38130b9f2e51ac7f377522fa28518f8c4e96873a9a66dbff5b0311
+action=correct-storage
