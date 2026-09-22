@@ -156,8 +156,19 @@ export const buildLayerSentryGuestContext = (
     ...existingContext,
     NETWORK: 'YES',
     SET_HOSTNAME: '$NAME',
-    GROW_FS: '/',
     USERNAME: normalized(access.username) || 'root',
+  }
+
+  // OpenNebula one-context defaults GROW_ROOTFS to YES when neither
+  // GROW_ROOTFS nor GROW_FS is supplied. Customer VM creation does not resize
+  // the source OS disk, so forcing a grow here is unnecessary and can block
+  // pre-network contextualization on already-full Rocky/RHEL-like images.
+  // Preserve an explicit provider growth policy; otherwise disable root growth.
+  if (
+    !normalized(existingContext.GROW_ROOTFS) &&
+    !normalized(existingContext.GROW_FS)
+  ) {
+    context.GROW_ROOTFS = 'NO'
   }
 
   credentialKeys.forEach((key) => delete context[key])
