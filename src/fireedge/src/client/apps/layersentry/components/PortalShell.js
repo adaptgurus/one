@@ -19,8 +19,12 @@ import {
   Alert,
   Avatar,
   Box,
+  Button,
+  FormControl,
   IconButton,
   InputBase,
+  MenuItem,
+  Select,
   Tooltip,
   Typography,
 } from '@mui/material'
@@ -34,7 +38,7 @@ import {
 } from 'iconoir-react'
 import { useMemo, useState } from 'react'
 import { useHistory, useLocation } from 'react-router-dom'
-import { useAuth, useViews } from '@FeaturesModule'
+import { AuthAPI, useAuth, useAuthApi, useViews } from '@FeaturesModule'
 import { getNavigation } from 'client/apps/layersentry/navigation'
 import {
   CAPABILITY_IDS,
@@ -121,7 +125,9 @@ NavItem.propTypes = {
 const PortalShell = ({ children, endpoints }) => {
   const history = useHistory()
   const location = useLocation()
-  const { view } = useViews()
+  const { view, views = {} } = useViews()
+  const { changeView } = useAuthApi()
+  const [logout] = AuthAPI.useLogoutMutation()
   const { user, groups = [] } = useAuth()
   const [search, setSearch] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -157,6 +163,20 @@ const PortalShell = ({ children, endpoints }) => {
     [groups, user?.GID]
   )
   const userName = user?.NAME ?? 'User'
+  const availableViews = useMemo(
+    () =>
+      Object.keys(views || {}).filter((candidate) =>
+        ['admin', 'groupadmin', 'user', 'cloud'].includes(candidate)
+      ),
+    [views]
+  )
+  const switchRole = (nextView) => {
+    if (!nextView || nextView === view || !availableViews.includes(nextView)) {
+      return
+    }
+    changeView(nextView)
+    navigate('/overview')
+  }
   const isActive = (path) =>
     location.pathname === path ||
     (path !== '/overview' && location.pathname.startsWith(`${path}/`))
@@ -405,6 +425,64 @@ const PortalShell = ({ children, endpoints }) => {
               <Settings width={19} height={19} />
             </IconButton>
           </Tooltip>
+          <Box
+            sx={{
+              display: { xs: 'none', lg: 'block' },
+              px: 1.25,
+              py: 0.55,
+              border: `1px solid ${colors.border}`,
+              borderRadius: `${radius.sm}px`,
+              backgroundColor: colors.surfaceMuted,
+            }}
+            data-layersentry-current-role
+          >
+            <Typography
+              sx={{
+                color: colors.text.muted,
+                fontSize: 9,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                fontWeight: 700,
+              }}
+            >
+              Role
+            </Typography>
+            <Typography sx={{ color: colors.text.primary, fontSize: 12, fontWeight: 700 }}>
+              {roleLabel(view)}
+            </Typography>
+          </Box>
+          {availableViews.length > 1 && (
+            <FormControl
+              size="small"
+              sx={{ minWidth: 145, display: { xs: 'none', lg: 'flex' } }}
+            >
+              <Select
+                value={view || availableViews[0] || ''}
+                onChange={(event) => switchRole(event.target.value)}
+                inputProps={{ 'aria-label': 'Switch role' }}
+                data-layersentry-role-switcher
+              >
+                {availableViews.map((candidate) => (
+                  <MenuItem key={candidate} value={candidate}>
+                    {roleLabel(candidate)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          <Button
+            size="small"
+            variant="text"
+            onClick={() => logout()}
+            sx={{
+              display: { xs: 'none', xl: 'inline-flex' },
+              textTransform: 'none',
+              whiteSpace: 'nowrap',
+            }}
+            data-layersentry-switch-account
+          >
+            Switch account
+          </Button>
           <Tooltip title="Current project">
             <Box
               sx={{
