@@ -1,0 +1,76 @@
+name: T2 Durable Begin Validated Install
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-durable-begin-install.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-durable-live-install
+  cancel-in-progress: true
+
+jobs:
+  begin:
+    runs-on: self-hosted
+    timeout-minutes: 15
+    steps:
+      - name: Re-bind durable VM, VHD and ISO
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-durable-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-durable-qual\os.vhdx'
+          $iso='C:\LayerSentryLab\qualification\durable-5f3bda7\LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $disks=@(Get-VMHardDiskDrive -VMName $name)
+          if($disks.Count -ne 1 -or $disks[0].Path -ne $vhd){throw 'Durable VHD binding changed'}
+          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction Stop
+          if($dvd.Path -ne $iso){throw "Durable ISO binding changed: $($dvd.Path)"}
+          Set-VMFirmware -VMName $name -FirstBootDevice $disks[0]
+          Write-Host "DURABLE_INSTALL_BIND=PASS initial_vhd_file_bytes=$((Get-Item $vhd).Length)"
+
+      - name: Begin validated durable installation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-durable-qual'
+          $vm=Get-WmiObject -Namespace root\virtualization\v2 -Class Msvm_ComputerSystem | Where-Object ElementName -eq $name
+          $kb=Get-WmiObject -Namespace root\virtualization\v2 -Query "ASSOCIATORS OF {$($vm.__PATH)} WHERE ResultClass=Msvm_Keyboard"
+          if(-not $kb){throw 'Hyper-V keyboard missing'}
+          $a=$kb.TypeKey([uint32]0x42); Start-Sleep -Milliseconds 250
+          $b=$kb.TypeKey([uint32]0x0D)
+          if($a.ReturnValue -ne 0 -or $b.ReturnValue -ne 0){throw 'Begin-install key injection failed'}
+          Start-Sleep -Seconds 20
+          Write-Host 'DURABLE_INSTALL_BEGIN_KEYS=PASS'
+
+      - name: Prove installer started writing VHD
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-durable-qual\os.vhdx'
+          $grew=$false
+          for($i=0;$i -lt 18;$i++){
+            $len=(Get-Item $vhd).Length
+            Write-Host "VHD_FILE_BYTES=$len"
+            if($len -gt 100000000){$grew=$true;break}
+            Start-Sleep -Seconds 10
+          }
+          if(-not $grew){throw 'Durable installer did not begin writing the VHD'}
+          $out='C:\LayerSentryLab\evidence\t2-durable-5f3bda7\install-start-valid.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-durable-qual' -Out $out
+          Write-Host "DURABLE_INSTALL_WRITING=PASS vhd_bytes=$((Get-Item $vhd).Length)"
+
+      - name: Upload install-start evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-durable-install-start-valid
+          path: C:\LayerSentryLab\evidence\t2-durable-5f3bda7\install-start-valid.png
+          if-no-files-found: error
+          retention-days: 7
