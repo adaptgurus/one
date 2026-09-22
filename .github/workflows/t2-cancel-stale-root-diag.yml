@@ -1,4 +1,4 @@
-name: T2 Cancel Stale Root Diagnostic
+name: T2 Cancel active bootstrap-fix installer retry
 
 on:
   push:
@@ -29,4 +29,4 @@ jobs:
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/35687463960/force-cancel")
           cat /tmp/cancel.out || true
           case "$code" in 202|409) ;; *) echo "cancel HTTP $code" >&2; exit 1 ;; esac
-          echo "STALE_LOCAL_FETCH_FORCE_CANCEL_REQUEST=PASS http=$code"
+          echo "BOOTSTRAPFIX_RETRY_CANCEL=PASS http=$code"
