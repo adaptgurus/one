@@ -1,0 +1,68 @@
+name: LayerSentry Manoj DR lab inventory
+
+on:
+  push:
+    branches:
+      - feat/layersentry-protection-domain-20260923
+    paths:
+      - .github/workflows/layersentry-manoj-dr-inventory.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Inspect existing nested DR lab
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @('ls-fe1','ls-fe2','ls-fe3','ls-kvm1','ls-kvm2')
+          $rows = @()
+          foreach ($name in $targets) {
+            $vm = Get-VM -Name $name -ErrorAction SilentlyContinue
+            if ($null -eq $vm) {
+              $rows += [pscustomobject]@{Name=$name; Present=$false}
+              continue
+            }
+            $cpu = Get-VMProcessor -VMName $name
+            $memory = Get-VMMemory -VMName $name
+            $nics = @(Get-VMNetworkAdapter -VMName $name)
+            $disks = @(Get-VMHardDiskDrive -VMName $name)
+            $ipv4 = @($nics.IPAddresses | Where-Object {
+              $_ -match '^\d+\.\d+\.\d+\.\d+$' -and $_ -notmatch '^169\.254\.'
+            })
+            $rows += [pscustomobject]@{
+              Name = $name
+              Present = $true
+              State = [string]$vm.State
+              Generation = $vm.Generation
+              CPU = $cpu.Count
+              ExposeVirtualizationExtensions = $cpu.ExposeVirtualizationExtensions
+              StartupMemoryBytes = $memory.Startup
+              DynamicMemory = $memory.DynamicMemoryEnabled
+              Switches = @($nics.SwitchName)
+              IPv4 = $ipv4
+              DiskPaths = @($disks.Path)
+            }
+          }
+          $rows | ConvertTo-Json -Depth 6 | Tee-Object -FilePath "$env:RUNNER_TEMP\manoj-dr-inventory.json"
+          foreach ($row in $rows | Where-Object { $_.Present }) {
+            foreach ($ip in @($row.IPv4)) {
+              foreach ($port in @(22,2633,9869)) {
+                $probe = Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
+                Write-Host "PROBE VM=$($row.Name) IP=$ip PORT=$port TCP=$($probe.TcpTestSucceeded)"
+              }
+            }
+          }
+
+      - name: Upload read-only inventory evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: manoj-dr-lab-inventory
+          path: ${{ runner.temp }}\manoj-dr-inventory.json
+          if-no-files-found: error
+          retention-days: 3
