@@ -1,0 +1,38 @@
+name: T2 Bootstrap-Fix Current Screen
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-bootstrapfix-current-screen.yml
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Bind exact Manoj runner and VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $vm=Get-VM -Name 'ls-appliance-bootstrapfix-qual' -ErrorAction Stop
+          $fw=Get-VMFirmware -VMName $vm.Name
+          Write-Host "VM_STATE=$($vm.State) SECURE_BOOT=$($fw.SecureBoot) UPTIME=$($vm.Uptime)"
+      - name: Capture current framebuffer
+        shell: powershell
+        run: |
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\current-screen.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-bootstrapfix-qual' -Out $out
+          if(-not(Test-Path $out)){throw 'Current framebuffer missing'}
+      - name: Upload current framebuffer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-bootstrapfix-db8ef17-current-screen
+          path: C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\current-screen.png
+          if-no-files-found: error
+          retention-days: 7
