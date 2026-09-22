@@ -1,0 +1,96 @@
+name: Manoj DR SSH key discovery
+
+on:
+  push:
+    branches:
+      - qual/manoj-dr-opennebula-20260923
+    paths:
+      - .github/workflows/manoj-dr-key-discovery.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Discover existing lab private keys and test access
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $roots = @(
+            'C:\LayerSentryLab',
+            'C:\actions-runner'
+          )
+
+          $candidates = @()
+          foreach ($root in $roots) {
+            if (-not (Test-Path $root)) { continue }
+            Get-ChildItem $root -Recurse -File -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.Length -gt 0 -and $_.Length -lt 65536 -and
+                $_.FullName -notmatch '\\node_modules\\|\\site-packages\\|\\_work\\'
+              } |
+              ForEach-Object {
+                try {
+                  $first = Get-Content $_.FullName -TotalCount 1 -ErrorAction Stop
+                  if ($first -match '^-----BEGIN (OPENSSH|RSA|EC|DSA) PRIVATE KEY-----$') {
+                    $candidates += $_.FullName
+                  }
+                } catch {}
+              }
+          }
+          $candidates = @($candidates | Sort-Object -Unique)
+          Write-Host "PRIVATE_KEY_CANDIDATE_COUNT=$($candidates.Count)"
+          foreach ($path in $candidates) {
+            Write-Host "PRIVATE_KEY_CANDIDATE_PATH=$path"
+          }
+
+          $targets = @(
+            @{ Role='FE'; IP='10.250.10.10' },
+            @{ Role='FE_ALT'; IP='10.250.10.11' },
+            @{ Role='FE3'; IP='10.250.10.13' },
+            @{ Role='KVM'; IP='10.250.10.20' }
+          )
+          $users = @('root','oneadmin','opc')
+          $successes = @()
+
+          foreach ($key in $candidates) {
+            foreach ($target in $targets) {
+              foreach ($user in $users) {
+                $remote = "$user@$($target.IP)"
+                $oldPreference = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                $output = & ssh.exe -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ConnectTimeout=5 $remote 'printf "HOST=%s USER=%s\n" "$(hostname)" "$(id -un)"' 2>&1
+                $rc = $LASTEXITCODE
+                $ErrorActionPreference = $oldPreference
+                if ($rc -eq 0) {
+                  Write-Host "SSH_KEY_ACCESS=PASS ROLE=$($target.Role) IP=$($target.IP) USER=$user KEY=$key"
+                  $successes += [pscustomobject]@{
+                    Role = $target.Role
+                    IP = $target.IP
+                    User = $user
+                    KeyPath = $key
+                  }
+                  break
+                }
+              }
+            }
+          }
+
+          $successes | ConvertTo-Json -Depth 4 | Set-Content "$env:RUNNER_TEMP\manoj-dr-key-access.json"
+          if ($successes.Count -eq 0) {
+            Write-Host 'SSH_KEY_ACCESS=NONE'
+            exit 2
+          }
+
+      - name: Upload non-secret access map
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manoj-dr-key-access
+          path: ${{ runner.temp }}\manoj-dr-key-access.json
+          if-no-files-found: warn
+          retention-days: 1
