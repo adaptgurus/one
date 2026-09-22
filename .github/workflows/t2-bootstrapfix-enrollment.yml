@@ -1,0 +1,135 @@
+name: T2 Bootstrap-Fix Enrollment
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - '.github/workflows/t2-bootstrapfix-enrollment.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-bootstrapfix-enrollment
+  cancel-in-progress: true
+
+jobs:
+  enroll:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind final VHD-only appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-bootstrapfix-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $hb=(Get-VMIntegrationService -VMName $name -Name 'Heartbeat' -ErrorAction Stop).PrimaryStatusDescription
+          if($vm.State -ne 'Running' -or $hb -ne 'OK'){throw "Final VM unhealthy state=$($vm.State) heartbeat=$hb"}
+          if(@(Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Final VM is not VHD-only'}
+          Write-Host 'FINAL_ENROLL_VM_BIND=PASS'
+
+      - name: Prepare controller key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\iso-builder-key';$known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)'|Out-Null;& icacls.exe $known /grant:r '*S-1-5-18:(R)'|Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-bootstrapfix-controller-key';Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)'|Out-Null;& icacls.exe $key /setowner '*S-1-5-18'|Out-Null;& icacls.exe $key /inheritance:r|Out-Null;& icacls.exe $key /grant:r '*S-1-5-18:(R)'|Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18'|Out-Null
+          "T2_BOOTSTRAPFIX_CTL_KEY=$key"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Create fresh one-time bootstrap
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if(Test-Connection -ComputerName 10.250.10.43 -Count 2 -Quiet -ErrorAction SilentlyContinue){throw 'Management IP 10.250.10.43 is already in use'}
+          $ssh=(Get-Command ssh.exe).Source;$scp=(Get-Command scp.exe).Source;$known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $py=@'
+          import json,os,ssl,urllib.request
+          from pathlib import Path
+          q=Path('/home/builder/layersentry-qual');state=json.loads(q.joinpath('state.json').read_text())
+          for h in (state.get('hosts') or {}).values():
+              if h.get('site')=='qualification' and h.get('host')=='lsbootstrapfix01': raise SystemExit('host identity already enrolled')
+              if h.get('enrollment_management_ip')=='10.250.10.43': raise SystemExit('management IP already enrolled')
+          admin=q.joinpath('admin.token').read_text().strip();ctx=ssl.create_default_context(cafile=str(q/'agent-ca.crt'))
+          body=json.dumps({'site':'qualification','host':'lsbootstrapfix01','management_ip':'10.250.10.43','ttl_seconds':3600}).encode()
+          req=urllib.request.Request('https://10.250.10.40:9443/v1/admin/bootstrap',data=body,method='POST');req.add_header('Authorization','Bearer '+admin);req.add_header('Content-Type','application/json')
+          with urllib.request.urlopen(req,context=ctx,timeout=10) as r:d=json.loads(r.read().decode())
+          p=q/'bootstrapfix-final.token';p.write_text(d['token'],encoding='ascii');os.chmod(p,0o600)
+          print('BOOTSTRAPFIX_TOKEN_READY=PASS host='+str(d.get('host'))+' expires='+str(d.get('expires_at')))
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($py -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BOOTSTRAPFIX_CTL_KEY builder@10.250.10.40 "printf '%s' '$b64'|base64 -d|python3"
+          if($LASTEXITCODE -ne 0){throw 'Fresh bootstrap creation failed'}
+          $token=Join-Path $env:RUNNER_TEMP 'bootstrapfix-final.token'
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BOOTSTRAPFIX_CTL_KEY builder@10.250.10.40:/home/builder/layersentry-qual/bootstrapfix-final.token $token
+          if($LASTEXITCODE -ne 0){throw 'Bootstrap transfer failed'}
+          & icacls.exe $token /inheritance:r|Out-Null;& icacls.exe $token /grant:r '*S-1-5-18:(R)'|Out-Null
+          "T2_BOOTSTRAPFIX_TOKEN=$token"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Generate qualification-only passwords
+        shell: powershell
+        run: |
+          function New-Hex([string]$p){$b=New-Object byte[] 16;$r=[Security.Cryptography.RandomNumberGenerator]::Create();try{$r.GetBytes($b)}finally{$r.Dispose()};$v=([BitConverter]::ToString($b)).Replace('-','').ToLowerInvariant();[IO.File]::WriteAllText($p,$v,[Text.Encoding]::ASCII);& icacls.exe $p /inheritance:r|Out-Null;& icacls.exe $p /grant:r '*S-1-5-18:(R)'|Out-Null}
+          $support=Join-Path $env:RUNNER_TEMP 'bootstrapfix-support.password';$root=Join-Path $env:RUNNER_TEMP 'bootstrapfix-root.password';New-Hex $support;New-Hex $root
+          "T2_BOOTSTRAPFIX_SUPPORT=$support"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append;"T2_BOOTSTRAPFIX_ROOT=$root"|Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'BOOTSTRAPFIX_PASSWORDS=PASS values=REDACTED'
+
+      - name: Enter supported firstboot sequence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $token=(Get-Content -Raw $env:T2_BOOTSTRAPFIX_TOKEN).Trim();$support=(Get-Content -Raw $env:T2_BOOTSTRAPFIX_SUPPORT).Trim();$root=(Get-Content -Raw $env:T2_BOOTSTRAPFIX_ROOT).Trim()
+          $pp=((Get-Content -Raw 'C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519.pub').Trim() -split '\s+');$pub=$pp[0]+' '+$pp[1]
+          $ns='root\virtualization\v2';$vm=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem|Where-Object ElementName -eq 'ls-appliance-bootstrapfix-qual';$kbd=Get-CimAssociatedInstance -InputObject $vm -Namespace $ns -Association Msvm_SystemDevice -ResultClassName Msvm_Keyboard|Select-Object -First 1
+          function K([uint32]$k){Invoke-CimMethod -InputObject $kbd -MethodName TypeKey -Arguments @{KeyCode=$k}|Out-Null;Start-Sleep -Milliseconds 35}
+          function SK([uint32]$k){Invoke-CimMethod -InputObject $kbd -MethodName PressKey -Arguments @{KeyCode=[uint32]0x10}|Out-Null;K $k;Invoke-CimMethod -InputObject $kbd -MethodName ReleaseKey -Arguments @{KeyCode=[uint32]0x10}|Out-Null}
+          function E(){Invoke-CimMethod -InputObject $kbd -MethodName PressKey -Arguments @{KeyCode=[uint32]0x0D}|Out-Null;Start-Sleep -Milliseconds 120;Invoke-CimMethod -InputObject $kbd -MethodName ReleaseKey -Arguments @{KeyCode=[uint32]0x0D}|Out-Null;Start-Sleep -Milliseconds 900}
+          function T([string]$s){foreach($c in $s.ToCharArray()){if($c -ge 'a'-and$c -le 'z'){K ([uint32][char]([string]$c).ToUpperInvariant())}elseif($c -ge 'A'-and$c -le 'Z'){SK ([uint32][char]$c)}elseif($c -ge '0'-and$c -le '9'){K ([uint32][char]$c)}elseif($c -eq ' '){K 0x20}elseif($c -eq '.'){K 0xBE}elseif($c -eq '-'){K 0xBD}elseif($c -eq '/'){K 0xBF}elseif($c -eq ':'){SK 0xBA}elseif($c -eq '_'){SK 0xBD}elseif($c -eq '='){K 0xBB}elseif($c -eq '+'){SK 0xBB}else{throw ('unsupported character '+[int][char]$c)}};E}
+          T '1';T 'lsbootstrapfix01';T 'qualification';T '10.250.10.40:9443';T '10.250.10.43/24';T '10.250.10.1';T '1.1.1.1';T $token;T $support;T $support;T $root;T $root;T $pub
+          Write-Host 'BOOTSTRAPFIX_FIRSTBOOT_INPUT=PASS secrets=REDACTED'
+
+      - name: Require first mTLS poll
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source;$known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $py=@'
+          import json,time
+          from pathlib import Path
+          p=Path('/home/builder/layersentry-qual/state.json');deadline=time.time()+300
+          while time.time()<deadline:
+              d=json.loads(p.read_text());h=(d.get('hosts') or {}).get('qualification/lsbootstrapfix01')
+              if h and h.get('last_poll_at') and not str(h.get('last_poll_at')).startswith('0001-'):
+                  inv=h.get('inventory') or {};print('BOOTSTRAPFIX_MTLS_POLL=PASS last_poll='+str(h.get('last_poll_at'))+' bootstrap_present='+str(inv.get('bootstrap_token_present')));raise SystemExit(0 if inv.get('bootstrap_token_present') is False else 3)
+              time.sleep(5)
+          print('BOOTSTRAPFIX_MTLS_POLL=TIMEOUT');raise SystemExit(2)
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($py -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_BOOTSTRAPFIX_CTL_KEY builder@10.250.10.40 "printf '%s' '$b64'|base64 -d|python3"
+          if($LASTEXITCODE -ne 0){throw 'Final appliance failed enrollment/poll/bootstrap-retirement proof'}
+
+      - name: Capture enrollment evidence
+        if: always()
+        shell: powershell
+        run: |
+          $dir='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17';New-Item -ItemType Directory -Force -Path $dir|Out-Null;& 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-bootstrapfix-qual' -Out (Join-Path $dir 'post-enrollment.png')
+
+      - name: Upload enrollment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-bootstrapfix-db8ef17-enrollment
+          path: C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\post-enrollment.png
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Cleanup transient credentials
+        if: always()
+        shell: powershell
+        run: |
+          foreach($p in @($env:T2_BOOTSTRAPFIX_TOKEN,$env:T2_BOOTSTRAPFIX_SUPPORT,$env:T2_BOOTSTRAPFIX_ROOT,$env:T2_BOOTSTRAPFIX_CTL_KEY)){if($p -and(Test-Path $p)){& icacls.exe $p /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $p -Force}}
