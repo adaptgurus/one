@@ -58,7 +58,7 @@ jobs:
           src=/home/builder/t2-enrollment-fix-src
           q=/home/builder/layersentry-qual-dbeacd5
           agent=/home/builder/t2-enrollment-fix-build/layersentry-host-agent
-          outdir=/var/tmp/layersentry-durable-5f3bda7
+          outdir=/mnt/t2-durable-iso-work/layersentry-durable-5f3bda7
           out="$outdir/LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso"
           mkdir -p "$outdir"
           rm -f "$out" "$out.sha256" "$out.provenance.json"
@@ -86,7 +86,7 @@ jobs:
           $ErrorActionPreference='Stop'
           $ssh=(Get-Command ssh.exe).Source; $scp=(Get-Command scp.exe).Source; $known='C:\LayerSentryLab\qualification\known_hosts_builder'
           $dst='C:\LayerSentryLab\qualification\durable-5f3bda7'; New-Item -ItemType Directory -Force -Path $dst | Out-Null
-          $remote='/var/tmp/layersentry-durable-5f3bda7/LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso'
+          $remote='/mnt/t2-durable-iso-work/layersentry-durable-5f3bda7/LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso'
           $iso=Join-Path $dst 'LayerSentry-Rocky-9.8-durable-5f3bda7-generic-x86_64.iso'
           & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_DURABLE_ISO_KEY "builder@10.250.10.40:$remote" $iso
           if($LASTEXITCODE -ne 0){throw 'Durable ISO transfer failed'}
