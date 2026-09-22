@@ -1,0 +1,66 @@
+name: T2 Foundation Enrollment Inspect
+
+on:
+  push:
+    branches:
+      - ops/t2-foundation-iso-qualification-20260921
+    paths:
+      - .github/workflows/t2-foundation-enrollment-inspect.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, windows, x64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj qualification host
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host $env:COMPUTERNAME"}
+          Write-Host 'RUNNER_BIND=PASS'
+      - name: Show lab network metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          Get-VMSwitch | Select-Object Name,SwitchType | Format-Table -AutoSize
+          Get-NetIPConfiguration | Select-Object InterfaceAlias,IPv4Address,IPv4DefaultGateway | Format-List
+          Get-NetRoute -AddressFamily IPv4 | Where-Object {$_.DestinationPrefix -like '10.250.10.*' -or $_.DestinationPrefix -eq '0.0.0.0/0'} |
+            Select-Object DestinationPrefix,NextHop,InterfaceAlias,RouteMetric | Format-Table -AutoSize
+      - name: Inspect qualification helper source safely
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          $names=@(
+            'prepare_fresh_enrollment_safe.py',
+            'prepare_fresh_enrollment_8ddb3a3.py',
+            'create_ac7e14e_bootstrap.py',
+            'create_bootstrap_safe.py',
+            'vm_enroll_testlab.ps1',
+            'vm_full_enroll_testlab.ps1'
+          )
+          foreach($n in $names){
+            $p=Join-Path $root $n
+            if(-not (Test-Path $p)){continue}
+            Write-Host "=== $n ==="
+            Get-Content -LiteralPath $p | ForEach-Object {
+              $line=$_
+              $line=[regex]::Replace($line,'(?i)(bearer\s+)[A-Za-z0-9._~+/-]{20,}','$1<REDACTED>')
+              $line=[regex]::Replace($line,'(?i)(token\s*=\s*["'']?)[A-Fa-f0-9]{32,}','$1<REDACTED>')
+              $line=[regex]::Replace($line,'(?i)(password\s*=\s*["'']?)[^"'']{12,}','$1<REDACTED>')
+              $line
+            }
+          }
+      - name: Show qualification material metadata only
+        shell: powershell
+        run: |
+          $root='C:\LayerSentryLab\qualification'
+          Get-ChildItem $root -File |
+            Where-Object {$_.Name -match '(?i)qual-(enrollment|support|root)|durable-(support|root)'} |
+            Select-Object Name,Length,LastWriteTime |
+            Sort-Object LastWriteTime -Descending |
+            Format-Table -AutoSize
