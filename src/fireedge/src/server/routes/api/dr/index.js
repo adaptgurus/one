@@ -16,6 +16,8 @@
 const { Actions, Commands } = require('server/routes/api/dr/routes')
 const {
   capabilities,
+  sites,
+  createSite,
   domains,
   createDomain,
   recoveryPoints,
@@ -24,6 +26,8 @@ const {
 
 module.exports = [
   { ...Commands[Actions.CAPABILITIES], action: capabilities },
+  { ...Commands[Actions.SITES], action: sites },
+  { ...Commands[Actions.SITE_CREATE], action: createSite },
   { ...Commands[Actions.DOMAINS], action: domains },
   { ...Commands[Actions.DOMAIN_CREATE], action: createDomain },
   { ...Commands[Actions.RECOVERY_POINTS], action: recoveryPoints },
