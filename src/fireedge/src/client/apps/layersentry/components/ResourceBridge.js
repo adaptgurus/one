@@ -206,9 +206,7 @@ const VmUtilization = ({ vm }) => {
   const memoryKb = Number(vm?.MONITORING?.MEMORY)
   const configuredStorage = vmStorageMb(vm)
   const observedStorage = monitoredStorageMb(vm)
-  const cpu = clampPercent(
-    Number.isFinite(cpuRaw) ? (cpuRaw / vcpu) * 100 : NaN
-  )
+  const cpu = clampPercent(Number.isFinite(cpuRaw) ? cpuRaw / vcpu : NaN)
   const ram = clampPercent(
     Number.isFinite(memoryKb) && configuredMemoryMb > 0
       ? (memoryKb / 1024 / configuredMemoryMb) * 100
