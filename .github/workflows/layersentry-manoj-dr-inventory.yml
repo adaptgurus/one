@@ -26,7 +26,7 @@ jobs:
           foreach ($name in $targets) {
             $vm = Get-VM -Name $name -ErrorAction SilentlyContinue
             if ($null -eq $vm) {
-              $rows += [pscustomobject]@{ Name = $name; Present = $false }
+              $rows += [pscustomobject]@{Name=$name; Present=$false}
               continue
             }
 
@@ -40,22 +40,19 @@ jobs:
                 Where-Object {
                   $_ -match '^\d+\.\d+\.\d+\.\d+$' -and
                   $_ -notmatch '^169\.254\.'
-                } |
-                Sort-Object -Unique
+                }
             )
 
             $macs = @(
               $nics.MacAddress |
                 Where-Object { $_ } |
-                ForEach-Object { ($_ -replace '[:-]', '').ToUpperInvariant() } |
-                Sort-Object -Unique
+                ForEach-Object { ($_ -replace '[:-]', '').ToUpperInvariant() }
             )
 
             $neighbors = @(
               Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
                 Where-Object {
                   $_.IPAddress -match '^\d+\.\d+\.\d+\.\d+$' -and
-                  $_.IPAddress -notmatch '^169\.254\.' -and
                   $_.LinkLayerAddress -and
                   $macs -contains (($_.LinkLayerAddress -replace '[:-]', '').ToUpperInvariant())
                 }
