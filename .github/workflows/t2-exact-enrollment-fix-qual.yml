@@ -1,0 +1,158 @@
+name: T2 Exact Enrollment Fix Qualification
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-exact-enrollment-fix-qual.yml
+      - qualification/t2-exact-enrollment-fix-qual.request
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-exact-enrollment-fix-qual
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    runs-on: self-hosted
+    timeout-minutes: 90
+    steps:
+      - name: Bind Manoj runner and fetch exact LayerSentry fix branch
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $repo='C:\LayerSentryLab\src\layersentry-platform'
+          $git='C:\Program Files\Git\cmd\git.exe'
+          if(-not(Test-Path $repo) -or -not(Test-Path $git)){throw 'LayerSentry local Git workspace unavailable'}
+          & $git -C $repo fetch origin fix/t2-enrollment-durability-20260922
+          if($LASTEXITCODE -ne 0){throw 'Fetch failed'}
+          $wt=Join-Path $env:RUNNER_TEMP "layersentry-enrollfix-$env:GITHUB_RUN_ID"
+          if(Test-Path $wt){Remove-Item $wt -Recurse -Force}
+          & $git -C $repo worktree add --detach $wt FETCH_HEAD
+          if($LASTEXITCODE -ne 0){throw 'Worktree add failed'}
+          "T2_FIX_WT=$wt" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "T2_FIX_GIT=$git" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "FETCH_HEAD=$((& $git -C $wt rev-parse HEAD).Trim())"
+
+      - name: Format and persist exact Go source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $files=@(
+            "$env:T2_FIX_WT\deploy\host-agent\internal\inventory\inventory.go",
+            "$env:T2_FIX_WT\deploy\host-agent\internal\inventory\enrollment_test.go",
+            "$env:T2_FIX_WT\deploy\host-agent\internal\client\client.go",
+            "$env:T2_FIX_WT\deploy\host-agent\internal\client\client_test.go",
+            "$env:T2_FIX_WT\deploy\host-agent\internal\controller\controller.go",
+            "$env:T2_FIX_WT\deploy\host-agent\internal\controller\controller_test.go"
+          )
+          & gofmt -w $files
+          if($LASTEXITCODE -ne 0){throw 'gofmt failed'}
+          $remaining=& gofmt -l $files
+          if($remaining){throw "gofmt drift remains: $remaining"}
+          & $env:T2_FIX_GIT -C $env:T2_FIX_WT add -- deploy/host-agent/internal
+          if($LASTEXITCODE -ne 0){throw 'git add failed'}
+          & $env:T2_FIX_GIT -C $env:T2_FIX_WT diff --cached --quiet
+          if($LASTEXITCODE -ne 0){
+            & $env:T2_FIX_GIT -C $env:T2_FIX_WT -c user.name='LayerSentry Qualification' -c user.email='qualification@layersentry.invalid' commit -m 'style(agent): gofmt enrollment durability fix'
+            if($LASTEXITCODE -ne 0){throw 'format commit failed'}
+            & $env:T2_FIX_GIT -C $env:T2_FIX_WT push origin HEAD:fix/t2-enrollment-durability-20260922
+            if($LASTEXITCODE -ne 0){throw 'format push failed'}
+            Write-Host 'GOFMT_PUSH=PASS'
+          } else { Write-Host 'GOFMT_PUSH=NO_CHANGES' }
+          Write-Host "FIX_HEAD=$((& $env:T2_FIX_GIT -C $env:T2_FIX_WT rev-parse HEAD).Trim())"
+
+      - name: Windows regression matrix
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Push-Location $env:T2_FIX_WT
+          try {
+            $env:PYTHONIOENCODING='utf-8'
+            py -m unittest discover -s tests -p 'test_*.py' -v
+            if($LASTEXITCODE -ne 0){throw 'Python regression failed'}
+            Push-Location 'deploy\host-agent'
+            try {
+              go test ./...
+              if($LASTEXITCODE -ne 0){throw 'Windows host-agent Go tests failed'}
+              go vet ./...
+              if($LASTEXITCODE -ne 0){throw 'Windows host-agent go vet failed'}
+            } finally { Pop-Location }
+          } finally { Pop-Location }
+          Write-Host 'WINDOWS_FIX_REGRESSION=PASS'
+
+      - name: Build exact source archive
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $archive=Join-Path $env:RUNNER_TEMP 'layersentry-enrollment-fix-exact.tar.gz'
+          if(Test-Path $archive){Remove-Item $archive -Force}
+          & $env:T2_FIX_GIT -C $env:T2_FIX_WT archive --format=tar.gz --output=$archive HEAD
+          if($LASTEXITCODE -ne 0){throw 'git archive failed'}
+          $sha=(Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+          "T2_FIX_ARCHIVE=$archive" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "T2_FIX_ARCHIVE_SHA=$sha" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "ARCHIVE_SHA256=$sha"
+
+      - name: Prepare builder key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          foreach($p in @($src,$known)){if(-not(Test-Path $p)){throw "Missing $p"}}
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-exactfix-builder-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_EXACTFIX_KEY=$key" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Transfer and qualify on Linux builder
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $scp=(Get-Command scp.exe).Source; $ssh=(Get-Command ssh.exe).Source
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_EXACTFIX_KEY $env:T2_FIX_ARCHIVE builder@10.250.10.40:/home/builder/layersentry-enrollment-fix-exact.tar.gz
+          if($LASTEXITCODE -ne 0){throw 'source transfer failed'}
+          $remote=@'
+          set -euo pipefail
+          src=/home/builder/layersentry-enrollment-fix-exact-src
+          out=/home/builder/layersentry-enrollment-fix-exact-build
+          rm -rf "$src" "$out"; mkdir -p "$src" "$out"
+          tar -xzf /home/builder/layersentry-enrollment-fix-exact.tar.gz -C "$src"
+          test -z "$(gofmt -l "$src/deploy/host-agent")" || { gofmt -l "$src/deploy/host-agent"; exit 51; }
+          cd "$src"
+          go test -race -count=1 ./...
+          go vet ./...
+          /home/builder/go-bin/govulncheck ./...
+          cd "$src/deploy/host-agent"
+          go test -race -count=1 ./...
+          go vet ./...
+          /home/builder/go-bin/govulncheck ./...
+          export CGO_ENABLED=0
+          go build -trimpath -ldflags '-s -w -X main.Version=t2-enrollment-durability' -o "$out/layersentry-host-agent" ./cmd/layersentry-host-agent
+          go build -trimpath -ldflags '-s -w' -o "$out/layersentry-host-controller" ./cmd/layersentry-host-controller
+          "$out/layersentry-host-agent" self-test
+          sha256sum "$out/layersentry-host-agent" "$out/layersentry-host-controller"
+          echo T2_EXACT_ENROLLMENT_FIX_LINUX=PASS
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remote -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_EXACTFIX_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'Linux exact fix qualification failed'}
+
+      - name: Cleanup
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_EXACTFIX_KEY -and(Test-Path $env:T2_EXACTFIX_KEY)){& icacls.exe $env:T2_EXACTFIX_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_EXACTFIX_KEY -Force}
+          if($env:T2_FIX_WT -and(Test-Path $env:T2_FIX_WT)){& $env:T2_FIX_GIT -C 'C:\LayerSentryLab\src\layersentry-platform' worktree remove --force $env:T2_FIX_WT | Out-Null}
