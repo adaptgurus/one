@@ -1,0 +1,71 @@
+name: LayerSentry Manoj OpenNebula DR probe
+
+on:
+  push:
+    branches:
+      - feat/layersentry-protection-domain-20260923
+    paths:
+      - .github/workflows/layersentry-manoj-opennebula-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Probe existing DR guests
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @(
+            @{Name='ls-fe1'; IP='10.250.10.10'},
+            @{Name='ls-fe1-alt'; IP='10.250.10.11'},
+            @{Name='ls-fe3'; IP='10.250.10.13'},
+            @{Name='ls-kvm1'; IP='10.250.10.20'}
+          )
+          $users = @('root','oneadmin','opc')
+          $ssh = Get-Command ssh.exe -ErrorAction SilentlyContinue
+          if ($null -eq $ssh) { throw 'OpenSSH client is not installed on Manoj runner' }
+
+          Write-Host 'SSH_DIRECTORY'
+          if (Test-Path "$HOME\.ssh") {
+            Get-ChildItem "$HOME\.ssh" -File |
+              Select-Object Name,Length,LastWriteTime |
+              Format-Table -AutoSize
+          } else {
+            Write-Host 'NO_SSH_DIRECTORY'
+          }
+
+          foreach ($target in $targets) {
+            foreach ($user in $users) {
+              $dest = "$user@$($target.IP)"
+              $output = & ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ConnectTimeout=5 $dest 'printf "HOST=%s USER=%s\n" "$(hostname)" "$(id -un)"; command -v onehost || true; command -v oned || true; systemctl is-active opennebula 2>/dev/null || true; rpm -q opennebula 2>/dev/null || true' 2>&1
+              $rc = $LASTEXITCODE
+              Write-Host "SSH_PROBE NAME=$($target.Name) IP=$($target.IP) USER=$user RC=$rc"
+              if ($rc -eq 0) {
+                $output | ForEach-Object { Write-Host "REMOTE $($_)" }
+                break
+              }
+            }
+          }
+
+      - name: Probe OpenNebula XML-RPC listeners
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($ip in @('10.250.10.10','10.250.10.11','10.250.10.13')) {
+            try {
+              $response = Invoke-WebRequest -Uri "http://$ip:2633/RPC2" -Method Post -ContentType 'text/xml' -Body '<methodCall><methodName>system.listMethods</methodName><params /></methodCall>' -TimeoutSec 5
+              Write-Host "XMLRPC IP=$ip STATUS=$($response.StatusCode)"
+              Write-Host ($response.Content.Substring(0, [Math]::Min(300, $response.Content.Length)))
+            } catch {
+              if ($_.Exception.Response) {
+                Write-Host "XMLRPC IP=$ip HTTP_STATUS=$([int]$_.Exception.Response.StatusCode)"
+              } else {
+                Write-Host "XMLRPC IP=$ip ERROR=$($_.Exception.Message)"
+              }
+            }
+          }
