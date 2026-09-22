@@ -1,0 +1,42 @@
+name: LayerSentry Manoj OpenNebula DR probe
+
+on:
+  push:
+    branches:
+      - feat/layersentry-protection-domain-20260923
+    paths:
+      - .github/workflows/layersentry-manoj-opennebula-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Probe existing Manoj OpenNebula site
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @('10.250.10.10','10.250.10.11','10.250.10.13','10.250.10.20')
+          foreach ($ip in $targets) {
+            Write-Host "=== $ip ==="
+            $ssh = Test-NetConnection -ComputerName $ip -Port 22 -WarningAction SilentlyContinue
+            Write-Host "SSH=$($ssh.TcpTestSucceeded)"
+            if (-not $ssh.TcpTestSucceeded) { continue }
+
+            $known = Join-Path $env:RUNNER_TEMP 'known_hosts'
+            ssh-keyscan -H $ip 2>$null | Out-File -FilePath $known -Append -Encoding ascii
+            $users = @('root','oneadmin','opc')
+            foreach ($user in $users) {
+              Write-Host "-- TRY $user@$ip --"
+              $result = & ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "$user@$ip" "hostname; id; command -v oneversion || true; command -v onehost || true; command -v onedatastore || true; systemctl is-active opennebula 2>/dev/null || true" 2>&1
+              $result | ForEach-Object { Write-Host $_ }
+              if ($LASTEXITCODE -eq 0) {
+                Write-Host "SSH_AUTH_SUCCESS=$user@$ip"
+                break
+              }
+            }
+          }
