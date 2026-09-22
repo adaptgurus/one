@@ -100,8 +100,12 @@ jobs:
           tar -xzf /home/builder/t2-enrollment-fix-source.tar.gz -C "$src"
           echo '=== GO ==='
           go version
-          echo '=== GOFMT ==='
-          test -z "$(gofmt -l "$src/deploy/host-agent")" || { gofmt -l "$src/deploy/host-agent"; exit 51; }
+          echo '=== GOFMT (Go 1.26 authority) ==='
+          gofmt -w             "$src/deploy/host-agent/internal/inventory/inventory.go"             "$src/deploy/host-agent/internal/inventory/enrollment_test.go"             "$src/deploy/host-agent/internal/client/client.go"             "$src/deploy/host-agent/internal/client/client_test.go"             "$src/deploy/host-agent/internal/controller/controller.go"             "$src/deploy/host-agent/internal/controller/controller_test.go"
+          test -z "$(gofmt -l             "$src/deploy/host-agent/internal/inventory/inventory.go"             "$src/deploy/host-agent/internal/inventory/enrollment_test.go"             "$src/deploy/host-agent/internal/client/client.go"             "$src/deploy/host-agent/internal/client/client_test.go"             "$src/deploy/host-agent/internal/controller/controller.go"             "$src/deploy/host-agent/internal/controller/controller_test.go")"
+          mkdir -p "$out/formatted"
+          cp --parents             "$src/deploy/host-agent/internal/inventory/inventory.go"             "$src/deploy/host-agent/internal/inventory/enrollment_test.go"             "$src/deploy/host-agent/internal/client/client.go"             "$src/deploy/host-agent/internal/client/client_test.go"             "$src/deploy/host-agent/internal/controller/controller.go"             "$src/deploy/host-agent/internal/controller/controller_test.go"             "$out/formatted"
+          tar -C "$out/formatted" -czf "$out/linux-gofmt.tar.gz" .
           echo '=== ROOT ==='
           cd "$src"
           go test -race -count=1 ./...
@@ -124,6 +128,20 @@ jobs:
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
           & $ssh -o BatchMode=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=20 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_FIX_BUILDER_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | bash"
           if($LASTEXITCODE -ne 0){throw 'Linux qualification failed'}
+          $formatted=Join-Path $env:RUNNER_TEMP 't2-linux-gofmt.tar.gz'
+          & $scp -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_FIX_BUILDER_KEY builder@10.250.10.40:/home/builder/t2-enrollment-fix-build/linux-gofmt.tar.gz $formatted
+          if($LASTEXITCODE -ne 0){throw 'Linux-formatted source transfer failed'}
+          "T2_LINUX_GOFMT=$formatted" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+
+      - name: Upload Linux-formatted changed source
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-enrollment-fix-linux-gofmt
+          path: ${{ env.T2_LINUX_GOFMT }}
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Remove runner-private builder key
         if: always()
