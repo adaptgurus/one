@@ -1,0 +1,121 @@
+diff --git a/deploy/host-agent/internal/client/client.go b/deploy/host-agent/internal/client/client.go
+--- a/deploy/host-agent/internal/client/client.go
++++ b/deploy/host-agent/internal/client/client.go
+@@ -73,7 +73,7 @@ func EnrollIfNeeded(ctx context.Context, cfg config.Config) error {
+ 		return errors.New("invalid bootstrap token")
+ 	}
+ 
+-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
++	pub, priv, err := loadOrCreateEnrollmentKey(cfg.ClientKeyFile)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -84,7 +84,7 @@ func EnrollIfNeeded(ctx context.Context, cfg config.Config) error {
+ 	csr := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE REQUEST", Bytes: csrDER})
+ 	body, _ := json.Marshal(enrollRequest{
+ 		Schema: "layersentry-agent-enroll/v1", Site: cfg.Site, Host: cfg.Host,
+-		CSRPEM: string(csr), Inventory: inventory.Collect(ctx),
++		CSRPEM: string(csr), Inventory: inventory.CollectEnrollment(ctx),
+ 	})
+ 	roots, err := loadRoots(cfg.CAFile)
+ 	if err != nil {
+@@ -117,14 +117,6 @@ func EnrollIfNeeded(ctx context.Context, cfg config.Config) error {
+ 	if err := verifyCertificateForKey(er.CertPEM, pub, roots); err != nil {
+ 		return err
+ 	}
+-	keyDER, err := x509.MarshalPKCS8PrivateKey(priv)
+-	if err != nil {
+-		return err
+-	}
+-	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
+-	if err := atomicWrite(cfg.ClientKeyFile, keyPEM, 0o640); err != nil {
+-		return err
+-	}
+ 	if err := atomicWrite(cfg.ClientCertFile, []byte(er.CertPEM), 0o644); err != nil {
+ 		return err
+ 	}
+@@ -134,6 +126,42 @@ func EnrollIfNeeded(ctx context.Context, cfg config.Config) error {
+ 	return nil
+ }
+ 
++func loadOrCreateEnrollmentKey(path string) (ed25519.PublicKey, ed25519.PrivateKey, error) {
++	if fileOK(path) {
++		body, err := os.ReadFile(path)
++		if err != nil {
++			return nil, nil, err
++		}
++		block, _ := pem.Decode(body)
++		if block == nil || block.Type != "PRIVATE KEY" {
++			return nil, nil, errors.New("existing enrollment key is not PKCS8 PEM")
++		}
++		value, err := x509.ParsePKCS8PrivateKey(block.Bytes)
++		if err != nil {
++			return nil, nil, err
++		}
++		private, ok := value.(ed25519.PrivateKey)
++		if !ok || len(private) != ed25519.PrivateKeySize {
++			return nil, nil, errors.New("existing enrollment key is not Ed25519")
++		}
++		public := private.Public().(ed25519.PublicKey)
++		return public, private, nil
++	}
++	public, private, err := ed25519.GenerateKey(rand.Reader)
++	if err != nil {
++		return nil, nil, err
++	}
++	keyDER, err := x509.MarshalPKCS8PrivateKey(private)
++	if err != nil {
++		return nil, nil, err
++	}
++	keyPEM := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
++	if err := atomicWrite(path, keyPEM, 0o640); err != nil {
++		return nil, nil, err
++	}
++	return public, private, nil
++}
++
+ func New(cfg config.Config) (*Client, error) {
+ 	roots, err := loadRoots(cfg.CAFile)
+ 	if err != nil {
+diff --git a/deploy/host-agent/internal/inventory/inventory.go b/deploy/host-agent/internal/inventory/inventory.go
+--- a/deploy/host-agent/internal/inventory/inventory.go
++++ b/deploy/host-agent/internal/inventory/inventory.go
+@@ -60,6 +60,27 @@ type Snapshot struct {
+ 	RebootRequired        bool              `json:"reboot_required"`
+ }
+ 
++func CollectEnrollment(ctx context.Context) Snapshot {
++	host, _ := os.Hostname()
++	return Snapshot{
++		Schema:         "layersentry-agent-inventory/v3",
++		ObservedAt:     time.Now().UTC(),
++		Hostname:       strings.Split(host, ".")[0],
++		MachineID:      readTrim("/etc/machine-id"),
++		BootID:         readTrim("/proc/sys/kernel/random/boot_id"),
++		OSRelease:      osRelease(),
++		Kernel:         command(ctx, "uname", "-r"),
++		Architecture:   runtime.GOARCH,
++		Virtualization: command(ctx, "systemd-detect-virt"),
++		SELinux:        command(ctx, "getenforce"),
++		Network:        jsonCommand(ctx, "ip", "-j", "addr", "show"),
++		Links:          jsonCommand(ctx, "ip", "-j", "link", "show"),
++		Routes:         jsonCommand(ctx, "ip", "-j", "route", "show", "table", "all"),
++		Services:       map[string]string{},
++		Packages:       map[string]string{},
++	}
++}
++
+ func Collect(ctx context.Context) Snapshot {
+ 	host, _ := os.Hostname()
+ 	s := Snapshot{
+diff --git a/deploy/host-agent/packaging/layersentry-host-agent.service b/deploy/host-agent/packaging/layersentry-host-agent.service
+--- a/deploy/host-agent/packaging/layersentry-host-agent.service
++++ b/deploy/host-agent/packaging/layersentry-host-agent.service
+@@ -12,6 +12,7 @@ ExecStartPost=/usr/local/libexec/layersentry-agent-confirm.sh
+ Restart=always
+ RestartSec=5s
+ WatchdogSec=90s
++TimeoutStartSec=5min
+ TimeoutStopSec=30s
+ KillMode=mixed
+ UMask=0077
