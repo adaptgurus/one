@@ -117,7 +117,8 @@ export function InstantiateVmTemplate() {
           if (view === 'cloud') {
             filteredTemplate = applyLayerSentryVmDefaults(
               filteredTemplate,
-              rawTemplate?.access
+              rawTemplate?.access,
+              apiTemplateData
             )
 
             const selectedNetwork = await getVNetwork({

@@ -645,7 +645,7 @@ const handleOtherSections = (
     tabFormMap[section].forEach((key) => {
       // Scheduled actions special case
       if (key === 'SCHED_ACTION') {
-        newExtra[key] = formData?.extra[key]
+        newExtra[key] = formData?.extra?.[key]
       } else if (key === 'PCI') {
         handleNetwork(
           formData,
@@ -662,7 +662,7 @@ const handleOtherSections = (
           newExtra[key] = { ...formData.extra[key] }
         }
         // If form doesn't have MEMORY_ENCRYPTION but corrections do, process normally
-        else if (correctionMap.extra[section]?.[key]) {
+        else if (correctionMap?.extra?.[section]?.[key]) {
           filterSingleSection(formData, correctionMap, section, newExtra, key)
         }
       } else {
@@ -672,10 +672,11 @@ const handleOtherSections = (
         if (
           section === 'Context' &&
           key === 'USER_INPUTS' &&
-          correctionMap.extra.Context.USER_INPUTS
+          correctionMap?.extra?.Context?.USER_INPUTS
         ) {
-          // Keep CONTEXT.INPUTS_ORDER because it's not a form by himself, depends on CONTEXT.USER_INPUTS
-          newExtra.INPUTS_ORDER = formData.extra.INPUTS_ORDER
+          // Keep CONTEXT.INPUTS_ORDER because it's not a form by himself, depends on CONTEXT.USER_INPUTS.
+          const inputsOrder = formData?.extra?.INPUTS_ORDER
+          if (inputsOrder !== undefined) newExtra.INPUTS_ORDER = inputsOrder
         }
       }
     })
@@ -698,13 +699,18 @@ const filterSingleSection = (
   newExtra,
   key
 ) => {
-  // Check if attribute has changes on the correction map
+  const formExtra = formData?.extra ?? {}
+  const sectionModifications = itemsModifications?.extra?.[section] ?? {}
+
+  // Check if attribute has changes on the correction map. Instantiate forms can
+  // omit untouched extra sections entirely, so never use the `in` operator on
+  // a missing modification map.
   if (
-    (key in formData.extra || key in itemsModifications.extra[section]) &&
-    itemsModifications.extra[section]?.[key]
+    (key in formExtra || key in sectionModifications) &&
+    sectionModifications[key]
   ) {
     // Get value and copy the section
-    const value = formData.extra[key]
+    const value = formExtra[key]
     const newOtherSection = { ...newExtra[key] }
 
     // Arrays and single values replace the whole value
@@ -716,8 +722,13 @@ const filterSingleSection = (
       newExtra[key] = value
     } else {
       // Objects iterate over each key to check if the key was changed by the user
-      Object.entries(itemsModifications.extra[section]?.[key] || {}).forEach(
+      Object.entries(sectionModifications[key] || {}).forEach(
         ([childrenKey, correction]) => {
+          const hasChild =
+            value !== null &&
+            typeof value === 'object' &&
+            childrenKey in value
+
           // If the correction is boolean, means that the user changed this value that is a simple value
           // If the correction is an object with an attribute delete means that is a hidden field that was deleted because the user change the value of its parent
           // If the correction is an object without an attribute delete means that is a field with an object instead a simple value and the user changed its value
@@ -730,15 +741,14 @@ const filterSingleSection = (
           } else if (
             correction &&
             typeof correction === 'boolean' &&
-            childrenKey in formData.extra[key] &&
-            (!_.isEmpty(formData.extra[key][childrenKey]) ||
-              formData.extra[key][childrenKey] !== null)
+            hasChild &&
+            (!_.isEmpty(value[childrenKey]) || value[childrenKey] !== null)
           ) {
-            newOtherSection[childrenKey] = formData.extra[key][childrenKey]
+            newOtherSection[childrenKey] = value[childrenKey]
           } else if (
             correction &&
             typeof correction === 'boolean' &&
-            !(childrenKey in formData.extra[key])
+            !hasChild
           ) {
             delete newOtherSection[childrenKey]
           }

@@ -151,13 +151,29 @@ test('LayerSentry VM defaults force virtio networking without deleting template 
       CONTEXT: { KEEP: 'yes' },
       NIC_DEFAULT: { FILTER: 'clean-traffic' },
     },
-    { username: 'root' }
+    { username: 'root' },
+    { NAME: 'Rocky-9-PoC' }
   )
 
   assert.equal(result.CONTEXT.KEEP, 'yes')
   assert.equal(result.CONTEXT.NETWORK, 'YES')
+  assert.equal(result.CONTEXT.NETCFG_TYPE, 'nm')
   assert.equal(result.NIC_DEFAULT.MODEL, 'virtio')
   assert.equal(result.NIC_DEFAULT.FILTER, 'clean-traffic')
+})
+
+test('provider guest renderer overrides Rocky fallback and other Linux stays auto', () => {
+  assert.equal(
+    api.getLayerSentryGuestNetcfgType({
+      NAME: 'Rocky Linux 9',
+      TEMPLATE: { LAYERSENTRY_NETCFG_TYPE: 'networkd' },
+    }),
+    'networkd'
+  )
+  assert.equal(
+    api.getLayerSentryGuestNetcfgType({ NAME: 'Ubuntu Server 24.04' }),
+    ''
+  )
 })
 
 test('clone source filter excludes OneKS and virtual-router VMs', () => {
@@ -247,6 +263,38 @@ test('cloud resource request creates only a simple data disk and selected networ
     FS: 'ext4',
   })
   assert.deepEqual(result.NIC, [{ NETWORK_ID: '0', MODEL: 'virtio' }])
+})
+
+test('LayerSentry leaves NIC METHOD to native OpenNebula network semantics', () => {
+  const automatic = api.applyLayerSentryCloudResources(
+    {},
+    { networkId: '0', ipAssignment: 'AUTO', networkQosEnabled: false },
+    {
+      network: {
+        ID: '0',
+        AR_POOL: { AR: { TYPE: 'IP4', IP: '10.10.10.100' } },
+      },
+    }
+  )
+  assert.equal(automatic.NIC[0].METHOD, undefined)
+
+  const selectedStatic = api.applyLayerSentryCloudResources(
+    {},
+    {
+      networkId: '0',
+      ipAssignment: 'STATIC',
+      staticIp: '10.10.10.141',
+      networkQosEnabled: false,
+    },
+    {
+      network: {
+        ID: '0',
+        AR_POOL: { AR: { TYPE: 'IP4', IP: '10.10.10.100' } },
+      },
+    }
+  )
+  assert.equal(selectedStatic.NIC[0].IP, '10.10.10.141')
+  assert.equal(selectedStatic.NIC[0].METHOD, undefined)
 })
 
 test('data-disk policy is OS-aware while hiding format and filesystem from customers', () => {
@@ -412,4 +460,19 @@ test('cloud instantiate flow is customer-only and strips helper data', () => {
   assert.match(instantiate, /useLazyGetVNetworkQuery/)
   assert.match(instantiate, /delete requestTemplate\.resources/)
   assert.match(instantiate, /delete requestTemplate\.services/)
+})
+
+
+test('form renderer treats dynamic hidden input types as hidden fields', () => {
+  const source = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/components/composed/Forms/FormWithSchema/index.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(source, /type === INPUT_TYPES\.HIDDEN/)
+  assert.match(source, /htmlType === INPUT_TYPES\.HIDDEN/)
+  assert.match(source, /if \(isHidden\) return null/)
 })

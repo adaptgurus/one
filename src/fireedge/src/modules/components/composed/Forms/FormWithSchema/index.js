@@ -638,7 +638,11 @@ const FieldComponent = memo(
       () => `${cy}-${name ?? ''}`.replaceAll('.', '-'),
       [cy]
     )
-    const isHidden = useMemo(() => htmlType === INPUT_TYPES.HIDDEN, [htmlType])
+    const isHidden = useMemo(
+      () =>
+        type === INPUT_TYPES.HIDDEN || htmlType === INPUT_TYPES.HIDDEN,
+      [type, htmlType]
+    )
     // Key is computed in first hand based on it's type, meaning we re-render if type changes.
     const key = useMemo(
       () =>

@@ -101,6 +101,44 @@ const credentialKeys = [
   'CRYPTED_PASSWORD_BASE64',
 ]
 
+const supportedNetcfgTypes = new Set([
+  'bsd',
+  'interfaces',
+  'netplan',
+  'networkd',
+  'nm',
+  'scripts',
+])
+
+/**
+ * Resolve a deterministic guest network renderer when the source image needs
+ * one. Existing template context remains authoritative; provider metadata is
+ * preferred over the conservative Rocky/RHEL-like 9 fallback.
+ *
+ * @param {object} sourceTemplate - OpenNebula VM template resource or body
+ * @returns {string} OpenNebula one-context NETCFG_TYPE value or blank
+ */
+export const getLayerSentryGuestNetcfgType = (sourceTemplate = {}) => {
+  const body = sourceTemplate?.TEMPLATE ?? sourceTemplate
+  const explicit = normalized(body?.LAYERSENTRY_NETCFG_TYPE).toLowerCase()
+  if (supportedNetcfgTypes.has(explicit)) return explicit
+
+  const identity = [
+    sourceTemplate?.NAME,
+    body?.NAME,
+    body?.DESCRIPTION,
+    body?.OS?.TYPE,
+  ]
+    .map(normalized)
+    .join(' ')
+    .toLowerCase()
+
+  const rhelLike9 =
+    /(?:rocky|rhel|red hat enterprise linux|alma(?:linux)?|oracle linux|centos(?: stream)?)[^0-9]{0,16}9(?:\D|$)/i
+
+  return rhelLike9.test(identity) ? 'nm' : ''
+}
+
 /**
  * Apply LayerSentry's fixed guest-context defaults and requested credentials.
  * Plain-text passwords are never emitted into the OpenNebula template.
@@ -111,7 +149,8 @@ const credentialKeys = [
  */
 export const buildLayerSentryGuestContext = (
   existingContext = {},
-  access = {}
+  access = {},
+  sourceTemplate = {}
 ) => {
   const context = {
     ...existingContext,
@@ -122,6 +161,11 @@ export const buildLayerSentryGuestContext = (
   }
 
   credentialKeys.forEach((key) => delete context[key])
+
+  if (!normalized(existingContext.NETCFG_TYPE)) {
+    const netcfgType = getLayerSentryGuestNetcfgType(sourceTemplate)
+    if (netcfgType) context.NETCFG_TYPE = netcfgType
+  }
 
   const password = String(access.password ?? '')
   if (password) context.PASSWORD_BASE64 = encodeBase64Utf8(password)
@@ -144,9 +188,17 @@ export const buildLayerSentryGuestContext = (
  * @param {object} access - LayerSentry access form values
  * @returns {object} Template with customer-safe defaults
  */
-export const applyLayerSentryVmDefaults = (template = {}, access = {}) => ({
+export const applyLayerSentryVmDefaults = (
+  template = {},
+  access = {},
+  sourceTemplate = template
+) => ({
   ...template,
-  CONTEXT: buildLayerSentryGuestContext(template.CONTEXT, access),
+  CONTEXT: buildLayerSentryGuestContext(
+    template.CONTEXT,
+    access,
+    sourceTemplate
+  ),
   NIC_DEFAULT: {
     ...(template.NIC_DEFAULT ?? {}),
     MODEL: 'virtio',
