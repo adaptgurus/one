@@ -1,0 +1,73 @@
+name: LayerSentry three-point independent DR qualification
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-three-point-independent-dr.yml
+      - .github/scripts/layersentry_three_point_source.py
+      - .github/scripts/layersentry_three_point_boot.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source_three_point:
+    runs-on: [self-hosted, Linux, X64, testser-two-site]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build and verify baseline middle latest from native CBT
+        shell: bash
+        run: python3 .github/scripts/layersentry_three_point_source.py
+      - name: Upload three-point recovery material
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm220-three-point-independent-recovery
+          path: |
+            ${{ env.PORTABLE_DIR }}/baseline.qcow2
+            ${{ env.PORTABLE_DIR }}/baseline.qcow2.sha256
+            ${{ env.PORTABLE_DIR }}/middle.qcow2
+            ${{ env.PORTABLE_DIR }}/middle.qcow2.sha256
+            ${{ env.PORTABLE_DIR }}/latest.qcow2
+            ${{ env.PORTABLE_DIR }}/latest.qcow2.sha256
+            ${{ env.PORTABLE_DIR }}/manifest.json
+          if-no-files-found: error
+          retention-days: 3
+
+  independent_boot:
+    needs: source_three_point
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download three-point recovery material
+        uses: actions/download-artifact@v4
+        with:
+          name: vm220-three-point-independent-recovery
+          path: ${{ runner.temp }}\vm220-three-point
+      - name: Verify and boot all three points on independent OpenNebula
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ruleName = "LayerSentry-ThreePoint-DR-$env:GITHUB_RUN_ID"
+          New-NetFirewallRule -DisplayName $ruleName -Direction Inbound -Action Allow -Protocol TCP -LocalPort 18083 -RemoteAddress 10.250.10.0/24 -Profile Any | Out-Null
+          try {
+            & 'C:\LayerSentryLab\tools\Python313\python.exe' '.github\scripts\layersentry_three_point_boot.py'
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-NetFirewallRule -DisplayName $ruleName -ErrorAction SilentlyContinue
+          }
+      - name: Upload independent boot evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: vm220-three-point-independent-boot-evidence
+          path: ${{ runner.temp }}\vm220-three-point\manoj-boot-results.json
+          if-no-files-found: error
+          retention-days: 7
