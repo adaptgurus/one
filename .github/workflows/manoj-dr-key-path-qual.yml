@@ -1,0 +1,85 @@
+name: Manoj DR key path qualification
+
+on:
+  push:
+    branches:
+      - qual/manoj-dr-opennebula-20260923
+    paths:
+      - .github/workflows/manoj-dr-key-path-qual.yml
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Find existing lab SSH identity
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $searchRoots = @(
+            'C:\LayerSentryLab\linux-runner',
+            (Join-Path $env:USERPROFILE '.ssh')
+          )
+          $files = @()
+          foreach ($root in $searchRoots) {
+            if (Test-Path $root) {
+              $files += Get-ChildItem $root -File -Recurse -ErrorAction SilentlyContinue |
+                Where-Object { $_.Length -gt 0 -and $_.Length -lt 65536 }
+            }
+          }
+          if (Test-Path 'C:\LayerSentryLab') {
+            $files += Get-ChildItem 'C:\LayerSentryLab' -File -ErrorAction SilentlyContinue |
+              Where-Object { $_.Length -gt 0 -and $_.Length -lt 65536 }
+          }
+
+          $keys = @()
+          foreach ($file in @($files | Sort-Object FullName -Unique)) {
+            try {
+              $first = Get-Content $file.FullName -TotalCount 1 -ErrorAction Stop
+              if ($first -match '^-----BEGIN .*PRIVATE KEY-----$') {
+                $keys += $file.FullName
+                Write-Host "LAB_KEY_PATH=$($file.FullName)"
+              }
+            } catch {}
+          }
+          Write-Host "LAB_KEY_COUNT=$($keys.Count)"
+
+          $targets = @(
+            @{Role='FE';IP='10.250.10.10'},
+            @{Role='KVM';IP='10.250.10.20'}
+          )
+          $users = @('root','oneadmin','opc')
+          $access = @()
+          foreach ($key in $keys) {
+            foreach ($target in $targets) {
+              foreach ($user in $users) {
+                $old = $ErrorActionPreference
+                $ErrorActionPreference = 'Continue'
+                & ssh.exe -i $key -o IdentitiesOnly=yes -o BatchMode=yes -o LogLevel=ERROR -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ConnectTimeout=4 "$user@$($target.IP)" 'hostname; id -un' *> $null
+                $rc = $LASTEXITCODE
+                $ErrorActionPreference = $old
+                if ($rc -eq 0) {
+                  Write-Host "LAB_SSH_ACCESS=PASS ROLE=$($target.Role) IP=$($target.IP) USER=$user KEY=$key"
+                  $access += [pscustomobject]@{role=$target.Role;ip=$target.IP;user=$user;key=$key}
+                  break
+                }
+              }
+            }
+          }
+          $access | ConvertTo-Json -Depth 3 | Set-Content "$env:RUNNER_TEMP\dr-key-access.json"
+          if ($access.Count -eq 0) {
+            Write-Host 'LAB_SSH_ACCESS=NONE'
+            exit 2
+          }
+
+      - name: Save access map
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dr-key-access-map
+          path: ${{ runner.temp }}\dr-key-access.json
+          if-no-files-found: warn
+          retention-days: 1
