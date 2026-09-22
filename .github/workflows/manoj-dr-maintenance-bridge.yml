@@ -23,10 +23,16 @@ jobs:
           $source='C:\LayerSentryLab\qualification\iso-builder-key'
           $known='C:\LayerSentryLab\qualification\known_hosts_builder'
           foreach ($p in @($source,$known)) { if (-not (Test-Path $p)) { throw "Missing $p" } }
+          & icacls.exe $source /grant:r '*S-1-5-18:(R)' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM source-key read access' }
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to grant SYSTEM known_hosts read access' }
           $private=Join-Path $env:RUNNER_TEMP 'dr-builder-key'
           Copy-Item -LiteralPath $source -Destination $private -Force
           & icacls.exe $private /inheritance:r | Out-Null
           & icacls.exe $private /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $source /remove:g '*S-1-5-18' | Out-Null
+          if ($LASTEXITCODE -ne 0) { throw 'Failed to restore source-key ACL' }
           "DR_BUILDER_KEY=$private" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Inspect builder maintenance tooling
