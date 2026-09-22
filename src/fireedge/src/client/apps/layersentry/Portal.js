@@ -36,6 +36,7 @@ import ComputeWorkspace from 'client/apps/layersentry/pages/ComputeWorkspace'
 import ManagedServicesWorkspace from 'client/apps/layersentry/pages/ManagedServicesWorkspace'
 import ProductionServiceWizard from 'client/apps/layersentry/pages/ProductionServiceWizard'
 import SiteRecoveryWorkspace from 'client/apps/layersentry/pages/SiteRecoveryWorkspace'
+import ReplicationV2Workspace from 'client/apps/layersentry/pages/ReplicationV2Workspace'
 import BackupStorageWorkspace from 'client/apps/layersentry/pages/BackupStorageWorkspace'
 import NetworkCreateWizard from 'client/apps/layersentry/pages/NetworkCreateWizard'
 import BackupPlanCreateWizard from 'client/apps/layersentry/pages/BackupPlanCreateWizard'
@@ -277,6 +278,11 @@ const Portal = ({ endpoints }) => {
           exact
           path={PRODUCT_PATHS.PROTECTION_SITE_RECOVERY}
           component={SiteRecoveryWorkspace}
+        />
+        <Route
+          exact
+          path={PRODUCT_PATHS.PROTECTION_REPLICATION}
+          component={ReplicationV2Workspace}
         />
 
         <Route
