@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  inspect:
+  open-destination:
     runs-on: [self-hosted, windows, x64]
     timeout-minutes: 10
     steps:
-      - name: Bind existing disposable VM without mutation
+      - name: Open Installation Destination with explicit virtual keys
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -28,18 +28,22 @@ jobs:
           $name='ls-appliance-4c4ac81-qual'
           $vm=Get-VM -Name $name -ErrorAction Stop
           $fw=Get-VMFirmware -VMName $name
-          $dvd=Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue
-          Write-Host "VM_STATE=$($vm.State) UPTIME=$($vm.Uptime) SECURE_BOOT=$($fw.SecureBoot) DVD=$($dvd.Path)"
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
           if($fw.SecureBoot -ne 'Off'){throw "Secure Boot is not disabled"}
-      - name: Capture exact current console
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $name='ls-appliance-4c4ac81-qual'
-          $script='C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1'
-          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\current-anaconda-state.png'
-          New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
-          & $script -VM $name -Out $out
-          if(-not (Test-Path $out)){throw 'current console screenshot not created'}
-          Write-Host ("SCREENSHOT_current_anaconda_state_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
-          Write-Host 'CURRENT_CONSOLE_CAPTURE=PASS'
+          $wmi=Get-CimInstance -Namespace root/virtualization/v2 -ClassName Msvm_ComputerSystem |
+            Where-Object { $_.ElementName -eq $name } | Select-Object -First 1
+          $kbd=Get-CimAssociatedInstance -InputObject $wmi -Namespace root/virtualization/v2 -ResultClassName Msvm_Keyboard | Select-Object -First 1
+          if(-not $kbd){throw 'Hyper-V virtual keyboard not found'}
+          function Key([uint32]$code){
+            $r=Invoke-CimMethod -InputObject $kbd -MethodName TypeKey -Arguments @{keyCode=$code}
+            if([int]$r.ReturnValue -ne 0){throw "TypeKey $code failed rc=$($r.ReturnValue)"}
+            Start-Sleep -Milliseconds 400
+          }
+          Key 0x35
+          Key 0x0D
+          Start-Sleep -Seconds 8
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\vk-destination.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          if(-not (Test-Path $out)){throw 'destination screenshot missing'}
+          Write-Host ("SCREENSHOT_vk_destination_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
+          Write-Host 'VK_DESTINATION_OPEN_SENT=PASS'
