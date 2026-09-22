@@ -92,8 +92,11 @@ jobs:
             $pub=(Get-Content "$env:DR_MAINT_KEY.pub" -Raw).Trim()
             $pub64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pub))
             $helper=Join-Path $env:GITHUB_WORKSPACE '.github\scripts\manoj-fe1-authorize.sh'
+            $normalized=Join-Path $env:RUNNER_TEMP 'manoj-fe1-authorize.sh'
+            $helperText=(Get-Content $helper -Raw).Replace("`r`n","`n")
+            [IO.File]::WriteAllText($normalized,$helperText,[Text.UTF8Encoding]::new($false))
 
-            & scp.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:DR_BUILDER_KNOWN" -i $env:DR_BUILDER_KEY $helper builder@10.250.10.40:/tmp/manoj-fe1-authorize.sh
+            & scp.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:DR_BUILDER_KNOWN" -i $env:DR_BUILDER_KEY $normalized builder@10.250.10.40:/tmp/manoj-fe1-authorize.sh
             if ($LASTEXITCODE -ne 0) { throw 'failed to copy FE1 auth helper to builder' }
 
             & ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:DR_BUILDER_KNOWN" -i $env:DR_BUILDER_KEY builder@10.250.10.40 "bash /tmp/manoj-fe1-authorize.sh $slot '$pub64'"
