@@ -61,6 +61,10 @@ const createWebsocket = (path, query) =>
   socketIO({
     path: `${WEBSOCKET_URL}/${path}`,
     query,
+    // The deployed WebSocket upgrade path currently fails frame validation.
+    // Use Socket.IO's authenticated long-polling transport until that
+    // transport is separately re-qualified.
+    transports: ['polling'],
     autoConnect: false,
     timeout: 10_000,
     reconnectionAttempts: 5,
