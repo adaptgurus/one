@@ -202,6 +202,272 @@ export const BACKUP_PROFILES = Object.freeze({
   },
 })
 
+export const CAPACITY_PROFILES = Object.freeze({
+  postgresql: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected database data (GiB)',
+    loadLabel: 'Expected DB client connections',
+    defaults: [8, 32, 500, 1000, 25],
+  },
+  'mysql-family': {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected database data (GiB)',
+    loadLabel: 'Expected DB client connections',
+    defaults: [8, 32, 500, 1000, 25],
+  },
+  mariadb: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected database data (GiB)',
+    loadLabel: 'Expected DB client connections',
+    defaults: [8, 32, 500, 1000, 25],
+  },
+  'mongodb-community': {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected document data (GiB)',
+    loadLabel: 'Expected application connections',
+    defaults: [8, 32, 500, 1000, 25],
+  },
+  'percona-mongodb': {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected document data (GiB)',
+    loadLabel: 'Expected application connections',
+    defaults: [8, 32, 500, 1000, 25],
+  },
+  ferretdb: {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected frontend connections',
+    defaults: [4, 8, 0, 500, 0],
+  },
+  redis: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected in-memory dataset (GiB)',
+    loadLabel: 'Expected client connections',
+    defaults: [4, 16, 50, 5000, 20],
+  },
+  valkey: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected in-memory dataset (GiB)',
+    loadLabel: 'Expected client connections',
+    defaults: [4, 16, 50, 5000, 20],
+  },
+  clickhouse: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected compressed analytical data (GiB)',
+    loadLabel: 'Expected concurrent client connections',
+    defaults: [8, 32, 1000, 500, 40],
+  },
+  cassandra: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected logical dataset (GiB)',
+    loadLabel: 'Expected client connections',
+    defaults: [8, 32, 1000, 1000, 40],
+  },
+  yugabytedb: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected distributed SQL data (GiB)',
+    loadLabel: 'Expected SQL/CQL client connections',
+    defaults: [8, 32, 500, 1000, 30],
+  },
+  rabbitmq: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected retained message data (GiB)',
+    loadLabel: 'Expected concurrent publishers/consumers',
+    defaults: [4, 16, 100, 2000, 30],
+  },
+  kafka: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected retained log data (GiB)',
+    loadLabel: 'Expected producer/consumer connections',
+    defaults: [8, 32, 1000, 2000, 40],
+  },
+  pulsar: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected retained ledger data (GiB)',
+    loadLabel: 'Expected producer/consumer connections',
+    defaults: [8, 32, 1000, 2000, 40],
+  },
+  nginx: {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected concurrent client connections',
+    defaults: [2, 4, 0, 2000, 0],
+  },
+  'apache-httpd': {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected concurrent client connections',
+    defaults: [2, 4, 0, 1500, 0],
+  },
+  tomcat: {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected concurrent application sessions',
+    defaults: [4, 8, 0, 500, 0],
+  },
+  keycloak: {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected concurrent identity sessions',
+    defaults: [4, 8, 0, 1000, 0],
+  },
+  superset: {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected concurrent interactive users',
+    defaults: [4, 8, 0, 200, 0],
+  },
+  airflow: {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected concurrent workflow tasks',
+    defaults: [4, 8, 0, 200, 0],
+  },
+  openbao: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected Raft state (GiB)',
+    loadLabel: 'Expected concurrent API clients',
+    defaults: [4, 8, 20, 500, 20],
+  },
+  jenkins: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected controller state (GiB)',
+    loadLabel: 'Expected concurrent build/API clients',
+    defaults: [4, 8, 100, 200, 30],
+  },
+  forgejo: {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected concurrent web/Git clients',
+    defaults: [4, 8, 0, 500, 0],
+  },
+  opensearch: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected indexed data (GiB)',
+    loadLabel: 'Expected concurrent indexing/search clients',
+    defaults: [8, 32, 1000, 500, 40],
+  },
+  prometheus: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected local TSDB data (GiB)',
+    loadLabel: 'Expected scrape targets',
+    defaults: [4, 16, 200, 1000, 40],
+  },
+  grafana: {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected concurrent dashboard users',
+    defaults: [2, 4, 0, 300, 0],
+  },
+  alloy: {
+    data: false,
+    load: true,
+    growth: false,
+    loadLabel: 'Expected telemetry source count',
+    defaults: [2, 4, 0, 500, 0],
+  },
+})
+
+export const getCapacityProfile = (blueprint) =>
+  CAPACITY_PROFILES[blueprint?.id] || {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected application data (GiB)',
+    loadLabel: 'Expected concurrent clients',
+    defaults: [4, 8, 100, 500, 20],
+  }
+
+export const DR_PROFILES = Object.freeze({
+  postgresql: {
+    mode: 'topology',
+    topologies: ['HA + DR'],
+    label: 'PostgreSQL site DR',
+  },
+  'mysql-family': {
+    mode: 'topology',
+    match: /DR|ClusterSet/i,
+    label: 'MySQL/Percona site DR',
+  },
+  mariadb: { mode: 'topology', match: /DR/i, label: 'MariaDB asynchronous DR' },
+  cassandra: {
+    mode: 'topology',
+    match: /Multi-DC/i,
+    label: 'Cassandra multi-DC placement',
+  },
+  yugabytedb: {
+    mode: 'topology',
+    match: /xCluster DR/i,
+    label: 'YugabyteDB xCluster DR',
+  },
+  rabbitmq: {
+    mode: 'topology',
+    match: /Federation DR/i,
+    label: 'RabbitMQ federation DR',
+  },
+  pulsar: {
+    mode: 'topology',
+    match: /Multi-cluster DR/i,
+    label: 'Pulsar multi-cluster DR',
+  },
+})
+
+export const getDrProfile = (draft, blueprint) => {
+  const profile = DR_PROFILES[blueprint?.id]
+  if (!profile) return { available: false, configuredByTopology: false }
+  const topology = String(draft?.topology || '')
+  const active = profile.topologies
+    ? profile.topologies.includes(topology)
+    : profile.match
+    ? profile.match.test(topology)
+    : false
+
+  return { ...profile, available: active, configuredByTopology: active }
+}
+
 export const getBackupProfile = (blueprint) =>
   BACKUP_PROFILES[blueprint?.id] || {
     mode: 'none',
@@ -879,26 +1145,26 @@ export const getEndpointOptions = (draft, blueprint) => {
       'Existing load balancer',
       'MariaDB MaxScale HA pair',
     ],
-    'mongodb-community': [
-      'Native multi-host / replica-set discovery',
-      'Existing load balancer',
-    ],
-    'percona-mongodb': [
-      'Native multi-host / replica-set discovery',
-      'Existing load balancer',
-    ],
+    'mongodb-community': ['Native multi-host / replica-set discovery'],
+    'percona-mongodb': ['Native multi-host / replica-set discovery'],
     ferretdb: [
       'LayerSentry managed FerretDB endpoint',
       'Existing load balancer',
     ],
-    redis: ['Native Sentinel/Cluster discovery', 'Existing load balancer'],
-    valkey: ['Native Sentinel/Cluster discovery', 'Existing load balancer'],
+    redis:
+      draft.topology === 'Standalone'
+        ? ['Direct service endpoint', 'Existing load balancer']
+        : ['Native Sentinel/Cluster discovery'],
+    valkey:
+      draft.topology === 'Standalone'
+        ? ['Direct service endpoint', 'Existing load balancer']
+        : ['Native Sentinel/Cluster discovery'],
     clickhouse: [
       'Native multi-host client list',
       'LayerSentry managed ClickHouse endpoint',
       'Existing load balancer',
     ],
-    cassandra: ['Native multi-host client list', 'Existing load balancer'],
+    cassandra: ['Native multi-host client list'],
     yugabytedb: [
       'LayerSentry managed YSQL/YCQL endpoint',
       'Native multi-host client list',
@@ -1122,16 +1388,7 @@ export const getDependencySpecs = (draft, blueprint) => {
   }
 }
 
-export const getDependencyOptions = (dependency) => {
-  if (dependency.kind === 'service') {
-    return [dependency.provisionLabel, dependency.existingLabel]
-  }
-  if (dependency.kind === 'storage') {
-    return [dependency.managedLabel, dependency.existingLabel]
-  }
-
-  return [dependency.existingLabel]
-}
+export const getDependencyOptions = (dependency) => [dependency.existingLabel]
 
 const defaultDependencyMode = (dependency) =>
   getDependencyOptions(dependency)[0]
@@ -1150,10 +1407,7 @@ export const getDefaultDependencyState = (draft, blueprint) => {
 const dependencyNeedsReference = (dependency, mode) =>
   mode === dependency.existingLabel
 
-const dependencyVmCount = (dependency, mode) =>
-  dependency.kind === 'service' && mode === dependency.provisionLabel
-    ? Number(dependency.vmEstimate || 0)
-    : 0
+const dependencyVmCount = () => 0
 
 export const getDependencyErrors = (draft, blueprint) =>
   getDependencySpecs(draft, blueprint).flatMap((dependency) => {
@@ -1195,6 +1449,7 @@ const vol = (
   role,
   scope,
   sizeGiB,
+  mountpoint,
   storagePool = 'Production Block Pool',
   layout = 'Single disk'
 ) => ({
@@ -1204,134 +1459,112 @@ const vol = (
   storagePool,
   layout,
   attachmentRef: '',
-  mountpoint: '',
-})
-
-const storageDependency = (role, scope, required = true) => ({
-  role,
-  scope,
-  sizeGiB: '',
-  storagePool: 'External / linked dependency',
-  layout: 'Dependency reference',
-  attachmentRef: '',
-  mountpoint: '',
-  dependency: true,
-  required,
+  mountpoint,
 })
 
 const dataSize = (draft) => Math.max(20, Number(draft.expectedDataGiB) || 100)
-const backupSize = (draft) => Math.max(50, Math.ceil(dataSize(draft) * 1.2))
 const logSize = (draft) => Math.max(20, Math.ceil(dataSize(draft) * 0.2))
 
 export const getStorageTemplate = (draft, blueprint) => {
   if (!blueprint) return []
   const d = dataSize(draft)
-  const b = backupSize(draft)
   const l = logSize(draft)
 
   switch (blueprint.id) {
     case 'postgresql':
       return [
-        vol('Data', 'Per PostgreSQL VM', d),
-        vol('WAL', 'Per PostgreSQL VM', l),
-        vol(
-          'Backup repository',
-          'Shared recovery repository',
-          b,
-          'Backup Repository',
-          'Repository-managed'
-        ),
+        vol('Data', 'Per PostgreSQL VM', d, '/pgdata'),
+        vol('WAL', 'Per PostgreSQL VM', l, '/pgwal'),
       ]
     case 'mysql-family':
     case 'mariadb':
       return [
-        vol('Data', 'Per database VM', d),
-        vol('Redo / binary log', 'Per database VM', l),
-        vol(
-          'Backup repository',
-          'Shared recovery repository',
-          b,
-          'Backup Repository',
-          'Repository-managed'
-        ),
+        vol('Data', 'Per database VM', d, '/var/lib/mysql'),
+        vol('Redo / binary log', 'Per database VM', l, '/var/lib/mysql-binlog'),
       ]
     case 'mongodb-community':
     case 'percona-mongodb':
       return [
-        vol('Data', 'Per data-bearing MongoDB VM', d),
-        vol('Journal', 'Per data-bearing MongoDB VM', l),
+        vol('Data', 'Per data-bearing MongoDB VM', d, '/var/lib/mongo'),
         vol(
-          'Backup repository',
-          'Shared recovery repository',
-          b,
-          'Backup Repository',
-          'Repository-managed'
+          'Journal',
+          'Per data-bearing MongoDB VM',
+          l,
+          '/var/lib/mongo-journal'
         ),
       ]
     case 'ferretdb':
       return []
     case 'redis':
+      return [
+        vol('Persistence data (RDB/AOF)', 'Per data node', d, '/var/lib/redis'),
+      ]
     case 'valkey':
       return [
-        vol('Persistence data (RDB/AOF)', 'Per data node', d),
         vol(
-          'Backup repository',
-          'Shared recovery repository',
-          b,
-          'Backup Repository',
-          'Repository-managed'
+          'Persistence data (RDB/AOF)',
+          'Per data node',
+          d,
+          '/var/lib/valkey'
         ),
       ]
     case 'clickhouse':
-      return [
-        vol('ClickHouse data', 'Per data node', d),
-        vol(
-          'Backup repository',
-          'Shared recovery repository',
-          b,
-          'Backup Repository',
-          'Repository-managed'
-        ),
-      ]
+      return [vol('ClickHouse data', 'Per data node', d, '/var/lib/clickhouse')]
     case 'cassandra':
       return [
-        vol('Data', 'Per Cassandra node', d),
-        vol('Commit log', 'Per Cassandra node', l),
+        vol('Data', 'Per Cassandra node', d, '/var/lib/cassandra/data'),
         vol(
-          'Backup repository',
-          'Shared recovery repository',
-          b,
-          'Backup Repository',
-          'Repository-managed'
+          'Commit log',
+          'Per Cassandra node',
+          l,
+          '/var/lib/cassandra/commitlog'
         ),
       ]
     case 'yugabytedb':
       return [
-        vol('Tablet data', 'Per YB-TServer VM', d),
-        vol('WAL', 'Per YB-TServer VM', l),
-        vol('YB-Master metadata', 'Per dedicated YB-Master VM', 20),
+        vol('Tablet data', 'Per YB-TServer VM', d, '/var/lib/yugabyte/tserver'),
+        vol('WAL', 'Per YB-TServer VM', l, '/var/lib/yugabyte/wal'),
         vol(
-          'Backup repository',
-          'Shared recovery repository',
-          b,
-          'Backup Repository',
-          'Repository-managed'
+          'YB-Master metadata',
+          'Per dedicated YB-Master VM',
+          20,
+          '/var/lib/yugabyte/master'
         ),
       ]
     case 'rabbitmq':
-      return [vol('Persistent message data', 'Per RabbitMQ VM', d)]
+      return [
+        vol(
+          'Persistent message data',
+          'Per RabbitMQ VM',
+          d,
+          '/var/lib/rabbitmq'
+        ),
+      ]
     case 'kafka':
-      return [vol('Broker log / data', 'Per Kafka broker VM', d)]
+      return [
+        vol('Broker log / data', 'Per Kafka broker VM', d, '/var/lib/kafka'),
+      ]
     case 'pulsar':
       return [
-        vol('BookKeeper journal', 'Per bookie VM', l),
-        vol('BookKeeper ledgers', 'Per bookie VM', d),
+        vol(
+          'BookKeeper journal',
+          'Per bookie VM',
+          l,
+          '/var/lib/pulsar/bookkeeper/journal'
+        ),
+        vol(
+          'BookKeeper ledgers',
+          'Per bookie VM',
+          d,
+          '/var/lib/pulsar/bookkeeper/ledgers'
+        ),
         ...(draft.pulsarConfigStore === 'Dedicated 3-node configuration store'
           ? [
               vol(
                 'Configuration metadata state',
                 'Per configuration-store VM',
-                20
+                20,
+                '/var/lib/pulsar/configuration'
               ),
             ]
           : []),
@@ -1339,67 +1572,51 @@ export const getStorageTemplate = (draft, blueprint) => {
     case 'nginx':
     case 'apache-httpd':
     case 'tomcat':
-      return []
     case 'keycloak':
     case 'superset':
     case 'airflow':
+    case 'forgejo':
+    case 'grafana':
+    case 'alloy':
       return []
     case 'openbao':
       return [
         vol(
           'Raft integrated-storage data',
           'Per OpenBao server',
-          Math.max(20, Math.min(d, 200))
-        ),
-        vol(
-          'Raft snapshot repository',
-          'Shared recovery repository',
-          Math.max(50, b),
-          'Backup Repository',
-          'Repository-managed'
+          Math.max(20, Math.min(d, 200)),
+          '/opt/openbao/data'
         ),
       ]
     case 'jenkins':
       return [
-        vol('JENKINS_HOME', 'Controller persistent state', d),
         vol(
-          'Backup repository',
-          'Shared recovery repository',
-          b,
-          'Backup Repository',
-          'Repository-managed'
+          'JENKINS_HOME',
+          'Controller persistent state',
+          d,
+          '/var/lib/jenkins'
         ),
       ]
-    case 'forgejo':
-      return []
     case 'opensearch':
       return [
-        vol('Index data', 'Per OpenSearch data VM', d),
-        vol(
-          'Snapshot repository',
-          'Shared recovery repository',
-          b,
-          'Backup Repository',
-          'Repository-managed'
-        ),
+        vol('Index data', 'Per OpenSearch data VM', d, '/var/lib/opensearch'),
       ]
     case 'prometheus':
       return [
-        vol('Local TSDB', 'Per Prometheus VM', d),
+        vol('Local TSDB', 'Per Prometheus VM', d, '/var/lib/prometheus'),
         ...(draft.promAlerting === 'Provision 3-node Alertmanager'
-          ? [vol('Alertmanager local state', 'Per Alertmanager VM', 10)]
+          ? [
+              vol(
+                'Alertmanager local state',
+                'Per Alertmanager VM',
+                10,
+                '/var/lib/alertmanager'
+              ),
+            ]
           : []),
-        storageDependency(
-          'Optional long-term storage',
-          'Remote-write / Thanos-compatible backend when selected',
-          false
-        ),
       ]
-    case 'grafana':
-    case 'alloy':
-      return []
     default:
-      return [vol('Data', 'Per service VM', d)]
+      return []
   }
 }
 
@@ -3522,7 +3739,8 @@ const backupErrors = (draft, blueprint) => {
     }
   }
 
-  if (draft.drEnabled) {
+  const drProfile = getDrProfile(draft, blueprint)
+  if (drProfile.configuredByTopology) {
     if (!nonEmpty(draft.drTarget))
       errors.push('DR requires a target site / profile.')
     if (
@@ -3704,28 +3922,248 @@ const platformNodeAddresses = (draft) =>
     .map((value) => value.trim())
     .filter(Boolean)
 
+export const NATIVE_PRODUCT_OPTION_BINDINGS = Object.freeze({
+  postgresql: {
+    databaseBootstrap: 'database_bootstrap',
+    initialDatabases: 'initial_databases',
+    dcsPlacement: 'dcs_placement',
+    pgbouncerPlacement: 'pgbouncer_placement',
+    barmanPlacement: 'barman_placement',
+    pgStatStatements: 'pg_stat_statements',
+    postgis: 'postgis',
+    postgisTarget: 'postgis_target',
+    postgisDatabases: 'postgis_databases',
+  },
+  'mysql-family': {
+    sqlBootstrap: 'database_bootstrap',
+    sqlDbName: 'database_name',
+  },
+  mariadb: {
+    sqlBootstrap: 'database_bootstrap',
+    sqlDbName: 'database_name',
+  },
+  'mongodb-community': {
+    mongoScopeMode: 'credential_scope_mode',
+    mongoDbName: 'database_name',
+  },
+  'percona-mongodb': {
+    mongoScopeMode: 'credential_scope_mode',
+    mongoDbName: 'database_name',
+  },
+  ferretdb: { ferretDbName: 'database_name' },
+  redis: { kvPersistence: 'persistence_policy' },
+  valkey: { kvPersistence: 'persistence_policy' },
+  clickhouse: {
+    clickBootstrap: 'database_bootstrap',
+    clickDbName: 'database_name',
+  },
+  cassandra: {
+    cassBootstrap: 'keyspace_bootstrap',
+    cassKeyspace: 'keyspace',
+  },
+  yugabytedb: {
+    ybApi: 'api',
+    ybBootstrap: 'namespace_bootstrap',
+    ybDbName: 'database_or_namespace',
+  },
+  rabbitmq: {
+    rabbitVhostMode: 'vhost_mode',
+    rabbitVhost: 'vhost',
+    rabbitDurability: 'durability_profile',
+  },
+  kafka: {
+    kafkaTopicMode: 'topic_bootstrap',
+    kafkaTopic: 'topic',
+    kafkaDurability: 'durability_profile',
+  },
+  pulsar: {
+    pulsarMetadata: 'metadata_store',
+    pulsarNamespaceMode: 'namespace_bootstrap',
+    pulsarTenant: 'tenant',
+    pulsarNamespace: 'namespace',
+    pulsarConfigStore: 'configuration_store',
+  },
+  nginx: { webMode: 'service_role', webSourceRef: 'source_ref' },
+  'apache-httpd': { webMode: 'service_role', webSourceRef: 'source_ref' },
+  tomcat: {
+    tomcatDeploy: 'deployment_mode',
+    tomcatArtifactRef: 'artifact_ref',
+    tomcatSessionMode: 'session_mode',
+  },
+  keycloak: {
+    keycloakAdminMode: 'admin_exposure',
+    keycloakAdminFqdn: 'admin_fqdn',
+  },
+  superset: {
+    supersetSecretMode: 'secret_mode',
+    supersetSecretRef: 'secret_ref',
+  },
+  airflow: {
+    airflowDagRef: 'dag_ref',
+    airflowSecretMode: 'secret_mode',
+    airflowSecretRef: 'secret_ref',
+  },
+  openbao: { baoSealMode: 'seal_mode', baoSealRef: 'seal_ref' },
+  jenkins: {
+    jenkinsAgentSource: 'agent_source',
+    jenkinsAgentRef: 'agent_ref',
+  },
+  forgejo: { forgejoSsh: 'git_ssh', forgejoSshPort: 'git_ssh_port' },
+  opensearch: {
+    openSearchSecurity: 'security_config_mode',
+    openSearchSecurityRef: 'security_config_ref',
+  },
+  prometheus: {
+    prometheusHistoryMode: 'history_mode',
+    prometheusHistoryRef: 'history_ref',
+    promScrapeMode: 'scrape_mode',
+    promScrapeRef: 'scrape_ref',
+    promAlerting: 'alerting_mode',
+    promAlertRef: 'alertmanager_ref',
+  },
+  grafana: {
+    grafanaDatasourceMode: 'datasource_mode',
+    grafanaDatasourceRef: 'datasource_ref',
+    grafanaSession: 'session_mode',
+    grafanaSessionRef: 'session_ref',
+    grafanaAlertHa: 'alerting_ha_mode',
+    grafanaAlertRef: 'alerting_ha_ref',
+  },
+  alloy: { alloyConfig: 'config_mode', alloyConfigRef: 'config_ref' },
+})
+
+export const NATIVE_PRODUCT_DERIVED_OPTION_KEYS = Object.freeze({
+  postgresql: ['pgbouncer'],
+})
+
+const isNativeProductOptionActive = (draft, blueprintId, draftKey) => {
+  const rules = {
+    postgresql: {
+      initialDatabases:
+        draft.databaseBootstrap ===
+        'Create initial database(s) during deployment',
+      postgisTarget: draft.postgis === true,
+      postgisDatabases:
+        draft.postgis === true &&
+        draft.postgisTarget === 'Existing/restored database(s)',
+    },
+    'mysql-family': {
+      sqlDbName: draft.sqlBootstrap === 'Create initial application database',
+    },
+    mariadb: {
+      sqlDbName: draft.sqlBootstrap === 'Create initial application database',
+    },
+    'mongodb-community': {
+      mongoDbName:
+        draft.mongoScopeMode === 'Create application credential scope',
+    },
+    'percona-mongodb': {
+      mongoDbName:
+        draft.mongoScopeMode === 'Create application credential scope',
+    },
+    clickhouse: {
+      clickDbName: draft.clickBootstrap === 'Create initial database',
+    },
+    cassandra: {
+      cassKeyspace: draft.cassBootstrap === 'Create initial keyspace',
+    },
+    yugabytedb: {
+      ybDbName: draft.ybBootstrap === 'Create initial database / namespace',
+    },
+    rabbitmq: {
+      rabbitVhost: draft.rabbitVhostMode === 'Create application virtual host',
+    },
+    kafka: { kafkaTopic: draft.kafkaTopicMode === 'Create bootstrap topic' },
+    pulsar: {
+      pulsarTenant: draft.pulsarNamespaceMode === 'Create tenant + namespace',
+      pulsarNamespace:
+        draft.pulsarNamespaceMode === 'Create tenant + namespace',
+      pulsarConfigStore: String(draft.topology || '').startsWith(
+        'Multi-cluster DR'
+      ),
+    },
+    nginx: { webSourceRef: draft.webMode !== 'Runtime only / configure later' },
+    'apache-httpd': {
+      webSourceRef: draft.webMode !== 'Runtime only / configure later',
+    },
+    tomcat: {
+      tomcatArtifactRef: draft.tomcatDeploy === 'Deploy application artifact',
+    },
+    keycloak: {
+      keycloakAdminFqdn: draft.keycloakAdminMode === 'Separate admin FQDN',
+    },
+    superset: {
+      supersetSecretRef:
+        draft.supersetSecretMode === 'Existing SECRET_KEY secret reference',
+    },
+    airflow: {
+      airflowSecretRef:
+        draft.airflowSecretMode === 'Existing Fernet/signing secret reference',
+    },
+    openbao: {
+      baoSealRef: draft.baoSealMode === 'Existing KMS/HSM/transit reference',
+    },
+    jenkins: {
+      jenkinsAgentRef:
+        draft.jenkinsAgentSource === 'Existing agent template/image reference',
+    },
+    forgejo: { forgejoSshPort: draft.forgejoSsh === 'Enabled' },
+    opensearch: {
+      openSearchSecurityRef:
+        draft.openSearchSecurity ===
+        'Existing security configuration secret reference',
+    },
+    prometheus: {
+      prometheusHistoryRef:
+        draft.prometheusHistoryMode ===
+        'Existing remote-write / long-term backend',
+      promScrapeRef:
+        draft.promScrapeMode === 'Existing versioned scrape configuration',
+      promAlertRef: draft.promAlerting === 'Existing Alertmanager cluster',
+    },
+    grafana: {
+      grafanaDatasourceRef:
+        draft.grafanaDatasourceMode ===
+        'Existing datasource configuration reference',
+      grafanaSessionRef:
+        draft.grafanaSession === 'Existing Redis session store',
+      grafanaAlertRef:
+        draft.grafanaAlertHa === 'Existing Redis for alerting HA',
+    },
+    alloy: {
+      alloyConfigRef:
+        draft.alloyConfig === 'Existing configuration bundle reference',
+    },
+  }
+  const appRules = rules[blueprintId] || {}
+
+  return Object.prototype.hasOwnProperty.call(appRules, draftKey)
+    ? Boolean(appRules[draftKey])
+    : true
+}
+
 const platformProductOptions = (draft, blueprint) => {
   if (!blueprint) return {}
+  const bindings = NATIVE_PRODUCT_OPTION_BINDINGS[blueprint.id] || {}
 
-  if (blueprint.id === 'nginx' || blueprint.id === 'apache-httpd') {
-    return {
-      webMode: draft.webMode,
-      webSourceRef: draft.webSourceRef || '',
-    }
-  }
+  const result = Object.entries(bindings).reduce(
+    (options, [draftKey, backendKey]) => {
+      if (!isNativeProductOptionActive(draft, blueprint.id, draftKey))
+        return options
+      const value = draft[draftKey]
+      if (value === undefined || value === null || value === '') return options
+      options[backendKey] = value
+
+      return options
+    },
+    {}
+  )
 
   if (blueprint.id === 'postgresql') {
-    return {
-      pg_stat_statements: draft.pgStatStatements === true,
-      postgis: draft.postgis === true,
-      postgis_databases: draft.postgisDatabases || '',
-      dcs_placement: draft.dcsPlacement,
-      pgbouncer_placement: draft.pgbouncerPlacement,
-      barman_placement: draft.barmanPlacement,
-    }
+    result.pgbouncer = draft.pgbouncerPlacement !== 'Disabled'
   }
 
-  return {}
+  return result
 }
 
 /**
@@ -3738,6 +4176,13 @@ const platformProductOptions = (draft, blueprint) => {
  * @param {object} blueprint - selected service blueprint
  * @returns {object} backend desired-state document
  */
+const platformDependencies = (draft, blueprint) =>
+  getDependencySpecs(draft, blueprint).map((dependency) => ({
+    key: dependency.key,
+    kind: dependency.kind,
+    reference: String(draft.dependencyRefs?.[dependency.key] || '').trim(),
+  }))
+
 export const compilePlatformDesiredState = (draft, blueprint) => {
   const architecture = getArchitecturePlan(draft, blueprint)
   const nodeCount =
@@ -3764,7 +4209,8 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
       return {
         role: String(item.role || '')
           .toLowerCase()
-          .replace(/\s+/g, '_'),
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, ''),
         layout,
         mountpoint: item.mountpoint || '',
         storage_class: item.storagePool || '',
@@ -3788,6 +4234,7 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
   const packageSource =
     PLATFORM_PACKAGE_SOURCES[draft.packageSourceMode] || 'unsupported'
   const backup = getBackupProfile(blueprint)
+  const drProfile = getDrProfile(draft, blueprint)
   const hardening =
     draft.hardeningProfile === 'CIS qualified hardening'
       ? 'cis-qualified'
@@ -3818,6 +4265,7 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
       annual_growth_percent: Number(draft.expectedGrowthPercent) || 0,
       expected_connections: Number(draft.expectedConnections) || 0,
     },
+    dependencies: platformDependencies(draft, blueprint),
     storage,
     network: {
       domain,
@@ -3862,11 +4310,17 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
       pitr_window_hours: Number(draft.pitrWindowHours) || 0,
     },
     dr: {
-      enabled: draft.drEnabled === true,
-      target_site: draft.drTarget || '',
-      rpo_minutes: Number(draft.rpoMinutes) || 0,
-      rto_minutes: Number(draft.rtoMinutes) || 0,
-      replication_mode: draft.drEnabled ? 'product_specific' : '',
+      enabled: drProfile.configuredByTopology === true,
+      target_site: drProfile.configuredByTopology ? draft.drTarget || '' : '',
+      rpo_minutes: drProfile.configuredByTopology
+        ? Number(draft.rpoMinutes) || 0
+        : 0,
+      rto_minutes: drProfile.configuredByTopology
+        ? Number(draft.rtoMinutes) || 0
+        : 0,
+      replication_mode: drProfile.configuredByTopology
+        ? 'product_specific'
+        : '',
     },
     security: {
       hardening_profile: hardening,
@@ -3891,11 +4345,52 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
   }
 }
 
-export const sanitizeDesign = (draft) => {
+const ALL_NATIVE_PRODUCT_DRAFT_KEYS = new Set(
+  Object.values(NATIVE_PRODUCT_OPTION_BINDINGS).flatMap((bindings) =>
+    Object.keys(bindings)
+  )
+)
+
+export const sanitizeDesign = (
+  draft,
+  blueprint = getBlueprintById(draft?.blueprintId)
+) => {
   const { proxyPassword, ...safe } = draft
+  const allowedNativeKeys = new Set(
+    Object.keys(NATIVE_PRODUCT_OPTION_BINDINGS[blueprint?.id] || {})
+  )
+  const activeDependencyKeys = new Set(
+    getDependencySpecs(draft, blueprint).map(({ key }) => key)
+  )
+  const filtered = Object.entries(safe).reduce((result, [key, value]) => {
+    if (ALL_NATIVE_PRODUCT_DRAFT_KEYS.has(key) && !allowedNativeKeys.has(key)) {
+      return result
+    }
+    if (key === 'dependencyModes') {
+      result[key] = Object.fromEntries(
+        Object.entries(value || {}).filter(([dependencyKey]) =>
+          activeDependencyKeys.has(dependencyKey)
+        )
+      )
+
+      return result
+    }
+    if (key === 'dependencyRefs') {
+      result[key] = Object.fromEntries(
+        Object.entries(value || {}).filter(([dependencyKey]) =>
+          activeDependencyKeys.has(dependencyKey)
+        )
+      )
+
+      return result
+    }
+    result[key] = value
+
+    return result
+  }, {})
 
   return {
-    ...safe,
+    ...filtered,
     proxyPasswordPresent: Boolean(proxyPassword),
   }
 }
@@ -4092,6 +4587,21 @@ export const createDraft = (
     version: blueprint.versions[0] || '',
     workload: blueprint.workloads[0] || 'General',
   }
+  const capacity = getCapacityProfile(blueprint)
+  const [
+    vcpu,
+    memoryGiB,
+    expectedDataGiB,
+    expectedConnections,
+    expectedGrowthPercent,
+  ] = capacity.defaults
+  Object.assign(draft, {
+    vcpu,
+    memoryGiB,
+    expectedDataGiB,
+    expectedConnections,
+    expectedGrowthPercent,
+  })
   draft.topology = getRecommendedTopology(draft, blueprint)
   draft.endpointMode =
     endpointDefaults[blueprint.id] || 'Existing load balancer'

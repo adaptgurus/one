@@ -66,9 +66,11 @@ import {
   getArchitecturePlan,
   getBackupProfile,
   getBlueprintById,
+  getCapacityProfile,
   getCredentialProfile,
   getDefaultDependencyState,
   getDependencyErrors,
+  getDrProfile,
   getDependencyOptions,
   getDependencySpecs,
   getDependencySummary,
@@ -448,6 +450,14 @@ const ProductionServiceWizard = () => {
     [blueprint]
   )
   const backupProfile = useMemo(() => getBackupProfile(blueprint), [blueprint])
+  const capacityProfile = useMemo(
+    () => getCapacityProfile(blueprint),
+    [blueprint]
+  )
+  const drProfile = useMemo(
+    () => getDrProfile(draft, blueprint),
+    [draft.topology, blueprint]
+  )
   const currentErrors = useMemo(
     () => validateStep(step, draft, blueprint),
     [step, draft, blueprint]
@@ -593,8 +603,6 @@ const ProductionServiceWizard = () => {
     draft.endpointMode === 'Existing load balancer' ||
     draft.dnsRegistration !== 'Automatic' ||
     draft.portPolicy !== 'Use product default'
-
-  const backupAdvancedActive = draft.drEnabled
 
   const securityAdvancedActive =
     draft.packageSourceMode !== 'Managed repositories' ||
@@ -1162,16 +1170,20 @@ const ProductionServiceWizard = () => {
             onChange={(value) => update('memoryGiB', value)}
             min={1}
           />
-          <NumberField
-            label="Expected logical data (GiB)"
-            value={draft.expectedDataGiB}
-            onChange={(value) => update('expectedDataGiB', value)}
-          />
-          <NumberField
-            label="Expected client connections"
-            value={draft.expectedConnections}
-            onChange={(value) => update('expectedConnections', value)}
-          />
+          {capacityProfile.data && (
+            <NumberField
+              label={capacityProfile.dataLabel}
+              value={draft.expectedDataGiB}
+              onChange={(value) => update('expectedDataGiB', value)}
+            />
+          )}
+          {capacityProfile.load && (
+            <NumberField
+              label={capacityProfile.loadLabel}
+              value={draft.expectedConnections}
+              onChange={(value) => update('expectedConnections', value)}
+            />
+          )}
           <SelectField
             label="Workload profile"
             value={draft.workload}
@@ -1183,11 +1195,13 @@ const ProductionServiceWizard = () => {
               </MenuItem>
             ))}
           </SelectField>
-          <NumberField
-            label="Expected annual growth (%)"
-            value={draft.expectedGrowthPercent}
-            onChange={(value) => update('expectedGrowthPercent', value)}
-          />
+          {capacityProfile.growth && (
+            <NumberField
+              label="Expected annual growth (%)"
+              value={draft.expectedGrowthPercent}
+              onChange={(value) => update('expectedGrowthPercent', value)}
+            />
+          )}
         </Row>
         <Alert severity="info" sx={{ mt: 2 }}>
           Current design: {architecture.dedicated}
@@ -1281,14 +1295,20 @@ const ProductionServiceWizard = () => {
                     'Striped managed disks',
                     'Existing SAN / LUN',
                     'Existing mount',
-                    'Repository-managed',
-                    'Shared filesystem/object storage',
                   ].map((value) => (
                     <MenuItem key={value} value={value}>
                       {value}
                     </MenuItem>
                   ))}
                 </SelectField>
+                {item.layout !== 'Existing mount' && (
+                  <TextField
+                    label="Native mount path"
+                    value={item.mountpoint || ''}
+                    disabled
+                    helperText="Resolved by the application blueprint; filesystem is selected by the qualified OS tuple."
+                  />
+                )}
                 {(item.layout === 'Existing SAN / LUN' ||
                   item.layout === 'Existing mount') && (
                   <TextField
@@ -1638,24 +1658,20 @@ const ProductionServiceWizard = () => {
           promotion requires a real restore test for the exact service tuple.
         </Alert>
 
-        <AdvancedSection
-          title="Disaster Recovery"
-          description="Enable only when a qualified DR target and explicit RPO/RTO are available."
-          expanded={isAdvancedOpen('backup', backupAdvancedActive)}
-          onChange={(next) =>
-            setAdvancedOpen('backup', backupAdvancedActive, next)
-          }
-        >
-          <FormControlLabel
-            control={
-              <Switch
-                checked={draft.drEnabled}
-                onChange={(event) => update('drEnabled', event.target.checked)}
-              />
+        {drProfile.configuredByTopology && (
+          <AdvancedSection
+            title="Native Disaster Recovery"
+            description={
+              (drProfile.label || 'Application-native DR') +
+              ' is implied by the selected topology. Configure only the target and recovery objectives.'
             }
-            label="Configure a qualified DR topology"
-          />
-          {draft.drEnabled && (
+            expanded={isAdvancedOpen('backup', true)}
+            onChange={(next) => setAdvancedOpen('backup', true, next)}
+          >
+            <Alert severity="info" sx={{ mb: 2 }}>
+              DR is enabled by the selected native application topology; there
+              is no separate generic DR switch.
+            </Alert>
             <Row>
               <TextField
                 label="DR target site / profile"
@@ -1673,8 +1689,8 @@ const ProductionServiceWizard = () => {
                 onChange={(value) => update('rtoMinutes', value)}
               />
             </Row>
-          )}
-        </AdvancedSection>
+          </AdvancedSection>
+        )}
         {attemptedStep === step && <ErrorList errors={currentErrors} />}
       </>
     )
@@ -1937,7 +1953,7 @@ const ProductionServiceWizard = () => {
           version: draft.version,
           edition: draft.edition || undefined,
           topology: draft.topology,
-          desiredState: sanitizeDesign(draft),
+          desiredState: sanitizeDesign(draft, blueprint),
           platformDesiredState: compilePlatformDesiredState(draft, blueprint),
         }),
       })
@@ -2003,7 +2019,7 @@ const ProductionServiceWizard = () => {
           topology: draft.topology,
           serviceId: draft.serviceName,
           idempotencyKey: deploymentKey,
-          desiredState: sanitizeDesign(draft),
+          desiredState: sanitizeDesign(draft, blueprint),
           platformDesiredState: compilePlatformDesiredState(draft, blueprint),
         }),
       })
@@ -2029,7 +2045,7 @@ const ProductionServiceWizard = () => {
   }
 
   const renderReview = () => {
-    const safeDesign = sanitizeDesign(draft)
+    const safeDesign = sanitizeDesign(draft, blueprint)
 
     return (
       <>
@@ -2083,7 +2099,7 @@ const ProductionServiceWizard = () => {
             [
               'Dependencies',
               getDependencySummary(draft, blueprint),
-              'Provisioned linked VMs are included in the VM footprint; existing dependencies use references only.',
+              'Linked dependencies are immutable references to separately managed qualified services/storage; they add no hidden VMs.',
             ],
             [
               'Credential ownership',
@@ -2102,10 +2118,20 @@ const ProductionServiceWizard = () => {
                 ' vCPU · ' +
                 draft.memoryGiB +
                 ' GiB RAM per primary service node',
-              draft.expectedDataGiB +
-                ' GiB expected logical data · ' +
-                draft.expectedConnections +
-                ' client connections',
+              [
+                capacityProfile.data
+                  ? draft.expectedDataGiB +
+                    ' GiB · ' +
+                    capacityProfile.dataLabel
+                  : null,
+                capacityProfile.load
+                  ? draft.expectedConnections +
+                    ' · ' +
+                    capacityProfile.loadLabel
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(' · ') || 'No additional application load sizing input',
             ],
             [
               'Network',
@@ -2132,7 +2158,9 @@ const ProductionServiceWizard = () => {
                 ? 'PITR enabled'
                 : 'PITR not enabled here') +
                 ' · ' +
-                (draft.drEnabled ? 'DR configured' : 'DR disabled'),
+                (drProfile.configuredByTopology
+                  ? 'Native DR topology configured'
+                  : 'DR not applicable to this topology'),
             ],
             [
               'Security / observability',
@@ -2416,7 +2444,12 @@ const ProductionServiceWizard = () => {
             ['FQDN', draft.serviceFqdn || 'Not configured'],
             ['DNS', draft.dnsRegistration],
             ['Backup', draft.backupEnabled ? 'Enabled' : 'Disabled'],
-            ['DR', draft.drEnabled ? 'Enabled' : 'Disabled'],
+            [
+              'DR',
+              drProfile.configuredByTopology
+                ? 'Native topology'
+                : 'Not applicable',
+            ],
           ].map(([label, value]) => (
             <Box
               key={label}
@@ -2480,7 +2513,7 @@ const ProductionServiceWizard = () => {
               wordBreak: 'break-word',
             }}
           >
-            {JSON.stringify(sanitizeDesign(draft), null, 2)}
+            {JSON.stringify(sanitizeDesign(draft, blueprint), null, 2)}
           </Box>
         </DialogContent>
         <DialogActions>
