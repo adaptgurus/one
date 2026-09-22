@@ -1,0 +1,47 @@
+name: T2 Bootstrap-Fix Wait Install Complete
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-bootstrapfix-wait-install-complete.yml
+
+permissions:
+  contents: read
+
+jobs:
+  wait:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Wait for final Anaconda completion
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-bootstrapfix-qual'
+          $vhd='C:\LayerSentryLab\qualification\ls-appliance-bootstrapfix-qual\os.vhdx'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $fw=Get-VMFirmware -VMName $name
+          if($fw.SecureBoot -ne 'Off'){throw "Secure Boot changed: $($fw.SecureBoot)"}
+          $before=(Get-Item $vhd).Length
+          if($before -lt 3000000000){throw "Installed VHD unexpectedly small before final wait: $before"}
+          Write-Host "FINAL_WAIT_START_VHD_BYTES=$before secureboot=$($fw.SecureBoot)"
+          Start-Sleep -Seconds 240
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $after=(Get-Item $vhd).Length
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\install-final-window-secureboot-off.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          if(-not(Test-Path $out)){throw 'Final installation screenshot missing'}
+          Write-Host "FINAL_WAIT_END_STATE=$($vm.State) VHD_BYTES=$after SCREENSHOT_BYTES=$((Get-Item $out).Length)"
+          if($after -lt 3500000000){throw "Final installed VHD below expected size: $after"}
+
+      - name: Upload final installation screen
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-bootstrapfix-db8ef17-install-final-window
+          path: C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\install-final-window-secureboot-off.png
+          if-no-files-found: error
+          retention-days: 7
