@@ -90,6 +90,7 @@ jobs:
           test "$(sha256sum /home/builder/t2-bootstrapfix/layersentry-host-agent|awk '{print $1}')" = 1d994f68e581d8d068e09b833a64553bc4317e71636871be0e5fcaf5c1527d2e
           test "$(sha256sum /home/builder/t2-bootstrapfix/layersentry-host-controller|awk '{print $1}')" = deb0ac896e45fa9c03a77798d64bed3028ee2c3f06e0ff20a8c3e0d9b4450391
           test "$(git hash-object /home/builder/t2-bootstrapfix/layersentry-agent-wrapper.sh)" = 9cd78cf1a649f66795e22968cd28d5f74983eeda
+          chmod 0755 /home/builder/t2-bootstrapfix/layersentry-host-agent /home/builder/t2-bootstrapfix/layersentry-host-controller /home/builder/t2-bootstrapfix/layersentry-agent-wrapper.sh
           cp /home/builder/t2-bootstrapfix/layersentry-agent-wrapper.sh /home/builder/t2-enrollment-fix-src/deploy/host-agent/packaging/layersentry-agent-wrapper.sh
           bash -n /home/builder/t2-enrollment-fix-src/deploy/host-agent/packaging/layersentry-agent-wrapper.sh
           /home/builder/t2-bootstrapfix/layersentry-host-agent self-test | grep -Fx t2-durable
