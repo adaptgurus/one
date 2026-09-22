@@ -1,0 +1,48 @@
+name: T2 Format Enrollment Fix
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-format-enrollment-fix.yml
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - name: Format exact mirrored Go files
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src=Join-Path $env:GITHUB_WORKSPACE 'qualification\t2-enrollment-fix-mirror\deploy\host-agent'
+          $dst=Join-Path $env:RUNNER_TEMP 't2-formatted-host-agent'
+          if(Test-Path $dst){Remove-Item $dst -Recurse -Force}
+          Copy-Item $src $dst -Recurse -Force
+          $files=@(
+            (Join-Path $dst 'internal\inventory\inventory.go'),
+            (Join-Path $dst 'internal\inventory\enrollment_test.go'),
+            (Join-Path $dst 'internal\client\client.go'),
+            (Join-Path $dst 'internal\client\client_test.go'),
+            (Join-Path $dst 'internal\controller\controller.go'),
+            (Join-Path $dst 'internal\controller\controller_test.go')
+          )
+          & gofmt -w $files
+          if($LASTEXITCODE -ne 0){throw 'gofmt failed'}
+          $remaining=& gofmt -l $files
+          if($remaining){throw "gofmt drift remains: $remaining"}
+          "T2_FORMATTED_DIR=$dst" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'T2_GOFMT=PASS'
+      - name: Upload formatted Go sources
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-enrollment-fix-gofmt
+          path: ${{ env.T2_FORMATTED_DIR }}
+          if-no-files-found: error
+          retention-days: 7
