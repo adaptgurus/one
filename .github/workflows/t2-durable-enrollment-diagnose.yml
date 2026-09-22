@@ -1,0 +1,95 @@
+name: T2 Durable Enrollment Diagnose
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - '.github/workflows/t2-durable-enrollment-diagnose.yml'
+      - 'qualification/t2-durable-enrollment-diagnose.request'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: self-hosted
+    timeout-minutes: 12
+    steps:
+      - name: Bind Manoj runner and network state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $vm=Get-VM -Name 'ls-appliance-durable-qual' -ErrorAction Stop
+          $hb=(Get-VMIntegrationService -VMName $vm.Name -Name 'Heartbeat' -ErrorAction Stop).PrimaryStatusDescription
+          Write-Host "VM=$($vm.Name) STATE=$($vm.State) HEARTBEAT=$hb UPTIME=$($vm.Uptime)"
+          $sshOpen=Test-NetConnection -ComputerName 10.250.10.42 -Port 22 -InformationLevel Quiet -WarningAction SilentlyContinue
+          Write-Host "DURABLE_SSH_PORT=$sshOpen"
+
+      - name: Prepare temporary support key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519'
+          if(-not(Test-Path $src)){throw 'Qualification support key missing'}
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-durable-support-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_DURABLE_SUPPORT_KEY=$key" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Inspect durable host state without secrets
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $known=Join-Path $env:RUNNER_TEMP 't2-durable-known_hosts'
+          $cmd=@'
+          set +e
+          echo '=== IDENTITY ==='
+          hostname
+          id
+          echo '=== NETWORK ==='
+          ip -br addr
+          ip route
+          echo '=== AGENT SERVICE ==='
+          systemctl show layersentry-host-agent.service -p LoadState -p ActiveState -p SubState -p Result -p ExecMainStatus -p NRestarts --no-pager 2>&1
+          echo '=== FILE STATE ==='
+          for p in /var/lib/layersentry/firstboot.done /var/lib/layersentry/console-setup.done /var/lib/layersentry/agent/pki/client.key /var/lib/layersentry/agent/pki/client.crt /etc/layersentry/bootstrap-token /etc/layersentry/host-agent.json; do
+            if [ -s "$p" ]; then stat -c '%n PRESENT size=%s mode=%a owner=%U group=%G' "$p" 2>/dev/null || echo "$p PRESENT"; else echo "$p MISSING_OR_EMPTY"; fi
+          done
+          echo '=== AGENT VERSION ==='
+          /opt/layersentry/agent/current/layersentry-host-agent self-test 2>&1 || true
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($cmd -replace "`r",'')))
+          & $ssh -i $env:T2_DURABLE_SUPPORT_KEY -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" layersentry@10.250.10.42 "printf '%s' '$b64' | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'Durable support SSH diagnostic failed'}
+
+      - name: Capture durable console
+        if: always()
+        shell: powershell
+        run: |
+          $out='C:\LayerSentryLab\evidence\t2-durable-5f3bda7\diagnostic-console.png'
+          New-Item -ItemType Directory -Force -Path (Split-Path $out) | Out-Null
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-durable-qual' -Out $out
+          if(Test-Path $out){Write-Host "DURABLE_CONSOLE=$out bytes=$((Get-Item $out).Length)"}
+
+      - name: Upload durable console
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-durable-diagnostic-console
+          path: C:\LayerSentryLab\evidence\t2-durable-5f3bda7\diagnostic-console.png
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Cleanup temporary key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_DURABLE_SUPPORT_KEY -and(Test-Path $env:T2_DURABLE_SUPPORT_KEY)){& icacls.exe $env:T2_DURABLE_SUPPORT_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_DURABLE_SUPPORT_KEY -Force}
