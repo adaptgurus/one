@@ -19,13 +19,18 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
+          $healthy = 0
           foreach ($ip in @('10.250.10.10','10.250.10.11','10.250.10.13')) {
             $tcp = Test-NetConnection -ComputerName $ip -Port 2633 -WarningAction SilentlyContinue
             Write-Host "ONED_TCP IP=$ip OPEN=$($tcp.TcpTestSucceeded)"
             if (-not $tcp.TcpTestSucceeded) { continue }
             try {
               $body = '<methodCall><methodName>system.listMethods</methodName><params /></methodCall>'
-              $resp = Invoke-WebRequest -UseBasicParsing -Uri "http://$ip:2633/RPC2" -Method Post -ContentType 'text/xml' -Body $body -TimeoutSec 5
+              $uri = "http://${ip}:2633/RPC2"
+              $resp = Invoke-WebRequest -UseBasicParsing -Uri $uri -Method Post -ContentType 'text/xml' -Body $body -TimeoutSec 5
+              if ($resp.StatusCode -eq 200 -and $resp.RawContentLength -gt 0) {
+                $healthy++
+              }
               Write-Host "ONED_XMLRPC IP=$ip STATUS=$($resp.StatusCode) BYTES=$($resp.RawContentLength)"
             } catch {
               if ($_.Exception.Response) {
@@ -35,3 +40,6 @@ jobs:
               }
             }
           }
+
+          if ($healthy -lt 1) { throw 'No Manoj OpenNebula FE returned a valid XML-RPC response' }
+          Write-Host "ONED_XMLRPC_HEALTHY_FE_COUNT=$healthy"
