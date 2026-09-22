@@ -38,6 +38,10 @@ const websockets = (appServer = {}) => {
           if (path && methods) {
             const io = socketIO({
               path,
+              // The hooks channel remains fully functional over Socket.IO
+              // long-polling. Do not advertise a WebSocket upgrade until the
+              // deployed Node/ws stack is qualified for that transport.
+              allowUpgrades: false,
               cors: {
                 origin: '*',
                 methods,
