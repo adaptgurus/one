@@ -18,9 +18,30 @@ const json = async (path, options = {}) => {
 export const replicationAPI = {
   capabilities: () => json('/capabilities'),
   sessions: () => json('/sessions'),
-  preflight: (request) => json('/preflight', { method: 'POST', body: JSON.stringify({ request }) }),
-  create: (request) => json('/sessions', { method: 'POST', body: JSON.stringify({ request }) }),
-  checkpoints: (sessionId) => json('/checkpoints', { method: 'POST', body: JSON.stringify({ sessionId }) }),
-  clone: (sessionId, checkpointId, name) => json('/clone', { method: 'POST', body: JSON.stringify({ sessionId, checkpointId, name }) }),
-  rebaseline: (sessionId) => json('/rebaseline', { method: 'POST', body: JSON.stringify({ sessionId }) }),
+  preflight: (request) =>
+    json('/preflight', { method: 'POST', body: JSON.stringify({ request }) }),
+  create: (request) =>
+    json('/sessions', { method: 'POST', body: JSON.stringify({ request }) }),
+  health: (sessionId) =>
+    json('/health', { method: 'POST', body: JSON.stringify({ sessionId }) }),
+  backendHealth: (sessionId) =>
+    json('/backend-health', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }),
+  checkpoints: (sessionId) =>
+    json('/checkpoints', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }),
+  clone: (sessionId, checkpointId, name) =>
+    json('/clone', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId, checkpointId, name }),
+    }),
+  rebaseline: (sessionId) =>
+    json('/rebaseline', {
+      method: 'POST',
+      body: JSON.stringify({ sessionId }),
+    }),
 }
