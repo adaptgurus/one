@@ -87,10 +87,9 @@ jobs:
           }
 
           if (Get-Command wsl.exe -ErrorAction SilentlyContinue) {
-            Write-Host 'WSL=PRESENT'
-            wsl.exe -l -v
+            Write-Host 'WSL_BINARY=PRESENT'
           } else {
-            Write-Host 'WSL=ABSENT'
+            Write-Host 'WSL_BINARY=ABSENT'
           }
 
       - name: Download Tester checkpoint
