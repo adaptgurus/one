@@ -1,0 +1,53 @@
+name: T2 Bootstrap-Fix Wait For Anaconda
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-bootstrapfix-wait-anaconda.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: t2-bootstrapfix-final-install
+  cancel-in-progress: true
+
+jobs:
+  wait:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj runner and verify Secure Boot remains off
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $name='ls-appliance-bootstrapfix-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "VM not running: $($vm.State)"}
+          $fw=Get-VMFirmware -VMName $name
+          if($fw.SecureBoot -ne 'Off'){throw "Secure Boot unexpectedly enabled: $($fw.SecureBoot)"}
+          Write-Host "ANACONDA_WAIT_BIND=PASS state=$($vm.State) secureboot=$($fw.SecureBoot)"
+
+      - name: Wait for media check to finish
+        shell: powershell
+        run: Start-Sleep -Seconds 150
+
+      - name: Capture post-media-check screen
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $out='C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\post-media-check-secureboot-off.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM 'ls-appliance-bootstrapfix-qual' -Out $out
+          if(-not(Test-Path $out)){throw 'Post-media screenshot missing'}
+          Write-Host "POST_MEDIA_SCREENSHOT=$out bytes=$((Get-Item $out).Length)"
+
+      - name: Upload post-media-check evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-bootstrapfix-db8ef17-post-media-secureboot-off
+          path: C:\LayerSentryLab\evidence\t2-bootstrapfix-db8ef17\post-media-check-secureboot-off.png
+          if-no-files-found: error
+          retention-days: 7
