@@ -1,0 +1,2 @@
+source=adaptgurus/layersentry-platform@263361e21c9898047781cf8d2351742877441771
+validation=go-format-vet-race-vuln-static-build
