@@ -1,0 +1,84 @@
+name: LayerSentry inspect existing OpenNebula recovery tools
+
+on:
+  push:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-inspect-recovery-tools.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect selected helper behavior with literals redacted
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          import ast, hashlib, pathlib, re
+
+          paths = [
+              pathlib.Path(r"C:\LayerSentryLab\tools\check-fe2-auth.py"),
+              pathlib.Path(r"C:\LayerSentryLab\tools\validate-one-auth.py"),
+              pathlib.Path(r"C:\LayerSentryLab\tools\one-readonly-audit.py"),
+              pathlib.Path(r"C:\Users\opc\open-root-fe2.py"),
+              pathlib.Path(r"C:\Users\opc\patch-fe2-root-key.py"),
+          ]
+          sensitive = re.compile(r"(?i)(password|passwd|token|secret|credential)")
+          interesting = re.compile(r"(?i)(one_auth|opennebula|ssh|paramiko|10\.250|password|key|xmlrpc|rpc2|subprocess|systemctl)")
+          mutating = re.compile(r"(?i)(write_text|write_bytes|open\([^\n]*['\"]w|subprocess|os\.system|remove|unlink|chmod|chown|authorized_keys|set-vm|start-vm|stop-vm)")
+          for path in paths:
+              print(f"FILE={path}")
+              if not path.is_file():
+                  print("MISSING")
+                  continue
+              data = path.read_bytes()
+              print("SHA256="+hashlib.sha256(data).hexdigest())
+              text = data.decode("utf-8", "replace")
+              try:
+                  tree = ast.parse(text)
+              except Exception as exc:
+                  print("AST_ERROR="+type(exc).__name__)
+                  continue
+              calls=[]
+              basenames=[]
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.Call):
+                      fn=node.func
+                      name=""
+                      if isinstance(fn, ast.Name):
+                          name=fn.id
+                      elif isinstance(fn, ast.Attribute):
+                          parts=[]
+                          cur=fn
+                          while isinstance(cur, ast.Attribute):
+                              parts.append(cur.attr); cur=cur.value
+                          if isinstance(cur, ast.Name): parts.append(cur.id)
+                          name=".".join(reversed(parts))
+                      if name:
+                          calls.append(name)
+                  if isinstance(node, ast.Constant) and isinstance(node.value,str):
+                      value=node.value
+                      if "\\" in value or "/" in value:
+                          base=re.split(r"[\\/]",value)[-1]
+                          if re.search(r"(?i)(auth|password|key|cred)",base):
+                              basenames.append(base)
+              print("CALLS="+",".join(sorted(set(calls))))
+              print("SENSITIVE_PATH_BASENAMES="+",".join(sorted(set(basenames))))
+              for i,line in enumerate(text.splitlines(),1):
+                  if interesting.search(line):
+                      redacted=re.sub(r"(['\"])(.*?)(\1)", lambda m: m.group(1)+"<str>"+m.group(1), line)
+                      if sensitive.search(redacted):
+                          redacted=re.sub(r"(?i)(password|passwd|token|secret|credential)(\s*=\s*).*",r"\1\2<redacted>",redacted)
+                      print(f"L{i}:{redacted[:300]}")
+              print("MUTATION_MARKERS="+("YES" if mutating.search(text) else "NO"))
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'inspect_tools.py'
+          Set-Content -Path $path -Value $script -Encoding UTF8
+          python $path
