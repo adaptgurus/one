@@ -60,7 +60,7 @@ const initials = (name = '') =>
 
 const roleLabel = (view) => {
   const labels = {
-    admin: 'Platform Admin',
+    admin: 'Super Admin',
     groupadmin: 'Project Admin',
     user: 'User',
     cloud: 'Cloud User',
