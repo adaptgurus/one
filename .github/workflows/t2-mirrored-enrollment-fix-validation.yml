@@ -1,0 +1,69 @@
+name: T2 Mirrored Enrollment Fix Validation
+
+on:
+  push:
+    branches:
+      - ops/t2-enrollment-fix-mirror-20260922
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e
+        with:
+          go-version: '1.26.7'
+          cache: false
+      - name: Verify mirrored source manifest
+        run: |
+          test -f qualification/t2-enrollment-fix-src/go.mod
+          grep -q 'CollectEnrollment' qualification/t2-enrollment-fix-src/internal/inventory/inventory.go
+          grep -q 'loadOrCreateEnrollmentKey' qualification/t2-enrollment-fix-src/internal/client/client.go
+          grep -q 'CommitEnrollment' qualification/t2-enrollment-fix-src/internal/controller/controller.go
+          grep -q 'TimeoutStartSec=5min' qualification/t2-enrollment-fix-src/packaging/layersentry-host-agent.service
+      - name: Go format
+        working-directory: qualification/t2-enrollment-fix-src
+        run: |
+          gofmt -d . | tee /tmp/gofmt.diff
+          test ! -s /tmp/gofmt.diff
+      - name: Go vet
+        working-directory: qualification/t2-enrollment-fix-src
+        run: go vet ./...
+      - name: Go race tests
+        working-directory: qualification/t2-enrollment-fix-src
+        run: go test -race -count=1 ./...
+      - name: Vulnerability scan
+        working-directory: qualification/t2-enrollment-fix-src
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+          govulncheck ./...
+      - name: Build exact recovery binaries
+        working-directory: qualification/t2-enrollment-fix-src
+        run: |
+          mkdir -p /tmp/t2-durable
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w -X main.Version=t2-durable-263361e' -o /tmp/t2-durable/layersentry-host-agent ./cmd/layersentry-host-agent
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags='-s -w -X main.Version=t2-durable-263361e' -o /tmp/t2-durable/layersentry-host-controller ./cmd/layersentry-host-controller
+          /tmp/t2-durable/layersentry-host-agent self-test | grep -Fx t2-durable-263361e
+          /tmp/t2-durable/layersentry-host-controller self-test | grep -Fx t2-durable-263361e
+          sha256sum /tmp/t2-durable/layersentry-host-agent /tmp/t2-durable/layersentry-host-controller | tee /tmp/t2-durable/SHA256SUMS
+          cp packaging/layersentry-host-agent.service /tmp/t2-durable/layersentry-host-agent.service
+      - name: Shell syntax
+        working-directory: qualification/t2-enrollment-fix-src
+        run: |
+          bash -n packaging/install-host-agent.sh
+          bash -n packaging/layersentry-agent-wrapper.sh
+          bash -n packaging/layersentry-agent-confirm.sh
+          bash -n packaging/layersentry-repo-config.sh
+      - name: Upload recovery artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-enrollment-durability-recovery
+          path: /tmp/t2-durable/
+          retention-days: 7
+          if-no-files-found: error
