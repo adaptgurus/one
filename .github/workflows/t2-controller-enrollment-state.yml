@@ -1,0 +1,77 @@
+name: T2 Controller Enrollment State
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-controller-enrollment-state.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Prepare temporary builder SSH key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-controller-state-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_CONTROLLER_KEY=$key" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Inspect redacted controller state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $py=@'
+          import json
+          from pathlib import Path
+          candidates=[Path('/home/builder/layersentry-qual/state.json'),Path('/home/builder/layersentry-qual/controller-state.json'),Path('/var/lib/layersentry-host-controller/state.json')]
+          p=next((x for x in candidates if x.exists()),None)
+          if not p:
+              print('STATE_FILE=NOT_FOUND')
+              raise SystemExit(2)
+          data=json.loads(p.read_text())
+          print('STATE_FILE='+str(p))
+          hosts=data.get('hosts') or {}
+          boot=data.get('bootstraps') or {}
+          found=0
+          for key,h in hosts.items():
+              if h.get('site')=='qualification' and h.get('host')=='lsappliancequal':
+                  found+=1
+                  safe={k:h.get(k) for k in ['site','host','machine_id','enrolled_at','bootstrap_consumed_at','enrollment_management_ip','last_seen','last_poll_at','disabled']}
+                  print('HOST='+json.dumps(safe,sort_keys=True,default=str))
+          print('MATCHING_HOSTS='+str(found))
+          rows=[]
+          for b in boot.values():
+              if b.get('site')=='qualification' and b.get('host')=='lsappliancequal':
+                  rows.append({k:b.get(k) for k in ['site','host','expected_management_ip','expires_at','consumed_at']})
+          rows.sort(key=lambda x:str(x.get('expires_at')))
+          print('MATCHING_BOOTSTRAPS='+str(len(rows)))
+          for x in rows[-8:]:print('BOOTSTRAP='+json.dumps(x,sort_keys=True,default=str))
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($py -replace "`r",'')))
+          & $ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:T2_CONTROLLER_KEY builder@10.250.10.40 "printf '%s' '$b64' | base64 -d | python3"
+          if($LASTEXITCODE -ne 0){throw 'Controller state inspection failed'}
+
+      - name: Remove temporary builder key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_CONTROLLER_KEY -and(Test-Path $env:T2_CONTROLLER_KEY)){& icacls.exe $env:T2_CONTROLLER_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_CONTROLLER_KEY -Force}
