@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   install:
-    runs-on: self-hosted
+    runs-on: [self-hosted, windows, x64]
     timeout-minutes: 75
     steps:
       - name: Bind exact Manoj runner and ISO
