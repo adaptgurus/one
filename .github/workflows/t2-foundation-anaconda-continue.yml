@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  confirm-partitioning:
+  confirm-scheme:
     runs-on: [self-hosted, windows, x64]
     timeout-minutes: 10
     steps:
-      - name: Continue with selected Use All Space partitioning
+      - name: Continue with selected LVM partition scheme
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -42,8 +42,8 @@ jobs:
           Key 0x43
           Key 0x0D
           Start-Sleep -Seconds 15
-          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\vk-summary-ready.png'
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\vk-final-summary.png'
           & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
-          if(-not (Test-Path $out)){throw 'summary screenshot missing'}
-          Write-Host ("SCREENSHOT_vk_summary_ready_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
-          Write-Host 'VK_PARTITION_CONTINUE_SENT=PASS'
+          if(-not (Test-Path $out)){throw 'final summary screenshot missing'}
+          Write-Host ("SCREENSHOT_vk_final_summary_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
+          Write-Host 'VK_SCHEME_CONTINUE_SENT=PASS'
