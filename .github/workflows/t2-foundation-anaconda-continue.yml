@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  open-destination:
+  confirm-destination:
     runs-on: [self-hosted, windows, x64]
     timeout-minutes: 10
     steps:
-      - name: Open Installation Destination with explicit virtual keys
+      - name: Continue from selected Installation Destination
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -39,11 +39,11 @@ jobs:
             if([int]$r.ReturnValue -ne 0){throw "TypeKey $code failed rc=$($r.ReturnValue)"}
             Start-Sleep -Milliseconds 400
           }
-          Key 0x35
+          Key 0x43
           Key 0x0D
-          Start-Sleep -Seconds 8
-          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\vk-destination.png'
+          Start-Sleep -Seconds 12
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\vk-after-destination-c.png'
           & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
-          if(-not (Test-Path $out)){throw 'destination screenshot missing'}
-          Write-Host ("SCREENSHOT_vk_destination_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
-          Write-Host 'VK_DESTINATION_OPEN_SENT=PASS'
+          if(-not (Test-Path $out)){throw 'post-destination screenshot missing'}
+          Write-Host ("SCREENSHOT_vk_after_destination_c_B64="+[Convert]::ToBase64String([IO.File]::ReadAllBytes($out)))
+          Write-Host 'VK_DESTINATION_CONTINUE_SENT=PASS'
