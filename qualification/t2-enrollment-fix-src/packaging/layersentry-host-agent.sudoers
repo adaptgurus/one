@@ -1,0 +1,4 @@
+# Managed by LayerSentry. Do not broaden to arbitrary command execution.
+layersentry-agent ALL=(root) NOPASSWD: /opt/layersentry/agent/current/layersentry-host-agent integrity-status
+layersentry-agent ALL=(root) NOPASSWD: /opt/layersentry/agent/current/layersentry-host-agent privileged --config /etc/layersentry/host-agent.json
+%layersentry-maint ALL=(root) NOPASSWD: /opt/layersentry/agent/current/layersentry-host-agent configure-repo --lines

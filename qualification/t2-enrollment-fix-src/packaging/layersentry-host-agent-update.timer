@@ -1,0 +1,12 @@
+[Unit]
+Description=Monthly LayerSentry approved host maintenance
+
+[Timer]
+OnCalendar=monthly
+RandomizedDelaySec=6h
+Persistent=true
+AccuracySec=1h
+Unit=layersentry-host-agent-update.service
+
+[Install]
+WantedBy=timers.target
