@@ -1,0 +1,33 @@
+name: LayerSentry Manoj qualification key inventory
+
+on:
+  push:
+    branches:
+      - ops/layersentry-live-qualification-20260919
+    paths:
+      - .github/workflows/layersentry-manoj-key-inventory.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: List qualification auth material names only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $root='C:\\LayerSentryLab\\qualification'
+          if(-not(Test-Path $root)){throw 'Qualification directory missing'}
+          Get-ChildItem -LiteralPath $root -File -Recurse |
+            Where-Object { $_.Name -match '(?i)(front|fe|one|auth|ssh|key|root|password|secret|token|qual)' } |
+            Select-Object Name,DirectoryName,Length,LastWriteTimeUtc |
+            Sort-Object DirectoryName,Name | Format-Table -AutoSize
+          Write-Host '=== FRONTEND GUEST SERVICE INTERFACES ==='
+          foreach($name in @('ls-fe1','ls-fe3')){
+            Get-VMIntegrationService -VMName $name -ErrorAction SilentlyContinue |
+              Select-Object @{n='VMName';e={$name}},Name,Enabled,PrimaryStatusDescription | Format-Table -AutoSize
+          }
