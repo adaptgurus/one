@@ -22,73 +22,43 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $targets = @('ls-fe1','ls-fe2','ls-fe3','ls-kvm1','ls-kvm2')
           $rows = @()
+
           foreach ($name in $targets) {
             $vm = Get-VM -Name $name -ErrorAction SilentlyContinue
             if ($null -eq $vm) {
-              $rows += [pscustomobject]@{Name=$name; Present=$false}
+              $rows += [pscustomobject]@{ Name = $name; Present = $false }
               continue
             }
+
             $cpu = Get-VMProcessor -VMName $name
             $memory = Get-VMMemory -VMName $name
             $nics = @(Get-VMNetworkAdapter -VMName $name)
             $disks = @(Get-VMHardDiskDrive -VMName $name)
-            $reportedIPv4 = @($nics.IPAddresses | Where-Object {
-              $_ -match '^\d+\.\d+\.\d+\.\d+
-          }
-          Write-Host 'HOST_NETWORK'
-          Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
-            Where-Object { $_.IPAddress -notmatch '^169\.254\.' } |
-            Select-Object InterfaceAlias,IPAddress,PrefixLength |
-            Format-Table -AutoSize
-          Write-Host 'MATCHED_VM_INVENTORY'
-                    $rows | ConvertTo-Json -Depth 6 | Tee-Object -FilePath "$env:RUNNER_TEMP\manoj-dr-inventory.json"
-          foreach ($row in $rows | Where-Object { $_.Present }) {
-            foreach ($ip in @($row.IPv4)) {
-              foreach ($port in @(22,2633,9869)) {
-                $probe = Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
-                Write-Host "PROBE VM=$($row.Name) IP=$ip PORT=$port TCP=$($probe.TcpTestSucceeded)"
-              }
-            }
-          }
-
-      - name: Upload read-only inventory evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: manoj-dr-lab-inventory
-          path: ${{ runner.temp }}\manoj-dr-inventory.json
-          if-no-files-found: error
-          retention-days: 3
- -and $_ -notmatch '^169\.254\.'
-            })
-            $macs = @($nics.MacAddress | Where-Object { $_ } | ForEach-Object {
-              ($_ -replace '[:-]', '').ToUpperInvariant()
-            })
-            $neighbors = @(Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {
-              $_.IPAddress -match '^\d+\.\d+\.\d+\.\d+
-          }
-          $rows | ConvertTo-Json -Depth 6 | Tee-Object -FilePath "$env:RUNNER_TEMP\manoj-dr-inventory.json"
-          foreach ($row in $rows | Where-Object { $_.Present }) {
-            foreach ($ip in @($row.IPv4)) {
-              foreach ($port in @(22,2633,9869)) {
-                $probe = Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
-                Write-Host "PROBE VM=$($row.Name) IP=$ip PORT=$port TCP=$($probe.TcpTestSucceeded)"
-              }
-            }
-          }
-
-      - name: Upload read-only inventory evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: manoj-dr-lab-inventory
-          path: ${{ runner.temp }}\manoj-dr-inventory.json
-          if-no-files-found: error
-          retention-days: 3
- -and
-              $_.LinkLayerAddress -and
-              $macs -contains (($_.LinkLayerAddress -replace '[:-]', '').ToUpperInvariant())
-            })
+            $reportedIPv4 = @(
+              $nics.IPAddresses |
+                Where-Object {
+                  $_ -match '^\d+\.\d+\.\d+\.\d+$' -and
+                  $_ -notmatch '^169\.254\.'
+                } |
+                Sort-Object -Unique
+            )
+            $macs = @(
+              $nics.MacAddress |
+                Where-Object { $_ } |
+                ForEach-Object { ($_ -replace '[:-]', '').ToUpperInvariant() } |
+                Sort-Object -Unique
+            )
+            $neighbors = @(
+              Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                Where-Object {
+                  $_.IPAddress -match '^\d+\.\d+\.\d+\.\d+$' -and
+                  $_.LinkLayerAddress -and
+                  $macs -contains (($_.LinkLayerAddress -replace '[:-]', '').ToUpperInvariant())
+                }
+            )
             $neighborIPv4 = @($neighbors.IPAddress | Sort-Object -Unique)
             $ipv4 = @($reportedIPv4 + $neighborIPv4 | Sort-Object -Unique)
+
             $rows += [pscustomobject]@{
               Name = $name
               Present = $true
@@ -104,12 +74,25 @@ jobs:
               NeighborIPv4 = $neighborIPv4
               IPv4 = $ipv4
               DiskPaths = @($disks.Path)
-              DiskFileSizes = @($disks | ForEach-Object {
-                if (Test-Path $_.Path) { (Get-Item $_.Path).Length } else { $null }
-              })
+              DiskFileSizes = @(
+                $disks | ForEach-Object {
+                  if (Test-Path $_.Path) { (Get-Item $_.Path).Length } else { $null }
+                }
+              )
             }
           }
-          $rows | ConvertTo-Json -Depth 6 | Tee-Object -FilePath "$env:RUNNER_TEMP\manoj-dr-inventory.json"
+
+          Write-Host 'HOST_NETWORK'
+          Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPAddress -notmatch '^169\.254\.' } |
+            Select-Object InterfaceAlias,IPAddress,PrefixLength |
+            Format-Table -AutoSize
+
+          Write-Host 'MATCHED_VM_INVENTORY'
+          $rows |
+            ConvertTo-Json -Depth 6 |
+            Tee-Object -FilePath "$env:RUNNER_TEMP\manoj-dr-inventory.json"
+
           foreach ($row in $rows | Where-Object { $_.Present }) {
             foreach ($ip in @($row.IPv4)) {
               foreach ($port in @(22,2633,9869)) {
