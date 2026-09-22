@@ -1,0 +1,63 @@
+name: T2 Firstboot Recovery Inspect
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-firstboot-recovery-inspect.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Bind runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+
+      - name: Print non-secret qualification helper scripts
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          foreach($n in @(
+            'prepare_fresh_enrollment_safe.py',
+            'prepare_fresh_enrollment_8ddb3a3.py',
+            'vm_type_nonsecret.ps1',
+            'vm_type_secret.ps1',
+            'vm_full_enroll_testlab.ps1',
+            'vm_enroll_testlab.ps1',
+            'make_qual_site.py',
+            'inspect_controller_state_safe.py'
+          )){
+            $p=Join-Path $root $n
+            if(Test-Path $p){
+              Write-Host "=== $n ==="
+              Get-Content -LiteralPath $p
+            }
+          }
+
+      - name: Capture current firstboot framebuffer
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-4c4ac81-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          Write-Host "VM=$($vm.Name) STATE=$($vm.State) UPTIME=$($vm.Uptime)"
+          $out='C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\firstboot-current.png'
+          & 'C:\LayerSentryLab\qualification\capture_vm_thumbnail.ps1' -VM $name -Out $out
+          if(-not (Test-Path $out)){throw 'Current framebuffer missing'}
+
+      - name: Upload current firstboot framebuffer
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: t2-4c4ac81-firstboot-current
+          path: C:\LayerSentryLab\evidence\t2-foundation-4c4ac81\firstboot-current.png
+          if-no-files-found: error
+          retention-days: 7
