@@ -1,0 +1,67 @@
+name: T2 Root Agent Journal Diagnose
+
+on:
+  push:
+    branches:
+      - ops/t2-install-4c4ac81
+    paths:
+      - .github/workflows/t2-root-agent-journal.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Prepare temporary support key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner $env:RUNNER_NAME"}
+          $src='C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519'
+          & icacls.exe $src /grant:r '*S-1-5-18:(R)' | Out-Null
+          $key=Join-Path $env:RUNNER_TEMP 't2-rootdiag-support-key'
+          Copy-Item $src $key -Force
+          & icacls.exe $key /grant:r '*S-1-5-18:(F)' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:(R)' | Out-Null
+          & icacls.exe $src /remove:g '*S-1-5-18' | Out-Null
+          "T2_ROOTDIAG_KEY=$key" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Collect root-only journal through su
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $rootFile='C:\LayerSentryLab\qualification\qual-root-4c4ac81-35685057701.password'
+          if(-not(Test-Path $rootFile)){throw 'Qualification root password file missing'}
+          $root=(Get-Content -Raw $rootFile).Trim()
+          if($root -notmatch '^[0-9a-f]{32}$'){throw 'Qualification root password file invalid'}
+          $known=Join-Path $env:RUNNER_TEMP 't2-rootdiag-known_hosts'
+          $remote="su -c 'echo ===ROOT_ID===; id; echo ===AGENT_JOURNAL===; journalctl -u layersentry-host-agent.service -n 220 --no-pager; echo ===FILES===; ls -lZ /opt/layersentry/agent/current/layersentry-host-agent /usr/local/libexec/layersentry-agent-wrapper.sh /usr/local/libexec/layersentry-agent-confirm.sh /etc/layersentry/host-agent.json /etc/layersentry/bootstrap-token 2>&1; echo ===AGENT_USER_TEST===; runuser -u layersentry-agent -- /opt/layersentry/agent/current/layersentry-host-agent self-test 2>&1; echo ===SERVICE_SHOW===; systemctl show layersentry-host-agent.service -p ActiveState -p SubState -p Result -p ExecMainStatus -p NRestarts --no-pager' -"
+          $psi=New-Object Diagnostics.ProcessStartInfo
+          $psi.FileName=(Get-Command ssh.exe).Source
+          $psi.Arguments="-tt -i `"$env:T2_ROOTDIAG_KEY`" -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=`"$known`" layersentry@10.250.10.41 `"$remote`""
+          $psi.UseShellExecute=$false
+          $psi.RedirectStandardInput=$true
+          $psi.RedirectStandardOutput=$true
+          $psi.RedirectStandardError=$true
+          $p=[Diagnostics.Process]::Start($psi)
+          $p.StandardInput.WriteLine($root)
+          $p.StandardInput.Flush()
+          $p.StandardInput.Close()
+          $stdout=$p.StandardOutput.ReadToEnd()
+          $stderr=$p.StandardError.ReadToEnd()
+          $p.WaitForExit(30000)
+          Write-Host $stdout
+          if($stderr){Write-Host $stderr}
+          if($p.ExitCode -ne 0){throw "Root journal command failed rc=$($p.ExitCode)"}
+          Write-Host 'ROOT_JOURNAL_DIAG=PASS password=REDACTED'
+
+      - name: Remove temporary support key
+        if: always()
+        shell: powershell
+        run: |
+          if($env:T2_ROOTDIAG_KEY -and(Test-Path $env:T2_ROOTDIAG_KEY)){& icacls.exe $env:T2_ROOTDIAG_KEY /grant:r '*S-1-5-18:(F)'|Out-Null;Remove-Item $env:T2_ROOTDIAG_KEY -Force}
