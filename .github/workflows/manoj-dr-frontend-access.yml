@@ -6,6 +6,7 @@ on:
       - qual/manoj-dr-opennebula-20260923
     paths:
       - .github/workflows/manoj-dr-frontend-access.yml
+      - .github/scripts/manoj-fe1-authorize.sh
   workflow_dispatch:
 
 permissions:
@@ -16,6 +17,8 @@ jobs:
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 20
     steps:
+      - uses: actions/checkout@v4
+
       - name: Bind HA safety and prepare builder key
         shell: powershell
         run: |
@@ -23,19 +26,26 @@ jobs:
           if ($env:RUNNER_NAME -ine 'MANOJ-TEST-INST') { throw 'wrong runner' }
           $fe3 = Test-NetConnection -ComputerName '10.250.10.13' -Port 2633 -WarningAction SilentlyContinue
           if (-not $fe3.TcpTestSucceeded) { throw 'FE3 is not healthy; refusing FE1 maintenance' }
+
           $source='C:\LayerSentryLab\qualification\iso-builder-key'
           $known='C:\LayerSentryLab\qualification\known_hosts_builder'
-          foreach ($p in @($source,$known)) { if (-not (Test-Path $p)) { throw "Missing $p" } }
+          foreach ($p in @($source,$known)) {
+            if (-not (Test-Path $p)) { throw "Missing $p" }
+          }
+
           & icacls.exe $source /grant:r '*S-1-5-18:(R)' | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'grant builder-key read failed' }
           & icacls.exe $known /grant:r '*S-1-5-18:(R)' | Out-Null
           if ($LASTEXITCODE -ne 0) { throw 'grant known-hosts read failed' }
+
           $private=Join-Path $env:RUNNER_TEMP 'dr-builder-key'
           Copy-Item -LiteralPath $source -Destination $private -Force
           & icacls.exe $private /inheritance:r | Out-Null
           & icacls.exe $private /grant:r '*S-1-5-18:(R)' | Out-Null
           & icacls.exe $source /remove:g '*S-1-5-18' | Out-Null
+
           "DR_BUILDER_KEY=$private" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "DR_BUILDER_KNOWN=$known" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Create scoped DR maintenance key
         shell: powershell
@@ -61,65 +71,38 @@ jobs:
           $slot=4
           $disk=(Get-VMHardDiskDrive -VMName $vmName | Select-Object -First 1).Path
           if (-not $disk) { throw 'FE1 OS disk not found' }
+
           $attached=$false
-          $stopped=$false
           try {
-            $state=(Get-VM -Name $vmName).State
-            if ($state -ne 'Off') {
+            if ((Get-VM -Name $vmName).State -ne 'Off') {
               Stop-VM -Name $vmName -Force -Confirm:$false
-              $stopped=$true
             }
-            $existing=Get-VMHardDiskDrive -VMName $builder | Where-Object { $_.ControllerType -eq 'SCSI' -and $_.ControllerLocation -eq $slot }
+
+            $existing=Get-VMHardDiskDrive -VMName $builder |
+              Where-Object { $_.ControllerType -eq 'SCSI' -and $_.ControllerLocation -eq $slot }
             if ($existing) { throw "builder SCSI slot $slot is already occupied" }
+
             Add-VMHardDiskDrive -VMName $builder -ControllerType SCSI -ControllerNumber 0 -ControllerLocation $slot -Path $disk
             $attached=$true
             Start-Sleep -Seconds 3
 
             $pub=(Get-Content "$env:DR_MAINT_KEY.pub" -Raw).Trim()
             $pub64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pub))
-            $known='C:\LayerSentryLab\qualification\known_hosts_builder'
-            $remote = @'
-set -euo pipefail
-slot=4
-dev=''
-for sys in /sys/block/sd*/device; do
-  target=$(readlink -f "$sys")
-  case "$target" in *:0:0:$slot) dev=/dev/$(basename "$(dirname "$sys")") ;; esac
-done
-test -n "$dev"
-echo "ATTACHED_DEVICE=$dev"
-lsblk -o NAME,SIZE,FSTYPE,TYPE "$dev"
-part=$(lsblk -lnpo NAME,TYPE,FSTYPE "$dev" | awk '$2=="part" && $3=="LVM2_member" {print $1; exit}')
-test -n "$part"
-vg=$(sudo -n pvs --noheadings -o vg_name "$part" | xargs)
-test -n "$vg"
-sudo -n vgchange -ay "$vg" >/dev/null
-rootlv=$(sudo -n lvs --noheadings -o lv_path "$vg" | awk '/root/ {print $1; exit}')
-test -n "$rootlv"
-mnt=/mnt/layersentry-dr-fe1
-sudo -n mkdir -p "$mnt"
-cleanup() { sudo -n umount "$mnt" 2>/dev/null || true; sudo -n vgchange -an "$vg" >/dev/null 2>&1 || true; }
-trap cleanup EXIT
-sudo -n mount "$rootlv" "$mnt"
-auth="$mnt/var/lib/one/.ssh/authorized_keys"
-test -f "$auth"
-key=$(printf '%s' '__PUB64__' | base64 -d)
-grep -qxF "$key" "$auth" || printf '%s\n' "$key" | sudo -n tee -a "$auth" >/dev/null
-uid=$(awk -F: '$1=="oneadmin" {print $3}' "$mnt/etc/passwd")
-gid=$(awk -F: '$1=="oneadmin" {print $4}' "$mnt/etc/passwd")
-test -n "$uid"; test -n "$gid"
-sudo -n chown "$uid:$gid" "$auth"
-sudo -n chmod 600 "$auth"
-echo ONEADMIN_KEY_INJECT=PASS
-'@
-            $remote=$remote.Replace('__PUB64__',$pub64)
-            & ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $env:DR_BUILDER_KEY builder@10.250.10.40 $remote
+            $helper=Join-Path $env:GITHUB_WORKSPACE '.github\scripts\manoj-fe1-authorize.sh'
+
+            & scp.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:DR_BUILDER_KNOWN" -i $env:DR_BUILDER_KEY $helper builder@10.250.10.40:/tmp/manoj-fe1-authorize.sh
+            if ($LASTEXITCODE -ne 0) { throw 'failed to copy FE1 auth helper to builder' }
+
+            & ssh.exe -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:DR_BUILDER_KNOWN" -i $env:DR_BUILDER_KEY builder@10.250.10.40 "bash /tmp/manoj-fe1-authorize.sh $slot '$pub64'"
             if ($LASTEXITCODE -ne 0) { throw 'offline FE1 key injection failed' }
-          } finally {
+          }
+          finally {
             if ($attached) {
               Remove-VMHardDiskDrive -VMName $builder -ControllerType SCSI -ControllerNumber 0 -ControllerLocation $slot -ErrorAction SilentlyContinue
             }
-            if ((Get-VM -Name $vmName).State -eq 'Off') { Start-VM -Name $vmName }
+            if ((Get-VM -Name $vmName).State -eq 'Off') {
+              Start-VM -Name $vmName
+            }
           }
 
       - name: Verify FE1 oneadmin access and OpenNebula state
@@ -129,10 +112,14 @@ echo ONEADMIN_KEY_INJECT=PASS
           $ready=$false
           for ($i=0; $i -lt 40; $i++) {
             $tcp=Test-NetConnection -ComputerName '10.250.10.10' -Port 22 -WarningAction SilentlyContinue
-            if ($tcp.TcpTestSucceeded) { $ready=$true; break }
+            if ($tcp.TcpTestSucceeded) {
+              $ready=$true
+              break
+            }
             Start-Sleep -Seconds 3
           }
           if (-not $ready) { throw 'FE1 SSH did not return' }
-          & ssh.exe -i $env:DR_MAINT_KEY -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL oneadmin@10.250.10.10 'hostname; id; oneversion 2>/dev/null || true; onehost list; onedatastore list; onevm list'
+
+          & ssh.exe -i $env:DR_MAINT_KEY -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL oneadmin@10.250.10.10 'hostname; id; onehost list; onedatastore list; onevm list'
           if ($LASTEXITCODE -ne 0) { throw 'FE1 oneadmin maintenance access failed' }
           Write-Host 'MANOJ_FE1_ONEADMIN_ACCESS=PASS'
