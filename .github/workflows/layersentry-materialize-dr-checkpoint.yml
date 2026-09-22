@@ -61,7 +61,7 @@ jobs:
           test -d "$repo_root/220"
           dsxml="$RUNNER_TEMP/ds100.xml"
           passfile="$RUNNER_TEMP/restic-password"
-          ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 'onedatastore show 100 -x' > "$dsxml"
+          ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 'onedatastore show 100 --decrypt -x' > "$dsxml"
           python3 - "$dsxml" "$passfile" <<'PY'
           import pathlib, sys, xml.etree.ElementTree as ET
           root=ET.parse(sys.argv[1]).getroot()
