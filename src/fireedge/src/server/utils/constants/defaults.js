@@ -185,6 +185,8 @@ const defaults = {
   protectedConfigData: {
     [appNameSunstone]: [
       'support_url',
+      'layersentry_dr_api',
+      'layersentry_dr_gateway_token_file',
       'sunstone_prepend',
       'guacd',
       'tmpdir',

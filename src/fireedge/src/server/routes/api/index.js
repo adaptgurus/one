@@ -46,6 +46,7 @@ const routes = [
   '2fa',
   'auth',
   'cluster',
+  'dr',
   'host',
   'files',
   'image',

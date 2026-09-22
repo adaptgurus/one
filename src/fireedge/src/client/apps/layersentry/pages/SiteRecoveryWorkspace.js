@@ -25,6 +25,8 @@ import {
 } from 'client/apps/layersentry/components/Primitives'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import { colors } from 'client/apps/layersentry/theme/tokens'
+import ProtectionDomainPanel from 'client/apps/layersentry/components/ProtectionDomainPanel'
+import RemoteSitePanel from 'client/apps/layersentry/components/RemoteSitePanel'
 
 const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 
@@ -126,6 +128,11 @@ const SiteRecoveryWorkspace = () => {
           />
         </Box>
       )}
+
+      <Box sx={{ mt: 2, display: 'grid', gap: 2 }}>
+        <RemoteSitePanel isAdmin={isAdmin} />
+        <ProtectionDomainPanel isAdmin={isAdmin} />
+      </Box>
 
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
