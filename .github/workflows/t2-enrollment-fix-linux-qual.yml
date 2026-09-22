@@ -96,7 +96,7 @@ jobs:
           out=/home/builder/t2-enrollment-fix-build
           rm -rf "$src" "$out"
           mkdir -p "$src" "$out"
-          unzip -q /home/builder/t2-enrollment-fix-source.zip -d "$src"
+          python3 -m zipfile -e /home/builder/t2-enrollment-fix-source.zip "$src"
           echo '=== GO ==='
           go version
           echo '=== GOFMT ==='
