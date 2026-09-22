@@ -6,6 +6,7 @@ on:
       - ops/t2-foundation-iso-qualification-20260921
     paths:
       - .github/workflows/t2-foundation-seal-live.yml
+      - qualification/t2-live-seal.py
 
 permissions:
   contents: read
@@ -19,6 +20,10 @@ jobs:
     runs-on: [self-hosted, windows, x64]
     timeout-minutes: 35
     steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
       - name: Bind qualification host and prepare builder access
         shell: powershell
         run: |
@@ -40,105 +45,24 @@ jobs:
           "T2_SEAL_KEY=$key" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host 'SEAL_BUILDER_ACCESS=PASS'
 
-      - name: Queue tools.ensure then host.seal and verify receipts
+      - name: Queue tooling and platform hardening seal
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           $q='C:\LayerSentryLab\qualification'
           $known=Join-Path $q 'known_hosts_builder'
           $ssh=(Get-Command ssh.exe).Source
+          $scp=(Get-Command scp.exe).Source
           $base=@('-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-i',$env:T2_SEAL_KEY)
-          $py=@'
-import json, ssl, time, urllib.request, urllib.error, uuid
-from pathlib import Path
-q=Path('/home/builder/layersentry-qual')
-admin=(q/'admin.token').read_text(encoding='ascii').strip()
-ctx=ssl.create_default_context(cafile=str(q/'agent-ca.crt'))
-base='https://10.250.10.40:9443'
-def call(method,path,payload=None):
-    body=None if payload is None else json.dumps(payload,separators=(',',':')).encode()
-    req=urllib.request.Request(base+path,data=body,method=method)
-    req.add_header('Authorization','Bearer '+admin)
-    if body is not None:req.add_header('Content-Type','application/json')
-    with urllib.request.urlopen(req,context=ctx,timeout=20) as r:
-        return json.loads(r.read().decode())
-def state():
-    return call('GET','/v1/admin/state')
-def host_state():
-    return (state().get('hosts') or {}).get('qualification/lsappliancequal')
-def derive_iface(host):
-    inv=host.get('inventory') or {}
-    network=inv.get('network') or []
-    for row in network:
-        for addr in (row.get('addr_info') or []):
-            if addr.get('local')=='10.250.10.41':
-                return row.get('ifname')
-    return None
-def queue(action,payload):
-    op='t2-'+action.replace('.','-')+'-'+uuid.uuid4().hex[:12]
-    call('POST','/v1/admin/jobs',{'operation_id':op,'site':'qualification','host':'lsappliancequal','action':action,'payload':payload,'ttl_seconds':1800})
-    return op
-def wait_job(op,timeout):
-    deadline=time.time()+timeout
-    while time.time()<deadline:
-        s=state()
-        rec=(s.get('jobs') or {}).get(op)
-        if rec:
-            st=rec.get('state')
-            if st=='SUCCEEDED':
-                print('JOB_PASS action=%s operation=%s' % (rec.get('action'),op))
-                return rec
-            if st in ('FAILED','EXPIRED','UNKNOWN'):
-                print('JOB_FAIL action=%s state=%s receipt=%s' % (rec.get('action'),st,json.dumps(rec.get('receipt'),sort_keys=True)))
-                raise SystemExit(2)
-        time.sleep(4)
-    raise SystemExit('job timeout '+op)
-
-host=host_state()
-if not host:
-    raise SystemExit('enrolled host missing')
-iface=derive_iface(host)
-if not iface:
-    raise SystemExit('management interface for 10.250.10.41 not found in inventory')
-print('MANAGEMENT_INTERFACE='+iface)
-
-op=queue('tools.ensure',{})
-wait_job(op,1200)
-
-seal_payload={
-  'role':'platform',
-  'management_cidr':'10.250.10.0/24',
-  'management_interface':iface,
-  'controller_local':False,
-  'nfs':False
-}
-op=queue('host.seal',seal_payload)
-wait_job(op,600)
-
-deadline=time.time()+180
-final=None
-while time.time()<deadline:
-    final=host_state()
-    inv=(final or {}).get('inventory') or {}
-    if inv.get('sealed') is True and inv.get('seal_integrity_ok') is True:
-        break
-    time.sleep(4)
-inv=(final or {}).get('inventory') or {}
-if inv.get('sealed') is not True or inv.get('seal_integrity_ok') is not True:
-    raise SystemExit('sealed inventory attestation not observed')
-hard=inv.get('hardening') or {}
-print('HOST_SEALED=PASS seal_integrity_ok=true selinux=%s reboot_required=%s' % (inv.get('selinux'),inv.get('reboot_required')))
-for key in sorted(hard):
-    if key in ('firewalld_active','fapolicyd_active','root_ssh_disabled','support_no_sudo','selinux_enforcing'):
-        print('HARDENING_%s=%s' % (key.upper(),hard.get(key)))
-'@
-          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($py))
-          $cmd="printf '%s' '$b64' | base64 -d | python3 -"
-          $out=& $ssh @base 'builder@10.250.10.40' $cmd
+          $local=Join-Path $env:GITHUB_WORKSPACE 'qualification\t2-live-seal.py'
+          if(-not (Test-Path $local)){throw 'Auditable live seal helper missing from checkout'}
+          & $scp @base $local 'builder@10.250.10.40:/home/builder/t2-live-seal.py'
+          if($LASTEXITCODE -ne 0){throw 'Could not stage live seal helper'}
+          $out=& $ssh @base 'builder@10.250.10.40' 'python3 /home/builder/t2-live-seal.py'
           $out | Write-Host
-          if($LASTEXITCODE -ne 0){throw 'Live tools/seal qualification failed'}
-          $joined=$out -join [Environment]::NewLine
-          if($joined -notmatch 'HOST_SEALED=PASS'){throw 'Host seal PASS marker missing'}
+          if($LASTEXITCODE -ne 0){throw 'Live tooling/seal qualification failed'}
+          if(($out -join [Environment]::NewLine) -notmatch 'HOST_SEALED=PASS'){throw 'Host seal PASS marker missing'}
+          & $ssh @base 'builder@10.250.10.40' 'rm -f /home/builder/t2-live-seal.py' 2>$null
 
       - name: Verify management reachability after sealing
         shell: powershell
