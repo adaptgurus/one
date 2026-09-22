@@ -25,8 +25,9 @@ jobs:
           import paramiko
 
           roots = [
-              pathlib.Path(r"C:\LayerSentryLab"),
-              pathlib.Path(r"C:\Users\opc"),
+              pathlib.Path(r"C:\LayerSentryLab\Recovery"),
+              pathlib.Path(r"C:\LayerSentryLab\qualification"),
+              pathlib.Path(r"C:\Users\opc\.ssh"),
           ]
           targets = {
               "ls-fe1": "10.250.10.11",
