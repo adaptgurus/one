@@ -35,7 +35,7 @@ var Version = "dev"
 
 func main() {
 	if len(os.Args) < 2 {
-		fatal("usage: layersentry-host-agent <run|version|self-test|privileged|integrity-status|configure-repo|update|seal-host>")
+		fatal("usage: layersentry-host-agent <enroll|run|version|self-test|privileged|integrity-status|configure-repo|update|seal-host>")
 	}
 	var err error
 	switch os.Args[1] {
@@ -47,6 +47,8 @@ func main() {
 		if err == nil {
 			fmt.Println(Version)
 		}
+	case "enroll":
+		err = enrollCommand(os.Args[2:])
 	case "run":
 		err = runCommand(os.Args[2:])
 	case "privileged":
@@ -73,6 +75,30 @@ func selfTest() error {
 	}
 	_, err := os.Executable()
 	return err
+}
+
+func enrollCommand(args []string) error {
+	fs := flag.NewFlagSet("enroll", flag.ContinueOnError)
+	configPath := fs.String("config", config.DefaultPath, "agent configuration")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	cfg, err := config.Load(*configPath)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	if err := client.EnrollIfNeeded(ctx, cfg); err != nil {
+		return fmt.Errorf("enrollment: %w", err)
+	}
+	if _, err := os.Stat(cfg.ClientCertFile); err != nil {
+		return fmt.Errorf("enrollment certificate missing after successful response: %w", err)
+	}
+	if _, err := os.Stat(cfg.ClientKeyFile); err != nil {
+		return fmt.Errorf("enrollment key missing after successful response: %w", err)
+	}
+	return nil
 }
 
 func runCommand(args []string) error {

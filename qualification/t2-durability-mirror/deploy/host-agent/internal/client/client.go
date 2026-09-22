@@ -120,9 +120,10 @@ func EnrollIfNeeded(ctx context.Context, cfg config.Config) error {
 	if err := atomicWrite(cfg.ClientCertFile, []byte(er.CertPEM), 0o644); err != nil {
 		return err
 	}
-	if err := os.Remove(cfg.BootstrapFile); err != nil && !errors.Is(err, os.ErrNotExist) {
-		return err
-	}
+	// Bootstrap material is root-owned configuration. The unprivileged agent
+	// persists its client identity but must not mutate /etc/layersentry.
+	// The root-owned service wrapper removes the bootstrap token only after
+	// this enrollment step succeeds and both identity files are present.
 	return nil
 }
 
