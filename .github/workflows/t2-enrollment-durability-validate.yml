@@ -84,7 +84,7 @@ jobs:
             'deploy\host-agent\internal\client\client_test.go'='0572d621aa932fb200047db539281b3be77460ff';
             'deploy\host-agent\internal\inventory\enrollment_test.go'='44d6fbc745f682d02eb8bb077bbdb8fe5de0edb8';
             'deploy\host-agent\packaging\layersentry-host-agent.service'='959d2c05236c9122b6f6fdf29bc5030d485660a3';
-            'tests\test_iso_appliance.py'='9e9d91e80db2a8a21f46a80dfe570ff9df780e95'
+            'tests\test_iso_appliance.py'='e002b65b02bb8e7ddeb561c77887ecfae91efe78'
           }
           foreach($rel in $expected.Keys){
             $path=Join-Path $env:T2_FIX_TREE $rel
