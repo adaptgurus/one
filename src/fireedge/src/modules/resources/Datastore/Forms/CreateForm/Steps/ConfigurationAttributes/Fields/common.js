@@ -152,7 +152,7 @@ const DATASTORE_CAPACITY_CHECK = {
 /** @type {Field} - Host bridge field */
 const BRIDGE_LIST = {
   name: 'BRIDGE_LIST',
-  label: T.HostBridgeList,
+  label: 'Compute hosts',
   tooltip: [T.PressKeysToAddAValue, ['ENTER']],
   type: INPUT_TYPES.AUTOCOMPLETE,
   multiple: true,
@@ -161,7 +161,7 @@ const BRIDGE_LIST = {
     .default(() => [])
     .when('$general.STORAGE_BACKEND', (storageBackend, schema) =>
       typeIsOneOf(storageBackend, [isCeph, isIscsiMultipath, isLinstor])
-        ? schema.min(1, 'Select at least one OpenNebula host').required()
+        ? schema.min(1, 'Select at least one compute host').required()
         : schema.notRequired()
     ),
   dependOf: '$general.STORAGE_BACKEND',
