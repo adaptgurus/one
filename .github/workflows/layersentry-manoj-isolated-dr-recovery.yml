@@ -1,0 +1,279 @@
+name: LayerSentry Manoj Isolated DR Recovery
+
+on:
+  pull_request:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - ".github/workflows/layersentry-manoj-isolated-dr-recovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-manoj-isolated-dr-recovery
+  cancel-in-progress: false
+
+jobs:
+  isolated-recovery:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 35
+    steps:
+      - name: Bind exact Manoj host and start only isolated KVM2
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner: $env:RUNNER_NAME" }
+          if ($env:COMPUTERNAME -ine 'MANOJ-TEST-INST') { throw "Wrong computer: $env:COMPUTERNAME" }
+
+          $vm = Get-VM -Name 'ls-kvm2' -ErrorAction Stop
+          Write-Host "KVM2_INITIAL_STATE=$($vm.State)"
+          if ($vm.State -eq 'Off') {
+            Start-VM -VM $vm | Out-Null
+            Write-Host "KVM2_START_REQUESTED=YES"
+          } elseif ($vm.State -eq 'Saved') {
+            Start-VM -VM $vm | Out-Null
+            Write-Host "KVM2_RESUME_REQUESTED=YES"
+          } elseif ($vm.State -ne 'Running') {
+            throw "ls-kvm2 is in unexpected Hyper-V state $($vm.State)"
+          }
+
+          $deadline = (Get-Date).AddMinutes(4)
+          do {
+            Start-Sleep -Seconds 3
+            $vm = Get-VM -Name 'ls-kvm2'
+          } while ($vm.State -ne 'Running' -and (Get-Date) -lt $deadline)
+          if ($vm.State -ne 'Running') { throw 'ls-kvm2 did not reach Running' }
+
+          $nic = Get-VMNetworkAdapter -VMName 'ls-kvm2'
+          $ips = @($nic.IPAddresses | Where-Object { $_ -match '^10\.250\.10\.\d+$' })
+          Write-Host "KVM2_HYPERV_RUNNING=PASS"
+          Write-Host ("KVM2_REPORTED_IPS=" + ($ips -join ','))
+
+      - name: Enable and pin empty OpenNebula host
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          import pathlib
+          import time
+          import xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+
+          ENDPOINT = "http://10.250.10.10:2633/RPC2"
+          AUTH_IMAGE = pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
+          HOST_NAME = "ls-kvm2"
+
+          target = Target.open(str(AUTH_IMAGE))
+          auth = target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          if ":" not in auth or len(auth) > 1024:
+              raise SystemExit("invalid independent OpenNebula auth shape")
+          one = ServerProxy(ENDPOINT, allow_none=True)
+          version = one.one.system.version(auth)
+          if not version[0] or str(version[1]) != "7.4.1":
+              raise SystemExit("independent OpenNebula authentication/version failed")
+          print("INDEPENDENT_ONE_VERSION=" + str(version[1]))
+
+          def host_by_name():
+              res = one.one.hostpool.info(auth, -2, -1, -1)
+              if not res[0]:
+                  raise RuntimeError("host pool query failed: " + str(res[1])[:400])
+              pool = ET.fromstring(res[1])
+              matches = [h for h in pool.findall("HOST") if (h.findtext("NAME") or "").strip() == HOST_NAME]
+              if len(matches) != 1:
+                  raise RuntimeError(f"{HOST_NAME} host count={len(matches)}")
+              return matches[0]
+
+          host = host_by_name()
+          host_id = int(host.findtext("ID"))
+          running = int(host.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
+          if running != 0:
+              raise SystemExit(f"refusing isolated-host preparation: {HOST_NAME} already has RUNNING_VMS={running}")
+
+          status = one.one.host.status(auth, host_id, 0)
+          if not status[0]:
+              raise SystemExit("enable host failed: " + str(status[1])[:400])
+
+          updated = one.one.host.update(auth, host_id, 'PIN_POLICY="PINNED"\nVMS_THREAD="1"', 1)
+          if not updated[0]:
+              raise SystemExit("host pinning update failed: " + str(updated[1])[:400])
+
+          deadline = time.time() + 240
+          last = None
+          while time.time() < deadline:
+              info = one.one.host.info(auth, host_id, False)
+              if not info[0]:
+                  last = ("info_error", str(info[1])[:200])
+                  time.sleep(3)
+                  continue
+              root = ET.fromstring(info[1])
+              state = int(root.findtext("STATE") or -1)
+              running = int(root.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
+              total_cpu = int(root.findtext("./HOST_SHARE/MAX_CPU") or root.findtext("./HOST_SHARE/TOTAL_CPU") or 0)
+              pin = (root.findtext("./TEMPLATE/PIN_POLICY") or "").strip().upper()
+              vms_thread = (root.findtext("./TEMPLATE/VMS_THREAD") or "1").strip()
+              last = (state, running, total_cpu, pin, vms_thread)
+              if running == 0 and total_cpu > 0 and pin == "PINNED" and vms_thread == "1":
+                  print(f"MANOJ_ISOLATED_HOST_READY=PASS HOST={HOST_NAME} HOST_ID={host_id} STATE={state} TOTAL_CPU={total_cpu} PIN_POLICY={pin} VMS_THREAD={vms_thread}")
+                  break
+              time.sleep(3)
+          else:
+              raise SystemExit("isolated host did not become ready: " + repr(last))
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'prepare_isolated_kvm2.py'
+          Set-Content -Path $path -Value $script -Encoding UTF8
+          & 'C:\LayerSentryLab\tools\Python313\python.exe' $path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Import recovery material and boot CPU-pinned VM
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          import functools
+          import hashlib
+          import http.server
+          import json
+          import os
+          import pathlib
+          import threading
+          import time
+          import xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+
+          ENDPOINT = "http://10.250.10.10:2633/RPC2"
+          HOST_HTTP_IP = "10.250.10.1"
+          HTTP_PORT = 18085
+          DATASTORE_ID = 1
+          TARGET_HOST = "ls-kvm2"
+          RECOVERY_DIR = pathlib.Path(r"C:\LayerSentryLab\dr-recovery\tester-vm220-20260923")
+          DISK = RECOVERY_DIR / "vm220-dr-recovered.qcow2"
+          AUTH_IMAGE = pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
+
+          if not DISK.is_file():
+              raise SystemExit("staged recovery disk missing")
+          digest = hashlib.sha256(DISK.read_bytes()).hexdigest()
+          print("RECOVERY_SOURCE_SHA256=" + digest)
+          print("RECOVERY_SOURCE_BYTES=" + str(DISK.stat().st_size))
+
+          target = Target.open(str(AUTH_IMAGE))
+          auth = target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          one = ServerProxy(ENDPOINT, allow_none=True)
+
+          class QuietHandler(http.server.SimpleHTTPRequestHandler):
+              def log_message(self, fmt, *args):
+                  pass
+
+          handler = functools.partial(QuietHandler, directory=str(RECOVERY_DIR))
+          server = http.server.ThreadingHTTPServer(("0.0.0.0", HTTP_PORT), handler)
+          threading.Thread(target=server.serve_forever, daemon=True).start()
+
+          run_id = os.environ.get("GITHUB_RUN_ID", "manual")
+          image_name = "ls-dr-pinned-recovery-" + run_id
+          vm_name = "ls-dr-pinned-boot-" + run_id
+          image_template = f'''NAME="{image_name}"
+          PATH="http://{HOST_HTTP_IP}:{HTTP_PORT}/{DISK.name}"
+          TYPE="OS"
+          PERSISTENT="NO"
+          DESCRIPTION="LayerSentry CPU-pinned independent DR recovery qualification"
+          '''
+          alloc = one.one.image.allocate(auth, image_template, DATASTORE_ID)
+          if not alloc[0]:
+              raise SystemExit("image allocate failed: " + str(alloc[1])[:500])
+          image_id = int(alloc[1])
+          print("PINNED_RECOVERY_IMAGE_ID=" + str(image_id))
+
+          image_state = None
+          for _ in range(180):
+              info = one.one.image.info(auth, image_id, False)
+              if not info[0]:
+                  raise SystemExit("image info failed")
+              root = ET.fromstring(info[1])
+              image_state = int(root.findtext("STATE") or -1)
+              if image_state == 1:
+                  break
+              if image_state in (5, 7):
+                  err = root.findtext("./TEMPLATE/ERROR") or root.findtext("ERROR") or "provider error"
+                  raise SystemExit("image terminal state: " + err[:500])
+              time.sleep(2)
+          if image_state != 1:
+              raise SystemExit("image did not become READY")
+
+          vm_template = f'''NAME="{vm_name}"
+          CPU="1"
+          VCPU="1"
+          MEMORY="256"
+          TOPOLOGY=[
+            PIN_POLICY="CORE",
+            CORES="1",
+            SOCKETS="1",
+            THREADS="1"
+          ]
+          DISK=[IMAGE_ID="{image_id}"]
+          SCHED_REQUIREMENTS="NAME = \"{TARGET_HOST}\""
+          '''
+          va = one.one.vm.allocate(auth, vm_template, False)
+          if not va[0]:
+              raise SystemExit("VM allocate failed: " + str(va[1])[:500])
+          vm_id = int(va[1])
+          print("PINNED_RECOVERY_VM_ID=" + str(vm_id))
+
+          final = None
+          for _ in range(180):
+              info = one.one.vm.info(auth, vm_id, False)
+              if not info[0]:
+                  raise SystemExit("VM info failed")
+              root = ET.fromstring(info[1])
+              state = int(root.findtext("STATE") or -1)
+              lcm = int(root.findtext("LCM_STATE") or -1)
+              histories = root.findall("./HISTORY_RECORDS/HISTORY")
+              host = histories[-1].findtext("HOSTNAME") if histories else ""
+              pin = (root.findtext("./TEMPLATE/TOPOLOGY/PIN_POLICY") or "").strip().upper()
+              numa_cpus = [x.text for x in root.findall("./TEMPLATE/NUMA_NODE/CPUS") if x.text]
+              final = (state, lcm, host, pin, numa_cpus)
+              if state == 3 and lcm == 3 and host == TARGET_HOST:
+                  if pin != "CORE":
+                      raise SystemExit(f"VM running but PIN_POLICY={pin!r}, expected CORE")
+                  print(f"MANOJ_PINNED_RECOVERY_BOOT=PASS VM_ID={vm_id} IMAGE_ID={image_id} HOST={host} PIN_POLICY={pin} NUMA_CPUS={numa_cpus}")
+                  break
+              if state == 6 or lcm in (14,15,36,44,48,49,50,56,57,58,59,60):
+                  raise SystemExit("VM entered terminal/failure state: " + repr(final))
+              time.sleep(2)
+          else:
+              raise SystemExit("pinned recovery VM did not become RUNNING: " + repr(final))
+
+          evidence = {
+              "vm_id": vm_id,
+              "image_id": image_id,
+              "host": TARGET_HOST,
+              "pin_policy": "CORE",
+              "source_sha256": digest,
+              "source_bytes": DISK.stat().st_size,
+              "preserved": True,
+          }
+          out = pathlib.Path(os.environ["RUNNER_TEMP"]) / "manoj-pinned-recovery.json"
+          out.write_text(json.dumps(evidence, indent=2) + "\n", encoding="utf-8")
+          print("MANOJ_PINNED_RECOVERY_PRESERVED=YES")
+          server.shutdown()
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'pinned_recovery.py'
+          Set-Content -Path $path -Value $script -Encoding UTF8
+          $rule = "LayerSentry-Pinned-DR-$env:GITHUB_RUN_ID"
+          try {
+            New-NetFirewallRule -DisplayName $rule -Direction Inbound -Action Allow -Protocol TCP -LocalPort 18085 -RemoteAddress 10.250.10.0/24 -Profile Any | Out-Null
+            & 'C:\LayerSentryLab\tools\Python313\python.exe' $path
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue
+          }
+
+      - name: Upload preserved recovery evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: manoj-pinned-recovery-evidence
+          path: ${{ runner.temp }}\manoj-pinned-recovery.json
+          if-no-files-found: error
+          retention-days: 7
