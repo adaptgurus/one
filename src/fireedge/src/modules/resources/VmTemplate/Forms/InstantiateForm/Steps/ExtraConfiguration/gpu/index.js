@@ -24,9 +24,9 @@ const Gpu = ({ vmTemplate }) => {
   return (
     <Box>
       <Alert severity="info" sx={{ mb: 2 }}>
-        Select only a provider-published GPU profile. OpenNebula schedules a
-        compatible GPU; physical Host names and PCI addresses are intentionally
-        not exposed to self-service users.
+        Select a LayerSentry-approved GPU profile. LayerSentry schedules a
+        compatible GPU automatically; physical host names and PCI addresses are
+        hidden from self-service users.
       </Alert>
       <FormWithSchema
         id={EXTRA_ID}
