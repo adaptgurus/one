@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# qualification-source: disposable-networked-ssh-v2
 import base64
 import bz2
 import csv
@@ -14,8 +15,15 @@ import time
 import urllib.request
 import xml.etree.ElementTree as ET
 
-VM_ID = 220
+VM_ID = None
 BACKUP_DS = 100
+SOURCE_IMAGE_ID = 1
+SOURCE_NETWORK_ID = 0
+SOURCE_HOST = None
+SOURCE_HOST_CANDIDATES = [x.strip() for x in os.environ.get("LAYERSENTRY_TEST_HOSTS", "rocky-02,rocky-03").split(",") if x.strip()]
+RUN_ID = os.environ.get("GITHUB_RUN_ID", str(os.getpid()))
+SOURCE_NAME = "ls-dr-threepoint-src-" + RUN_ID
+SOURCE_IP = None
 RUNNER_TEMP = pathlib.Path(os.environ["RUNNER_TEMP"])
 OUTDIR = RUNNER_TEMP / "three-point-portable"
 OUTDIR.mkdir(parents=True, exist_ok=True)
@@ -36,6 +44,8 @@ def ssh(cmd, *, input_text=None):
     return p.stdout
 
 def vm_xml():
+    if VM_ID is None:
+        raise RuntimeError("source VM is not allocated")
     return ET.fromstring(ssh(f"onevm show {VM_ID} -x"))
 
 def vm_state():
@@ -49,102 +59,191 @@ def wait_vm_state(wanted, timeout=180):
         time.sleep(2)
     raise RuntimeError(f"VM {VM_ID} did not reach state {wanted}")
 
-def ensure_running():
+def find_vm_by_name(name):
+    rows = list(csv.reader(ssh("onevm list --csv --no-header").splitlines()))
+    matches = []
+    for row in rows:
+        if len(row) >= 4 and row[3].strip() == name:
+            matches.append(int(row[0]))
+    if len(matches) > 1:
+        raise RuntimeError(f"multiple VMs named {name}: {matches}")
+    return matches[0] if matches else None
+
+def select_safe_source_host():
+    global SOURCE_HOST
+    if not SOURCE_HOST_CANDIDATES:
+        raise RuntimeError("no qualification compute-host candidates configured")
+
+    pool = ET.fromstring(ssh("onevm list --xml"))
+    running_by_host = {}
+    for vm in pool.findall("VM"):
+        state = int(vm.findtext("STATE") or -1)
+        lcm = int(vm.findtext("LCM_STATE") or -1)
+        if state != 3 or lcm != 3:
+            continue
+        histories = vm.findall("./HISTORY_RECORDS/HISTORY")
+        host = histories[-1].findtext("HOSTNAME") if histories else ""
+        if host:
+            running_by_host[host] = running_by_host.get(host, 0) + 1
+
+    rejected = []
+    for host in SOURCE_HOST_CANDIDATES:
+        host_xml = ET.fromstring(ssh(f"onehost show {shlex.quote(host)} -x"))
+        policies = [(node.text or "").strip().upper() for node in host_xml.findall(".//PIN_POLICY")]
+        pin_policy = next((value for value in policies if value), "")
+        vms_thread = next(((node.text or "").strip() for node in host_xml.findall(".//VMS_THREAD") if (node.text or "").strip()), "1")
+        existing = running_by_host.get(host, 0)
+        if pin_policy != "PINNED":
+            rejected.append(f"{host}:PIN_POLICY={pin_policy or 'UNSET'}")
+            continue
+        if vms_thread != "1":
+            rejected.append(f"{host}:VMS_THREAD={vms_thread}")
+            continue
+        if existing != 0:
+            rejected.append(f"{host}:RUNNING_VMS={existing}")
+            continue
+        SOURCE_HOST = host
+        print(f"CPU_ISOLATION_HOST=PASS HOST={host} PIN_POLICY={pin_policy} VMS_THREAD={vms_thread} PREEXISTING_RUNNING_VMS=0")
+        return
+
+    raise RuntimeError("no safe empty PINNED compute host for qualification: " + ";".join(rejected))
+
+def create_source_vm():
+    global VM_ID, SOURCE_IP
+    if not SOURCE_HOST:
+        raise RuntimeError("safe CPU-isolated source host was not selected")
+    existing = find_vm_by_name(SOURCE_NAME)
+    if existing is not None:
+        raise RuntimeError(f"refusing to reuse pre-existing disposable VM {SOURCE_NAME} id={existing}")
+
+    template = f'''NAME="{SOURCE_NAME}"
+CPU="1"
+VCPU="1"
+MEMORY="256"
+TOPOLOGY=[
+  PIN_POLICY="CORE",
+  CORES="1",
+  SOCKETS="1",
+  THREADS="1"
+]
+DISK=[IMAGE_ID="{SOURCE_IMAGE_ID}"]
+NIC=[NETWORK_ID="{SOURCE_NETWORK_ID}"]
+CONTEXT=[
+  NETWORK="YES",
+  SSH_PUBLIC_KEY="$USER[SSH_PUBLIC_KEY]"
+]
+BACKUP_CONFIG=[
+  MODE="INCREMENT",
+  FS_FREEZE="NONE",
+  INCREMENT_MODE="CBT",
+  INTERACTIVE="NO",
+  BACKUP_VOLATILE="NO",
+  KEEP_LAST="3"
+]
+SCHED_REQUIREMENTS="NAME = \\"{SOURCE_HOST}\\""
+'''
+    tmpl = f"/tmp/{SOURCE_NAME}.tmpl"
     try:
-        state = vm_state()
-        if state in (4, 5, 8, 9):
-            ssh(f"onevm resume {VM_ID}")
-            wait_vm_state(3, 180)
-    except Exception as exc:
-        print("SOURCE_VM_RECOVERY_WARNING=" + str(exc)[:300])
+        ssh(
+            f"cat > {shlex.quote(tmpl)} && "
+            f"onevm create {shlex.quote(tmpl)}; rc=$?; rm -f {shlex.quote(tmpl)}; exit $rc",
+            input_text=template,
+        )
+    except subprocess.CalledProcessError:
+        # onevm create can fail after the VM object was allocated. Recover the
+        # uniquely named qualification-owned identity so finally cleanup can
+        # terminate it rather than leaking a disposable VM.
+        VM_ID = find_vm_by_name(SOURCE_NAME)
+        raise
+    VM_ID = find_vm_by_name(SOURCE_NAME)
+    if VM_ID is None:
+        raise RuntimeError("source VM allocation returned no authoritative VM identity")
+    print(f"SOURCE_VM_CREATED=PASS VM_ID={VM_ID} NAME={SOURCE_NAME}")
 
-def qga_fix():
-    config = '''FEATURES=[GUEST_AGENT="YES",ACPI="YES"]
-BACKUP_CONFIG=[MODE="INCREMENT",FS_FREEZE="NONE",INCREMENT_MODE="CBT",BACKUP_VOLATILE="NO",KEEP_LAST="3"]
-'''
-    ssh(f"onevm updateconf {VM_ID}", input_text=config)
-    if vm_state() != 3:
-        ensure_running()
-    ssh(f"onevm poweroff {VM_ID} --hard")
-    wait_vm_state(8, 180)
-    remote = r'''set -euo pipefail
-dev=/dev/nbd15
-mnt=/mnt/ls-vm220-qga-fix
-connected=0
-cleanup() {
-  set +e
-  mountpoint -q "$mnt" && umount "$mnt"
-  [ "$connected" = 1 ] && qemu-nbd --disconnect "$dev" >/dev/null 2>&1
-  rmdir "$mnt" >/dev/null 2>&1 || true
-}
-trap cleanup EXIT
-modprobe nbd max_part=8
-if [ -s /sys/block/nbd15/pid ]; then
-  echo "/dev/nbd15 is already in use" >&2
-  exit 1
-fi
-mkdir -p "$mnt"
-qemu-nbd --connect="$dev" /var/lib/one/datastores/0/220/disk.0
-connected=1
-sleep 1
-mount "$dev" "$mnt"
-mkdir -p "$mnt/etc/local.d" "$mnt/etc/runlevels/default"
-cat > "$mnt/etc/local.d/layersentry-qga-retry.start" <<'SCRIPT'
-#!/bin/sh
-i=0
-while [ "$i" -lt 30 ]; do
-  if [ -e /dev/virtio-ports/org.qemu.guest_agent.0 ]; then
-    rc-service qemu-guest-agent restart >/dev/null 2>&1 && exit 0
-  fi
-  i=$((i+1))
-  sleep 1
-done
-exit 0
-SCRIPT
-chmod 0755 "$mnt/etc/local.d/layersentry-qga-retry.start"
-ln -sfn /etc/init.d/local "$mnt/etc/runlevels/default/local"
-sync
-'''
-    ssh("ssh rocky-02 'sudo bash -s'", input_text=remote)
-    ssh(f"onevm resume {VM_ID}")
-    wait_vm_state(3, 180)
-    ping_cmd = "sudo virsh qemu-agent-command one-220 '{\"execute\":\"guest-ping\"}'"
-    end = time.time() + 120
-    while time.time() < end:
-        try:
-            p = subprocess.run(
-                ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "rocky-02", ping_cmd],
-                capture_output=True, text=True, timeout=8
-            )
-            if p.returncode == 0 and '"return"' in p.stdout:
-                print("VM220_QGA_CONNECTED=PASS")
-                return
-        except Exception:
-            pass
-        time.sleep(2)
-    raise RuntimeError("qemu-ga did not connect after boot-time retry")
-
-def qga_exec(command, expected):
-    remote = f"onevm exec {VM_ID} {shlex.quote(command)}"
-    ssh(remote)
-    end = time.time() + 120
-    last = None
+    end = time.time() + 300
     while time.time() < end:
         root = vm_xml()
-        q = root.find("./TEMPLATE/QEMU_GA_EXEC")
-        if q is not None:
-            status = (q.findtext("STATUS") or "").strip()
-            last = q
-            if status in ("DONE", "ERROR", "CANCELLED"):
-                rc = (q.findtext("RETURN_CODE") or "").strip()
-                raw = (q.findtext("STDOUT") or "").strip()
-                out = base64.b64decode(raw).decode("utf-8", "replace") if raw else ""
-                if status != "DONE" or rc != "0" or expected not in out:
-                    raise RuntimeError(f"guest exec failed status={status} rc={rc} output={out[:200]!r}")
-                print("GUEST_MARKER_PASS=" + expected)
-                return
+        state = int(root.findtext("STATE"))
+        lcm = int(root.findtext("LCM_STATE"))
+        ip = (root.findtext("./TEMPLATE/NIC/IP") or "").strip()
+        histories = root.findall("./HISTORY_RECORDS/HISTORY")
+        host = histories[-1].findtext("HOSTNAME") if histories else ""
+        if state == 3 and lcm == 3 and host == SOURCE_HOST and ip:
+            SOURCE_IP = ip
+            break
+        if state in (6, 7):
+            raise RuntimeError(f"source VM entered terminal state state={state} lcm={lcm}")
         time.sleep(2)
-    raise RuntimeError("guest exec timed out")
+    if not SOURCE_IP:
+        raise RuntimeError("source VM did not reach RUNNING with an allocated IP")
+    print(f"SOURCE_VM_RUNNING=PASS VM_ID={VM_ID} IP={SOURCE_IP} HOST={SOURCE_HOST}")
+
+    end = time.time() + 240
+    while time.time() < end:
+        cmd = (
+            "ssh -o BatchMode=yes -o StrictHostKeyChecking=no "
+            "-o UserKnownHostsFile=/dev/null -o ConnectTimeout=4 "
+            f"root@{shlex.quote(SOURCE_IP)} true"
+        )
+        try:
+            ssh(cmd)
+            print("SOURCE_VM_SSH=PASS")
+            return
+        except subprocess.CalledProcessError:
+            time.sleep(3)
+    raise RuntimeError(f"source VM SSH did not become ready at {SOURCE_IP}")
+
+def guest_exec(command):
+    if not SOURCE_IP:
+        raise RuntimeError("source VM IP is unavailable")
+    remote = (
+        "ssh -o BatchMode=yes -o StrictHostKeyChecking=no "
+        "-o UserKnownHostsFile=/dev/null -o ConnectTimeout=8 "
+        f"root@{shlex.quote(SOURCE_IP)} {shlex.quote(command)}"
+    )
+    return ssh(remote)
+
+def write_guest_marker(marker):
+    out = guest_exec(
+        f"printf '%s\\n' {shlex.quote(marker)} > /etc/layersentry-dr-point && "
+        "sync && cat /etc/layersentry-dr-point"
+    ).strip()
+    if out != marker:
+        raise RuntimeError(f"guest marker write mismatch: expected {marker}, got {out!r}")
+    print("GUEST_MARKER_PASS=" + marker)
+
+def owned_backup_ids():
+    if VM_ID is None:
+        return []
+    try:
+        root = vm_xml()
+    except Exception:
+        return []
+    out = []
+    for node in root.findall("./BACKUPS/BACKUP_IDS/ID"):
+        try:
+            out.append(int((node.text or "").strip()))
+        except ValueError:
+            pass
+    return sorted(set(out))
+
+def cleanup_source():
+    # Owner constraint for this qualification: never stop/terminate/delete a
+    # running VM. Preserve the qualification-owned source VM and its backup
+    # images after the run and report exact IDs for explicit later cleanup.
+    if VM_ID is None:
+        return
+    backup_ids = owned_backup_ids()
+    try:
+        root = vm_xml()
+        state = int(root.findtext("STATE"))
+        lcm = int(root.findtext("LCM_STATE"))
+        print(
+            f"SOURCE_VM_PRESERVED=PASS VM_ID={VM_ID} STATE={state} "
+            f"LCM_STATE={lcm} BACKUP_IMAGE_IDS={','.join(map(str, backup_ids))}"
+        )
+    except Exception as exc:
+        print("SOURCE_VM_PRESERVE_WARNING=" + str(exc)[:300])
 
 def counters():
     root = vm_xml()
@@ -158,7 +257,7 @@ def image_state(image_id):
     return int(root.findtext("STATE"))
 
 def capture(label, marker, reset):
-    qga_exec(f"printf '{marker}\\n' > /etc/layersentry-dr-point && sync && cat /etc/layersentry-dr-point", marker)
+    write_guest_marker(marker)
     before_img, before_inc = counters()
     cmd = f"onevm backup {VM_ID} -d {BACKUP_DS}" + (" --reset" if reset else "")
     ssh(cmd)
@@ -203,22 +302,22 @@ def install_restic():
     return binary
 
 def copy_repo():
-    archive = RUNNER_TEMP / "vm220-three-point-restic.tar.gz"
+    archive = RUNNER_TEMP / f"vm{VM_ID}-three-point-restic.tar.gz"
     with archive.open("wb") as out:
         p = subprocess.run(
-            ["ssh", "rocky-01", "ssh rocky-03 'tar -C /var/lib/one/datastores/100 -czf - 220'"],
+            ["ssh", "rocky-01", f"ssh rocky-03 'tar -C /var/lib/one/datastores/100 -czf - {VM_ID}'"],
             stdout=out,
             stderr=subprocess.PIPE,
         )
     if p.returncode != 0 or archive.stat().st_size == 0:
         raise RuntimeError("failed to copy Restic repository: " + p.stderr.decode("utf-8", "replace")[:300])
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    (RUNNER_TEMP / "vm220-three-point-restic.tar.gz.sha256").write_text(digest + "  " + archive.name + "\n")
+    (RUNNER_TEMP / f"vm{VM_ID}-three-point-restic.tar.gz.sha256").write_text(digest + "  " + archive.name + "\n")
     copied = RUNNER_TEMP / "recovery-copy"
     shutil.rmtree(copied, ignore_errors=True)
     copied.mkdir()
     run(["tar", "-xzf", str(archive), "-C", str(copied)])
-    return archive, digest, copied / "220"
+    return archive, digest, copied / str(VM_ID)
 
 def datastore_password_file():
     root = ET.fromstring(ssh("onedatastore show 100 --decrypt -x"))
@@ -257,14 +356,15 @@ def verify_portable_marker(disk, expected):
 def main():
     restic = install_restic()
     try:
-        qga_fix()
+        select_safe_source_host()
+        create_source_vm()
         points = []
-        image_id, inc = capture("BASELINE", "LS-DR-BASELINE-20260923", True)
-        points.append(("BASELINE", "LS-DR-BASELINE-20260923", image_id, inc))
-        image2, inc = capture("MIDDLE", "LS-DR-MIDDLE-20260923", False)
-        points.append(("MIDDLE", "LS-DR-MIDDLE-20260923", image2, inc))
-        image3, inc = capture("LATEST", "LS-DR-LATEST-20260923", False)
-        points.append(("LATEST", "LS-DR-LATEST-20260923", image3, inc))
+        image_id, inc = capture("BASELINE", "LS-DR-BASELINE-20260924", True)
+        points.append(("BASELINE", "LS-DR-BASELINE-20260924", image_id, inc))
+        image2, inc = capture("MIDDLE", "LS-DR-MIDDLE-20260924", False)
+        points.append(("MIDDLE", "LS-DR-MIDDLE-20260924", image2, inc))
+        image3, inc = capture("LATEST", "LS-DR-LATEST-20260924", False)
+        points.append(("LATEST", "LS-DR-LATEST-20260924", image3, inc))
         if len({p[2] for p in points}) != 1 or [p[3] for p in points] != [0, 1, 2]:
             raise RuntimeError("unexpected OpenNebula three-point identity")
         backup_image_id = points[0][2]
@@ -328,6 +428,8 @@ def main():
         passfile.unlink(missing_ok=True)
         manifest = {
             "qualification": "T10.4-three-point-independent-dr",
+            "source_vm_name": SOURCE_NAME,
+            "source_vm_owned_by_qualification": True,
             "source_site": "tester",
             "recovery_site": "manoj",
             "source_vm_id": VM_ID,
@@ -341,7 +443,7 @@ def main():
         with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as f:
             f.write("PORTABLE_DIR=" + str(OUTDIR) + "\n")
     finally:
-        ensure_running()
+        cleanup_source()
 
 if __name__ == "__main__":
     main()
