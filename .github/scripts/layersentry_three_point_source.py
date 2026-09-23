@@ -180,33 +180,22 @@ def owned_backup_ids():
     return sorted(set(out))
 
 def cleanup_source():
-    global VM_ID
+    # Owner constraint for this qualification: never stop/terminate/delete a
+    # running VM. Preserve the qualification-owned source VM and its backup
+    # images after the run and report exact IDs for explicit later cleanup.
     if VM_ID is None:
         return
     backup_ids = owned_backup_ids()
     try:
         root = vm_xml()
         state = int(root.findtext("STATE"))
-        if state != 6:
-            ssh(f"onevm terminate {VM_ID} --hard")
-            end = time.time() + 180
-            while time.time() < end:
-                try:
-                    if vm_state() == 6:
-                        break
-                except Exception:
-                    break
-                time.sleep(2)
-        print(f"SOURCE_VM_CLEANUP_REQUESTED=PASS VM_ID={VM_ID}")
+        lcm = int(root.findtext("LCM_STATE"))
+        print(
+            f"SOURCE_VM_PRESERVED=PASS VM_ID={VM_ID} STATE={state} "
+            f"LCM_STATE={lcm} BACKUP_IMAGE_IDS={','.join(map(str, backup_ids))}"
+        )
     except Exception as exc:
-        print("SOURCE_VM_CLEANUP_WARNING=" + str(exc)[:300])
-
-    for image_id in backup_ids:
-        try:
-            ssh(f"oneimage delete {image_id}")
-            print(f"SOURCE_BACKUP_IMAGE_CLEANUP_REQUESTED=PASS IMAGE_ID={image_id}")
-        except Exception as exc:
-            print(f"SOURCE_BACKUP_IMAGE_CLEANUP_WARNING IMAGE_ID={image_id} ERROR={str(exc)[:200]}")
+        print("SOURCE_VM_PRESERVE_WARNING=" + str(exc)[:300])
 
 def counters():
     root = vm_xml()
