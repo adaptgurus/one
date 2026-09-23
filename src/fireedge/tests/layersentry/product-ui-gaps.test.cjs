@@ -215,6 +215,16 @@ test('backup plan create flow uses Backup Storage wording', () => {
   assert.match(schema, /DATASTORE_TYPES\.BACKUP\.value/)
 })
 
+test('VM GPU self-service help stays LayerSentry-only', () => {
+  const gpu = read(
+    'src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/gpu/index.js'
+  )
+
+  assert.match(gpu, /LayerSentry-approved GPU profile/)
+  assert.match(gpu, /LayerSentry schedules a/)
+  assert.doesNotMatch(gpu.split('\n').slice(1).join('\n'), /OpenNebula/)
+})
+
 test('LayerSentry forms and primary actions use one product palette', () => {
   const shell = read(
     'src/client/apps/layersentry/components/PortalShell.js'
