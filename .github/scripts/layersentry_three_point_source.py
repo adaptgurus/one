@@ -108,11 +108,15 @@ sync
     ssh("ssh rocky-02 'sudo bash -s'", input_text=remote)
     ssh(f"onevm resume {VM_ID}")
     wait_vm_state(3, 180)
-    ping_cmd = "ssh rocky-02 \"sudo virsh qemu-agent-command one-220 '{\\\"execute\\\":\\\"guest-ping\\\"}'\""
+    ping_cmd = "sudo virsh qemu-agent-command one-220 '{\"execute\":\"guest-ping\"}'"
     end = time.time() + 120
     while time.time() < end:
         try:
-            if "{}" in ssh(ping_cmd):
+            p = subprocess.run(
+                ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=5", "rocky-02", ping_cmd],
+                capture_output=True, text=True, timeout=8
+            )
+            if p.returncode == 0 and '"return"' in p.stdout:
                 print("VM220_QGA_CONNECTED=PASS")
                 return
         except Exception:
