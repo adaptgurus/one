@@ -83,7 +83,7 @@ const LINSTOR_RESOURCE_GROUP = {
   name: 'LINSTOR_RESOURCE_GROUP',
   label: 'LINSTOR resource group',
   tooltip:
-    'Resource groups are the supported placement-policy object for current LINSTOR OpenNebula integration.',
+    'Resource groups are the supported placement-policy object for the current LayerSentry LINSTOR integration.',
   type: INPUT_TYPES.TEXT,
   dependOf: '$general.STORAGE_BACKEND',
   htmlType: hideUnless(isLinstor),
