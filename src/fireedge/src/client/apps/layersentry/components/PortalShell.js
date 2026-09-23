@@ -630,7 +630,7 @@ const PortalShell = ({ children, endpoints }) => {
               sx={{ flex: 1, fontSize: 13, color: colors.text.primary }}
             />
           </Box>
-  
+
           <Box
             sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}
           >
@@ -686,7 +686,11 @@ const PortalShell = ({ children, endpoints }) => {
                 Role
               </Typography>
               <Typography
-                sx={{ color: colors.text.primary, fontSize: 12, fontWeight: 700 }}
+                sx={{
+                  color: colors.text.primary,
+                  fontSize: 12,
+                  fontWeight: 700,
+                }}
               >
                 {roleLabel(view)}
               </Typography>
