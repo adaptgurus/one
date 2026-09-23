@@ -62,9 +62,8 @@ const run = async () => {
       const chip = [...document.querySelectorAll('.MuiChip-root')].find(
         (node) => node.textContent === 'Ready'
       )
-      const switchRoot = document.querySelector('[data-testid="qa-switch"]')
-      const checkedSwitch = switchRoot?.querySelector(
-        '.MuiSwitch-switchBase.Mui-checked'
+      const checkedSwitch = document.querySelector(
+        '[data-testid="qa-switch"].Mui-checked'
       )
       const checkedCheckbox = document.querySelector(
         '[data-testid="qa-checkbox"].Mui-checked'
