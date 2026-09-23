@@ -233,7 +233,7 @@ const PortalShell = ({ children, endpoints }) => {
             borderWidth: 2,
           },
         },
-        '& .MuiInputLabel-root.Mui-focused, & .MuiFormControl-root:focus-within .MuiInputLabel-root':
+        '&& .MuiInputLabel-root.Mui-focused, && .MuiFormControl-root:focus-within .MuiInputLabel-root':
           {
             color: colors.brand.primary,
           },
