@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - fix/layersentry-vm-network-backup-20260921
+      - dr-threepoint-ssh-20260924
     paths:
       - .github/workflows/layersentry-three-point-independent-dr.yml
       - .github/scripts/layersentry_three_point_source.py
@@ -27,7 +28,7 @@ jobs:
       - name: Upload three-point recovery material
         uses: actions/upload-artifact@v4
         with:
-          name: vm220-three-point-independent-recovery
+          name: three-point-independent-recovery
           path: |
             ${{ env.PORTABLE_DIR }}/baseline.qcow2
             ${{ env.PORTABLE_DIR }}/baseline.qcow2.sha256
@@ -50,8 +51,8 @@ jobs:
       - name: Download three-point recovery material
         uses: actions/download-artifact@v4
         with:
-          name: vm220-three-point-independent-recovery
-          path: ${{ runner.temp }}\vm220-three-point
+          name: three-point-independent-recovery
+          path: ${{ runner.temp }}\three-point
       - name: Verify and boot all three points on independent OpenNebula
         shell: powershell
         run: |
@@ -67,7 +68,7 @@ jobs:
       - name: Upload independent boot evidence
         uses: actions/upload-artifact@v4
         with:
-          name: vm220-three-point-independent-boot-evidence
-          path: ${{ runner.temp }}\vm220-three-point\manoj-boot-results.json
+          name: three-point-independent-boot-evidence
+          path: ${{ runner.temp }}\three-point\manoj-boot-results.json
           if-no-files-found: error
           retention-days: 7
