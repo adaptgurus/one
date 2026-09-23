@@ -186,6 +186,20 @@ test('bridged customer creation flows do not expose OpenNebula branding', () => 
   }
 })
 
+test('firewall network target uses LayerSentry wording and validates the selected target', () => {
+  const rules = read(
+    'src/modules/resources/SecurityGroups/Forms/CreateForm/Steps/Rules/schema.js'
+  )
+
+  assert.match(rules, /LAYERSENTRY_VIRTUAL_NETWORK = 'LayerSentry Network'/)
+  assert.doesNotMatch(rules, /T\.OpennebulaVirtualNetwork/)
+  assert.match(rules, /mixed\(\)\.when\(TARGET\.name/)
+  assert.match(
+    rules,
+    /target === LAYERSENTRY_VIRTUAL_NETWORK/
+  )
+})
+
 test('LayerSentry forms and primary actions use one product palette', () => {
   const shell = read(
     'src/client/apps/layersentry/components/PortalShell.js'
