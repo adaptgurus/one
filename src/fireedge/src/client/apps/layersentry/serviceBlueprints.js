@@ -1842,6 +1842,67 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
     )
   }
 
+  if (id === 'mssql') {
+    if (topology === 'Standalone') {
+      return plan(
+        1,
+        [
+          component(
+            'SQL Server',
+            'Standalone licensed database VM',
+            1,
+            1,
+            'No automatic database failover.'
+          ),
+        ],
+        [],
+        1,
+        'SQL Server'
+      )
+    }
+
+    if (topology === 'Basic AG (2 SQL replicas + config-only quorum)') {
+      return plan(
+        3,
+        [
+          component(
+            'SQL Server Standard replicas',
+            'Primary + secondary Basic AG VMs',
+            2,
+            2,
+            'Standard edition Basic AG is limited to two SQL replicas.'
+          ),
+          component(
+            'Pacemaker configuration-only quorum',
+            'Dedicated quorum VM without a SQL data replica',
+            1,
+            1,
+            'Required for safe automatic failover of a two-replica Linux AG.'
+          ),
+        ],
+        [],
+        2,
+        'SQL Server replicas'
+      )
+    }
+
+    return plan(
+      3,
+      [
+        component(
+          'SQL Server Enterprise replicas',
+          'Three Availability Group replica VMs',
+          3,
+          3,
+          'Enterprise edition supports the full three-replica HA profile.'
+        ),
+      ],
+      [],
+      3,
+      'SQL Server replicas'
+    )
+  }
+
   if (id === 'mariadb') {
     const dr = topology.indexOf('DR') >= 0
     const nodes = dr
@@ -2492,6 +2553,51 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         nodes,
         'Forgejo'
       )
+    )
+  }
+
+  if (id === 'elasticsearch') {
+    if (topology === '3-node Production Cluster') {
+      return plan(
+        3,
+        [
+          component(
+            'Elasticsearch combined nodes',
+            'Master-eligible + data/ingest VMs',
+            3,
+            3,
+            'Small production profile keeps an odd master quorum while every node carries data.'
+          ),
+        ],
+        [],
+        3,
+        'Elasticsearch'
+      )
+    }
+
+    const dataNodes = topology.includes('6 data') ? 6 : 3
+
+    return plan(
+      3 + dataNodes,
+      [
+        component(
+          'Elasticsearch master nodes',
+          'Dedicated master-eligible VMs',
+          3,
+          3,
+          'Three dedicated masters preserve cluster-state quorum.'
+        ),
+        component(
+          'Elasticsearch data nodes',
+          'Dedicated data/ingest/search VMs',
+          dataNodes,
+          dataNodes,
+          'Data capacity scales independently from master quorum.'
+        ),
+      ],
+      [],
+      dataNodes,
+      'Elasticsearch data'
     )
   }
 
