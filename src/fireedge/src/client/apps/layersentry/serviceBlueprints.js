@@ -35,6 +35,10 @@ export const LICENSE_NOTICES = Object.freeze({
     'Percona Server for MongoDB uses MongoDB-derived source-available licensing for current releases. Treat it separately from OSI-approved OSS.',
   redis:
     'Redis licensing varies by release. The production catalog must pin the approved exact artifact and license rather than assuming one license across versions.',
+  mssql:
+    'Microsoft SQL Server production use requires the customer-selected licensed edition and a qualified Microsoft package repository / entitlement path.',
+  elasticsearch:
+    'Elasticsearch distribution licensing must be presented accurately for the exact artifact; catalog presence is not an OSI-open-source claim.',
 })
 
 export const BACKUP_PROFILES = Object.freeze({
@@ -55,6 +59,12 @@ export const BACKUP_PROFILES = Object.freeze({
     default: true,
     engine: 'mariadb-backup + binary logs',
     note: 'PITR uses qualified backup plus binary-log retention.',
+  },
+  mssql: {
+    mode: 'direct',
+    default: true,
+    engine: 'SQL Server native full/differential/log backups',
+    note: 'PITR requires an intact native backup and transaction-log chain; AG replication is not a backup.',
   },
   'mongodb-community': {
     mode: 'direct',
@@ -176,6 +186,12 @@ export const BACKUP_PROFILES = Object.freeze({
     engine: 'Coordinated DB + repository/object storage recovery',
     note: 'Database-only recovery is insufficient because repository/object state must remain consistent.',
   },
+  elasticsearch: {
+    mode: 'direct',
+    default: true,
+    engine: 'Elasticsearch snapshot repository',
+    note: 'Snapshot API recovery is the supported application backup path; live data-directory copies are not advertised as backup.',
+  },
   opensearch: {
     mode: 'direct',
     default: true,
@@ -225,6 +241,14 @@ export const CAPACITY_PROFILES = Object.freeze({
     growth: true,
     dataLabel: 'Expected database data (GiB)',
     loadLabel: 'Expected DB client connections',
+    defaults: [8, 32, 500, 1000, 25],
+  },
+  mssql: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected SQL Server data (GiB)',
+    loadLabel: 'Expected SQL client connections',
     defaults: [8, 32, 500, 1000, 25],
   },
   'mongodb-community': {
@@ -379,6 +403,14 @@ export const CAPACITY_PROFILES = Object.freeze({
     loadLabel: 'Expected concurrent web/Git clients',
     defaults: [4, 8, 0, 500, 0],
   },
+  elasticsearch: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected indexed data (GiB)',
+    loadLabel: 'Expected concurrent indexing/search clients',
+    defaults: [8, 32, 1000, 500, 40],
+  },
   opensearch: {
     data: true,
     load: true,
@@ -518,6 +550,25 @@ export const FALLBACK_BLUEPRINTS = [
     recommendedTopology: '3-node InnoDB Cluster',
     workloads: ['OLTP', 'OLAP', 'Mixed'],
     defaultPort: 3306,
+    supportsPitr: true,
+  }),
+  catalogItem({
+    id: 'mssql',
+    category: 'Databases & Data',
+    name: 'Microsoft SQL Server',
+    icon: 'MS',
+    description:
+      'Licensed SQL Server with edition-aware Linux HA and native recovery.',
+    versions: ['2025', '2022', '2019'],
+    editions: ['Standard', 'Enterprise'],
+    topologies: [
+      'Standalone',
+      'Basic AG (2 SQL replicas + config-only quorum)',
+      '3-replica Availability Group',
+    ],
+    recommendedTopology: 'Standalone',
+    workloads: ['OLTP', 'OLAP', 'Mixed'],
+    defaultPort: 1433,
     supportsPitr: true,
   }),
   catalogItem({
@@ -852,6 +903,24 @@ export const FALLBACK_BLUEPRINTS = [
     supportsPitr: true,
   }),
   catalogItem({
+    id: 'elasticsearch',
+    category: 'Search & Observability',
+    name: 'Elasticsearch',
+    icon: 'ES',
+    description:
+      'Search/analytics with first-formation-safe cluster bootstrap and snapshot recovery.',
+    versions: ['9.5', '8.19'],
+    topologies: [
+      '3-node Production Cluster',
+      '3 masters + 3 data',
+      '3 masters + 6 data',
+    ],
+    recommendedTopology: '3-node Production Cluster',
+    workloads: ['Search', 'Logs', 'Analytics'],
+    defaultPort: 9200,
+    supportsPitr: false,
+  }),
+  catalogItem({
     id: 'opensearch',
     category: 'Search & Observability',
     name: 'OpenSearch',
@@ -910,6 +979,10 @@ export const FALLBACK_BLUEPRINTS = [
 const PRODUCT_DEFAULTS = {
   sqlBootstrap: 'Create initial application database',
   sqlDbName: 'appdb',
+  mssqlFencingRef: '',
+  elasticSecurity: 'LayerSentry managed security configuration',
+  elasticSecurityRef: '',
+  elasticKibana: false,
   mongoScopeMode: 'Create application credential scope',
   mongoDbName: 'appdb',
   ferretDbName: 'appdb',
@@ -1035,6 +1108,10 @@ export const getEndpointOptions = (draft, blueprint) => {
       return standalone
         ? ['Direct service endpoint', 'Existing load balancer']
         : ['Existing load balancer']
+    case 'mssql':
+      return standalone
+        ? ['Direct service endpoint', 'Existing load balancer']
+        : ['SQL Server Pacemaker listener']
     case 'mongodb-community':
     case 'percona-mongodb':
       return ['Native multi-host / replica-set discovery']
@@ -1078,6 +1155,8 @@ export const getEndpointOptions = (draft, blueprint) => {
         : ['Existing load balancer']
     case 'jenkins':
       return ['Direct service endpoint']
+    case 'elasticsearch':
+      return ['Native node list']
     case 'opensearch':
       return ['Native node list']
     case 'prometheus':
@@ -1102,6 +1181,13 @@ const endpointIntentMode = (endpointMode) => {
 
 export const getTopologyOptions = (draft, blueprint) => {
   if (!blueprint) return []
+
+  if (blueprint.id === 'mssql') {
+    return draft.edition === 'Standard'
+      ? ['Standalone', 'Basic AG (2 SQL replicas + config-only quorum)']
+      : ['Standalone', '3-replica Availability Group']
+  }
+
   if (blueprint.id !== 'mysql-family') return blueprint.topologies
 
   if (draft.edition === 'Percona Server for MySQL') {
@@ -1127,6 +1213,7 @@ export const getTopologyOptions = (draft, blueprint) => {
 
 export const getRecommendedTopology = (draft, blueprint) => {
   if (!blueprint) return ''
+  if (blueprint.id === 'mssql') return 'Standalone'
   if (blueprint.id === 'mysql-family') {
     if (draft.edition === 'Percona Server for MySQL') {
       return '3-node Group Replication'
@@ -1413,6 +1500,17 @@ export const getStorageTemplate = (draft, blueprint) => {
         vol('Data', 'Per database VM', d, '/var/lib/mysql'),
         vol('Redo / binary log', 'Per database VM', l, '/var/lib/mysql-binlog'),
       ]
+    case 'mssql':
+      return [
+        vol('SQL Server data', 'Per SQL replica VM', d, '/var/opt/mssql/data'),
+        vol('SQL Server log', 'Per SQL replica VM', l, '/var/opt/mssql/log'),
+        vol(
+          'SQL Server tempdb',
+          'Per SQL replica VM',
+          Math.max(20, Math.ceil(d * 0.15)),
+          '/var/opt/mssql/tempdb'
+        ),
+      ]
     case 'mongodb-community':
     case 'percona-mongodb':
       return [
@@ -1551,6 +1649,31 @@ export const getStorageTemplate = (draft, blueprint) => {
           d,
           '/var/lib/jenkins'
         ),
+      ]
+    case 'elasticsearch':
+      return [
+        vol(
+          'Elasticsearch data',
+          'Per Elasticsearch data/combined VM',
+          d,
+          '/var/lib/elasticsearch'
+        ),
+        vol(
+          'Elasticsearch logs',
+          'Per Elasticsearch VM',
+          l,
+          '/var/log/elasticsearch'
+        ),
+        ...(String(draft.topology || '').startsWith('3 masters +')
+          ? [
+              vol(
+                'Elasticsearch master state',
+                'Per dedicated master VM',
+                20,
+                '/var/lib/elasticsearch-master'
+              ),
+            ]
+          : []),
       ]
     case 'opensearch':
       return [
@@ -1722,6 +1845,67 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
         name,
         minimum
       )
+    )
+  }
+
+  if (id === 'mssql') {
+    if (topology === 'Standalone') {
+      return plan(
+        1,
+        [
+          component(
+            'SQL Server',
+            'Standalone licensed database VM',
+            1,
+            1,
+            'No automatic database failover.'
+          ),
+        ],
+        [],
+        1,
+        'SQL Server'
+      )
+    }
+
+    if (topology === 'Basic AG (2 SQL replicas + config-only quorum)') {
+      return plan(
+        3,
+        [
+          component(
+            'SQL Server Standard replicas',
+            'Primary + secondary Basic AG VMs',
+            2,
+            2,
+            'Standard edition Basic AG is limited to two SQL replicas.'
+          ),
+          component(
+            'Pacemaker configuration-only quorum',
+            'Dedicated quorum VM without a SQL data replica',
+            1,
+            1,
+            'Required for safe automatic failover of a two-replica Linux AG.'
+          ),
+        ],
+        [],
+        2,
+        'SQL Server replicas'
+      )
+    }
+
+    return plan(
+      3,
+      [
+        component(
+          'SQL Server Enterprise replicas',
+          'Three Availability Group replica VMs',
+          3,
+          3,
+          'Enterprise edition supports the full three-replica HA profile.'
+        ),
+      ],
+      [],
+      3,
+      'SQL Server replicas'
     )
   }
 
@@ -2378,6 +2562,51 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
     )
   }
 
+  if (id === 'elasticsearch') {
+    if (topology === '3-node Production Cluster') {
+      return plan(
+        3,
+        [
+          component(
+            'Elasticsearch combined nodes',
+            'Master-eligible + data/ingest VMs',
+            3,
+            3,
+            'Small production profile keeps an odd master quorum while every node carries data.'
+          ),
+        ],
+        [],
+        3,
+        'Elasticsearch'
+      )
+    }
+
+    const dataNodes = topology.includes('6 data') ? 6 : 3
+
+    return plan(
+      3 + dataNodes,
+      [
+        component(
+          'Elasticsearch master nodes',
+          'Dedicated master-eligible VMs',
+          3,
+          3,
+          'Three dedicated masters preserve cluster-state quorum.'
+        ),
+        component(
+          'Elasticsearch data nodes',
+          'Dedicated data/ingest/search VMs',
+          dataNodes,
+          dataNodes,
+          'Data capacity scales independently from master quorum.'
+        ),
+      ],
+      [],
+      dataNodes,
+      'Elasticsearch data'
+    )
+  }
+
   if (id === 'opensearch') {
     const dataNodes = topology.indexOf('6 data') >= 0 ? 6 : 3
 
@@ -2658,6 +2887,32 @@ export const getProductConfigFields = (draft, blueprint) => {
           text('postgisDatabases', 'Existing/restored database name(s)')
         )
       }
+    }
+
+    return fields
+  }
+
+  if (id === 'mssql') {
+    fields.push(
+      select('sqlBootstrap', 'Application database', [
+        'Create initial application database',
+        'Create database later',
+      ])
+    )
+    if (draft.sqlBootstrap === 'Create initial application database') {
+      fields.push(text('sqlDbName', 'Initial application database name'))
+    }
+    if (draft.topology !== 'Standalone') {
+      fields.push(
+        text(
+          'mssqlFencingRef',
+          'Qualified fencing / STONITH profile reference',
+          {
+            helper:
+              'Production Pacemaker HA is blocked without an explicit, tested fencing profile.',
+          }
+        )
+      )
     }
 
     return fields
@@ -2948,6 +3203,32 @@ export const getProductConfigFields = (draft, blueprint) => {
     return fields
   }
 
+  if (id === 'elasticsearch') {
+    fields.push(
+      select('elasticSecurity', 'Security configuration', [
+        'LayerSentry managed security configuration',
+        'Existing security configuration secret reference',
+      ])
+    )
+    if (
+      draft.elasticSecurity ===
+      'Existing security configuration secret reference'
+    ) {
+      fields.push(
+        text('elasticSecurityRef', 'Security configuration reference')
+      )
+    }
+    fields.push({
+      key: 'elasticKibana',
+      label: 'Install Kibana companion',
+      type: 'switch',
+      helper:
+        'Optional companion only; Elasticsearch cluster lifecycle remains independent.',
+    })
+
+    return fields
+  }
+
   if (id === 'opensearch') {
     fields.push(
       select('openSearchSecurity', 'Security configuration', [
@@ -3079,7 +3360,7 @@ export const getProductConfigErrors = (draft, blueprint) => {
   const id = blueprint.id
 
   if (
-    (id === 'mysql-family' || id === 'mariadb') &&
+    (id === 'mysql-family' || id === 'mariadb' || id === 'mssql') &&
     draft.sqlBootstrap === 'Create initial application database' &&
     !dbNamePattern.test(String(draft.sqlDbName || '').trim())
   ) {
@@ -3095,6 +3376,16 @@ export const getProductConfigErrors = (draft, blueprint) => {
   ) {
     errors.push(
       'Enter the MongoDB application database / credential scope name.'
+    )
+  }
+
+  if (
+    id === 'mssql' &&
+    draft.topology !== 'Standalone' &&
+    !nonEmpty(draft.mssqlFencingRef)
+  ) {
+    errors.push(
+      'SQL Server Pacemaker HA requires a qualified fencing / STONITH profile reference.'
     )
   }
 
@@ -3254,6 +3545,17 @@ export const getProductConfigErrors = (draft, blueprint) => {
   ) {
     errors.push(
       'Forgejo Git-over-SSH requires a valid TCP port between 1 and 65535.'
+    )
+  }
+
+  if (
+    id === 'elasticsearch' &&
+    draft.elasticSecurity ===
+      'Existing security configuration secret reference' &&
+    !nonEmpty(draft.elasticSecurityRef)
+  ) {
+    errors.push(
+      'Elasticsearch existing security configuration requires a secret/config reference.'
     )
   }
 
@@ -3658,6 +3960,9 @@ export const STORAGE_ROLE_IDS = Object.freeze({
   Data: 'data',
   WAL: 'wal',
   'Redo / binary log': 'redo_binlog',
+  'SQL Server data': 'data',
+  'SQL Server log': 'log',
+  'SQL Server tempdb': 'tempdb',
   Journal: 'journal',
   'Persistence data (RDB/AOF)': 'persistence_data',
   'ClickHouse data': 'data',
@@ -3674,6 +3979,9 @@ export const STORAGE_ROLE_IDS = Object.freeze({
   'Configuration metadata state': 'configuration_metadata',
   'Raft integrated-storage data': 'raft_data',
   JENKINS_HOME: 'jenkins_home',
+  'Elasticsearch data': 'data',
+  'Elasticsearch logs': 'logs',
+  'Elasticsearch master state': 'master_state',
   'Index data': 'index_data',
   'OpenSearch manager state': 'manager_state',
   'Local TSDB': 'tsdb',
@@ -3731,6 +4039,19 @@ export const getPlatformNodeRoles = (
       ...repeatPlatformRole('mysql_primary', 3),
       ...repeatPlatformRole('mysql_dr', 3),
     ]
+  }
+
+  if (id === 'mssql') {
+    if (topology === 'Basic AG (2 SQL replicas + config-only quorum)') {
+      return [
+        'mssql_primary_candidate',
+        'mssql_secondary_candidate',
+        'mssql_config_only',
+      ]
+    }
+    if (topology === '3-replica Availability Group') {
+      return repeatPlatformRole('mssql_replica', 3)
+    }
   }
 
   if (id === 'mariadb' && /DR/i.test(topology)) {
@@ -3839,6 +4160,17 @@ export const getPlatformNodeRoles = (
     ]
   }
 
+  if (id === 'elasticsearch') {
+    if (topology === '3-node Production Cluster') {
+      return repeatPlatformRole('elasticsearch_combined', 3)
+    }
+
+    return [
+      ...repeatPlatformRole('elasticsearch_master', 3),
+      ...repeatPlatformRole('elasticsearch_data', count - 3),
+    ]
+  }
+
   if (id === 'opensearch') {
     return [
       ...repeatPlatformRole('opensearch_manager', 3),
@@ -3852,6 +4184,43 @@ export const getPlatformNodeRoles = (
 const storageNodeRolesFor = (blueprint, storageRole, nodeRoles) => {
   if (!nodeRoles.length) return []
   const id = blueprint?.id
+
+  if (id === 'mssql') {
+    if (
+      storageRole === 'data' ||
+      storageRole === 'log' ||
+      storageRole === 'tempdb'
+    ) {
+      return [
+        ...new Set(nodeRoles.filter((role) => role !== 'mssql_config_only')),
+      ]
+    }
+  }
+
+  if (id === 'elasticsearch') {
+    if (storageRole === 'data') {
+      return [
+        ...new Set(
+          nodeRoles.filter(
+            (role) =>
+              role === 'elasticsearch_data' || role === 'elasticsearch_combined'
+          )
+        ),
+      ]
+    }
+    if (storageRole === 'logs') return [...new Set(nodeRoles)]
+    if (storageRole === 'master_state') {
+      return [
+        ...new Set(
+          nodeRoles.filter(
+            (role) =>
+              role === 'elasticsearch_master' ||
+              role === 'elasticsearch_combined'
+          )
+        ),
+      ]
+    }
+  }
 
   if (id === 'mongodb-community' || id === 'percona-mongodb') {
     if (storageRole === 'data' || storageRole === 'journal') {
@@ -3925,6 +4294,11 @@ export const NATIVE_PRODUCT_OPTION_BINDINGS = Object.freeze({
     sqlBootstrap: 'database_bootstrap',
     sqlDbName: 'database_name',
   },
+  mssql: {
+    sqlBootstrap: 'database_bootstrap',
+    sqlDbName: 'database_name',
+    mssqlFencingRef: 'fencing_profile_ref',
+  },
   'mongodb-community': {
     mongoScopeMode: 'credential_scope_mode',
     mongoDbName: 'database_name',
@@ -3992,6 +4366,11 @@ export const NATIVE_PRODUCT_OPTION_BINDINGS = Object.freeze({
     jenkinsAgentRef: 'agent_ref',
   },
   forgejo: { forgejoSsh: 'git_ssh', forgejoSshPort: 'git_ssh_port' },
+  elasticsearch: {
+    elasticSecurity: 'security_config_mode',
+    elasticSecurityRef: 'security_config_ref',
+    elasticKibana: 'kibana_enabled',
+  },
   opensearch: {
     openSearchSecurity: 'security_config_mode',
     openSearchSecurityRef: 'security_config_ref',
@@ -4017,6 +4396,7 @@ export const NATIVE_PRODUCT_OPTION_BINDINGS = Object.freeze({
 
 export const NATIVE_PRODUCT_DERIVED_OPTION_KEYS = Object.freeze({
   postgresql: ['pgbouncer'],
+  mssql: ['listener_name'],
 })
 
 const isNativeProductOptionActive = (draft, blueprintId, draftKey) => {
@@ -4035,6 +4415,10 @@ const isNativeProductOptionActive = (draft, blueprintId, draftKey) => {
     },
     mariadb: {
       sqlDbName: draft.sqlBootstrap === 'Create initial application database',
+    },
+    mssql: {
+      sqlDbName: draft.sqlBootstrap === 'Create initial application database',
+      mssqlFencingRef: draft.topology !== 'Standalone',
     },
     'mongodb-community': {
       mongoDbName:
@@ -4091,6 +4475,11 @@ const isNativeProductOptionActive = (draft, blueprintId, draftKey) => {
         draft.jenkinsAgentSource === 'Existing agent template/image reference',
     },
     forgejo: { forgejoSshPort: draft.forgejoSsh === 'Enabled' },
+    elasticsearch: {
+      elasticSecurityRef:
+        draft.elasticSecurity ===
+        'Existing security configuration secret reference',
+    },
     opensearch: {
       openSearchSecurityRef:
         draft.openSearchSecurity ===
@@ -4144,6 +4533,9 @@ const platformProductOptions = (draft, blueprint) => {
 
   if (blueprint.id === 'postgresql') {
     result.pgbouncer = draft.pgbouncerPlacement !== 'Disabled'
+  }
+  if (blueprint.id === 'mssql' && draft.topology !== 'Standalone') {
+    result.listener_name = draft.serviceFqdn
   }
 
   return result
@@ -4377,6 +4769,16 @@ export const getProductSummary = (draft, blueprint) => {
         : 'create later')
     )
   }
+  if (id === 'mssql') {
+    return (
+      draft.edition +
+      ' · ' +
+      draft.topology +
+      (draft.topology !== 'Standalone'
+        ? ' · fencing: ' + (draft.mssqlFencingRef || 'required')
+        : '')
+    )
+  }
   if (id === 'mysql-family' || id === 'mariadb') {
     return (
       draft.sqlBootstrap +
@@ -4505,6 +4907,13 @@ export const getProductSummary = (draft, blueprint) => {
       'Git HTTPS enabled; SSH ' +
       draft.forgejoSsh +
       (draft.forgejoSsh === 'Enabled' ? ' on ' + draft.forgejoSshPort : '')
+    )
+  }
+  if (id === 'elasticsearch') {
+    return (
+      draft.elasticSecurity +
+      (draft.elasticSecurityRef ? ' · reference configured' : '') +
+      (draft.elasticKibana ? ' · Kibana enabled' : '')
     )
   }
   if (id === 'opensearch') {

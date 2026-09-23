@@ -487,7 +487,7 @@ const ProductionServiceWizard = () => {
 
       if (
         (key === 'edition' || key === 'blueprintId') &&
-        blueprint?.id === 'mysql-family'
+        ['mysql-family', 'mssql'].includes(blueprint?.id)
       ) {
         const nextBlueprint = getBlueprintById(
           next.blueprintId || current.blueprintId,

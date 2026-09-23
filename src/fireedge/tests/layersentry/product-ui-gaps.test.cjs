@@ -22,16 +22,17 @@ test('DBaaS and APaaS replace customer VM Blueprints navigation', () => {
   assert.match(portal, /ManagedServicesWorkspace mode="apaas"/)
 })
 
-test('managed service catalog exposes all 27 authoritative families', () => {
+test('managed service catalog exposes all 29 authoritative families', () => {
   const catalog = require('../../src/server/routes/api/serviceblueprints/catalog')
-  assert.equal(catalog.CATALOG.length, 27)
+  assert.equal(catalog.CATALOG.length, 29)
 
   const ids = catalog.CATALOG.map(({ id }) => id)
-  assert.equal(new Set(ids).size, 27)
+  assert.equal(new Set(ids).size, 29)
 
   for (const id of [
     'postgresql',
     'mysql-family',
+    'mssql',
     'mariadb',
     'mongodb-community',
     'percona-mongodb',
@@ -41,6 +42,7 @@ test('managed service catalog exposes all 27 authoritative families', () => {
     'tomcat',
     'superset',
     'keycloak',
+    'elasticsearch',
     'opensearch',
     'prometheus',
     'grafana',
