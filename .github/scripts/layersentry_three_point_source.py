@@ -19,7 +19,8 @@ VM_ID = None
 BACKUP_DS = 100
 SOURCE_IMAGE_ID = 1
 SOURCE_NETWORK_ID = 0
-SOURCE_HOST = "rocky-02"
+SOURCE_HOST = None
+SOURCE_HOST_CANDIDATES = [x.strip() for x in os.environ.get("LAYERSENTRY_TEST_HOSTS", "rocky-02,rocky-03").split(",") if x.strip()]
 RUN_ID = os.environ.get("GITHUB_RUN_ID", str(os.getpid()))
 SOURCE_NAME = "ls-dr-threepoint-src-" + RUN_ID
 SOURCE_IP = None
@@ -68,8 +69,49 @@ def find_vm_by_name(name):
         raise RuntimeError(f"multiple VMs named {name}: {matches}")
     return matches[0] if matches else None
 
+def select_safe_source_host():
+    global SOURCE_HOST
+    if not SOURCE_HOST_CANDIDATES:
+        raise RuntimeError("no qualification compute-host candidates configured")
+
+    pool = ET.fromstring(ssh("onevm list --xml"))
+    running_by_host = {}
+    for vm in pool.findall("VM"):
+        state = int(vm.findtext("STATE") or -1)
+        lcm = int(vm.findtext("LCM_STATE") or -1)
+        if state != 3 or lcm != 3:
+            continue
+        histories = vm.findall("./HISTORY_RECORDS/HISTORY")
+        host = histories[-1].findtext("HOSTNAME") if histories else ""
+        if host:
+            running_by_host[host] = running_by_host.get(host, 0) + 1
+
+    rejected = []
+    for host in SOURCE_HOST_CANDIDATES:
+        host_xml = ET.fromstring(ssh(f"onehost show {shlex.quote(host)} -x"))
+        policies = [(node.text or "").strip().upper() for node in host_xml.findall(".//PIN_POLICY")]
+        pin_policy = next((value for value in policies if value), "")
+        vms_thread = next(((node.text or "").strip() for node in host_xml.findall(".//VMS_THREAD") if (node.text or "").strip()), "1")
+        existing = running_by_host.get(host, 0)
+        if pin_policy != "PINNED":
+            rejected.append(f"{host}:PIN_POLICY={pin_policy or 'UNSET'}")
+            continue
+        if vms_thread != "1":
+            rejected.append(f"{host}:VMS_THREAD={vms_thread}")
+            continue
+        if existing != 0:
+            rejected.append(f"{host}:RUNNING_VMS={existing}")
+            continue
+        SOURCE_HOST = host
+        print(f"CPU_ISOLATION_HOST=PASS HOST={host} PIN_POLICY={pin_policy} VMS_THREAD={vms_thread} PREEXISTING_RUNNING_VMS=0")
+        return
+
+    raise RuntimeError("no safe empty PINNED compute host for qualification: " + ";".join(rejected))
+
 def create_source_vm():
     global VM_ID, SOURCE_IP
+    if not SOURCE_HOST:
+        raise RuntimeError("safe CPU-isolated source host was not selected")
     existing = find_vm_by_name(SOURCE_NAME)
     if existing is not None:
         raise RuntimeError(f"refusing to reuse pre-existing disposable VM {SOURCE_NAME} id={existing}")
@@ -78,6 +120,12 @@ def create_source_vm():
 CPU="1"
 VCPU="1"
 MEMORY="256"
+TOPOLOGY=[
+  PIN_POLICY="CORE",
+  CORES="1",
+  SOCKETS="1",
+  THREADS="1"
+]
 DISK=[IMAGE_ID="{SOURCE_IMAGE_ID}"]
 NIC=[NETWORK_ID="{SOURCE_NETWORK_ID}"]
 CONTEXT=[
@@ -308,6 +356,7 @@ def verify_portable_marker(disk, expected):
 def main():
     restic = install_restic()
     try:
+        select_safe_source_host()
         create_source_vm()
         points = []
         image_id, inc = capture("BASELINE", "LS-DR-BASELINE-20260924", True)
