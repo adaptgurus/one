@@ -176,6 +176,9 @@ test('LayerSentry forms and primary actions use one product palette', () => {
   assert.match(shell, /borderColor: colors\.borderStrong/)
   assert.match(shell, /borderColor: colors\.brand\.primary/)
   assert.match(shell, /MuiInputLabel-root\.Mui-focused/)
+  assert.ok(
+    shell.includes('MuiFormControl-root:focus-within .MuiInputLabel-root')
+  )
   assert.ok(shell.includes('MuiSwitch-switchBase.Mui-checked'))
   assert.ok(shell.includes('MuiCheckbox-root.Mui-checked'))
   assert.ok(shell.includes('MuiRadio-root.Mui-checked'))
