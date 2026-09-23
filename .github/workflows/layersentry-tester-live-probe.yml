@@ -1,0 +1,28 @@
+name: LayerSentry Tester Live Probe
+
+on:
+  push:
+    branches:
+      - qa/layersentry-ui-browser-20260924
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  tester-probe:
+    runs-on: self-hosted
+    timeout-minutes: 10
+    steps:
+      - name: Identify runner and prove tester control-plane reachability
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_NAME=${RUNNER_NAME:-unknown}"
+          echo "HOSTNAME=$(hostname)"
+          id
+          curl -fsS --max-time 10 http://10.10.10.21:2616/fireedge/layersentry/ >/tmp/layersentry-live.html
+          grep -qi 'html' /tmp/layersentry-live.html
+          ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 hostname
+          ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 systemctl is-active opennebula-fireedge
+          echo "TESTER_LIVE_REACHABILITY_PASS"
