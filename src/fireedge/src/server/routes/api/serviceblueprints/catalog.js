@@ -48,6 +48,11 @@ const CATALOG = Object.freeze([
     '5-node InnoDB Cluster',
     'ClusterSet DR',
   ]),
+  item('mssql', 'Microsoft SQL Server', ['2025', '2022', '2019'], [
+    'Standalone',
+    'Basic AG (2 SQL replicas + config-only quorum)',
+    '3-replica Availability Group',
+  ]),
   item('mariadb', 'MariaDB Community', ['11.4 LTS', '11.8 LTS'], [
     'Standalone',
     '3-node Galera',
@@ -142,6 +147,11 @@ const CATALOG = Object.freeze([
     'Controller + 4 agents',
   ]),
   item('forgejo', 'Forgejo', ['15 LTS'], ['Standalone', 'HA Pair']),
+  item('elasticsearch', 'Elasticsearch', ['9.5', '8.19'], [
+    '3-node Production Cluster',
+    '3 masters + 3 data',
+    '3 masters + 6 data',
+  ]),
   item('opensearch', 'OpenSearch', ['3.8'], [
     '3 managers + 3 data',
     '3 managers + 6 data',
