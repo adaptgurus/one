@@ -1440,7 +1440,19 @@ export const getStorageTemplate = (draft, blueprint) => {
         ),
       ]
     case 'clickhouse':
-      return [vol('ClickHouse data', 'Per data node', d, '/var/lib/clickhouse')]
+      return [
+        vol('ClickHouse data', 'Per data node', d, '/var/lib/clickhouse'),
+        ...(draft.topology === 'Standalone'
+          ? []
+          : [
+              vol(
+                'ClickHouse Keeper data',
+                'Per Keeper VM',
+                20,
+                '/var/lib/clickhouse-keeper'
+              ),
+            ]),
+      ]
     case 'cassandra':
       return [
         vol('Data', 'Per Cassandra node', d, '/var/lib/cassandra/data'),
@@ -1474,6 +1486,12 @@ export const getStorageTemplate = (draft, blueprint) => {
     case 'kafka':
       return [
         vol('Broker log / data', 'Per Kafka broker VM', d, '/var/lib/kafka'),
+        vol(
+          'Kafka controller metadata',
+          'Per KRaft controller VM',
+          20,
+          '/var/lib/kafka-controller'
+        ),
       ]
     case 'pulsar':
       return [
@@ -1488,6 +1506,12 @@ export const getStorageTemplate = (draft, blueprint) => {
           'Per bookie VM',
           d,
           '/var/lib/pulsar/bookkeeper/ledgers'
+        ),
+        vol(
+          'Pulsar metadata state',
+          'Per local metadata VM',
+          20,
+          '/var/lib/pulsar/metadata'
         ),
         ...(draft.pulsarConfigStore === 'Dedicated 3-node configuration store'
           ? [
@@ -1531,6 +1555,12 @@ export const getStorageTemplate = (draft, blueprint) => {
     case 'opensearch':
       return [
         vol('Index data', 'Per OpenSearch data VM', d, '/var/lib/opensearch'),
+        vol(
+          'OpenSearch manager state',
+          'Per cluster-manager VM',
+          20,
+          '/var/lib/opensearch-manager'
+        ),
       ]
     case 'prometheus':
       return [vol('Local TSDB', 'Per Prometheus VM', d, '/var/lib/prometheus')]
@@ -3631,17 +3661,21 @@ export const STORAGE_ROLE_IDS = Object.freeze({
   Journal: 'journal',
   'Persistence data (RDB/AOF)': 'persistence_data',
   'ClickHouse data': 'data',
+  'ClickHouse Keeper data': 'keeper_data',
   'Commit log': 'commit_log',
   'Tablet data': 'tablet_data',
   'YB-Master metadata': 'master_metadata',
   'Persistent message data': 'message_data',
   'Broker log / data': 'broker_data',
+  'Kafka controller metadata': 'controller_metadata',
   'BookKeeper journal': 'bookkeeper_journal',
   'BookKeeper ledgers': 'bookkeeper_ledger',
+  'Pulsar metadata state': 'metadata_state',
   'Configuration metadata state': 'configuration_metadata',
   'Raft integrated-storage data': 'raft_data',
   JENKINS_HOME: 'jenkins_home',
   'Index data': 'index_data',
+  'OpenSearch manager state': 'manager_state',
   'Local TSDB': 'tsdb',
 })
 
@@ -3669,6 +3703,210 @@ const platformNodeAddresses = (draft) =>
     .split(/\n|,/)
     .map((value) => value.trim())
     .filter(Boolean)
+
+
+const repeatPlatformRole = (role, count) =>
+  Array.from({ length: Math.max(0, Number(count) || 0) }, () => role)
+
+export const getPlatformNodeRoles = (
+  draft,
+  blueprint,
+  architecture = getArchitecturePlan(draft, blueprint)
+) => {
+  const topology = String(draft?.topology || '')
+  const count = Number(architecture?.dedicated || 0)
+  const id = blueprint?.id
+
+  if (id === 'postgresql' && topology === 'HA + DR') {
+    return [
+      ...repeatPlatformRole('postgresql_primary', 3),
+      ...repeatPlatformRole('postgresql_dr', 3),
+    ]
+  }
+
+  if (
+    id === 'mysql-family' &&
+    (/DR/i.test(topology) || /ClusterSet/i.test(topology))
+  ) {
+    return [
+      ...repeatPlatformRole('mysql_primary', 3),
+      ...repeatPlatformRole('mysql_dr', 3),
+    ]
+  }
+
+  if (id === 'mariadb' && /DR/i.test(topology)) {
+    return [
+      ...repeatPlatformRole('mariadb_primary', 3),
+      ...repeatPlatformRole('mariadb_dr', 3),
+    ]
+  }
+
+  if (
+    (id === 'mongodb-community' || id === 'percona-mongodb') &&
+    topology.startsWith('Sharded:')
+  ) {
+    const shards = topology.includes('3 shards') ? 3 : 2
+    const roles = []
+    for (let shard = 1; shard <= shards; shard += 1) {
+      roles.push(...repeatPlatformRole('mongodb_shard_' + shard, 3))
+    }
+    roles.push(...repeatPlatformRole('mongodb_config', 3))
+    roles.push(...repeatPlatformRole('mongos', 2))
+
+    return roles
+  }
+
+  if (id === 'clickhouse' && topology !== 'Standalone') {
+    return [
+      ...repeatPlatformRole('clickhouse_data', count - 3),
+      ...repeatPlatformRole('clickhouse_keeper', 3),
+    ]
+  }
+
+  if (id === 'cassandra' && topology.startsWith('Multi-DC')) {
+    return [
+      ...repeatPlatformRole('cassandra_dc1', 3),
+      ...repeatPlatformRole('cassandra_dc2', 3),
+    ]
+  }
+
+  if (id === 'yugabytedb') {
+    if (topology.startsWith('xCluster DR')) {
+      return [
+        ...repeatPlatformRole('yugabyte_primary_tserver', 3),
+        ...repeatPlatformRole('yugabyte_primary_master', 3),
+        ...repeatPlatformRole('yugabyte_dr_tserver', 3),
+        ...repeatPlatformRole('yugabyte_dr_master', 3),
+      ]
+    }
+
+    return [
+      ...repeatPlatformRole('yugabyte_tserver', count - 3),
+      ...repeatPlatformRole('yugabyte_master', 3),
+    ]
+  }
+
+  if (id === 'rabbitmq' && topology.startsWith('Federation DR')) {
+    return [
+      ...repeatPlatformRole('rabbitmq_primary', 3),
+      ...repeatPlatformRole('rabbitmq_dr', 3),
+    ]
+  }
+
+  if (id === 'kafka') {
+    const brokers = topology.startsWith('5 brokers') ? 5 : 3
+
+    return [
+      ...repeatPlatformRole('kafka_broker', brokers),
+      ...repeatPlatformRole('kafka_controller', count - brokers),
+    ]
+  }
+
+  if (id === 'pulsar') {
+    if (topology.startsWith('Multi-cluster DR')) {
+      return [
+        ...repeatPlatformRole('pulsar_primary_broker_bookie', 3),
+        ...repeatPlatformRole('pulsar_primary_metadata', 3),
+        ...repeatPlatformRole('pulsar_dr_broker_bookie', 3),
+        ...repeatPlatformRole('pulsar_dr_metadata', 3),
+        ...repeatPlatformRole('pulsar_config_store', Math.max(0, count - 12)),
+      ]
+    }
+
+    return [
+      ...repeatPlatformRole('pulsar_broker_bookie', 3),
+      ...repeatPlatformRole('pulsar_metadata', count - 3),
+    ]
+  }
+
+  if (id === 'superset' && topology === 'Distributed') {
+    return [
+      ...repeatPlatformRole('superset_web', 2),
+      ...repeatPlatformRole('superset_worker', 2),
+    ]
+  }
+
+  if (id === 'airflow' && topology === 'Distributed Celery') {
+    return [
+      ...repeatPlatformRole('airflow_control', 2),
+      ...repeatPlatformRole('airflow_worker', 2),
+    ]
+  }
+
+  if (id === 'jenkins') {
+    return [
+      'jenkins_controller',
+      ...repeatPlatformRole('jenkins_agent', count - 1),
+    ]
+  }
+
+  if (id === 'opensearch') {
+    return [
+      ...repeatPlatformRole('opensearch_manager', 3),
+      ...repeatPlatformRole('opensearch_data', count - 3),
+    ]
+  }
+
+  return []
+}
+
+const storageNodeRolesFor = (blueprint, storageRole, nodeRoles) => {
+  if (!nodeRoles.length) return []
+  const id = blueprint?.id
+
+  if (id === 'mongodb-community' || id === 'percona-mongodb') {
+    if (storageRole === 'data' || storageRole === 'journal') {
+      return [...new Set(nodeRoles.filter((role) => role !== 'mongos'))]
+    }
+  }
+
+  if (id === 'clickhouse') {
+    if (storageRole === 'data') return ['clickhouse_data']
+    if (storageRole === 'keeper_data') return ['clickhouse_keeper']
+  }
+
+  if (id === 'yugabytedb') {
+    if (storageRole === 'tablet_data' || storageRole === 'wal') {
+      return [...new Set(nodeRoles.filter((role) => role.includes('tserver')))]
+    }
+    if (storageRole === 'master_metadata') {
+      return [...new Set(nodeRoles.filter((role) => role.includes('master')))]
+    }
+  }
+
+  if (id === 'kafka') {
+    if (storageRole === 'broker_data') return ['kafka_broker']
+    if (storageRole === 'controller_metadata') return ['kafka_controller']
+  }
+
+  if (id === 'pulsar') {
+    if (
+      storageRole === 'bookkeeper_journal' ||
+      storageRole === 'bookkeeper_ledger'
+    ) {
+      return [
+        ...new Set(nodeRoles.filter((role) => role.includes('broker_bookie'))),
+      ]
+    }
+    if (storageRole === 'metadata_state') {
+      return [...new Set(nodeRoles.filter((role) => role.includes('metadata')))]
+    }
+    if (storageRole === 'configuration_metadata') {
+      return ['pulsar_config_store']
+    }
+  }
+
+  if (id === 'jenkins' && storageRole === 'jenkins_home') {
+    return ['jenkins_controller']
+  }
+
+  if (id === 'opensearch') {
+    if (storageRole === 'index_data') return ['opensearch_data']
+    if (storageRole === 'manager_state') return ['opensearch_manager']
+  }
+
+  return []
+}
 
 export const NATIVE_PRODUCT_OPTION_BINDINGS = Object.freeze({
   postgresql: {
@@ -3932,10 +4170,11 @@ const platformDependencies = (draft, blueprint) =>
 export const compilePlatformDesiredState = (draft, blueprint) => {
   const architecture = getArchitecturePlan(draft, blueprint)
   const nodeCount =
-    Number.isInteger(Number(architecture.mainNodes)) &&
-    Number(architecture.mainNodes) > 0
-      ? Number(architecture.mainNodes)
+    Number.isInteger(Number(architecture.dedicated)) &&
+    Number(architecture.dedicated) > 0
+      ? Number(architecture.dedicated)
       : 1
+  const nodeRoles = getPlatformNodeRoles(draft, blueprint, architecture)
   const addresses = platformNodeAddresses(draft)
   const nodeBase = platformNodeSlug(draft.serviceName, blueprint?.id)
   const domain = String(draft.domain || '').trim()
@@ -3952,18 +4191,21 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
           ? [{ size_gib: sizeGiB }]
           : []
 
+      const role =
+        STORAGE_ROLE_IDS[item.role] ||
+        String(item.role || '')
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, '_')
+          .replace(/^_+|_+$/g, '')
+
       return {
-        role:
-          STORAGE_ROLE_IDS[item.role] ||
-          String(item.role || '')
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, '_')
-            .replace(/^_+|_+$/g, ''),
+        role,
         layout,
         mountpoint: item.mountpoint || '',
         storage_class: item.storagePool || '',
         reference: item.attachmentRef || '',
         disks,
+        node_roles: storageNodeRolesFor(blueprint, role, nodeRoles),
       }
     })
   const networkProfile = getNetworkProfile(draft, blueprint)
@@ -4000,6 +4242,7 @@ export const compilePlatformDesiredState = (draft, blueprint) => {
           nodeBase + '-' + String(index + 1).padStart(2, '0') + '.' + domain,
         ip_mode: staticMode ? 'static' : 'auto',
         ip: staticMode ? addresses[index] || '' : '',
+        role: nodeRoles[index] || '',
       })),
       endpoint: {
         mode: endpointMode,
