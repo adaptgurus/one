@@ -1159,8 +1159,18 @@ export const getEndpointOptions = (draft, blueprint) => {
       return ['Native node list']
     case 'elasticsearch':
       return [
-        vol('Elasticsearch data', 'Per Elasticsearch data/combined VM', d, '/var/lib/elasticsearch'),
-        vol('Elasticsearch logs', 'Per Elasticsearch VM', l, '/var/log/elasticsearch'),
+        vol(
+          'Elasticsearch data',
+          'Per Elasticsearch data/combined VM',
+          d,
+          '/var/lib/elasticsearch'
+        ),
+        vol(
+          'Elasticsearch logs',
+          'Per Elasticsearch VM',
+          l,
+          '/var/log/elasticsearch'
+        ),
         ...(String(draft.topology || '').startsWith('3 masters +')
           ? [
               vol(
@@ -1933,12 +1943,12 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
   }
 
   if (id === 'mssql') {
-    if (storageRole === 'data' || storageRole === 'log' || storageRole === 'tempdb') {
-      return [
-        ...new Set(
-          nodeRoles.filter((role) => role !== 'mssql_config_only')
-        ),
-      ]
+    if (
+      storageRole === 'data' ||
+      storageRole === 'log' ||
+      storageRole === 'tempdb'
+    ) {
+      return [...new Set(nodeRoles.filter((role) => role !== 'mssql_config_only'))]
     }
   }
 
@@ -2973,10 +2983,14 @@ export const getProductConfigFields = (draft, blueprint) => {
     }
     if (draft.topology !== 'Standalone') {
       fields.push(
-        text('mssqlFencingRef', 'Qualified fencing / STONITH profile reference', {
-          helper:
-            'Production Pacemaker HA is blocked without an explicit, tested fencing profile.',
-        })
+        text(
+          'mssqlFencingRef',
+          'Qualified fencing / STONITH profile reference',
+          {
+            helper:
+              'Production Pacemaker HA is blocked without an explicit, tested fencing profile.',
+          }
+        )
       )
     }
 
@@ -4206,6 +4220,17 @@ export const getPlatformNodeRoles = (
     return [
       'jenkins_controller',
       ...repeatPlatformRole('jenkins_agent', count - 1),
+    ]
+  }
+
+  if (id === 'elasticsearch') {
+    if (topology === '3-node Production Cluster') {
+      return repeatPlatformRole('elasticsearch_combined', 3)
+    }
+
+    return [
+      ...repeatPlatformRole('elasticsearch_master', 3),
+      ...repeatPlatformRole('elasticsearch_data', count - 3),
     ]
   }
 
