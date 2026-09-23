@@ -1,0 +1,63 @@
+name: LayerSentry three-point source static validation
+
+on:
+  pull_request:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/scripts/layersentry_three_point_source.py
+      - .github/scripts/layersentry_three_point_boot.py
+      - .github/workflows/layersentry-three-point-source-static.yml
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile qualification Python
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          python -m py_compile .github\scripts\layersentry_three_point_source.py
+          python -m py_compile .github\scripts\layersentry_three_point_boot.py
+      - name: Enforce disposable-source contract
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          @'
+          import pathlib
+
+          p = pathlib.Path(".github/scripts/layersentry_three_point_source.py")
+          s = p.read_text(encoding="utf-8")
+          forbidden = [
+              "VM_ID = 220",
+              "qga_fix(",
+              "qga_exec(",
+              "datastores/100 -czf - 220",
+              'copied / "220"',
+          ]
+          for token in forbidden:
+              if token in s:
+                  raise SystemExit("forbidden legacy coupling: " + token)
+
+          required = [
+              "SOURCE_NAME =",
+              "SOURCE_NETWORK_ID = 0",
+              'SSH_PUBLIC_KEY="$USER[SSH_PUBLIC_KEY]"',
+              "write_guest_marker(marker)",
+              "copied / str(VM_ID)",
+              '"source_vm_owned_by_qualification": True',
+              "cleanup_source()",
+          ]
+          for token in required:
+              if token not in s:
+                  raise SystemExit("missing disposable-source contract: " + token)
+
+          print("THREE_POINT_SOURCE_STATIC=PASS")
+          '@ | python -
