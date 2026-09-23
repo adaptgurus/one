@@ -95,11 +95,18 @@ BACKUP_CONFIG=[
 SCHED_REQUIREMENTS="NAME = \\"{SOURCE_HOST}\\""
 '''
     tmpl = f"/tmp/{SOURCE_NAME}.tmpl"
-    out = ssh(
-        f"cat > {shlex.quote(tmpl)} && "
-        f"onevm create {shlex.quote(tmpl)}; rc=$?; rm -f {shlex.quote(tmpl)}; exit $rc",
-        input_text=template,
-    )
+    try:
+        ssh(
+            f"cat > {shlex.quote(tmpl)} && "
+            f"onevm create {shlex.quote(tmpl)}; rc=$?; rm -f {shlex.quote(tmpl)}; exit $rc",
+            input_text=template,
+        )
+    except subprocess.CalledProcessError:
+        # onevm create can fail after the VM object was allocated. Recover the
+        # uniquely named qualification-owned identity so finally cleanup can
+        # terminate it rather than leaking a disposable VM.
+        VM_ID = find_vm_by_name(SOURCE_NAME)
+        raise
     VM_ID = find_vm_by_name(SOURCE_NAME)
     if VM_ID is None:
         raise RuntimeError("source VM allocation returned no authoritative VM identity")
