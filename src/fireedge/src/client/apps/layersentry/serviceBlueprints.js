@@ -4397,6 +4397,7 @@ export const NATIVE_PRODUCT_OPTION_BINDINGS = Object.freeze({
 
 export const NATIVE_PRODUCT_DERIVED_OPTION_KEYS = Object.freeze({
   postgresql: ['pgbouncer'],
+  mssql: ['listener_name'],
 })
 
 const isNativeProductOptionActive = (draft, blueprintId, draftKey) => {
