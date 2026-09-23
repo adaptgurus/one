@@ -161,6 +161,31 @@ test('LayerSentry customer UI does not expose OpenNebula branding', () => {
 })
 
 
+test('bridged customer creation flows do not expose OpenNebula branding', () => {
+  const customerBridges = [
+    'src/modules/containers/VirtualMachines/Create.js',
+    'src/modules/containers/VmTemplates/Instantiate.js',
+    'src/modules/containers/VirtualNetworks/Create.js',
+    'src/modules/containers/SecurityGroups/Create.js',
+    'src/modules/containers/BackupJobs/Create.js',
+    'src/modules/containers/Images/Create.js',
+    'src/modules/containers/OneKs/Create.js',
+    'src/modules/containers/VmGroups/Create.js',
+    'src/modules/containers/VnTemplates/Instantiate.js',
+    'src/modules/containers/VrTemplates/Instantiate.js',
+  ]
+
+  for (const relative of customerBridges) {
+    const source = read(relative)
+    const customerSource = source.split('\n').slice(16).join('\n')
+    assert.doesNotMatch(
+      customerSource,
+      /OpenNebula/,
+      'backend brand leaked in bridged customer flow ' + relative
+    )
+  }
+})
+
 test('LayerSentry forms and primary actions use one product palette', () => {
   const shell = read(
     'src/client/apps/layersentry/components/PortalShell.js'
