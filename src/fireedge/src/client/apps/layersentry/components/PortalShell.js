@@ -197,6 +197,44 @@ const PortalShell = ({ children, endpoints }) => {
         minHeight: '100vh',
         backgroundColor: colors.background,
         color: colors.text.primary,
+        '& .MuiButton-root': {
+          textTransform: 'none',
+          borderRadius: `${radius.sm}px`,
+          fontWeight: 650,
+        },
+        '& .MuiButton-containedPrimary': {
+          backgroundColor: colors.brand.primary,
+          boxShadow: 'none',
+          '&:hover': {
+            backgroundColor: colors.brand.primaryHover,
+            boxShadow: 'none',
+          },
+        },
+        '& .MuiButton-outlinedPrimary': {
+          borderColor: colors.borderStrong,
+          color: colors.text.primary,
+          '&:hover': {
+            borderColor: colors.brand.primary,
+            backgroundColor: colors.status.infoSoft,
+          },
+        },
+        '& .MuiOutlinedInput-root': {
+          backgroundColor: colors.surface,
+          borderRadius: `${radius.sm}px`,
+          color: colors.text.primary,
+          '& .MuiOutlinedInput-notchedOutline': {
+            borderColor: colors.borderStrong,
+          },
+          '&:hover .MuiOutlinedInput-notchedOutline': {
+            borderColor: colors.brand.accent,
+          },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: colors.brand.primary,
+            borderWidth: 2,
+          },
+        },
+        '& .MuiInputLabel-root.Mui-focused': { color: colors.brand.primary },
+        '& .MuiFormHelperText-root': { color: colors.text.muted },
       }}
     >
       {mobileOpen && (
@@ -208,7 +246,7 @@ const PortalShell = ({ children, endpoints }) => {
             position: 'fixed',
             inset: 0,
             zIndex: 1150,
-            backgroundColor: 'rgba(15, 23, 42, 0.45)',
+            backgroundColor: colors.overlay.scrim,
           }}
         />
       )}
@@ -223,7 +261,7 @@ const PortalShell = ({ children, endpoints }) => {
           zIndex: 1200,
           display: { xs: mobileOpen ? 'flex' : 'none', md: 'flex' },
           flexDirection: 'column',
-          boxShadow: { xs: '0 16px 40px rgba(15, 23, 42, 0.28)', md: 'none' },
+          boxShadow: { xs: colors.shadow.mobileDrawer, md: 'none' },
         }}
       >
         <Box
