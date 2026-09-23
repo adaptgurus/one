@@ -716,7 +716,7 @@ test('implemented React wizard renders the 29-family catalog and blocks incomple
     })
 
     assert.equal(
-      document.querySelectorAll('[data-testid^="service-"]').length
+      document.querySelectorAll('[data-testid^="service-"]').length,
       29,
       'all 29 service cards must render in the implemented React wizard'
     )
