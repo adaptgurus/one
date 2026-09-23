@@ -14,7 +14,7 @@ concurrency:
 jobs:
   inventory:
     if: github.event.pull_request.head.ref == 'qual/hyperv-migration-live-20260924'
-    runs-on: self-hosted
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 20
     steps:
       - name: Bind exact Hyper-V host
