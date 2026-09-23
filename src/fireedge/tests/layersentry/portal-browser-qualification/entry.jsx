@@ -8,6 +8,13 @@ import {
   Checkbox,
   FormControlLabel,
   Radio,
+  LinearProgress,
+  Link,
+  Pagination,
+  Slider,
+  Tab,
+  Tabs,
+  ToggleButton,
   Step,
   StepLabel,
   Stepper,
@@ -62,6 +69,19 @@ const Content = () => (
           control={<Radio defaultChecked data-testid="qa-radio" />}
           label="Preferred"
         />
+        <Tabs value={0} data-testid="qa-tabs">
+          <Tab label="Overview" />
+          <Tab label="Details" />
+        </Tabs>
+        <LinearProgress variant="determinate" value={40} data-testid="qa-progress" />
+        <Pagination count={3} page={2} data-testid="qa-pagination" />
+        <ToggleButton value="grid" selected data-testid="qa-toggle">
+          Grid
+        </ToggleButton>
+        <Slider defaultValue={40} data-testid="qa-slider" />
+        <Link href="#details" data-testid="qa-link">
+          View details
+        </Link>
         <Stepper activeStep={1} data-testid="qa-stepper">
           <Step completed>
             <StepLabel>Basics</StepLabel>
