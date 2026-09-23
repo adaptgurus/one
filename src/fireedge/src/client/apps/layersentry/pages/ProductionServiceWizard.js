@@ -16,7 +16,7 @@
 /* eslint-disable jsdoc/require-jsdoc */
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from 'react'
-import { useHistory } from 'react-router-dom'
+import { useHistory, useLocation } from 'react-router-dom'
 import {
   Accordion,
   AccordionDetails,
@@ -350,13 +350,20 @@ const ProductField = ({ field, draft, update }) => {
 
 const ProductionServiceWizard = () => {
   const history = useHistory()
+  const location = useLocation()
+  const queryParams = useMemo(
+    () => new URLSearchParams(location.search),
+    [location.search]
+  )
+  const requestedBlueprint = queryParams.get('blueprint') || 'postgresql'
+  const returnTo = queryParams.get('return') || PRODUCT_PATHS.APAAS
   const [catalog, setCatalog] = useState(FALLBACK_BLUEPRINTS)
   const [catalogState, setCatalogState] = useState('fallback')
   const [capabilityState, setCapabilityState] = useState(() =>
     getRuntimeCapabilities(null)
   )
   const [step, setStep] = useState(0)
-  const [draft, setDraft] = useState(() => createDraft('postgresql'))
+  const [draft, setDraft] = useState(() => createDraft(requestedBlueprint))
   const [attemptedStep, setAttemptedStep] = useState(null)
   const [validated, setValidated] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -2049,7 +2056,7 @@ const ProductionServiceWizard = () => {
         <Button
           variant="text"
           startIcon={<NavArrowLeft width={18} height={18} />}
-          onClick={() => history.push(PRODUCT_PATHS.APPLICATIONS)}
+          onClick={() => history.push(returnTo)}
           sx={{ textTransform: 'none' }}
         >
           Back
