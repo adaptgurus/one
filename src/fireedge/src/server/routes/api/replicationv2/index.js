@@ -11,4 +11,16 @@ module.exports = [
   { ...Commands[Actions.CHECKPOINTS], action: actions.checkpoints },
   { ...Commands[Actions.CLONE], action: actions.clone },
   { ...Commands[Actions.REBASELINE], action: actions.rebaseline },
+  {
+    ...Commands[Actions.PUT_PROTECTION_GROUP],
+    action: actions.putProtectionGroup,
+  },
+  {
+    ...Commands[Actions.CAPTURE_PROTECTION_GROUP],
+    action: actions.captureProtectionGroup,
+  },
+  {
+    ...Commands[Actions.PROTECTION_GROUP_CHECKPOINTS],
+    action: actions.protectionGroupCheckpoints,
+  },
 ]
