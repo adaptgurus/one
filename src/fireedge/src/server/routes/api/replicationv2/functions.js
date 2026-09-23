@@ -227,6 +227,93 @@ const rebaseline = (
   )
 }
 
+const putProtectionGroup = (
+  res = {},
+  next = defaultEmptyFunction,
+  { group } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!group || typeof group !== 'object') {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Protection group request is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      { method: 'POST', path: '/v1/replication/protection-groups', data: group },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const captureProtectionGroup = (
+  res = {},
+  next = defaultEmptyFunction,
+  { groupId } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!groupId) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'groupId is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'POST',
+        path:
+          '/v1/replication/protection-groups/' +
+          encodeURIComponent(groupId) +
+          '/capture',
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const protectionGroupCheckpoints = (
+  res = {},
+  next = defaultEmptyFunction,
+  { groupId } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!groupId) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'groupId is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'GET',
+        path:
+          '/v1/replication/protection-groups/' +
+          encodeURIComponent(groupId) +
+          '/checkpoints',
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
 module.exports = {
   capabilities,
   sessions,
@@ -237,4 +324,7 @@ module.exports = {
   checkpoints,
   clone,
   rebaseline,
+  putProtectionGroup,
+  captureProtectionGroup,
+  protectionGroupCheckpoints,
 }
