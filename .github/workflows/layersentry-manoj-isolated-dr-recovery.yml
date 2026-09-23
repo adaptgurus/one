@@ -147,26 +147,44 @@ jobs:
               raise SystemExit("ls-kvm2 did not return fresh OpenNebula monitoring data")
 
           running = int(refreshed.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
+          free_cpu = int(refreshed.findtext("./HOST_SHARE/FREE_CPU") or 0)
+          free_mem = int(refreshed.findtext("./HOST_SHARE/FREE_MEM") or 0)
           vm_ids = [int((n.text or "-1").strip()) for n in refreshed.findall("./VMS/ID") if (n.text or "").strip()]
           diagnostics = []
+          blocking = []
           for vm_id in vm_ids:
               info = one.one.vm.info(auth, vm_id, False)
               if not info[0]:
                   diagnostics.append({"id": vm_id, "info_error": str(info[1])[:200]})
+                  blocking.append({"id": vm_id, "reason": "unreadable active allocation"})
                   continue
               vm = ET.fromstring(info[1])
               histories = vm.findall("./HISTORY_RECORDS/HISTORY")
               vm_host = histories[-1].findtext("HOSTNAME") if histories else ""
-              diagnostics.append({
+              state = int(vm.findtext("STATE") or -1)
+              lcm_state = int(vm.findtext("LCM_STATE") or -1)
+              deploy_id = (vm.findtext("DEPLOY_ID") or "").strip()
+              row = {
                   "id": vm_id,
                   "name": (vm.findtext("NAME") or "").strip(),
-                  "state": int(vm.findtext("STATE") or -1),
-                  "lcm_state": int(vm.findtext("LCM_STATE") or -1),
+                  "state": state,
+                  "lcm_state": lcm_state,
                   "host": vm_host,
-              })
+                  "deploy_id": deploy_id,
+              }
+              diagnostics.append(row)
+              # ACTIVE + provider deploy identity means a live/ambiguous
+              # hypervisor workload. Failure-without-deploy and POWEROFF do not.
+              if state == 3 and deploy_id:
+                  blocking.append(row)
           print("KVM2_POST_MONITOR_VM_DIAGNOSTICS=" + repr(diagnostics))
+          print(f"KVM2_CAPACITY running_counter={running} free_cpu={free_cpu} free_mem={free_mem}")
+          if blocking:
+              raise SystemExit("refusing isolated-host preparation: active deployed workloads=" + repr(blocking))
+          if free_cpu < 100 or free_mem < 262144:
+              raise SystemExit(f"refusing isolated-host preparation: insufficient free capacity free_cpu={free_cpu} free_mem={free_mem}")
           if running != 0:
-              raise SystemExit(f"refusing isolated-host preparation after fresh monitoring: {HOST_NAME} RUNNING_VMS={running}")
+              print("KVM2_STALE_OR_NONRUNNING_OCCUPANCY_ACCEPTED=YES")
 
           updated = one.one.host.update(auth, host_id, 'PIN_POLICY="PINNED"\nVMS_THREAD="1"', 1)
           if not updated[0]:
@@ -184,11 +202,13 @@ jobs:
               state = int(root.findtext("STATE") or -1)
               running = int(root.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
               total_cpu = int(root.findtext("./HOST_SHARE/MAX_CPU") or root.findtext("./HOST_SHARE/TOTAL_CPU") or 0)
+              free_cpu = int(root.findtext("./HOST_SHARE/FREE_CPU") or 0)
+              free_mem = int(root.findtext("./HOST_SHARE/FREE_MEM") or 0)
               pin = (root.findtext("./TEMPLATE/PIN_POLICY") or "").strip().upper()
               vms_thread = (root.findtext("./TEMPLATE/VMS_THREAD") or "1").strip()
-              last = (state, running, total_cpu, pin, vms_thread)
-              if running == 0 and total_cpu > 0 and pin == "PINNED" and vms_thread == "1":
-                  print(f"MANOJ_ISOLATED_HOST_READY=PASS HOST={HOST_NAME} HOST_ID={host_id} STATE={state} TOTAL_CPU={total_cpu} PIN_POLICY={pin} VMS_THREAD={vms_thread}")
+              last = (state, running, total_cpu, free_cpu, free_mem, pin, vms_thread)
+              if free_cpu >= 100 and free_mem >= 262144 and total_cpu > 0 and pin == "PINNED" and vms_thread == "1":
+                  print(f"MANOJ_ISOLATED_HOST_READY=PASS HOST={HOST_NAME} HOST_ID={host_id} STATE={state} TOTAL_CPU={total_cpu} FREE_CPU={free_cpu} FREE_MEM={free_mem} PIN_POLICY={pin} VMS_THREAD={vms_thread}")
                   break
               time.sleep(2)
           else:
