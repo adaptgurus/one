@@ -1,0 +1,71 @@
+name: LayerSentry Migration Source Bridge
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-migration-source-bridge
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    if: github.event.pull_request.head.ref == 'qual/hyperv-migration-live-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 40
+    steps:
+      - name: Bind exact source-validation runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){ throw "wrong runner: $env:RUNNER_NAME" }
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){ throw "wrong host: $env:COMPUTERNAME" }
+          Write-Host "RUNNER_BOUND=$env:RUNNER_NAME"
+
+      - name: Fetch exact LayerSentry migration source
+        shell: powershell
+        env:
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          $ErrorActionPreference='Stop'
+          $dest=Join-Path $env:RUNNER_TEMP 'layersentry-migration-agent-exact'
+          if(Test-Path $dest){ Remove-Item -LiteralPath $dest -Recurse -Force }
+          git clone --no-checkout https://github.com/adaptgurus/layersentry-platform.git $dest
+          Set-Location $dest
+          git fetch --depth=1 origin 1816ba856337c5f55ded36b0fa4f8baa1625312a
+          git checkout --detach 1816ba856337c5f55ded36b0fa4f8baa1625312a
+          $actual=(git rev-parse HEAD).Trim()
+          if($actual -ne '1816ba856337c5f55ded36b0fa4f8baa1625312a'){ throw "exact source mismatch: $actual" }
+          if((git status --porcelain).Count -ne 0){ throw 'exact source checkout is dirty' }
+          Write-Host "EXACT_SOURCE=$actual"
+
+      - name: Validate portable guest warm-migration source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dest=Join-Path $env:RUNNER_TEMP 'layersentry-migration-agent-exact'
+          Set-Location $dest
+          $offenders = gofmt -l cmd/layersentry-migration-agent internal/migrationagent internal/adapters/replication/guestagent pkg/replicationv2 internal/replicationv2
+          if($offenders){ $offenders | ForEach-Object { Write-Host "GOFMT_OFFENDER=$_" }; throw 'gofmt required' }
+          go test -count=1 ./internal/migrationagent
+          go test -count=1 ./internal/adapters/replication/guestagent
+          go test -count=1 ./pkg/replicationv2
+          go test -count=1 ./internal/replicationv2
+          go test -run TestNameThatDoesNotExist -count=1 ./...
+          Write-Host 'LAYERSENTRY_GUEST_WARM_SOURCE=PASS'
+
+      - name: Cross-build migration agent
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dest=Join-Path $env:RUNNER_TEMP 'layersentry-migration-agent-exact'
+          Set-Location $dest
+          $env:CGO_ENABLED='0'
+          $env:GOOS='windows'; $env:GOARCH='amd64'
+          go build -trimpath -o "$env:RUNNER_TEMP\layersentry-migration-agent-windows-amd64.exe" ./cmd/layersentry-migration-agent
+          $env:GOOS='linux'; $env:GOARCH='amd64'
+          go build -trimpath -o "$env:RUNNER_TEMP\layersentry-migration-agent-linux-amd64" ./cmd/layersentry-migration-agent
+          Write-Host 'LAYERSENTRY_GUEST_WARM_CROSS_BUILD=PASS'
