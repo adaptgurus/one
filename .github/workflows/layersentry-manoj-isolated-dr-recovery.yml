@@ -118,43 +118,67 @@ jobs:
 
           host = host_by_name()
           host_id = int(host.findtext("ID"))
-          running = int(host.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
-          if running != 0:
-              vm_ids = [int((n.text or "-1").strip()) for n in host.findall("./VMS/ID") if (n.text or "").strip()]
-              diagnostics = []
-              for vm_id in vm_ids:
-                  info = one.one.vm.info(auth, vm_id, False)
-                  if not info[0]:
-                      diagnostics.append({"id": vm_id, "info_error": str(info[1])[:200]})
-                      continue
-                  vm = ET.fromstring(info[1])
-                  histories = vm.findall("./HISTORY_RECORDS/HISTORY")
-                  vm_host = histories[-1].findtext("HOSTNAME") if histories else ""
-                  diagnostics.append({
-                      "id": vm_id,
-                      "name": (vm.findtext("NAME") or "").strip(),
-                      "state": int(vm.findtext("STATE") or -1),
-                      "lcm_state": int(vm.findtext("LCM_STATE") or -1),
-                      "host": vm_host,
-                  })
-              print("KVM2_PREEXISTING_VM_DIAGNOSTICS=" + repr(diagnostics))
-              raise SystemExit(f"refusing isolated-host preparation: {HOST_NAME} already has RUNNING_VMS={running}")
+          initial_running = int(host.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
+          print(f"KVM2_PRE_MONITOR_RUNNING_VMS={initial_running}")
 
+          # Hyper-V was just started; stale HOST_SHARE counters are not an
+          # authoritative safety decision. Enable monitoring first, then require
+          # a fresh host readback before checking occupancy.
           status = one.one.host.status(auth, host_id, 0)
           if not status[0]:
               raise SystemExit("enable host failed: " + str(status[1])[:400])
+
+          deadline = time.time() + 240
+          refreshed = None
+          while time.time() < deadline:
+              info = one.one.host.info(auth, host_id, False)
+              if not info[0]:
+                  time.sleep(3)
+                  continue
+              root = ET.fromstring(info[1])
+              state = int(root.findtext("STATE") or -1)
+              total_cpu = int(root.findtext("./HOST_SHARE/MAX_CPU") or root.findtext("./HOST_SHARE/TOTAL_CPU") or 0)
+              last_mon = int(root.findtext("LAST_MON_TIME") or 0)
+              if total_cpu > 0 and last_mon > 0 and state not in (3, 4):
+                  refreshed = root
+                  break
+              time.sleep(3)
+          if refreshed is None:
+              raise SystemExit("ls-kvm2 did not return fresh OpenNebula monitoring data")
+
+          running = int(refreshed.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
+          vm_ids = [int((n.text or "-1").strip()) for n in refreshed.findall("./VMS/ID") if (n.text or "").strip()]
+          diagnostics = []
+          for vm_id in vm_ids:
+              info = one.one.vm.info(auth, vm_id, False)
+              if not info[0]:
+                  diagnostics.append({"id": vm_id, "info_error": str(info[1])[:200]})
+                  continue
+              vm = ET.fromstring(info[1])
+              histories = vm.findall("./HISTORY_RECORDS/HISTORY")
+              vm_host = histories[-1].findtext("HOSTNAME") if histories else ""
+              diagnostics.append({
+                  "id": vm_id,
+                  "name": (vm.findtext("NAME") or "").strip(),
+                  "state": int(vm.findtext("STATE") or -1),
+                  "lcm_state": int(vm.findtext("LCM_STATE") or -1),
+                  "host": vm_host,
+              })
+          print("KVM2_POST_MONITOR_VM_DIAGNOSTICS=" + repr(diagnostics))
+          if running != 0:
+              raise SystemExit(f"refusing isolated-host preparation after fresh monitoring: {HOST_NAME} RUNNING_VMS={running}")
 
           updated = one.one.host.update(auth, host_id, 'PIN_POLICY="PINNED"\nVMS_THREAD="1"', 1)
           if not updated[0]:
               raise SystemExit("host pinning update failed: " + str(updated[1])[:400])
 
-          deadline = time.time() + 240
+          deadline = time.time() + 120
           last = None
           while time.time() < deadline:
               info = one.one.host.info(auth, host_id, False)
               if not info[0]:
                   last = ("info_error", str(info[1])[:200])
-                  time.sleep(3)
+                  time.sleep(2)
                   continue
               root = ET.fromstring(info[1])
               state = int(root.findtext("STATE") or -1)
@@ -166,9 +190,9 @@ jobs:
               if running == 0 and total_cpu > 0 and pin == "PINNED" and vms_thread == "1":
                   print(f"MANOJ_ISOLATED_HOST_READY=PASS HOST={HOST_NAME} HOST_ID={host_id} STATE={state} TOTAL_CPU={total_cpu} PIN_POLICY={pin} VMS_THREAD={vms_thread}")
                   break
-              time.sleep(3)
+              time.sleep(2)
           else:
-              raise SystemExit("isolated host did not become ready: " + repr(last))
+              raise SystemExit("isolated host did not become pin-ready: " + repr(last))
           '@
           $path = Join-Path $env:RUNNER_TEMP 'prepare_isolated_kvm2.py'
           Set-Content -Path $path -Value $script -Encoding UTF8
