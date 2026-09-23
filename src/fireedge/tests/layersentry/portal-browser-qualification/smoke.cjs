@@ -75,6 +75,17 @@ const run = async () => {
       const completedStep = document.querySelector(
         '.MuiStepIcon-root.Mui-completed'
       )
+      const tabIndicator = document.querySelector('.MuiTabs-indicator')
+      const selectedTab = document.querySelector('.MuiTab-root.Mui-selected')
+      const progressBar = document.querySelector('.MuiLinearProgress-bar')
+      const selectedPage = document.querySelector(
+        '.MuiPaginationItem-root.Mui-selected'
+      )
+      const selectedToggle = document.querySelector(
+        '.MuiToggleButton-root.Mui-selected'
+      )
+      const slider = document.querySelector('.MuiSlider-root')
+      const link = document.querySelector('[data-testid="qa-link"]')
       return {
         bodyBackground: getComputedStyle(document.body).backgroundColor,
         primaryBackground: getComputedStyle(primary).backgroundColor,
@@ -92,6 +103,19 @@ const run = async () => {
         completedStepColor: completedStep
           ? getComputedStyle(completedStep).color
           : '',
+        tabIndicatorBackground: tabIndicator
+          ? getComputedStyle(tabIndicator).backgroundColor
+          : '',
+        selectedTabColor: selectedTab ? getComputedStyle(selectedTab).color : '',
+        progressBarBackground: progressBar
+          ? getComputedStyle(progressBar).backgroundColor
+          : '',
+        selectedPageColor: selectedPage ? getComputedStyle(selectedPage).color : '',
+        selectedToggleColor: selectedToggle
+          ? getComputedStyle(selectedToggle).color
+          : '',
+        sliderColor: slider ? getComputedStyle(slider).color : '',
+        linkColor: link ? getComputedStyle(link).color : '',
       }
     })
 
@@ -107,6 +131,13 @@ const run = async () => {
       radioColor: styles.radioColor,
       activeStepColor: styles.activeStepColor,
       completedStepColor: styles.completedStepColor,
+      tabIndicatorBackground: styles.tabIndicatorBackground,
+      selectedTabColor: styles.selectedTabColor,
+      progressBarBackground: styles.progressBarBackground,
+      selectedPageColor: styles.selectedPageColor,
+      selectedToggleColor: styles.selectedToggleColor,
+      sliderColor: styles.sliderColor,
+      linkColor: styles.linkColor,
     })) {
       assert.equal(value, expectedBlue, name)
     }
