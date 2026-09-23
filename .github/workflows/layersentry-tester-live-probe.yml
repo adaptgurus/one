@@ -15,14 +15,15 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Identify runner and prove tester control-plane reachability
-        shell: bash
+        shell: powershell
         run: |
-          set -euo pipefail
-          echo "RUNNER_NAME=${RUNNER_NAME:-unknown}"
-          echo "HOSTNAME=$(hostname)"
-          id
-          curl -fsS --max-time 10 http://10.10.10.21:2616/fireedge/layersentry/ >/tmp/layersentry-live.html
-          grep -qi 'html' /tmp/layersentry-live.html
-          ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 hostname
-          ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 systemctl is-active opennebula-fireedge
-          echo "TESTER_LIVE_REACHABILITY_PASS"
+          $ErrorActionPreference = 'Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME"
+          Write-Host "COMPUTERNAME=$env:COMPUTERNAME"
+          wsl -l -v
+          $tcp = Test-NetConnection 10.10.10.21 -Port 2616 -WarningAction SilentlyContinue
+          if (-not $tcp.TcpTestSucceeded) {
+            throw "FireEdge 10.10.10.21:2616 is not reachable from the self-hosted runner"
+          }
+          wsl -e bash -lc "set -e; curl -fsS --max-time 10 http://10.10.10.21:2616/fireedge/layersentry/ >/tmp/layersentry-live.html; grep -qi html /tmp/layersentry-live.html; ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 hostname; ssh -o BatchMode=yes -o ConnectTimeout=10 rocky-01 systemctl is-active opennebula-fireedge"
+          Write-Host "TESTER_LIVE_REACHABILITY_PASS"
