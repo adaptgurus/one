@@ -16,7 +16,7 @@
 /* eslint-disable jsdoc/require-jsdoc */
 /* eslint-disable react/prop-types */
 import { useEffect, useMemo, useState } from 'react'
-import { useHistory, useLocation } from 'react-router-dom'
+import { useHistory } from 'react-router-dom'
 import {
   Accordion,
   AccordionDetails,
@@ -66,13 +66,16 @@ import {
   getArchitecturePlan,
   getBackupProfile,
   getBlueprintById,
+  getCapacityProfile,
   getCredentialProfile,
   getDefaultDependencyState,
   getDependencyErrors,
+  getDrProfile,
   getDependencyOptions,
   getDependencySpecs,
   getDependencySummary,
   getEndpointOptions,
+  getNetworkProfile,
   getProductConfigErrors,
   getProductConfigFields,
   getProductSummary,
@@ -347,20 +350,13 @@ const ProductField = ({ field, draft, update }) => {
 
 const ProductionServiceWizard = () => {
   const history = useHistory()
-  const location = useLocation()
-  const queryParams = useMemo(
-    () => new URLSearchParams(location.search),
-    [location.search]
-  )
-  const requestedBlueprint = queryParams.get('blueprint') || 'postgresql'
-  const returnTo = queryParams.get('return') || PRODUCT_PATHS.APAAS
   const [catalog, setCatalog] = useState(FALLBACK_BLUEPRINTS)
   const [catalogState, setCatalogState] = useState('fallback')
   const [capabilityState, setCapabilityState] = useState(() =>
     getRuntimeCapabilities(null)
   )
   const [step, setStep] = useState(0)
-  const [draft, setDraft] = useState(() => createDraft(requestedBlueprint))
+  const [draft, setDraft] = useState(() => createDraft('postgresql'))
   const [attemptedStep, setAttemptedStep] = useState(null)
   const [validated, setValidated] = useState(false)
   const [reviewOpen, setReviewOpen] = useState(false)
@@ -455,6 +451,18 @@ const ProductionServiceWizard = () => {
     [blueprint]
   )
   const backupProfile = useMemo(() => getBackupProfile(blueprint), [blueprint])
+  const capacityProfile = useMemo(
+    () => getCapacityProfile(blueprint),
+    [blueprint]
+  )
+  const drProfile = useMemo(
+    () => getDrProfile(draft, blueprint),
+    [draft.topology, blueprint]
+  )
+  const networkProfile = useMemo(
+    () => getNetworkProfile(draft, blueprint),
+    [draft, blueprint]
+  )
   const currentErrors = useMemo(
     () => validateStep(step, draft, blueprint),
     [step, draft, blueprint]
@@ -582,30 +590,15 @@ const ProductionServiceWizard = () => {
     dependencyErrors.length > 0 ||
     draft.postgis === true ||
     (blueprint?.id === 'postgresql' &&
-      (draft.dcsPlacement !== 'Shared LayerSentry etcd DCS' ||
-        draft.pgbouncerPlacement !== 'On PostgreSQL nodes' ||
-        draft.barmanPlacement !== 'Shared Barman service'))
-
-  const storageAdvancedActive =
-    draft.placementPolicy === 'Use qualified dedicated pool' ||
-    (draft.storage || []).some(
-      (item) =>
-        item.layout === 'Existing SAN / LUN' ||
-        item.layout === 'Existing mount' ||
-        item.dependency
-    )
+      draft.pgbouncerPlacement !== 'On PostgreSQL nodes')
 
   const networkAdvancedActive =
     draft.ipMode === 'Static' ||
-    draft.endpointMode === 'Existing load balancer' ||
-    draft.dnsRegistration !== 'Automatic' ||
-    draft.portPolicy !== 'Use product default'
-
-  const backupAdvancedActive = draft.drEnabled
-
-  const securityAdvancedActive =
-    draft.packageSourceMode !== 'Managed repositories' ||
-    draft.internetAccess === 'HTTP(S) Proxy'
+    (networkProfile.singleEndpoint &&
+      (draft.endpointMode === 'Existing load balancer' ||
+        draft.portPolicy !== 'Use product default')) ||
+    (networkProfile.nativeDiscovery &&
+      draft.portPolicy !== 'Use product default')
 
   const isAdvancedOpen = (section, active) =>
     Boolean(active || draft.advancedOpen?.[section])
@@ -1016,7 +1009,7 @@ const ProductionServiceWizard = () => {
         Select application release and topology. The VM footprint below shows
         all service-owned components before infrastructure is reserved.
       </Typography>
-      <Row columns={blueprint?.editions ? 4 : 3}>
+      <Row columns={blueprint?.editions ? 3 : 2}>
         {blueprint?.editions && (
           <SelectField
             label="Edition"
@@ -1047,17 +1040,6 @@ const ProductionServiceWizard = () => {
           onChange={(value) => update('topology', value)}
         >
           {topologyOptions.map((value) => (
-            <MenuItem key={value} value={value}>
-              {value}
-            </MenuItem>
-          ))}
-        </SelectField>
-        <SelectField
-          label="Environment"
-          value={draft.environment}
-          onChange={(value) => update('environment', value)}
-        >
-          {['Production', 'Staging', 'Development'].map((value) => (
             <MenuItem key={value} value={value}>
               {value}
             </MenuItem>
@@ -1169,16 +1151,20 @@ const ProductionServiceWizard = () => {
             onChange={(value) => update('memoryGiB', value)}
             min={1}
           />
-          <NumberField
-            label="Expected logical data (GiB)"
-            value={draft.expectedDataGiB}
-            onChange={(value) => update('expectedDataGiB', value)}
-          />
-          <NumberField
-            label="Expected client connections"
-            value={draft.expectedConnections}
-            onChange={(value) => update('expectedConnections', value)}
-          />
+          {capacityProfile.data && (
+            <NumberField
+              label={capacityProfile.dataLabel}
+              value={draft.expectedDataGiB}
+              onChange={(value) => update('expectedDataGiB', value)}
+            />
+          )}
+          {capacityProfile.load && (
+            <NumberField
+              label={capacityProfile.loadLabel}
+              value={draft.expectedConnections}
+              onChange={(value) => update('expectedConnections', value)}
+            />
+          )}
           <SelectField
             label="Workload profile"
             value={draft.workload}
@@ -1190,11 +1176,13 @@ const ProductionServiceWizard = () => {
               </MenuItem>
             ))}
           </SelectField>
-          <NumberField
-            label="Expected annual growth (%)"
-            value={draft.expectedGrowthPercent}
-            onChange={(value) => update('expectedGrowthPercent', value)}
-          />
+          {capacityProfile.growth && (
+            <NumberField
+              label="Expected annual growth (%)"
+              value={draft.expectedGrowthPercent}
+              onChange={(value) => update('expectedGrowthPercent', value)}
+            />
+          )}
         </Row>
         <Alert severity="info" sx={{ mt: 2 }}>
           Current design: {architecture.dedicated}
@@ -1213,8 +1201,9 @@ const ProductionServiceWizard = () => {
         Storage
       </Typography>
       <Typography sx={{ color: colors.text.secondary, mb: 2 }}>
-        Storage is application-aware. Per-node data volumes, shared recovery
-        repositories and linked dependencies are shown separately.
+        Storage is application-aware. Only service-owned persistent volumes are
+        shown here; recovery repositories and linked dependencies are configured
+        in their native workflow sections.
       </Typography>
       {(draft.storage || []).length === 0 && (
         <Alert severity="info" sx={{ mb: 2 }}>
@@ -1282,20 +1271,22 @@ const ProductionServiceWizard = () => {
                     })
                   }
                 >
-                  {[
-                    'Single disk',
-                    'LVM',
-                    'Striped managed disks',
-                    'Existing SAN / LUN',
-                    'Existing mount',
-                    'Repository-managed',
-                    'Shared filesystem/object storage',
-                  ].map((value) => (
-                    <MenuItem key={value} value={value}>
-                      {value}
-                    </MenuItem>
-                  ))}
+                  {['Single disk', 'Existing SAN / LUN', 'Existing mount'].map(
+                    (value) => (
+                      <MenuItem key={value} value={value}>
+                        {value}
+                      </MenuItem>
+                    )
+                  )}
                 </SelectField>
+                {item.layout !== 'Existing mount' && (
+                  <TextField
+                    label="Native mount path"
+                    value={item.mountpoint || ''}
+                    disabled
+                    helperText="Resolved by the application blueprint; filesystem is selected by the qualified OS tuple."
+                  />
+                )}
                 {(item.layout === 'Existing SAN / LUN' ||
                   item.layout === 'Existing mount') && (
                   <TextField
@@ -1326,36 +1317,7 @@ const ProductionServiceWizard = () => {
           </Surface>
         ))}
       </Box>
-      <AdvancedSection
-        title="Advanced storage placement"
-        description="Use only when placement must target a specifically qualified pool."
-        expanded={isAdvancedOpen('storage', storageAdvancedActive)}
-        onChange={(next) =>
-          setAdvancedOpen('storage', storageAdvancedActive, next)
-        }
-      >
-        <SelectField
-          label="Placement policy"
-          value={draft.placementPolicy}
-          onChange={(value) => update('placementPolicy', value)}
-        >
-          <MenuItem value="Spread across qualified failure domains">
-            Spread across qualified failure domains
-          </MenuItem>
-          <MenuItem value="Use qualified dedicated pool">
-            Use qualified dedicated pool
-          </MenuItem>
-        </SelectField>
-        {draft.placementPolicy === 'Use qualified dedicated pool' && (
-          <TextField
-            fullWidth
-            sx={{ mt: 2 }}
-            label="Qualified pool / placement-policy reference"
-            value={draft.dedicatedPool}
-            onChange={(event) => update('dedicatedPool', event.target.value)}
-          />
-        )}
-      </AdvancedSection>
+
       {attemptedStep === step && <ErrorList errors={currentErrors} />}
     </>
   )
@@ -1366,8 +1328,9 @@ const ProductionServiceWizard = () => {
         Network & Availability
       </Typography>
       <Typography sx={{ color: colors.text.secondary, mb: 2 }}>
-        Define the customer-facing name and availability intent. Raw LayerSentry
-        network internals stay hidden from normal users.
+        Configure node identity and the application&apos;s native access model.
+        DNS automation and scheduler placement are operational integrations, not
+        customer toggles in this workflow.
       </Typography>
       <Row>
         <TextField
@@ -1376,40 +1339,54 @@ const ProductionServiceWizard = () => {
           onChange={(event) => update('serviceName', event.target.value)}
         />
         <TextField
-          label="DNS domain"
+          label="Node DNS domain"
           value={draft.domain}
           onChange={(event) => update('domain', event.target.value)}
           placeholder="prod.example.internal"
         />
-        <TextField
-          label="Service FQDN"
-          value={draft.serviceFqdn}
-          onChange={(event) => update('serviceFqdn', event.target.value)}
-          placeholder="service.prod.example.internal"
-        />
-        <SelectField
-          label="Availability"
-          value={draft.availability}
-          onChange={(value) => update('availability', value)}
-        >
-          <MenuItem value="Separate failure domains">
-            Separate failure domains
-          </MenuItem>
-          <MenuItem value="Single failure domain">
-            Single failure domain
-          </MenuItem>
-        </SelectField>
-        <SelectField
-          label="Service endpoint"
-          value={draft.endpointMode}
-          onChange={(value) => update('endpointMode', value)}
-        >
-          {endpointOptions.map((value) => (
-            <MenuItem key={value} value={value}>
-              {value}
-            </MenuItem>
-          ))}
-        </SelectField>
+        {networkProfile.singleEndpoint && (
+          <TextField
+            label="Desired service FQDN"
+            value={draft.serviceFqdn}
+            onChange={(event) => update('serviceFqdn', event.target.value)}
+            placeholder="service.prod.example.internal"
+            helperText="Desired endpoint identity; external DNS publication is handled outside this blueprint until a DNS provider is connected."
+          />
+        )}
+        {networkProfile.singleEndpoint && endpointOptions.length > 1 && (
+          <SelectField
+            label="Service endpoint"
+            value={draft.endpointMode}
+            onChange={(value) => update('endpointMode', value)}
+          >
+            {endpointOptions.map((value) => (
+              <MenuItem key={value} value={value}>
+                {value}
+              </MenuItem>
+            ))}
+          </SelectField>
+        )}
+        {networkProfile.singleEndpoint && endpointOptions.length === 1 && (
+          <TextField
+            label="Service endpoint"
+            value={endpointOptions[0] || ''}
+            disabled
+          />
+        )}
+        {networkProfile.nativeDiscovery && (
+          <TextField
+            label="Native discovery model"
+            value={endpointOptions[0] || draft.endpointMode}
+            disabled
+            helperText="Clients use the application's native node/bootstrap discovery; no synthetic load-balancer endpoint is created."
+          />
+        )}
+        {networkProfile.mode === 'none' && (
+          <Alert severity="info">
+            This blueprint has no customer-facing service endpoint. The domain
+            is used only for managed node identity.
+          </Alert>
+        )}
         <SelectField
           label="Node IP assignment"
           value={draft.ipMode}
@@ -1420,131 +1397,71 @@ const ProductionServiceWizard = () => {
         </SelectField>
       </Row>
 
-      <AdvancedSection
-        title="Advanced network"
-        description="Static addresses, manual DNS, external endpoints and non-default ports."
-        expanded={isAdvancedOpen('network', networkAdvancedActive)}
-        onChange={(next) =>
-          setAdvancedOpen('network', networkAdvancedActive, next)
-        }
-      >
-        <Row>
-          {draft.ipMode === 'Static' && (
-            <TextField
-              multiline
-              minRows={3}
-              label="Static node IP addresses"
-              value={draft.staticIps}
-              onChange={(event) => update('staticIps', event.target.value)}
-              helperText={
-                'At least ' +
-                String(
-                  architecture.addressableNodes || architecture.dedicated
-                ) +
-                ' addresses are required for this footprint.'
-              }
-            />
-          )}
-
-          {draft.endpointMode === 'Existing load balancer' && (
-            <TextField
-              label="Existing VIP / endpoint reference"
-              value={draft.externalEndpoint}
-              onChange={(event) =>
-                update('externalEndpoint', event.target.value)
-              }
-            />
-          )}
-
-          <SelectField
-            label="DNS registration"
-            value={draft.dnsRegistration}
-            onChange={(value) => update('dnsRegistration', value)}
-          >
-            <MenuItem value="Automatic">Automatic</MenuItem>
-            <MenuItem value="Existing DNS workflow">
-              Existing DNS workflow
-            </MenuItem>
-            <MenuItem value="Manual DNS records">Manual DNS records</MenuItem>
-          </SelectField>
-
-          {draft.dnsRegistration === 'Existing DNS workflow' && (
-            <TextField
-              label="DNS workflow / integration reference"
-              value={draft.dnsWorkflowRef}
-              onChange={(event) => update('dnsWorkflowRef', event.target.value)}
-            />
-          )}
-
-          {draft.dnsRegistration === 'Manual DNS records' && (
-            <>
+      {(networkProfile.customerTraffic || draft.ipMode === 'Static') && (
+        <AdvancedSection
+          title="Advanced network"
+          description="Static node addresses, external endpoint references and qualified non-default service ports."
+          expanded={isAdvancedOpen('network', networkAdvancedActive)}
+          onChange={(next) =>
+            setAdvancedOpen('network', networkAdvancedActive, next)
+          }
+        >
+          <Row>
+            {draft.ipMode === 'Static' && (
               <TextField
-                label="DNS zone"
-                value={draft.dnsZone}
-                onChange={(event) => update('dnsZone', event.target.value)}
-                placeholder="prod.example.internal"
+                multiline
+                minRows={3}
+                label="Static node IP addresses"
+                value={draft.staticIps}
+                onChange={(event) => update('staticIps', event.target.value)}
+                helperText={
+                  'Exactly ' +
+                  String(
+                    architecture.addressableNodes || architecture.dedicated
+                  ) +
+                  ' addresses are required for the service-owned VM footprint.'
+                }
               />
-              <SelectField
-                label="DNS record type"
-                value={draft.dnsRecordType}
-                onChange={(value) => update('dnsRecordType', value)}
-              >
-                <MenuItem value="A/AAAA">A / AAAA</MenuItem>
-                <MenuItem value="CNAME">CNAME</MenuItem>
-              </SelectField>
-              <NumberField
-                label="DNS TTL (seconds)"
-                value={draft.dnsTtl}
-                onChange={(value) => update('dnsTtl', value)}
-                min={30}
-              />
-              <SelectField
-                label="DNS target"
-                value={draft.dnsTargetMode}
-                onChange={(value) => update('dnsTargetMode', value)}
-              >
-                <MenuItem value="Use generated service endpoint">
-                  Use generated service endpoint
-                </MenuItem>
-                <MenuItem value="Specify DNS target now">
-                  Specify DNS target now
-                </MenuItem>
-              </SelectField>
-              {draft.dnsTargetMode === 'Specify DNS target now' && (
+            )}
+
+            {networkProfile.singleEndpoint &&
+              draft.endpointMode === 'Existing load balancer' && (
                 <TextField
-                  label="DNS target IP / FQDN"
-                  value={draft.dnsTarget}
-                  onChange={(event) => update('dnsTarget', event.target.value)}
+                  label="Existing VIP / endpoint reference"
+                  value={draft.externalEndpoint}
+                  onChange={(event) =>
+                    update('externalEndpoint', event.target.value)
+                  }
+                  helperText="Reference an already managed/qualified external endpoint; LayerSentry does not create it in this workflow."
                 />
               )}
-            </>
-          )}
 
-          <SelectField
-            label="Service port policy"
-            value={draft.portPolicy}
-            onChange={(value) => update('portPolicy', value)}
-          >
-            <MenuItem value="Use product default">Use product default</MenuItem>
-            <MenuItem value="Custom qualified port">
-              Custom qualified port
-            </MenuItem>
-          </SelectField>
-          {draft.portPolicy === 'Custom qualified port' && (
-            <NumberField
-              label="Custom service port"
-              value={draft.customPort}
-              onChange={(value) => update('customPort', value)}
-              min={1}
-            />
-          )}
-        </Row>
-        <Alert severity="info" sx={{ mt: 2 }}>
-          Backend preflight must still validate subnet membership, duplicate IP,
-          DNS conflicts, gateway reachability, address capacity, failure-domain
-          placement and endpoint ownership before VM creation.
-        </Alert>
-      </AdvancedSection>
+            {networkProfile.customerTraffic && (
+              <SelectField
+                label="Service port policy"
+                value={draft.portPolicy}
+                onChange={(value) => update('portPolicy', value)}
+              >
+                <MenuItem value="Use product default">
+                  Use product default
+                </MenuItem>
+                <MenuItem value="Custom qualified port">
+                  Custom qualified port
+                </MenuItem>
+              </SelectField>
+            )}
+            {networkProfile.customerTraffic &&
+              draft.portPolicy === 'Custom qualified port' && (
+                <NumberField
+                  label="Custom service port"
+                  value={draft.customPort}
+                  onChange={(value) => update('customPort', value)}
+                  min={1}
+                />
+              )}
+          </Row>
+        </AdvancedSection>
+      )}
       {attemptedStep === step && <ErrorList errors={currentErrors} />}
     </>
   )
@@ -1645,24 +1562,20 @@ const ProductionServiceWizard = () => {
           promotion requires a real restore test for the exact service tuple.
         </Alert>
 
-        <AdvancedSection
-          title="Disaster Recovery"
-          description="Enable only when a qualified DR target and explicit RPO/RTO are available."
-          expanded={isAdvancedOpen('backup', backupAdvancedActive)}
-          onChange={(next) =>
-            setAdvancedOpen('backup', backupAdvancedActive, next)
-          }
-        >
-          <FormControlLabel
-            control={
-              <Switch
-                checked={draft.drEnabled}
-                onChange={(event) => update('drEnabled', event.target.checked)}
-              />
+        {drProfile.configuredByTopology && (
+          <AdvancedSection
+            title="Native Disaster Recovery"
+            description={
+              (drProfile.label || 'Application-native DR') +
+              ' is implied by the selected topology. Configure only the target and recovery objectives.'
             }
-            label="Configure a qualified DR topology"
-          />
-          {draft.drEnabled && (
+            expanded={isAdvancedOpen('backup', true)}
+            onChange={(next) => setAdvancedOpen('backup', true, next)}
+          >
+            <Alert severity="info" sx={{ mb: 2 }}>
+              DR is enabled by the selected native application topology; there
+              is no separate generic DR switch.
+            </Alert>
             <Row>
               <TextField
                 label="DR target site / profile"
@@ -1680,8 +1593,8 @@ const ProductionServiceWizard = () => {
                 onChange={(value) => update('rtoMinutes', value)}
               />
             </Row>
-          )}
-        </AdvancedSection>
+          </AdvancedSection>
+        )}
         {attemptedStep === step && <ErrorList errors={currentErrors} />}
       </>
     )
@@ -1693,228 +1606,76 @@ const ProductionServiceWizard = () => {
         Security & Observability
       </Typography>
       <Typography sx={{ color: colors.text.secondary, mb: 2 }}>
-        Secure defaults are automatic. Low-level SELinux/AppArmor, firewall,
-        kernel, sysctl and ulimit settings remain internal qualified policy.
+        Production security, OS access and observability policy are
+        backend-owned. This page collects only external secret/package
+        references that the execution backend can actually consume.
       </Typography>
-      <Row>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={draft.tls}
-              onChange={(event) => update('tls', event.target.checked)}
-            />
-          }
-          label="TLS enabled"
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={draft.monitoring}
-              onChange={(event) => update('monitoring', event.target.checked)}
-            />
-          }
-          label="Monitoring enabled"
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={draft.logging}
-              onChange={(event) => update('logging', event.target.checked)}
-            />
-          }
-          label="Central logging enabled"
-        />
-        <SelectField
-          label="OS access"
-          value={draft.accessMode}
-          onChange={(value) => update('accessMode', value)}
+
+      <Surface sx={{ p: 2 }}>
+        <Typography sx={{ fontWeight: 800 }}>
+          Enforced production policy
+        </Typography>
+        <Typography
+          sx={{ color: colors.text.secondary, fontSize: 12, mt: 0.75 }}
         >
-          <MenuItem value="SSH key / managed access">
-            SSH key / managed access
-          </MenuItem>
-          <MenuItem value="Managed access only">Managed access only</MenuItem>
-        </SelectField>
-        <SelectField
-          label="Hardening profile"
-          value={draft.hardeningProfile}
-          onChange={(value) => update('hardeningProfile', value)}
-        >
-          <MenuItem value="Standard production hardening">
-            Standard production hardening
-          </MenuItem>
-          <MenuItem value="CIS-aligned qualified profile">
-            CIS-aligned qualified profile
-          </MenuItem>
-        </SelectField>
-      </Row>
+          Managed SSH-key bootstrap · standard production hardening ·
+          tuple-qualified monitoring/logging. These are not optional customer
+          toggles.
+        </Typography>
+      </Surface>
 
       <Surface sx={{ p: 2, mt: 2 }}>
         <Typography sx={{ fontWeight: 800, mb: 1.5 }}>
-          TLS certificate and application credential ownership
+          TLS and application credential references
         </Typography>
+        {networkProfile.customerTraffic ? (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            TLS is mandatory for the production service endpoint. The current
+            backend accepts existing secret:// certificate bundles; managed PKI
+            generation is not advertised until a provider is implemented.
+          </Alert>
+        ) : (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            This blueprint exposes no customer service endpoint, so no inbound
+            service certificate is requested here. Any outbound TLS trust
+            belongs to the application configuration bundle.
+          </Alert>
+        )}
         <Row>
-          {draft.tls && (
-            <SelectField
-              label="TLS certificate source"
-              value={draft.tlsCertificateMode}
-              onChange={(value) => update('tlsCertificateMode', value)}
-            >
-              <MenuItem value="LayerSentry managed certificate / internal PKI">
-                LayerSentry managed certificate / internal PKI
-              </MenuItem>
-              <MenuItem value="Existing certificate / secret reference">
-                Existing certificate / secret reference
-              </MenuItem>
-            </SelectField>
+          {networkProfile.customerTraffic && (
+            <TextField
+              label="TLS certificate secret:// reference"
+              value={draft.tlsCertificateRef}
+              onChange={(event) =>
+                update('tlsCertificateRef', event.target.value)
+              }
+              helperText="Existing secret bundle only; never paste certificate/private-key material."
+              fullWidth
+            />
           )}
-          {draft.tls &&
-            draft.tlsCertificateMode ===
-              'Existing certificate / secret reference' && (
-              <TextField
-                label="Certificate / secret reference"
-                value={draft.tlsCertificateRef}
-                onChange={(event) =>
-                  update('tlsCertificateRef', event.target.value)
-                }
-                helperText="Reference only; never paste private-key material."
-                fullWidth
-              />
-            )}
           {credentialProfile.required && (
-            <SelectField
-              label={credentialProfile.label}
-              value={draft.credentialMode}
-              onChange={(value) => {
-                setDraft((current) => ({
-                  ...current,
-                  credentialMode: value,
-                  credentialRef: '',
-                }))
-                setValidated(false)
-              }}
-            >
-              <MenuItem value={credentialProfile.generated}>
-                {credentialProfile.generated}
-              </MenuItem>
-              <MenuItem value={credentialProfile.existing}>
-                {credentialProfile.existing}
-              </MenuItem>
-            </SelectField>
+            <TextField
+              label={credentialProfile.refLabel}
+              value={draft.credentialRef}
+              onChange={(event) => update('credentialRef', event.target.value)}
+              helperText="Existing secret bundle only; raw passwords/tokens are never persisted in the design."
+              fullWidth
+            />
           )}
-          {credentialProfile.required &&
-            draft.credentialMode === credentialProfile.existing && (
-              <TextField
-                label={credentialProfile.refLabel}
-                value={draft.credentialRef}
-                onChange={(event) =>
-                  update('credentialRef', event.target.value)
-                }
-                helperText="Secret reference only; raw passwords/tokens are not persisted in the design."
-                fullWidth
-              />
-            )}
         </Row>
       </Surface>
 
-      <AdvancedSection
-        title="Package Source / Internet Access"
-        description="Configure local/offline repositories or an HTTP(S) proxy without exposing credentials in the saved design."
-        expanded={isAdvancedOpen('security', securityAdvancedActive)}
-        onChange={(next) =>
-          setAdvancedOpen('security', securityAdvancedActive, next)
-        }
-      >
-        <Row>
-          <SelectField
-            label="Installation source"
-            value={draft.packageSourceMode}
-            onChange={(value) => update('packageSourceMode', value)}
-          >
-            <MenuItem value="Managed repositories">
-              Managed repositories
-            </MenuItem>
-            <MenuItem value="Local repository / mirror">
-              Local repository / mirror
-            </MenuItem>
-            <MenuItem value="Air-gapped bundle">Air-gapped bundle</MenuItem>
-          </SelectField>
-
-          {draft.packageSourceMode === 'Local repository / mirror' && (
-            <TextField
-              label="Internal repository URL / FQDN"
-              value={draft.repoUrl}
-              onChange={(event) => update('repoUrl', event.target.value)}
-            />
-          )}
-
-          {draft.packageSourceMode === 'Air-gapped bundle' && (
-            <TextField
-              label="Qualified bundle ID"
-              value={draft.bundleId}
-              onChange={(event) => update('bundleId', event.target.value)}
-            />
-          )}
-
-          {draft.packageSourceMode === 'Managed repositories' && (
-            <SelectField
-              label="Internet access"
-              value={draft.internetAccess}
-              onChange={(value) => update('internetAccess', value)}
-            >
-              <MenuItem value="Direct Internet">Direct Internet</MenuItem>
-              <MenuItem value="HTTP(S) Proxy">HTTP(S) Proxy</MenuItem>
-            </SelectField>
-          )}
-
-          {draft.packageSourceMode === 'Managed repositories' &&
-            draft.internetAccess === 'HTTP(S) Proxy' && (
-              <>
-                <TextField
-                  label="Proxy URL"
-                  value={draft.proxyUrl}
-                  onChange={(event) => update('proxyUrl', event.target.value)}
-                  placeholder="http://proxy.example.internal:3128"
-                />
-                <TextField
-                  label="Proxy username (optional)"
-                  value={draft.proxyUsername}
-                  onChange={(event) =>
-                    update('proxyUsername', event.target.value)
-                  }
-                />
-                <TextField
-                  type="password"
-                  label="Proxy password (optional)"
-                  value={draft.proxyPassword}
-                  onChange={(event) =>
-                    update('proxyPassword', event.target.value)
-                  }
-                  autoComplete="new-password"
-                  helperText="Never rendered in Review or persisted in the design. Production backend must store a secret reference instead."
-                />
-                <TextField
-                  label="no_proxy"
-                  value={draft.proxyNoProxy}
-                  onChange={(event) =>
-                    update('proxyNoProxy', event.target.value)
-                  }
-                />
-                <TextField
-                  label="Proxy CA / trust reference (optional)"
-                  value={draft.proxyCaRef}
-                  onChange={(event) => update('proxyCaRef', event.target.value)}
-                />
-              </>
-            )}
-        </Row>
-        {draft.packageSourceMode !== 'Managed repositories' && (
-          <Alert severity="info" sx={{ mt: 2 }}>
-            Public repository fallback must be disabled. Backend preflight must
-            verify signatures/checksums and all exact dependencies before VM
-            creation.
-          </Alert>
-        )}
-      </AdvancedSection>
+      <Surface sx={{ p: 2, mt: 2 }}>
+        <Typography sx={{ fontWeight: 800 }}>Package source</Typography>
+        <Typography
+          sx={{ color: colors.text.secondary, fontSize: 12, mt: 0.75 }}
+        >
+          Current executable path: tuple-qualified managed repositories with
+          direct network access. Local mirror, air-gap and proxy modes remain
+          fail-closed until their repository transports are fully implemented
+          and qualified.
+        </Typography>
+      </Surface>
       {attemptedStep === step && <ErrorList errors={currentErrors} />}
     </>
   )
@@ -1944,7 +1705,7 @@ const ProductionServiceWizard = () => {
           version: draft.version,
           edition: draft.edition || undefined,
           topology: draft.topology,
-          desiredState: sanitizeDesign(draft),
+          desiredState: sanitizeDesign(draft, blueprint),
           platformDesiredState: compilePlatformDesiredState(draft, blueprint),
         }),
       })
@@ -2010,7 +1771,7 @@ const ProductionServiceWizard = () => {
           topology: draft.topology,
           serviceId: draft.serviceName,
           idempotencyKey: deploymentKey,
-          desiredState: sanitizeDesign(draft),
+          desiredState: sanitizeDesign(draft, blueprint),
           platformDesiredState: compilePlatformDesiredState(draft, blueprint),
         }),
       })
@@ -2035,256 +1796,239 @@ const ProductionServiceWizard = () => {
     }
   }
 
-  const renderReview = () => {
-    const safeDesign = sanitizeDesign(draft)
+  const renderReview = () => (
+    <>
+      <Typography variant="h6" sx={{ mb: 0.5 }}>
+        Review
+      </Typography>
+      <Typography sx={{ color: colors.text.secondary, mb: 2 }}>
+        Review the desired state. No deployment is allowed until the
+        authoritative backend returns a promoted exact tuple and preflight
+        passes.
+      </Typography>
 
-    return (
-      <>
-        <Typography variant="h6" sx={{ mb: 0.5 }}>
-          Review
-        </Typography>
-        <Typography sx={{ color: colors.text.secondary, mb: 2 }}>
-          Review the desired state. No deployment is allowed until the
-          authoritative backend returns a promoted exact tuple and preflight
-          passes.
-        </Typography>
-
-        <Box
-          sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
-            gap: 1.5,
-          }}
-        >
-          {[
+      <Box
+        sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+          gap: 1.5,
+        }}
+      >
+        {[
+          ['Service', blueprint?.name, draft.version + ' · ' + draft.topology],
+          [
+            'VM footprint',
+            String(architecture.dedicated) +
+              (architecture.minimum ? '+' : '') +
+              ' new dedicated VMs',
+            architecture.shared.length
+              ? 'Shared/existing: ' + architecture.shared.join(' · ')
+              : 'No uncounted service-owned VM dependency',
+          ],
+          [
+            'Application configuration',
+            getProductSummary(draft, blueprint),
+            'Product-specific inputs were validated independently of VM settings.',
+          ],
+          [
+            'Execution source',
+            blueprint?.sourceRoleAvailable
+              ? 'Application Ansible role available'
+              : blueprint?.controlPlaneAvailable
+              ? 'Application role unavailable'
+              : 'Backend role status unavailable',
+            blueprint?.productionSelectable
+              ? 'The selected family reports a production-selectable runtime entry.'
+              : 'Exact tuple promotion and capability evidence are still required before deployment.',
+          ],
+          [
+            'Dependencies',
+            getDependencySummary(draft, blueprint),
+            'Linked dependencies are immutable references to separately managed qualified services/storage; they add no hidden VMs.',
+          ],
+          [
+            'Credential ownership',
+            credentialProfile.required
+              ? 'Existing secret reference'
+              : credentialProfile.label,
+            credentialProfile.required
+              ? 'Credential secret reference configured: ' +
+                (draft.credentialRef ? 'yes' : 'no')
+              : 'No application credential is owned by this blueprint.',
+          ],
+          [
+            'Capacity',
+            draft.vcpu +
+              ' vCPU · ' +
+              draft.memoryGiB +
+              ' GiB RAM per primary service node',
             [
-              'Service',
-              blueprint?.name,
-              draft.version + ' · ' + draft.topology,
-            ],
-            [
-              'VM footprint',
-              String(architecture.dedicated) +
-                (architecture.minimum ? '+' : '') +
-                ' new dedicated VMs',
-              architecture.shared.length
-                ? 'Shared/existing: ' + architecture.shared.join(' · ')
-                : 'No uncounted service-owned VM dependency',
-            ],
-            [
-              'Application configuration',
-              getProductSummary(draft, blueprint),
-              'Product-specific inputs were validated independently of VM settings.',
-            ],
-            [
-              'Execution source',
-              blueprint?.sourceRoleAvailable
-                ? 'Application Ansible role available'
-                : blueprint?.controlPlaneAvailable
-                ? 'Application role unavailable'
-                : 'Backend role status unavailable',
-              blueprint?.productionSelectable
-                ? 'The selected family reports a production-selectable runtime entry.'
-                : 'Exact tuple promotion and capability evidence are still required before deployment.',
-            ],
-            [
-              'Dependencies',
-              getDependencySummary(draft, blueprint),
-              'Provisioned linked VMs are included in the VM footprint; existing dependencies use references only.',
-            ],
-            [
-              'Credential ownership',
-              credentialProfile.required
-                ? draft.credentialMode
-                : credentialProfile.label,
-              credentialProfile.required &&
-              draft.credentialMode === credentialProfile.existing
-                ? 'Existing secret reference configured: ' +
-                  (draft.credentialRef ? 'yes' : 'no')
-                : 'Raw credential values are not persisted in the design.',
-            ],
-            [
-              'Capacity',
-              draft.vcpu +
-                ' vCPU · ' +
-                draft.memoryGiB +
-                ' GiB RAM per primary service node',
-              draft.expectedDataGiB +
-                ' GiB expected logical data · ' +
-                draft.expectedConnections +
-                ' client connections',
-            ],
-            [
-              'Network',
-              draft.serviceFqdn || 'FQDN not configured',
-              draft.endpointMode +
-                ' · ' +
-                draft.ipMode +
-                ' addressing · DNS ' +
-                draft.dnsRegistration,
-            ],
-            [
-              'Backup / DR',
-              backupProfile.mode === 'direct'
-                ? draft.backupEnabled
-                  ? 'Backup enabled · ' +
-                    draft.retentionDays +
-                    ' day retention · ' +
-                    backupProfile.engine
-                  : 'Direct backup disabled · ' + backupProfile.engine
-                : backupProfile.mode === 'dependency'
-                ? 'Dependency-owned recovery · ' + backupProfile.engine
-                : 'No generic application backup · ' + backupProfile.engine,
-              (draft.pitr && backupProfile.mode === 'direct'
-                ? 'PITR enabled'
-                : 'PITR not enabled here') +
-                ' · ' +
-                (draft.drEnabled ? 'DR configured' : 'DR disabled'),
-            ],
-            [
-              'Security / observability',
-              (draft.tls ? 'TLS' : 'TLS disabled') +
-                ' · ' +
-                (draft.monitoring ? 'Monitoring' : 'Monitoring disabled') +
-                ' · ' +
-                (draft.logging
-                  ? 'Central logging'
-                  : 'Central logging disabled'),
-              draft.hardeningProfile,
-            ],
-            [
-              'Package / Internet path',
-              draft.packageSourceMode,
-              draft.packageSourceMode === 'Managed repositories'
-                ? draft.internetAccess === 'HTTP(S) Proxy'
-                  ? draft.proxyUrl +
-                    ' · ' +
-                    (safeDesign.proxyPasswordPresent
-                      ? 'optional proxy credential supplied'
-                      : 'no proxy password supplied')
-                  : 'Direct Internet'
-                : 'Public fallback disabled',
-            ],
-          ].map(([label, title, detail]) => (
-            <Surface key={label} sx={{ p: 2 }}>
-              <Typography
-                sx={{
-                  color: colors.text.muted,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontSize: 9,
-                  fontWeight: 800,
-                }}
-              >
-                {label}
-              </Typography>
-              <Typography sx={{ fontWeight: 800, mt: 0.75 }}>
-                {title}
-              </Typography>
-              <Typography
-                sx={{ color: colors.text.secondary, fontSize: 11, mt: 0.5 }}
-              >
-                {detail}
-              </Typography>
-            </Surface>
-          ))}
-        </Box>
-
-        {allErrors.length === 0 ? (
-          <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
-            Frontend desired-state validation passed. Run authoritative
-            preflight to verify that the exact tuple is promoted before
-            deployment.
-          </Alert>
-        ) : (
-          <ErrorList errors={allErrors} />
-        )}
-
-        {preflightState.status === 'loading' && (
-          <Alert severity="info" sx={{ mt: 2 }}>
-            Running authoritative production-service preflight…
-          </Alert>
-        )}
-        {preflightState.status === 'passed' && (
-          <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
-            Authoritative preflight passed for this exact tuple.
-          </Alert>
-        )}
-        {(preflightState.status === 'blocked' ||
-          preflightState.status === 'error') && (
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
-              Authoritative preflight blocked
+              capacityProfile.data
+                ? draft.expectedDataGiB + ' GiB · ' + capacityProfile.dataLabel
+                : null,
+              capacityProfile.load
+                ? draft.expectedConnections + ' · ' + capacityProfile.loadLabel
+                : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'No additional application load sizing input',
+          ],
+          [
+            'Network',
+            networkProfile.singleEndpoint
+              ? draft.serviceFqdn || 'FQDN not configured'
+              : networkProfile.nativeDiscovery
+              ? 'Native discovery / node list'
+              : 'No customer service endpoint',
+            networkProfile.mode + ' · ' + draft.ipMode + ' node addressing',
+          ],
+          [
+            'Backup / DR',
+            backupProfile.mode === 'direct'
+              ? draft.backupEnabled
+                ? 'Backup enabled · ' +
+                  draft.retentionDays +
+                  ' day retention · ' +
+                  backupProfile.engine
+                : 'Direct backup disabled · ' + backupProfile.engine
+              : backupProfile.mode === 'dependency'
+              ? 'Dependency-owned recovery · ' + backupProfile.engine
+              : 'No generic application backup · ' + backupProfile.engine,
+            (draft.pitr && backupProfile.mode === 'direct'
+              ? 'PITR enabled'
+              : 'PITR not enabled here') +
+              ' · ' +
+              (drProfile.configuredByTopology
+                ? 'Native DR topology configured'
+                : 'DR not applicable to this topology'),
+          ],
+          [
+            'Security / observability',
+            networkProfile.customerTraffic
+              ? 'TLS enforced'
+              : 'No customer service TLS endpoint',
+            'Managed SSH-key bootstrap · standard production hardening · tuple-qualified monitoring/logging',
+          ],
+          [
+            'Package / Internet path',
+            'Tuple-qualified managed repositories',
+            'Direct network access only in the current executable contract; mirror/air-gap/proxy stay fail-closed.',
+          ],
+        ].map(([label, title, detail]) => (
+          <Surface key={label} sx={{ p: 2 }}>
+            <Typography
+              sx={{
+                color: colors.text.muted,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                fontSize: 9,
+                fontWeight: 800,
+              }}
+            >
+              {label}
             </Typography>
-            {(preflightState.result?.blockers || []).map((blocker) => (
-              <Typography key={blocker.code} sx={{ fontSize: 12 }}>
-                {blocker.code} — {blocker.message}
-              </Typography>
-            ))}
-          </Alert>
-        )}
+            <Typography sx={{ fontWeight: 800, mt: 0.75 }}>{title}</Typography>
+            <Typography
+              sx={{ color: colors.text.secondary, fontSize: 11, mt: 0.5 }}
+            >
+              {detail}
+            </Typography>
+          </Surface>
+        ))}
+      </Box>
 
-        <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
-          <Button
-            variant="outlined"
-            disabled={preflightState.status === 'loading'}
-            onClick={runAuthoritativePreflight}
-            sx={{ textTransform: 'none' }}
-          >
-            {preflightState.status === 'loading'
-              ? 'Validating…'
-              : 'Validate configuration'}
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => setReviewOpen(true)}
-            sx={{ textTransform: 'none' }}
-          >
-            Review Configuration
-          </Button>
-          <Button
-            variant="contained"
-            disabled={
-              !validated ||
-              preflightState.status !== 'passed' ||
-              allErrors.length > 0 ||
-              deploymentState.status === 'loading' ||
-              deploymentState.status === 'accepted'
-            }
-            title={
-              preflightState.status !== 'passed'
-                ? 'The exact tuple must pass authoritative preflight before deployment.'
-                : ''
-            }
-            onClick={runAuthoritativeDeploy}
-            sx={{ textTransform: 'none' }}
-          >
-            {deploymentState.status === 'loading' ? 'Deploying…' : 'Deploy'}
-          </Button>
-        </Box>
+      {allErrors.length === 0 ? (
+        <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
+          Frontend desired-state validation passed. Run authoritative preflight
+          to verify that the exact tuple is promoted before deployment.
+        </Alert>
+      ) : (
+        <ErrorList errors={allErrors} />
+      )}
 
-        {deploymentState.status === 'accepted' && (
-          <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
-            Deployment accepted. Operation{' '}
-            {deploymentState.result?.operation_id}
-            {' · '}stage {deploymentState.result?.stage}.
-          </Alert>
-        )}
-        {deploymentState.status === 'error' && (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {deploymentState.result?.message || 'Deployment admission failed.'}
-          </Alert>
-        )}
-        {preflightState.status !== 'passed' && (
-          <Alert severity="warning" sx={{ mt: 2 }}>
-            This exact tuple is not production-selectable until authoritative
-            preflight confirms an immutable promoted tuple. Browser validation
-            and family-level catalog visibility cannot promote a service.
-          </Alert>
-        )}
-      </>
-    )
-  }
+      {preflightState.status === 'loading' && (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          Running authoritative production-service preflight…
+        </Alert>
+      )}
+      {preflightState.status === 'passed' && (
+        <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
+          Authoritative preflight passed for this exact tuple.
+        </Alert>
+      )}
+      {(preflightState.status === 'blocked' ||
+        preflightState.status === 'error') && (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          <Typography sx={{ fontWeight: 800, mb: 0.5 }}>
+            Authoritative preflight blocked
+          </Typography>
+          {(preflightState.result?.blockers || []).map((blocker) => (
+            <Typography key={blocker.code} sx={{ fontSize: 12 }}>
+              {blocker.code} — {blocker.message}
+            </Typography>
+          ))}
+        </Alert>
+      )}
+
+      <Box sx={{ display: 'flex', gap: 1, mt: 2, flexWrap: 'wrap' }}>
+        <Button
+          variant="outlined"
+          disabled={preflightState.status === 'loading'}
+          onClick={runAuthoritativePreflight}
+          sx={{ textTransform: 'none' }}
+        >
+          {preflightState.status === 'loading'
+            ? 'Validating…'
+            : 'Validate configuration'}
+        </Button>
+        <Button
+          variant="outlined"
+          onClick={() => setReviewOpen(true)}
+          sx={{ textTransform: 'none' }}
+        >
+          Review Configuration
+        </Button>
+        <Button
+          variant="contained"
+          disabled={
+            !validated ||
+            preflightState.status !== 'passed' ||
+            allErrors.length > 0 ||
+            deploymentState.status === 'loading' ||
+            deploymentState.status === 'accepted'
+          }
+          title={
+            preflightState.status !== 'passed'
+              ? 'The exact tuple must pass authoritative preflight before deployment.'
+              : ''
+          }
+          onClick={runAuthoritativeDeploy}
+          sx={{ textTransform: 'none' }}
+        >
+          {deploymentState.status === 'loading' ? 'Deploying…' : 'Deploy'}
+        </Button>
+      </Box>
+
+      {deploymentState.status === 'accepted' && (
+        <Alert severity="success" icon={<CheckCircle />} sx={{ mt: 2 }}>
+          Deployment accepted. Operation {deploymentState.result?.operation_id}
+          {' · '}stage {deploymentState.result?.stage}.
+        </Alert>
+      )}
+      {deploymentState.status === 'error' && (
+        <Alert severity="error" sx={{ mt: 2 }}>
+          {deploymentState.result?.message || 'Deployment admission failed.'}
+        </Alert>
+      )}
+      {preflightState.status !== 'passed' && (
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          This exact tuple is not production-selectable until authoritative
+          preflight confirms an immutable promoted tuple. Browser validation and
+          family-level catalog visibility cannot promote a service.
+        </Alert>
+      )}
+    </>
+  )
 
   const panels = [
     renderService,
@@ -2305,7 +2049,7 @@ const ProductionServiceWizard = () => {
         <Button
           variant="text"
           startIcon={<NavArrowLeft width={18} height={18} />}
-          onClick={() => history.push(returnTo)}
+          onClick={() => history.push(PRODUCT_PATHS.APPLICATIONS)}
           sx={{ textTransform: 'none' }}
         >
           Back
@@ -2420,10 +2164,22 @@ const ProductionServiceWizard = () => {
                 String(architecture.linkedDedicated || 0) +
                 ' linked)',
             ],
-            ['FQDN', draft.serviceFqdn || 'Not configured'],
-            ['DNS', draft.dnsRegistration],
+            [
+              'Endpoint',
+              networkProfile.singleEndpoint
+                ? draft.serviceFqdn || 'Not configured'
+                : networkProfile.nativeDiscovery
+                ? 'Native discovery'
+                : 'No customer endpoint',
+            ],
+            ['Node domain', draft.domain || 'Not configured'],
             ['Backup', draft.backupEnabled ? 'Enabled' : 'Disabled'],
-            ['DR', draft.drEnabled ? 'Enabled' : 'Disabled'],
+            [
+              'DR',
+              drProfile.configuredByTopology
+                ? 'Native topology'
+                : 'Not applicable',
+            ],
           ].map(([label, value]) => (
             <Box
               key={label}
@@ -2472,8 +2228,8 @@ const ProductionServiceWizard = () => {
         <DialogTitle>Configuration Review</DialogTitle>
         <DialogContent dividers>
           <Alert severity="info" sx={{ mb: 2 }}>
-            Secret values are excluded. In particular, proxy passwords are never
-            rendered in this review payload.
+            Secret values are never rendered. This review contains only secret
+            references and non-secret desired-state metadata.
           </Alert>
           <Box
             component="pre"
@@ -2487,7 +2243,7 @@ const ProductionServiceWizard = () => {
               wordBreak: 'break-word',
             }}
           >
-            {JSON.stringify(sanitizeDesign(draft), null, 2)}
+            {JSON.stringify(sanitizeDesign(draft, blueprint), null, 2)}
           </Box>
         </DialogContent>
         <DialogActions>
