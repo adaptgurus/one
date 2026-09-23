@@ -233,9 +233,10 @@ const PortalShell = ({ children, endpoints }) => {
             borderWidth: 2,
           },
         },
-        '& .MuiInputLabel-root.Mui-focused, & .MuiFormControl-root:focus-within .MuiInputLabel-root': {
-          color: colors.brand.primary,
-        },
+        '& .MuiInputLabel-root.Mui-focused, & .MuiFormControl-root:focus-within .MuiInputLabel-root':
+          {
+            color: colors.brand.primary,
+          },
         '& .MuiFormHelperText-root': { color: colors.text.muted },
         '& .MuiSwitch-switchBase.Mui-checked': {
           color: colors.brand.primary,
