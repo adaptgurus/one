@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: tester-recovery-readonly
+  cancel-in-progress: true
+
 jobs:
   inspect:
     runs-on: [self-hosted, Windows, X64]
@@ -26,98 +30,21 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           Write-Host "runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME user=$env:USERNAME"
-          if ($env:RUNNER_NAME -ne 'Manoj-Test-Inst') { throw "Wrong runner" }
+          if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner" }
           if ($env:COMPUTERNAME -ine 'MANOJ-TEST-INST') { throw "Wrong computer" }
 
-      - name: Read-only WSL inventory
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Continue'
-          Write-Host "=== WSL STATUS ==="
-          & wsl.exe --status 2>&1 | Out-Host
-          $wslStatus = $LASTEXITCODE
-          Write-Host "=== WSL DISTROS ==="
-          & wsl.exe -l -v 2>&1 | Out-Host
-          $wslList = $LASTEXITCODE
-          if ($wslStatus -ne 0 -or $wslList -ne 0) {
-            Write-Host "WSL_UNAVAILABLE_OR_UNCONFIGURED=YES"
-          } else {
-            Write-Host "WSL_AVAILABLE=YES"
-          }
-          $global:LASTEXITCODE = 0
-
-      - name: Read-only Hyper-V VM inventory
+      - name: Read-only Hyper-V KVM2 inventory
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          Get-VM |
-            Select-Object Name,State,ProcessorCount,@{n='MemoryAssignedGB';e={[math]::Round($_.MemoryAssigned/1GB,2)}},Uptime |
-            Sort-Object Name |
-            Format-Table -AutoSize
-
-      - name: Read-only independent OpenNebula KVM2 identities
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $script = @'
-          import pathlib
-          import xml.etree.ElementTree as ET
-          from xmlrpc.client import ServerProxy
-          from dissect.target import Target
-
-          auth_image = pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
-          target = Target.open(str(auth_image))
-          auth = target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
-          one = ServerProxy("http://10.250.10.10:2633/RPC2", allow_none=True)
-          hp = one.one.hostpool.info(auth, -2, -1, -1)
-          if not hp[0]:
-              raise SystemExit("host pool query failed")
-          pool = ET.fromstring(hp[1])
-          hosts = [h for h in pool.findall("HOST") if (h.findtext("NAME") or "").strip()=="ls-kvm2"]
-          if len(hosts)!=1:
-              raise SystemExit(f"ls-kvm2 host count={len(hosts)}")
-          h=hosts[0]
-          ids=[int((n.text or "-1").strip()) for n in h.findall("./VMS/ID") if (n.text or "").strip()]
-          rows=[]
-          for vmid in ids:
-              info=one.one.vm.info(auth,vmid,False)
-              if not info[0]:
-                  rows.append({"id":vmid,"error":str(info[1])[:200]})
-                  continue
-              vm=ET.fromstring(info[1])
-              histories=vm.findall("./HISTORY_RECORDS/HISTORY")
-              rows.append({
-                  "id":vmid,
-                  "name":(vm.findtext("NAME") or "").strip(),
-                  "state":int(vm.findtext("STATE") or -1),
-                  "lcm_state":int(vm.findtext("LCM_STATE") or -1),
-                  "host": histories[-1].findtext("HOSTNAME") if histories else "",
-                  "deploy_id": (vm.findtext("DEPLOY_ID") or "").strip(),
-              })
-          print("KVM2_RUNNING_VMS=" + str(h.findtext("./HOST_SHARE/RUNNING_VMS") or ""))
-          print("KVM2_VM_DIAGNOSTICS=" + repr(rows))
-          '@
-          $path = Join-Path $env:RUNNER_TEMP 'kvm2_readonly.py'
-          Set-Content -Path $path -Value $script -Encoding UTF8
-          & 'C:\LayerSentryLab\tools\Python313\python.exe' $path
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      - name: Deep read-only KVM2 monitor/network diagnostic
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Continue'
-          Write-Host "=== KVM2 HYPER-V ADAPTER ==="
-          $nics = @(Get-VMNetworkAdapter -VMName 'ls-kvm2' -ErrorAction SilentlyContinue)
-          $nics |
-            Select-Object VMName,Name,SwitchName,MacAddress,Status,IPAddresses |
-            Format-List
-
-          $macs = @($nics.MacAddress | Where-Object { $_ } | ForEach-Object {
+          $vm = Get-VM -Name 'ls-kvm2' -ErrorAction Stop
+          $nic = @(Get-VMNetworkAdapter -VMName 'ls-kvm2' -ErrorAction Stop)
+          $vm | Select-Object Name,State,ProcessorCount,@{n='MemoryAssignedGB';e={[math]::Round($_.MemoryAssigned/1GB,2)}},Uptime | Format-Table -AutoSize
+          $nic | Select-Object VMName,Name,SwitchName,MacAddress,Status,IPAddresses | Format-List
+          $macs = @($nic.MacAddress | Where-Object { $_ } | ForEach-Object {
             ($_ -replace '[:-]', '').ToUpperInvariant()
           })
           Write-Host ("KVM2_MACS=" + ($macs -join ','))
-
-          Write-Host "=== MATCHING WINDOWS NEIGHBORS ==="
           $neighbors = @(
             Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
               Where-Object {
@@ -126,18 +53,7 @@ jobs:
               }
           )
           $neighbors | Select-Object InterfaceAlias,IPAddress,LinkLayerAddress,State | Format-Table -AutoSize
-          $candidateIPs = @($neighbors.IPAddress | Where-Object { $_ -match '^10\.250\.10\.\d+        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Continue'
-          Get-Service | Where-Object { $_.Name -match 'actions|runner|wsl' -or $_.DisplayName -match 'actions|runner|wsl' } |
-            Select-Object Name,DisplayName,Status,StartType | Format-Table -AutoSize
-          Get-NetIPAddress -AddressFamily IPv4 |
-            Where-Object { $_.IPAddress -notlike '169.254.*' } |
-            Select-Object InterfaceAlias,IPAddress,PrefixLength |
-            Sort-Object InterfaceAlias,IPAddress | Format-Table -AutoSize
- } | Sort-Object -Unique)
-
-          Write-Host "=== BOUNDED COMMON KVM2 CANDIDATES ==="
+          $candidateIPs = @($neighbors.IPAddress | Where-Object { $_ -match '^10\.250\.10\.\d+$' } | Sort-Object -Unique)
           foreach ($ip in @('10.250.10.20','10.250.10.21','10.250.10.22','10.250.10.23','10.250.10.24','10.250.10.25')) {
             if ($candidateIPs -notcontains $ip) { $candidateIPs += $ip }
           }
@@ -147,11 +63,18 @@ jobs:
             try {
               $task = $client.ConnectAsync($ip,22)
               if ($task.Wait(800)) { $ok = $client.Connected }
-            } catch { $ok = $false } finally { $client.Dispose() }
+            } catch {
+              $ok = $false
+            } finally {
+              $client.Dispose()
+            }
             Write-Host "KVM2_SSH_PROBE IP=$ip TCP=$ok"
           }
 
-          Write-Host "=== OPENNEBULA KVM2 HOST DETAIL ==="
+      - name: Read-only independent OpenNebula KVM2 detail
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
           $script = @'
           import pathlib
           import xml.etree.ElementTree as ET
@@ -162,14 +85,18 @@ jobs:
           target = Target.open(str(auth_image))
           auth = target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
           one = ServerProxy("http://10.250.10.10:2633/RPC2", allow_none=True)
+          version = one.one.system.version(auth)
+          if not version[0]:
+              raise SystemExit("OpenNebula authentication failed")
+          print("INDEPENDENT_ONE_VERSION=" + str(version[1]))
           hp = one.one.hostpool.info(auth, -2, -1, -1)
           if not hp[0]:
               raise SystemExit("host pool query failed")
           pool = ET.fromstring(hp[1])
-          hosts=[h for h in pool.findall("HOST") if (h.findtext("NAME") or "").strip()=="ls-kvm2"]
-          if len(hosts)!=1:
-              raise SystemExit(f"ls-kvm2 host count={len(hosts)}")
-          h=hosts[0]
+          matches = [h for h in pool.findall("HOST") if (h.findtext("NAME") or "").strip() == "ls-kvm2"]
+          if len(matches) != 1:
+              raise SystemExit(f"ls-kvm2 host count={len(matches)}")
+          h = matches[0]
           fields = {
               "ID": h.findtext("ID"),
               "STATE": h.findtext("STATE"),
@@ -188,21 +115,41 @@ jobs:
               "ERROR": h.findtext("./TEMPLATE/ERROR") or h.findtext("ERROR"),
           }
           print("KVM2_HOST_DETAIL=" + repr(fields))
-          print("KVM2_HOST_TEMPLATE_XML=" + ET.tostring(h.find("TEMPLATE"), encoding="unicode")[:12000])
+          vm_ids = [int((n.text or "-1").strip()) for n in h.findall("./VMS/ID") if (n.text or "").strip()]
+          rows = []
+          for vmid in vm_ids:
+              info = one.one.vm.info(auth, vmid, False)
+              if not info[0]:
+                  rows.append({"id": vmid, "error": str(info[1])[:200]})
+                  continue
+              vm = ET.fromstring(info[1])
+              histories = vm.findall("./HISTORY_RECORDS/HISTORY")
+              rows.append({
+                  "id": vmid,
+                  "name": (vm.findtext("NAME") or "").strip(),
+                  "state": int(vm.findtext("STATE") or -1),
+                  "lcm_state": int(vm.findtext("LCM_STATE") or -1),
+                  "host": histories[-1].findtext("HOSTNAME") if histories else "",
+                  "deploy_id": (vm.findtext("DEPLOY_ID") or "").strip(),
+              })
+          print("KVM2_VM_DIAGNOSTICS=" + repr(rows))
+          template = h.find("TEMPLATE")
+          if template is not None:
+              print("KVM2_HOST_TEMPLATE_XML=" + ET.tostring(template, encoding="unicode")[:12000])
           '@
           $path = Join-Path $env:RUNNER_TEMP 'kvm2_host_detail.py'
           Set-Content -Path $path -Value $script -Encoding UTF8
           & 'C:\LayerSentryLab\tools\Python313\python.exe' $path
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $global:LASTEXITCODE = 0
 
-      - name: Read-only runner and network inventory
+      - name: Read-only Windows runner and network inventory
         shell: powershell
         run: |
           $ErrorActionPreference = 'Continue'
-          Get-Service | Where-Object { $_.Name -match 'actions|runner|wsl' -or $_.DisplayName -match 'actions|runner|wsl' } |
+          Get-Service | Where-Object { $_.Name -match 'actions|runner' -or $_.DisplayName -match 'actions|runner' } |
             Select-Object Name,DisplayName,Status,StartType | Format-Table -AutoSize
           Get-NetIPAddress -AddressFamily IPv4 |
             Where-Object { $_.IPAddress -notlike '169.254.*' } |
             Select-Object InterfaceAlias,IPAddress,PrefixLength |
             Sort-Object InterfaceAlias,IPAddress | Format-Table -AutoSize
+          $global:LASTEXITCODE = 0
