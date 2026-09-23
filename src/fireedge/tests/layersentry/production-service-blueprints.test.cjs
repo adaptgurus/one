@@ -142,6 +142,128 @@ test('all service/topology architecture plans have exact non-negative VM account
   }
 })
 
+test('compiled desired state carries the full native VM footprint and deterministic node roles', () => {
+  const cases = [
+    ['postgresql', 'HA + DR'],
+    ['mysql-family', 'ClusterSet DR'],
+    ['mariadb', '3-node Galera + asynchronous DR'],
+    ['mongodb-community', 'Sharded: 2 shards × 3 + 3 config + 2 mongos'],
+    ['clickhouse', '3 data nodes + 3 Keeper'],
+    ['cassandra', 'Multi-DC: 3 nodes per DC minimum'],
+    ['yugabytedb', '3 TServers + 3 dedicated Masters (RF3)'],
+    ['rabbitmq', 'Federation DR: 3 + 3 nodes'],
+    ['kafka', '3 brokers + 3 controllers'],
+    ['pulsar', 'Production Cluster (3 broker+bookie + 3 metadata)'],
+    ['superset', 'Distributed'],
+    ['airflow', 'Distributed Celery'],
+    ['jenkins', 'Controller + 2 agents'],
+    ['opensearch', '3 managers + 3 data'],
+  ]
+
+  for (const [id, topology] of cases) {
+    const bp = api.getBlueprintById(id)
+    const draft = makeValid(bp)
+    draft.topology = topology
+    Object.assign(draft, api.getDefaultDependencyState(draft, bp))
+    for (const dependency of api.getDependencySpecs(draft, bp)) {
+      draft.dependencyModes[dependency.key] = dependency.existingLabel
+      draft.dependencyRefs[dependency.key] =
+        dependency.kind === 'storage'
+          ? `storage://${id}/${dependency.key}`
+          : `${dependency.key}.${id}.prod.example.internal`
+    }
+    draft.storage = api.getStorageTemplate(draft, bp)
+
+    const plan = api.getArchitecturePlan(draft, bp)
+    const roles = api.getPlatformNodeRoles(draft, bp, plan)
+    const compiled = api.compilePlatformDesiredState(draft, bp)
+
+    assert.equal(compiled.deployment.node_count, plan.dedicated, id)
+    assert.equal(compiled.network.nodes.length, plan.dedicated, id)
+    assert.equal(roles.length, plan.dedicated, id)
+    assert.deepEqual(
+      compiled.network.nodes.map(({ role }) => role),
+      roles,
+      id
+    )
+  }
+})
+
+test('heterogeneous storage is attached only to the native roles that own it', () => {
+  const cases = [
+    ['clickhouse', '3 data nodes + 3 Keeper'],
+    ['yugabytedb', '3 TServers + 3 dedicated Masters (RF3)'],
+    ['kafka', '3 brokers + 3 controllers'],
+    ['pulsar', 'Production Cluster (3 broker+bookie + 3 metadata)'],
+    ['opensearch', '3 managers + 3 data'],
+    ['mongodb-community', 'Sharded: 2 shards × 3 + 3 config + 2 mongos'],
+    ['jenkins', 'Controller + 2 agents'],
+  ]
+
+  for (const [id, topology] of cases) {
+    const bp = api.getBlueprintById(id)
+    const draft = makeValid(bp)
+    draft.topology = topology
+    Object.assign(draft, api.getDefaultDependencyState(draft, bp))
+    for (const dependency of api.getDependencySpecs(draft, bp)) {
+      draft.dependencyModes[dependency.key] = dependency.existingLabel
+      draft.dependencyRefs[dependency.key] =
+        dependency.kind === 'storage'
+          ? `storage://${id}/${dependency.key}`
+          : `${dependency.key}.${id}.prod.example.internal`
+    }
+    draft.storage = api.getStorageTemplate(draft, bp)
+    const compiled = api.compilePlatformDesiredState(draft, bp)
+
+    for (const volume of compiled.storage) {
+      assert.ok(Array.isArray(volume.node_roles), `${id}:${volume.role}`)
+    }
+
+    if (id === 'kafka') {
+      assert.deepEqual(
+        compiled.storage.find(({ role }) => role === 'broker_data').node_roles,
+        ['kafka_broker']
+      )
+      assert.deepEqual(
+        compiled.storage.find(({ role }) => role === 'controller_metadata').node_roles,
+        ['kafka_controller']
+      )
+    }
+    if (id === 'clickhouse') {
+      assert.deepEqual(
+        compiled.storage.find(({ role }) => role === 'data').node_roles,
+        ['clickhouse_data']
+      )
+      assert.deepEqual(
+        compiled.storage.find(({ role }) => role === 'keeper_data').node_roles,
+        ['clickhouse_keeper']
+      )
+    }
+    if (id === 'opensearch') {
+      assert.deepEqual(
+        compiled.storage.find(({ role }) => role === 'index_data').node_roles,
+        ['opensearch_data']
+      )
+      assert.deepEqual(
+        compiled.storage.find(({ role }) => role === 'manager_state').node_roles,
+        ['opensearch_manager']
+      )
+    }
+    if (id === 'jenkins') {
+      assert.deepEqual(
+        compiled.storage.find(({ role }) => role === 'jenkins_home').node_roles,
+        ['jenkins_controller']
+      )
+    }
+    if (id === 'mongodb-community') {
+      for (const volume of compiled.storage) {
+        assert.equal(volume.node_roles.includes('mongos'), false, volume.role)
+        assert.ok(volume.node_roles.includes('mongodb_config'), volume.role)
+      }
+    }
+  }
+})
+
 test('linked dependencies are reference-only and never add hidden VMs', () => {
   for (const id of [
     'ferretdb',
@@ -930,15 +1052,15 @@ test('compiled native storage role IDs match backend blueprint ownership', () =>
     'percona-mongodb': ['data', 'journal'],
     redis: ['persistence_data'],
     valkey: ['persistence_data'],
-    clickhouse: ['data'],
+    clickhouse: ['data', 'keeper_data'],
     cassandra: ['data', 'commit_log'],
     yugabytedb: ['tablet_data', 'wal', 'master_metadata'],
     rabbitmq: ['message_data'],
-    kafka: ['broker_data'],
-    pulsar: ['bookkeeper_journal', 'bookkeeper_ledger'],
+    kafka: ['broker_data', 'controller_metadata'],
+    pulsar: ['bookkeeper_journal', 'bookkeeper_ledger', 'metadata_state'],
     openbao: ['raft_data'],
     jenkins: ['jenkins_home'],
-    opensearch: ['index_data'],
+    opensearch: ['index_data', 'manager_state'],
     prometheus: ['tsdb'],
   }
 
