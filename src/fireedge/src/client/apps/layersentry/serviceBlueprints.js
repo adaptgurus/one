@@ -563,7 +563,7 @@ export const FALLBACK_BLUEPRINTS = [
     editions: ['Standard', 'Enterprise'],
     topologies: [
       'Standalone',
-      'Basic AG (2 SQL replicas + config-only quorum)',
+      'Basic AG (2 SQL replicas + configuration-only replica)',
       '3-replica Availability Group',
     ],
     recommendedTopology: 'Standalone',
@@ -1184,7 +1184,7 @@ export const getTopologyOptions = (draft, blueprint) => {
 
   if (blueprint.id === 'mssql') {
     return draft.edition === 'Standard'
-      ? ['Standalone', 'Basic AG (2 SQL replicas + config-only quorum)']
+      ? ['Standalone', 'Basic AG (2 SQL replicas + configuration-only replica)']
       : ['Standalone', '3-replica Availability Group']
   }
 
@@ -1867,7 +1867,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
       )
     }
 
-    if (topology === 'Basic AG (2 SQL replicas + config-only quorum)') {
+    if (topology === 'Basic AG (2 SQL replicas + configuration-only replica)') {
       return plan(
         3,
         [
@@ -1880,7 +1880,7 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
           ),
           component(
             'Pacemaker configuration-only quorum',
-            'Dedicated quorum VM without a SQL data replica',
+            'Configuration-only SQL Server replica without user databases',
             1,
             1,
             'Required for safe automatic failover of a two-replica Linux AG.'
@@ -4042,7 +4042,7 @@ export const getPlatformNodeRoles = (
   }
 
   if (id === 'mssql') {
-    if (topology === 'Basic AG (2 SQL replicas + config-only quorum)') {
+    if (topology === 'Basic AG (2 SQL replicas + configuration-only replica)') {
       return [
         'mssql_primary_candidate',
         'mssql_secondary_candidate',
