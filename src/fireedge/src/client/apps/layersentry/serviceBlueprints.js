@@ -1932,6 +1932,16 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
     )
   }
 
+  if (id === 'mssql') {
+    if (storageRole === 'data' || storageRole === 'log' || storageRole === 'tempdb') {
+      return [
+        ...new Set(
+          nodeRoles.filter((role) => role !== 'mssql_config_only')
+        ),
+      ]
+    }
+  }
+
   if (id === 'mongodb-community' || id === 'percona-mongodb') {
     const product =
       id === 'percona-mongodb'
@@ -2623,6 +2633,49 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
     return fields
   }
 
+  if (id === 'elasticsearch') {
+    if (topology === '3-node Production Cluster') {
+      return repeatPlatformRole('elasticsearch_combined', 3)
+    }
+
+    return [
+      ...repeatPlatformRole('elasticsearch_master', 3),
+      ...repeatPlatformRole('elasticsearch_data', count - 3),
+    ]
+  }
+
+  if (id === 'elasticsearch') {
+    if (storageRole === 'data') {
+      return [
+        ...new Set(
+          nodeRoles.filter(
+            (role) =>
+              role === 'elasticsearch_data' || role === 'elasticsearch_combined'
+          )
+        ),
+      ]
+    }
+    if (storageRole === 'logs') return [...new Set(nodeRoles)]
+    if (storageRole === 'master_state') {
+      return [
+        ...new Set(
+          nodeRoles.filter(
+            (role) =>
+              role === 'elasticsearch_master' ||
+              role === 'elasticsearch_combined'
+          )
+        ),
+      ]
+    }
+  }
+
+  if (id === 'elasticsearch') {
+    return (
+      draft.elasticSecurity +
+      (draft.elasticSecurityRef ? ' · reference configured' : '') +
+      (draft.elasticKibana ? ' · Kibana enabled' : '')
+    )
+  }
   if (id === 'opensearch') {
     const dataNodes = topology.indexOf('6 data') >= 0 ? 6 : 3
 
@@ -2930,6 +2983,16 @@ export const getProductConfigFields = (draft, blueprint) => {
     return fields
   }
 
+  if (id === 'mssql') {
+    return (
+      draft.edition +
+      ' · ' +
+      draft.topology +
+      (draft.topology !== 'Standalone'
+        ? ' · fencing: ' + (draft.mssqlFencingRef || 'required')
+        : '')
+    )
+  }
   if (id === 'mysql-family' || id === 'mariadb') {
     fields.push(
       select('sqlBootstrap', 'Application database', [
@@ -3946,6 +4009,9 @@ export const STORAGE_ROLE_IDS = Object.freeze({
   Data: 'data',
   WAL: 'wal',
   'Redo / binary log': 'redo_binlog',
+  'SQL Server data': 'data',
+  'SQL Server log': 'log',
+  'SQL Server tempdb': 'tempdb',
   Journal: 'journal',
   'Persistence data (RDB/AOF)': 'persistence_data',
   'ClickHouse data': 'data',
@@ -3962,6 +4028,9 @@ export const STORAGE_ROLE_IDS = Object.freeze({
   'Configuration metadata state': 'configuration_metadata',
   'Raft integrated-storage data': 'raft_data',
   JENKINS_HOME: 'jenkins_home',
+  'Elasticsearch data': 'data',
+  'Elasticsearch logs': 'logs',
+  'Elasticsearch master state': 'master_state',
   'Index data': 'index_data',
   'OpenSearch manager state': 'manager_state',
   'Local TSDB': 'tsdb',
@@ -4019,6 +4088,19 @@ export const getPlatformNodeRoles = (
       ...repeatPlatformRole('mysql_primary', 3),
       ...repeatPlatformRole('mysql_dr', 3),
     ]
+  }
+
+  if (id === 'mssql') {
+    if (topology === 'Basic AG (2 SQL replicas + config-only quorum)') {
+      return [
+        'mssql_primary_candidate',
+        'mssql_secondary_candidate',
+        'mssql_config_only',
+      ]
+    }
+    if (topology === '3-replica Availability Group') {
+      return repeatPlatformRole('mssql_replica', 3)
+    }
   }
 
   if (id === 'mariadb' && /DR/i.test(topology)) {
@@ -4213,6 +4295,11 @@ export const NATIVE_PRODUCT_OPTION_BINDINGS = Object.freeze({
     sqlBootstrap: 'database_bootstrap',
     sqlDbName: 'database_name',
   },
+  mssql: {
+    sqlBootstrap: 'database_bootstrap',
+    sqlDbName: 'database_name',
+    mssqlFencingRef: 'fencing_profile_ref',
+  },
   'mongodb-community': {
     mongoScopeMode: 'credential_scope_mode',
     mongoDbName: 'database_name',
@@ -4280,6 +4367,11 @@ export const NATIVE_PRODUCT_OPTION_BINDINGS = Object.freeze({
     jenkinsAgentRef: 'agent_ref',
   },
   forgejo: { forgejoSsh: 'git_ssh', forgejoSshPort: 'git_ssh_port' },
+  elasticsearch: {
+    elasticSecurity: 'security_config_mode',
+    elasticSecurityRef: 'security_config_ref',
+    elasticKibana: 'kibana_enabled',
+  },
   opensearch: {
     openSearchSecurity: 'security_config_mode',
     openSearchSecurityRef: 'security_config_ref',
@@ -4323,6 +4415,10 @@ const isNativeProductOptionActive = (draft, blueprintId, draftKey) => {
     },
     mariadb: {
       sqlDbName: draft.sqlBootstrap === 'Create initial application database',
+    },
+    mssql: {
+      sqlDbName: draft.sqlBootstrap === 'Create initial application database',
+      mssqlFencingRef: draft.topology !== 'Standalone',
     },
     'mongodb-community': {
       mongoDbName:
@@ -4379,6 +4475,11 @@ const isNativeProductOptionActive = (draft, blueprintId, draftKey) => {
         draft.jenkinsAgentSource === 'Existing agent template/image reference',
     },
     forgejo: { forgejoSshPort: draft.forgejoSsh === 'Enabled' },
+    elasticsearch: {
+      elasticSecurityRef:
+        draft.elasticSecurity ===
+        'Existing security configuration secret reference',
+    },
     opensearch: {
       openSearchSecurityRef:
         draft.openSearchSecurity ===
@@ -4432,6 +4533,9 @@ const platformProductOptions = (draft, blueprint) => {
 
   if (blueprint.id === 'postgresql') {
     result.pgbouncer = draft.pgbouncerPlacement !== 'Disabled'
+  }
+  if (blueprint.id === 'mssql' && draft.topology !== 'Standalone') {
+    result.listener_name = draft.serviceFqdn
   }
 
   return result
