@@ -92,6 +92,7 @@ jobs:
                   "state":int(vm.findtext("STATE") or -1),
                   "lcm_state":int(vm.findtext("LCM_STATE") or -1),
                   "host": histories[-1].findtext("HOSTNAME") if histories else "",
+                  "deploy_id": (vm.findtext("DEPLOY_ID") or "").strip(),
               })
           print("KVM2_RUNNING_VMS=" + str(h.findtext("./HOST_SHARE/RUNNING_VMS") or ""))
           print("KVM2_VM_DIAGNOSTICS=" + repr(rows))
