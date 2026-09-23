@@ -296,7 +296,20 @@ test('SQL Server and Elasticsearch production flows enforce native topology safe
   assert.equal(sqlDesired.product_options.fencing_profile_ref, 'fencing://redfish/lab')
   assert.equal(sqlDesired.product_options.listener_name, 'mssql.prod.example.internal')
   for (const volume of sqlDesired.storage) {
-    assert.equal(volume.node_roles.includes('mssql_config_only'), false, volume.role)
+    assert.ok(volume.node_roles.length > 0, volume.role)
+    assert.equal(
+      volume.node_roles.includes('mssql_config_only'),
+      false,
+      volume.role
+    )
+    assert.ok(
+      volume.node_roles.includes('mssql_primary_candidate'),
+      volume.role
+    )
+    assert.ok(
+      volume.node_roles.includes('mssql_secondary_candidate'),
+      volume.role
+    )
   }
 
   const es = api.getBlueprintById('elasticsearch')
@@ -1110,6 +1123,7 @@ test('compiled native storage role IDs match backend blueprint ownership', () =>
     postgresql: ['data', 'wal'],
     'mysql-family': ['data', 'redo_binlog'],
     mariadb: ['data', 'redo_binlog'],
+    mssql: ['data', 'log', 'tempdb'],
     'mongodb-community': ['data', 'journal'],
     'percona-mongodb': ['data', 'journal'],
     redis: ['persistence_data'],
@@ -1122,6 +1136,7 @@ test('compiled native storage role IDs match backend blueprint ownership', () =>
     pulsar: ['bookkeeper_journal', 'bookkeeper_ledger', 'metadata_state'],
     openbao: ['raft_data'],
     jenkins: ['jenkins_home'],
+    elasticsearch: ['data', 'logs'],
     opensearch: ['index_data', 'manager_state'],
     prometheus: ['tsdb'],
   }
