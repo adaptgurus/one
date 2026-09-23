@@ -271,7 +271,7 @@ test('SQL Server product summary includes edition topology and HA fencing state'
   assert.match(api.getProductSummary(standalone, blueprint), /Standard.*Standalone/)
 
   const ha = api.createDraft('mssql')
-  ha.topology = 'Basic AG (2 SQL replicas + config-only quorum)'
+  ha.topology = 'Basic AG (2 SQL replicas + configuration-only replica)'
   ha.mssqlFencingRef = 'fencing://redfish/lab'
   const summary = api.getProductSummary(ha, blueprint)
   assert.match(summary, /Standard/)
@@ -285,14 +285,14 @@ test('SQL Server and Elasticsearch production flows enforce native topology safe
   assert.equal(sqlDraft.topology, 'Standalone')
   assert.deepEqual(api.getTopologyOptions({ ...sqlDraft, edition: 'Standard' }, sql), [
     'Standalone',
-    'Basic AG (2 SQL replicas + config-only quorum)',
+    'Basic AG (2 SQL replicas + configuration-only replica)',
   ])
   assert.deepEqual(api.getTopologyOptions({ ...sqlDraft, edition: 'Enterprise' }, sql), [
     'Standalone',
     '3-replica Availability Group',
   ])
 
-  sqlDraft.topology = 'Basic AG (2 SQL replicas + config-only quorum)'
+  sqlDraft.topology = 'Basic AG (2 SQL replicas + configuration-only replica)'
   sqlDraft.mssqlFencingRef = 'fencing://redfish/lab'
   sqlDraft.domain = 'prod.example.internal'
   sqlDraft.serviceFqdn = 'mssql.prod.example.internal'
