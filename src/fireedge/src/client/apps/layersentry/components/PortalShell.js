@@ -354,385 +354,325 @@ const PortalShell = ({ children, endpoints }) => {
     <ThemeProvider theme={layerSentryTheme}>
       <Box
         sx={{
-        minHeight: '100vh',
-        backgroundColor: colors.background,
-        color: colors.text.primary,
-        '& .MuiButton-root': {
-          textTransform: 'none',
-          borderRadius: `${radius.sm}px`,
-          fontWeight: 650,
-        },
-        '& .MuiButton-containedPrimary': {
-          backgroundColor: colors.brand.primary,
-          boxShadow: 'none',
-          '&:hover': {
-            backgroundColor: colors.brand.primaryHover,
+          minHeight: '100vh',
+          backgroundColor: colors.background,
+          color: colors.text.primary,
+          '& .MuiButton-root': {
+            textTransform: 'none',
+            borderRadius: `${radius.sm}px`,
+            fontWeight: 650,
+          },
+          '& .MuiButton-containedPrimary': {
+            backgroundColor: colors.brand.primary,
             boxShadow: 'none',
+            '&:hover': {
+              backgroundColor: colors.brand.primaryHover,
+              boxShadow: 'none',
+            },
           },
-        },
-        '& .MuiButton-outlinedPrimary': {
-          borderColor: colors.borderStrong,
-          color: colors.text.primary,
-          '&:hover': {
-            borderColor: colors.brand.primary,
-            backgroundColor: colors.status.infoSoft,
-          },
-        },
-        '& .MuiOutlinedInput-root': {
-          backgroundColor: colors.surface,
-          borderRadius: `${radius.sm}px`,
-          color: colors.text.primary,
-          '& .MuiOutlinedInput-notchedOutline': {
+          '& .MuiButton-outlinedPrimary': {
             borderColor: colors.borderStrong,
+            color: colors.text.primary,
+            '&:hover': {
+              borderColor: colors.brand.primary,
+              backgroundColor: colors.status.infoSoft,
+            },
           },
-          '&:hover .MuiOutlinedInput-notchedOutline': {
-            borderColor: colors.brand.accent,
+          '& .MuiOutlinedInput-root': {
+            backgroundColor: colors.surface,
+            borderRadius: `${radius.sm}px`,
+            color: colors.text.primary,
+            '& .MuiOutlinedInput-notchedOutline': {
+              borderColor: colors.borderStrong,
+            },
+            '&:hover .MuiOutlinedInput-notchedOutline': {
+              borderColor: colors.brand.accent,
+            },
+            '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+              borderColor: colors.brand.primary,
+              borderWidth: 2,
+            },
           },
-          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-            borderColor: colors.brand.primary,
-            borderWidth: 2,
+          '&& .MuiInputLabel-root.Mui-focused, && .MuiFormControl-root:focus-within .MuiInputLabel-root':
+            {
+              color: `${colors.brand.primary} !important`,
+            },
+          '& .MuiFormHelperText-root': { color: colors.text.muted },
+          '& .MuiSwitch-switchBase.Mui-checked': {
+            color: colors.brand.primary,
+            '& + .MuiSwitch-track': {
+              backgroundColor: colors.brand.primary,
+            },
           },
-        },
-        '&& .MuiInputLabel-root.Mui-focused, && .MuiFormControl-root:focus-within .MuiInputLabel-root':
-          {
-            color: `${colors.brand.primary} !important`,
-          },
-        '& .MuiFormHelperText-root': { color: colors.text.muted },
-        '& .MuiSwitch-switchBase.Mui-checked': {
-          color: colors.brand.primary,
-          '& + .MuiSwitch-track': {
-            backgroundColor: colors.brand.primary,
-          },
-        },
-        '& .MuiCheckbox-root.Mui-checked, & .MuiRadio-root.Mui-checked': {
-          color: colors.brand.primary,
-        },
-        '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
-          color: colors.brand.primary,
-        },
-        '& .MuiTabs-indicator': {
-          backgroundColor: colors.brand.primary,
-        },
-        '& .MuiTab-root': {
-          textTransform: 'none',
-          color: colors.text.secondary,
-          fontWeight: 650,
-          '&.Mui-selected': {
+          '& .MuiCheckbox-root.Mui-checked, & .MuiRadio-root.Mui-checked': {
             color: colors.brand.primary,
           },
-        },
-        '& .MuiLinearProgress-root': {
-          backgroundColor: colors.status.infoSoft,
-          '& .MuiLinearProgress-bar': {
+          '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
+            color: colors.brand.primary,
+          },
+          '& .MuiTabs-indicator': {
             backgroundColor: colors.brand.primary,
           },
-        },
-        '& .MuiCircularProgress-root, & .MuiSlider-root, & .MuiLink-root': {
-          color: colors.brand.primary,
-        },
-        '& .MuiPaginationItem-root.Mui-selected, & .MuiToggleButton-root.Mui-selected':
-          {
-            color: colors.brand.primary,
+          '& .MuiTab-root': {
+            textTransform: 'none',
+            color: colors.text.secondary,
+            fontWeight: 650,
+            '&.Mui-selected': {
+              color: colors.brand.primary,
+            },
+          },
+          '& .MuiLinearProgress-root': {
             backgroundColor: colors.status.infoSoft,
+            '& .MuiLinearProgress-bar': {
+              backgroundColor: colors.brand.primary,
+            },
           },
-      }}
-    >
-      {mobileOpen && (
-        <Box
-          role="presentation"
-          onClick={() => setMobileOpen(false)}
-          sx={{
-            display: { xs: 'block', md: 'none' },
-            position: 'fixed',
-            inset: 0,
-            zIndex: 1150,
-            backgroundColor: colors.overlay.scrim,
-          }}
-        />
-      )}
-      <Box
-        component="aside"
-        sx={{
-          position: 'fixed',
-          inset: '0 auto 0 0',
-          width: SIDEBAR_WIDTH,
-          backgroundColor: colors.brand.navy,
-          color: colors.text.inverse,
-          zIndex: 1200,
-          display: { xs: mobileOpen ? 'flex' : 'none', md: 'flex' },
-          flexDirection: 'column',
-          boxShadow: { xs: colors.shadow.mobileDrawer, md: 'none' },
+          '& .MuiCircularProgress-root, & .MuiSlider-root, & .MuiLink-root': {
+            color: colors.brand.primary,
+          },
+          '& .MuiPaginationItem-root.Mui-selected, & .MuiToggleButton-root.Mui-selected':
+            {
+              color: colors.brand.primary,
+              backgroundColor: colors.status.infoSoft,
+            },
         }}
       >
+        {mobileOpen && (
+          <Box
+            role="presentation"
+            onClick={() => setMobileOpen(false)}
+            sx={{
+              display: { xs: 'block', md: 'none' },
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1150,
+              backgroundColor: colors.overlay.scrim,
+            }}
+          />
+        )}
         <Box
+          component="aside"
           sx={{
-            height: TOPBAR_HEIGHT,
-            display: 'flex',
-            alignItems: 'center',
-            px: 2.5,
-            borderBottom: `1px solid ${colors.sidebar.border}`,
+            position: 'fixed',
+            inset: '0 auto 0 0',
+            width: SIDEBAR_WIDTH,
+            backgroundColor: colors.brand.navy,
+            color: colors.text.inverse,
+            zIndex: 1200,
+            display: { xs: mobileOpen ? 'flex' : 'none', md: 'flex' },
+            flexDirection: 'column',
+            boxShadow: { xs: colors.shadow.mobileDrawer, md: 'none' },
           }}
         >
           <Box
             sx={{
-              width: 30,
-              height: 30,
-              borderRadius: `${radius.sm}px`,
-              backgroundColor: colors.brand.primary,
-              display: 'grid',
-              placeItems: 'center',
-              mr: 1.25,
-              fontWeight: 800,
+              height: TOPBAR_HEIGHT,
+              display: 'flex',
+              alignItems: 'center',
+              px: 2.5,
+              borderBottom: `1px solid ${colors.sidebar.border}`,
             }}
           >
-            L
-          </Box>
-          <Box>
-            <Typography
-              sx={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em' }}
-            >
-              LayerSentry
-            </Typography>
-            <Typography
+            <Box
               sx={{
-                fontSize: 10,
-                color: colors.sidebar.muted,
-                letterSpacing: '0.04em',
-                textTransform: 'uppercase',
+                width: 30,
+                height: 30,
+                borderRadius: `${radius.sm}px`,
+                backgroundColor: colors.brand.primary,
+                display: 'grid',
+                placeItems: 'center',
+                mr: 1.25,
+                fontWeight: 800,
               }}
             >
-              Private Cloud
-            </Typography>
-          </Box>
-        </Box>
-        <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 2 }}>
-          {navigation.map((section) => (
-            <Box key={section.label} sx={{ mb: 2.25 }}>
+              L
+            </Box>
+            <Box>
+              <Typography
+                sx={{ fontSize: 16, fontWeight: 800, letterSpacing: '-0.02em' }}
+              >
+                LayerSentry
+              </Typography>
               <Typography
                 sx={{
-                  px: 1.5,
-                  mb: 0.75,
-                  color: colors.sidebar.label,
                   fontSize: 10,
-                  fontWeight: 750,
-                  letterSpacing: '0.09em',
+                  color: colors.sidebar.muted,
+                  letterSpacing: '0.04em',
                   textTransform: 'uppercase',
                 }}
               >
-                {section.label}
-              </Typography>
-              <Box sx={{ display: 'grid', gap: 0.4 }}>
-                {section.items.map((item) => (
-                  <NavItem
-                    key={item.path ?? item.label}
-                    item={item}
-                    active={isActive(item.path)}
-                    onClick={() => navigate(item.path)}
-                  />
-                ))}
-              </Box>
-            </Box>
-          ))}
-        </Box>
-        <Box sx={{ p: 1.5, borderTop: `1px solid ${colors.sidebar.border}` }}>
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1.25,
-              px: 1,
-              py: 0.75,
-            }}
-          >
-            <Avatar
-              sx={{
-                width: 32,
-                height: 32,
-                fontSize: 12,
-                backgroundColor: colors.brand.primary,
-              }}
-            >
-              {initials(userName)}
-            </Avatar>
-            <Box sx={{ minWidth: 0 }}>
-              <Typography
-                noWrap
-                sx={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: colors.text.inverse,
-                }}
-              >
-                {userName}
-              </Typography>
-              <Typography
-                noWrap
-                sx={{ fontSize: 10, color: colors.sidebar.muted }}
-              >
-                {roleLabel(view)}
+                Private Cloud
               </Typography>
             </Box>
           </Box>
+          <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 2 }}>
+            {navigation.map((section) => (
+              <Box key={section.label} sx={{ mb: 2.25 }}>
+                <Typography
+                  sx={{
+                    px: 1.5,
+                    mb: 0.75,
+                    color: colors.sidebar.label,
+                    fontSize: 10,
+                    fontWeight: 750,
+                    letterSpacing: '0.09em',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {section.label}
+                </Typography>
+                <Box sx={{ display: 'grid', gap: 0.4 }}>
+                  {section.items.map((item) => (
+                    <NavItem
+                      key={item.path ?? item.label}
+                      item={item}
+                      active={isActive(item.path)}
+                      onClick={() => navigate(item.path)}
+                    />
+                  ))}
+                </Box>
+              </Box>
+            ))}
+          </Box>
+          <Box sx={{ p: 1.5, borderTop: `1px solid ${colors.sidebar.border}` }}>
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1.25,
+                px: 1,
+                py: 0.75,
+              }}
+            >
+              <Avatar
+                sx={{
+                  width: 32,
+                  height: 32,
+                  fontSize: 12,
+                  backgroundColor: colors.brand.primary,
+                }}
+              >
+                {initials(userName)}
+              </Avatar>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography
+                  noWrap
+                  sx={{
+                    fontSize: 12,
+                    fontWeight: 700,
+                    color: colors.text.inverse,
+                  }}
+                >
+                  {userName}
+                </Typography>
+                <Typography
+                  noWrap
+                  sx={{ fontSize: 10, color: colors.sidebar.muted }}
+                >
+                  {roleLabel(view)}
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
         </Box>
-      </Box>
-      <Box
-        component="header"
-        sx={{
-          position: 'fixed',
-          top: 0,
-          left: { xs: 0, md: SIDEBAR_WIDTH },
-          right: 0,
-          height: TOPBAR_HEIGHT,
-          backgroundColor: colors.surface,
-          borderBottom: `1px solid ${colors.border}`,
-          zIndex: 1100,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2,
-          px: { xs: 1.5, md: 3 },
-        }}
-      >
-        <IconButton
-          aria-label="Open navigation"
-          onClick={() => setMobileOpen(true)}
-          sx={{
-            display: { xs: 'inline-flex', md: 'none' },
-            color: colors.text.primary,
-          }}
-        >
-          <Menu width={21} height={21} />
-        </IconButton>
         <Box
+          component="header"
           sx={{
-            flex: 1,
-            maxWidth: 560,
+            position: 'fixed',
+            top: 0,
+            left: { xs: 0, md: SIDEBAR_WIDTH },
+            right: 0,
+            height: TOPBAR_HEIGHT,
+            backgroundColor: colors.surface,
+            borderBottom: `1px solid ${colors.border}`,
+            zIndex: 1100,
             display: 'flex',
             alignItems: 'center',
-            gap: 1,
-            px: 1.5,
-            py: 0.6,
-            border: `1px solid ${colors.border}`,
-            borderRadius: `${radius.sm}px`,
-            backgroundColor: colors.surfaceMuted,
-            '&:focus-within': {
-              borderColor: colors.focus,
-              boxShadow: `0 0 0 2px ${colors.status.infoSoft}`,
-            },
+            gap: 2,
+            px: { xs: 1.5, md: 3 },
           }}
         >
-          <Search width={18} height={18} color={colors.text.muted} />
-          <InputBase
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-            onKeyDown={submitSearch}
-            placeholder="Search VMs, storage, networks..."
-            inputProps={{ 'aria-label': 'Global search' }}
-            sx={{ flex: 1, fontSize: 13, color: colors.text.primary }}
-          />
-        </Box>
-
-        <Box
-          sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}
-        >
-          {operationsAvailable && (
-            <Tooltip title="Operations and alerts">
-              <IconButton
-                aria-label="Operations and alerts"
-                onClick={() => navigate('/operations')}
-                sx={{ color: colors.text.secondary }}
-              >
-                <BellNotification width={19} height={19} />
-              </IconButton>
-            </Tooltip>
-          )}
-          <Tooltip title="Support">
-            <IconButton
-              aria-label="Support"
-              onClick={() => navigate('/support')}
-              sx={{ color: colors.text.secondary }}
-            >
-              <HeadsetHelp width={19} height={19} />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Settings">
-            <IconButton
-              aria-label="Settings"
-              onClick={() => navigate('/settings')}
-              sx={{ color: colors.text.secondary }}
-            >
-              <Settings width={19} height={19} />
-            </IconButton>
-          </Tooltip>
+          <IconButton
+            aria-label="Open navigation"
+            onClick={() => setMobileOpen(true)}
+            sx={{
+              display: { xs: 'inline-flex', md: 'none' },
+              color: colors.text.primary,
+            }}
+          >
+            <Menu width={21} height={21} />
+          </IconButton>
           <Box
             sx={{
-              display: { xs: 'none', lg: 'block' },
-              px: 1.25,
-              py: 0.55,
+              flex: 1,
+              maxWidth: 560,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              px: 1.5,
+              py: 0.6,
               border: `1px solid ${colors.border}`,
               borderRadius: `${radius.sm}px`,
               backgroundColor: colors.surfaceMuted,
+              '&:focus-within': {
+                borderColor: colors.focus,
+                boxShadow: `0 0 0 2px ${colors.status.infoSoft}`,
+              },
             }}
-            data-layersentry-current-role
           >
-            <Typography
-              sx={{
-                color: colors.text.muted,
-                fontSize: 9,
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
-                fontWeight: 700,
-              }}
-            >
-              Role
-            </Typography>
-            <Typography
-              sx={{ color: colors.text.primary, fontSize: 12, fontWeight: 700 }}
-            >
-              {roleLabel(view)}
-            </Typography>
+            <Search width={18} height={18} color={colors.text.muted} />
+            <InputBase
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              onKeyDown={submitSearch}
+              placeholder="Search VMs, storage, networks..."
+              inputProps={{ 'aria-label': 'Global search' }}
+              sx={{ flex: 1, fontSize: 13, color: colors.text.primary }}
+            />
           </Box>
-          {availableViews.length > 1 && (
-            <FormControl
-              size="small"
-              sx={{ minWidth: 145, display: { xs: 'none', lg: 'flex' } }}
-            >
-              <Select
-                value={view || availableViews[0] || ''}
-                onChange={(event) => switchRole(event.target.value)}
-                inputProps={{ 'aria-label': 'Switch role' }}
-                data-layersentry-role-switcher
-              >
-                {availableViews.map((candidate) => (
-                  <MenuItem key={candidate} value={candidate}>
-                    {roleLabel(candidate)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-          <Button
-            size="small"
-            variant="text"
-            onClick={() => logout()}
-            sx={{
-              display: { xs: 'none', xl: 'inline-flex' },
-              textTransform: 'none',
-              whiteSpace: 'nowrap',
-            }}
-            data-layersentry-switch-account
+  
+          <Box
+            sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1.5 }}
           >
-            Switch account
-          </Button>
-          <Tooltip title="Current project">
+            {operationsAvailable && (
+              <Tooltip title="Operations and alerts">
+                <IconButton
+                  aria-label="Operations and alerts"
+                  onClick={() => navigate('/operations')}
+                  sx={{ color: colors.text.secondary }}
+                >
+                  <BellNotification width={19} height={19} />
+                </IconButton>
+              </Tooltip>
+            )}
+            <Tooltip title="Support">
+              <IconButton
+                aria-label="Support"
+                onClick={() => navigate('/support')}
+                sx={{ color: colors.text.secondary }}
+              >
+                <HeadsetHelp width={19} height={19} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Settings">
+              <IconButton
+                aria-label="Settings"
+                onClick={() => navigate('/settings')}
+                sx={{ color: colors.text.secondary }}
+              >
+                <Settings width={19} height={19} />
+              </IconButton>
+            </Tooltip>
             <Box
               sx={{
-                display: { xs: 'none', sm: 'block' },
+                display: { xs: 'none', lg: 'block' },
                 px: 1.25,
                 py: 0.55,
                 border: `1px solid ${colors.border}`,
                 borderRadius: `${radius.sm}px`,
                 backgroundColor: colors.surfaceMuted,
               }}
+              data-layersentry-current-role
             >
               <Typography
                 sx={{
@@ -743,55 +683,115 @@ const PortalShell = ({ children, endpoints }) => {
                   fontWeight: 700,
                 }}
               >
-                Project
+                Role
               </Typography>
               <Typography
-                sx={{
-                  color: colors.text.primary,
-                  fontSize: 12,
-                  fontWeight: 650,
-                }}
+                sx={{ color: colors.text.primary, fontSize: 12, fontWeight: 700 }}
               >
-                {groupName ?? 'Default'}
+                {roleLabel(view)}
               </Typography>
             </Box>
-          </Tooltip>
-          <Avatar
-            sx={{
-              display: { xs: 'none', sm: 'flex' },
-              width: 34,
-              height: 34,
-              fontSize: 12,
-              backgroundColor: colors.brand.primary,
-            }}
-          >
-            {initials(userName)}
-          </Avatar>
+            {availableViews.length > 1 && (
+              <FormControl
+                size="small"
+                sx={{ minWidth: 145, display: { xs: 'none', lg: 'flex' } }}
+              >
+                <Select
+                  value={view || availableViews[0] || ''}
+                  onChange={(event) => switchRole(event.target.value)}
+                  inputProps={{ 'aria-label': 'Switch role' }}
+                  data-layersentry-role-switcher
+                >
+                  {availableViews.map((candidate) => (
+                    <MenuItem key={candidate} value={candidate}>
+                      {roleLabel(candidate)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+            <Button
+              size="small"
+              variant="text"
+              onClick={() => logout()}
+              sx={{
+                display: { xs: 'none', xl: 'inline-flex' },
+                textTransform: 'none',
+                whiteSpace: 'nowrap',
+              }}
+              data-layersentry-switch-account
+            >
+              Switch account
+            </Button>
+            <Tooltip title="Current project">
+              <Box
+                sx={{
+                  display: { xs: 'none', sm: 'block' },
+                  px: 1.25,
+                  py: 0.55,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: `${radius.sm}px`,
+                  backgroundColor: colors.surfaceMuted,
+                }}
+              >
+                <Typography
+                  sx={{
+                    color: colors.text.muted,
+                    fontSize: 9,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    fontWeight: 700,
+                  }}
+                >
+                  Project
+                </Typography>
+                <Typography
+                  sx={{
+                    color: colors.text.primary,
+                    fontSize: 12,
+                    fontWeight: 650,
+                  }}
+                >
+                  {groupName ?? 'Default'}
+                </Typography>
+              </Box>
+            </Tooltip>
+            <Avatar
+              sx={{
+                display: { xs: 'none', sm: 'flex' },
+                width: 34,
+                height: 34,
+                fontSize: 12,
+                backgroundColor: colors.brand.primary,
+              }}
+            >
+              {initials(userName)}
+            </Avatar>
+          </Box>
         </Box>
-      </Box>
-      <Box
-        component="main"
-        sx={{
-          ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
-          pt: `${TOPBAR_HEIGHT}px`,
-          minHeight: '100vh',
-        }}
-      >
-        <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1680, mx: 'auto' }}>
-          {capabilityAvailable ? (
-            children
-          ) : (
-            <Alert severity="warning" data-layersentry-capability-unavailable>
-              <Typography sx={{ fontWeight: 750 }}>
-                Capability unavailable
-              </Typography>
-              <Typography sx={{ mt: 0.5, fontSize: 13 }}>
-                {pathCapabilityState?.reason ??
-                  'This capability is not available in the current deployment.'}
-              </Typography>
-            </Alert>
-          )}
-        </Box>
+        <Box
+          component="main"
+          sx={{
+            ml: { xs: 0, md: `${SIDEBAR_WIDTH}px` },
+            pt: `${TOPBAR_HEIGHT}px`,
+            minHeight: '100vh',
+          }}
+        >
+          <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: 1680, mx: 'auto' }}>
+            {capabilityAvailable ? (
+              children
+            ) : (
+              <Alert severity="warning" data-layersentry-capability-unavailable>
+                <Typography sx={{ fontWeight: 750 }}>
+                  Capability unavailable
+                </Typography>
+                <Typography sx={{ mt: 0.5, fontSize: 13 }}>
+                  {pathCapabilityState?.reason ??
+                    'This capability is not available in the current deployment.'}
+                </Typography>
+              </Alert>
+            )}
+          </Box>
         </Box>
       </Box>
     </ThemeProvider>
