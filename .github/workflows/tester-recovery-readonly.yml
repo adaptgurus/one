@@ -1,0 +1,54 @@
+name: Tester Recovery Read-Only Preflight
+
+on:
+  pull_request:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - ".github/workflows/tester-recovery-readonly.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: Manoj-Test-Inst
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj host
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Write-Host "runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME user=$env:USERNAME"
+          if ($env:RUNNER_NAME -ne 'Manoj-Test-Inst') { throw "Wrong runner" }
+          if ($env:COMPUTERNAME -ine 'MANOJ-TEST-INST') { throw "Wrong computer" }
+
+      - name: Read-only WSL inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Write-Host "=== WSL STATUS ==="
+          wsl.exe --status
+          Write-Host "=== WSL DISTROS ==="
+          wsl.exe -l -v
+
+      - name: Read-only Hyper-V VM inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-VM |
+            Select-Object Name,State,ProcessorCount,@{n='MemoryAssignedGB';e={[math]::Round($_.MemoryAssigned/1GB,2)}},Uptime |
+            Sort-Object Name |
+            Format-Table -AutoSize
+
+      - name: Read-only runner and network inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-Service | Where-Object { $_.Name -match 'actions|runner|wsl' -or $_.DisplayName -match 'actions|runner|wsl' } |
+            Select-Object Name,DisplayName,Status,StartType | Format-Table -AutoSize
+          Get-NetIPAddress -AddressFamily IPv4 |
+            Where-Object { $_.IPAddress -notlike '169.254.*' } |
+            Select-Object InterfaceAlias,IPAddress,PrefixLength |
+            Sort-Object InterfaceAlias,IPAddress | Format-Table -AutoSize
