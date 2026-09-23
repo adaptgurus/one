@@ -1,0 +1,58 @@
+name: LayerSentry cross-site read-only reachability probe
+
+on:
+  pull_request:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/scripts/layersentry_three_point_source.py
+      - .github/workflows/layersentry-crosssite-readonly-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Probe DC source endpoints from independent DR runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $targets = @(
+            @{Host='10.10.10.21'; Port=22;   Label='dc-fe-ssh'},
+            @{Host='10.10.10.21'; Port=2633; Label='dc-fe-xmlrpc'},
+            @{Host='10.10.10.22'; Port=22;   Label='dc-kvm1-ssh'},
+            @{Host='10.10.10.23'; Port=22;   Label='dc-kvm2-ssh'},
+            @{Host='10.10.10.23'; Port=13014;Label='dc-onebex'}
+          )
+          $rows = @()
+          foreach ($t in $targets) {
+            $tcp = Test-NetConnection -ComputerName $t.Host -Port $t.Port -WarningAction SilentlyContinue
+            $rows += [pscustomobject]@{
+              label = $t.Label
+              host = $t.Host
+              port = $t.Port
+              reachable = [bool]$tcp.TcpTestSucceeded
+            }
+          }
+          $rows | ConvertTo-Json -Depth 4
+          $reachable = @($rows | Where-Object { $_.reachable }).Count
+          Write-Host "CROSS_SITE_TCP_REACHABLE=$reachable/$($rows.Count)"
+
+          $sshArgs = @(
+            '-o','BatchMode=yes',
+            '-o','StrictHostKeyChecking=no',
+            '-o','UserKnownHostsFile=NUL',
+            '-o','ConnectTimeout=5',
+            'opc@10.10.10.21',
+            'hostname'
+          )
+          $sshOutput = & ssh @sshArgs 2>&1
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "CROSS_SITE_SOURCE_SSH=PASS"
+            Write-Host ("CROSS_SITE_SOURCE_HOST=" + (($sshOutput | Out-String).Trim()))
+          } else {
+            Write-Host "CROSS_SITE_SOURCE_SSH=NO_AUTH_OR_ROUTE"
+          }
