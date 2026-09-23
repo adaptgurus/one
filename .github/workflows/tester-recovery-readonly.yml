@@ -102,6 +102,100 @@ jobs:
           & 'C:\LayerSentryLab\tools\Python313\python.exe' $path
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Deep read-only KVM2 monitor/network diagnostic
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Write-Host "=== KVM2 HYPER-V ADAPTER ==="
+          $nics = @(Get-VMNetworkAdapter -VMName 'ls-kvm2' -ErrorAction SilentlyContinue)
+          $nics |
+            Select-Object VMName,Name,SwitchName,MacAddress,Status,IPAddresses |
+            Format-List
+
+          $macs = @($nics.MacAddress | Where-Object { $_ } | ForEach-Object {
+            ($_ -replace '[:-]', '').ToUpperInvariant()
+          })
+          Write-Host ("KVM2_MACS=" + ($macs -join ','))
+
+          Write-Host "=== MATCHING WINDOWS NEIGHBORS ==="
+          $neighbors = @(
+            Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.LinkLayerAddress -and
+                $macs -contains (($_.LinkLayerAddress -replace '[:-]', '').ToUpperInvariant())
+              }
+          )
+          $neighbors | Select-Object InterfaceAlias,IPAddress,LinkLayerAddress,State | Format-Table -AutoSize
+          $candidateIPs = @($neighbors.IPAddress | Where-Object { $_ -match '^10\.250\.10\.\d+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Continue'
+          Get-Service | Where-Object { $_.Name -match 'actions|runner|wsl' -or $_.DisplayName -match 'actions|runner|wsl' } |
+            Select-Object Name,DisplayName,Status,StartType | Format-Table -AutoSize
+          Get-NetIPAddress -AddressFamily IPv4 |
+            Where-Object { $_.IPAddress -notlike '169.254.*' } |
+            Select-Object InterfaceAlias,IPAddress,PrefixLength |
+            Sort-Object InterfaceAlias,IPAddress | Format-Table -AutoSize
+ } | Sort-Object -Unique)
+
+          Write-Host "=== BOUNDED COMMON KVM2 CANDIDATES ==="
+          foreach ($ip in @('10.250.10.20','10.250.10.21','10.250.10.22','10.250.10.23','10.250.10.24','10.250.10.25')) {
+            if ($candidateIPs -notcontains $ip) { $candidateIPs += $ip }
+          }
+          foreach ($ip in $candidateIPs) {
+            $client = [System.Net.Sockets.TcpClient]::new()
+            $ok = $false
+            try {
+              $task = $client.ConnectAsync($ip,22)
+              if ($task.Wait(800)) { $ok = $client.Connected }
+            } catch { $ok = $false } finally { $client.Dispose() }
+            Write-Host "KVM2_SSH_PROBE IP=$ip TCP=$ok"
+          }
+
+          Write-Host "=== OPENNEBULA KVM2 HOST DETAIL ==="
+          $script = @'
+          import pathlib
+          import xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+
+          auth_image = pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
+          target = Target.open(str(auth_image))
+          auth = target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          one = ServerProxy("http://10.250.10.10:2633/RPC2", allow_none=True)
+          hp = one.one.hostpool.info(auth, -2, -1, -1)
+          if not hp[0]:
+              raise SystemExit("host pool query failed")
+          pool = ET.fromstring(hp[1])
+          hosts=[h for h in pool.findall("HOST") if (h.findtext("NAME") or "").strip()=="ls-kvm2"]
+          if len(hosts)!=1:
+              raise SystemExit(f"ls-kvm2 host count={len(hosts)}")
+          h=hosts[0]
+          fields = {
+              "ID": h.findtext("ID"),
+              "STATE": h.findtext("STATE"),
+              "PREV_STATE": h.findtext("PREV_STATE"),
+              "LAST_MON_TIME": h.findtext("LAST_MON_TIME"),
+              "IM_MAD": h.findtext("IM_MAD"),
+              "VM_MAD": h.findtext("VM_MAD"),
+              "CLUSTER_ID": h.findtext("CLUSTER_ID"),
+              "MAX_CPU": h.findtext("./HOST_SHARE/MAX_CPU"),
+              "FREE_CPU": h.findtext("./HOST_SHARE/FREE_CPU"),
+              "MAX_MEM": h.findtext("./HOST_SHARE/MAX_MEM"),
+              "FREE_MEM": h.findtext("./HOST_SHARE/FREE_MEM"),
+              "RUNNING_VMS": h.findtext("./HOST_SHARE/RUNNING_VMS"),
+              "PIN_POLICY": h.findtext("./TEMPLATE/PIN_POLICY"),
+              "VMS_THREAD": h.findtext("./TEMPLATE/VMS_THREAD"),
+              "ERROR": h.findtext("./TEMPLATE/ERROR") or h.findtext("ERROR"),
+          }
+          print("KVM2_HOST_DETAIL=" + repr(fields))
+          print("KVM2_HOST_TEMPLATE_XML=" + ET.tostring(h.find("TEMPLATE"), encoding="unicode")[:12000])
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'kvm2_host_detail.py'
+          Set-Content -Path $path -Value $script -Encoding UTF8
+          & 'C:\LayerSentryLab\tools\Python313\python.exe' $path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $global:LASTEXITCODE = 0
+
       - name: Read-only runner and network inventory
         shell: powershell
         run: |
