@@ -123,6 +123,7 @@ const ReplicationV2Workspace = () => {
   const [groupName, setGroupName] = useState('')
   const [groupMembers, setGroupMembers] = useState([])
   const [groupConsistency, setGroupConsistency] = useState('CRASH_CONSISTENT')
+  const [groupDependencies, setGroupDependencies] = useState('{}')
   const [groupCheckpoints, setGroupCheckpoints] = useState([])
 
   const loadSessionDetails = async (sessionList) => {
@@ -787,6 +788,15 @@ const ReplicationV2Workspace = () => {
                 ))}
               </Select>
             </FormControl>
+            <TextField
+              label="Dependencies (JSON)"
+              value={groupDependencies}
+              onChange={(e) => setGroupDependencies(e.target.value)}
+              multiline
+              minRows={3}
+              placeholder='{"database-session":["storage-session"]}'
+              helperText="Map each session to prerequisite session IDs. Cycles and non-members are rejected by the coordinator."
+            />
             <FormControl fullWidth>
               <InputLabel>Group consistency</InputLabel>
               <Select
@@ -823,11 +833,21 @@ const ReplicationV2Workspace = () => {
                 setNotice('')
                 setActionBusy('group:configure')
                 try {
+                  const parsedDependencies = JSON.parse(groupDependencies || '{}')
+                  if (
+                    !parsedDependencies ||
+                    Array.isArray(parsedDependencies) ||
+                    typeof parsedDependencies !== 'object'
+                  ) {
+                    throw new Error(
+                      'Protection-group dependencies must be a JSON object.'
+                    )
+                  }
                   await replicationAPI.putProtectionGroup({
                     id: groupId.trim(),
                     name: groupName.trim(),
                     session_ids: groupMembers,
-                    dependencies: {},
+                    dependencies: parsedDependencies,
                     consistency: groupConsistency,
                   })
                   setNotice(`Protection group ${groupId} configured.`)
