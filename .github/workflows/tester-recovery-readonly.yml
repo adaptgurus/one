@@ -40,7 +40,15 @@ jobs:
           $vm = Get-VM -Name 'ls-kvm2' -ErrorAction Stop
           $nic = @(Get-VMNetworkAdapter -VMName 'ls-kvm2' -ErrorAction Stop)
           $vm | Select-Object Name,State,ProcessorCount,@{n='MemoryAssignedGB';e={[math]::Round($_.MemoryAssigned/1GB,2)}},Uptime | Format-Table -AutoSize
-          $nic | Select-Object VMName,Name,SwitchName,MacAddress,Status,IPAddresses | Format-List
+          $nic | Select-Object VMName,Name,SwitchName,MacAddress,Status,IPAddresses,DynamicMacAddressEnabled | Format-List
+          Write-Host "=== KVM2 INTEGRATION SERVICES ==="
+          Get-VMIntegrationService -VMName 'ls-kvm2' -ErrorAction SilentlyContinue |
+            Select-Object Name,Enabled,PrimaryStatusDescription,SecondaryStatusDescription |
+            Format-Table -AutoSize
+          Write-Host "=== KVM2 COM PORTS ==="
+          Get-VMComPort -VMName 'ls-kvm2' -ErrorAction SilentlyContinue |
+            Select-Object Name,Path |
+            Format-Table -AutoSize
           $macs = @($nic.MacAddress | Where-Object { $_ } | ForEach-Object {
             ($_ -replace '[:-]', '').ToUpperInvariant()
           })
