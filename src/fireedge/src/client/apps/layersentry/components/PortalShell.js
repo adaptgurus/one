@@ -250,6 +250,31 @@ const PortalShell = ({ children, endpoints }) => {
         '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
           color: colors.brand.primary,
         },
+        '& .MuiTabs-indicator': {
+          backgroundColor: colors.brand.primary,
+        },
+        '& .MuiTab-root': {
+          textTransform: 'none',
+          color: colors.text.secondary,
+          fontWeight: 650,
+          '&.Mui-selected': {
+            color: colors.brand.primary,
+          },
+        },
+        '& .MuiLinearProgress-root': {
+          backgroundColor: colors.status.infoSoft,
+          '& .MuiLinearProgress-bar': {
+            backgroundColor: colors.brand.primary,
+          },
+        },
+        '& .MuiCircularProgress-root, & .MuiSlider-root, & .MuiLink-root': {
+          color: colors.brand.primary,
+        },
+        '& .MuiPaginationItem-root.Mui-selected, & .MuiToggleButton-root.Mui-selected':
+          {
+            color: colors.brand.primary,
+            backgroundColor: colors.status.infoSoft,
+          },
       }}
     >
       {mobileOpen && (
