@@ -225,6 +225,30 @@ test('VM GPU self-service help stays LayerSentry-only', () => {
   assert.doesNotMatch(gpu.split('\n').slice(1).join('\n'), /OpenNebula/)
 })
 
+test('admin storage create flow uses LayerSentry storage terminology', () => {
+  const general = read(
+    'src/modules/resources/Datastore/Forms/CreateForm/Steps/General/schema.js'
+  )
+  const common = read(
+    'src/modules/resources/Datastore/Forms/CreateForm/Steps/ConfigurationAttributes/Fields/common.js'
+  )
+  const linstor = read(
+    'src/modules/resources/Datastore/Forms/CreateForm/Steps/ConfigurationAttributes/Fields/layersentry.js'
+  )
+  const config = read(
+    'src/modules/resources/Datastore/Forms/CreateForm/Steps/ConfigurationAttributes/schema.js'
+  )
+
+  assert.match(general, /label: 'Storage Type'/)
+  assert.match(general, /label: 'Storage Driver'/)
+  assert.match(common, /label: 'Compute hosts'/)
+  assert.match(common, /Select at least one compute host/)
+  assert.match(config, /label: 'Compatible System Storage Pools'/)
+  assert.match(linstor, /LayerSentry LINSTOR integration/)
+  assert.doesNotMatch(common.split('\n').slice(16).join('\n'), /OpenNebula host/)
+  assert.doesNotMatch(linstor.split('\n').slice(1).join('\n'), /OpenNebula integration/)
+})
+
 test('LayerSentry forms and primary actions use one product palette', () => {
   const shell = read(
     'src/client/apps/layersentry/components/PortalShell.js'
