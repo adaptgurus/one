@@ -33,7 +33,7 @@ jobs:
         run: ./node_modules/.bin/webpack --config tests/layersentry/portal-browser-qualification/webpack.config.cjs
       - name: Chromium desktop and mobile acceptance
         env:
-          QUALIFIED_HEAD: 122160046689594d1f24153ae559ede2194126ed
+          QUALIFIED_HEAD: 8097fef2256985f79437dbefba8515d791d50057
         run: |
           python3 -m http.server 4174 --directory tests/layersentry/portal-browser-qualification/dist >/tmp/layersentry-browser-http.log 2>&1 &
           server_pid=$!
