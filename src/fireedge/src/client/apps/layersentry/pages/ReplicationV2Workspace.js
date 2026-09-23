@@ -103,6 +103,12 @@ const ReplicationV2Workspace = () => {
   const [checkpointSeconds, setCheckpointSeconds] = useState(300)
   const [retention, setRetention] = useState(288)
   const [consistency, setConsistency] = useState('CRASH_CONSISTENT')
+  const [protectionGroupId, setProtectionGroupId] = useState('')
+  const [groupId, setGroupId] = useState('')
+  const [groupName, setGroupName] = useState('')
+  const [groupMembers, setGroupMembers] = useState([])
+  const [groupConsistency, setGroupConsistency] = useState('CRASH_CONSISTENT')
+  const [groupCheckpoints, setGroupCheckpoints] = useState([])
 
   const loadSessionDetails = async (sessionList) => {
     const entries = await Promise.all(
@@ -180,7 +186,7 @@ const ReplicationV2Workspace = () => {
     if (!selectedVm || !targetSite || !selectedBackend) return null
     return {
       id: `vm-${selectedVm.ID}-to-${targetSite}`,
-      protection_group_id: `vm-${selectedVm.ID}`,
+      protection_group_id: protectionGroupId.trim() || `vm-${selectedVm.ID}`,
       workload_id: String(selectedVm.ID),
       source_site_id: 'current',
       target_site_id: String(targetSite),
@@ -199,6 +205,7 @@ const ReplicationV2Workspace = () => {
     consistency,
     disks,
     retention,
+    protectionGroupId,
     selectedBackend,
     selectedVm,
     targetSite,
@@ -410,6 +417,13 @@ const ReplicationV2Workspace = () => {
               </MenuItem>
             </Select>
           </FormControl>
+          <TextField
+            label="Protection group ID"
+            value={protectionGroupId}
+            onChange={(e) => setProtectionGroupId(e.target.value)}
+            placeholder={selectedVm ? `vm-${selectedVm.ID}` : 'application-group'}
+            helperText="Use the same ID on application members that must share a coordinated checkpoint barrier."
+          />
           <TextField
             label="Hot checkpoints to retain"
             type="number"
@@ -700,6 +714,181 @@ const ReplicationV2Workspace = () => {
           )}
         </Box>
       </Surface>
+
+      {capabilities.application_protection_groups && (
+        <Surface sx={{ mt: 2, p: 2.5 }}>
+          <SectionHeader
+            title="Application protection groups"
+            description="Coordinate a common checkpoint barrier across related replication sessions. Filesystem/application consistency requires the qualified quiesce provider."
+          />
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' },
+              gap: 1.5,
+            }}
+          >
+            <TextField
+              label="Group ID"
+              value={groupId}
+              onChange={(e) => setGroupId(e.target.value)}
+              placeholder="app-ordering"
+            />
+            <TextField
+              label="Group name"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              placeholder="Ordering application"
+            />
+            <FormControl fullWidth>
+              <InputLabel>Member sessions</InputLabel>
+              <Select
+                multiple
+                value={groupMembers}
+                label="Member sessions"
+                onChange={(e) =>
+                  setGroupMembers(
+                    typeof e.target.value === 'string'
+                      ? e.target.value.split(',')
+                      : e.target.value
+                  )
+                }
+              >
+                {sessions.map((session) => (
+                  <MenuItem
+                    key={session.id}
+                    value={session.id}
+                    disabled={
+                      Boolean(groupId) &&
+                      session.protection_group_id !== groupId
+                    }
+                  >
+                    {session.id} · VM {session.workload_id} · group{' '}
+                    {session.protection_group_id || '—'}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Group consistency</InputLabel>
+              <Select
+                value={groupConsistency}
+                label="Group consistency"
+                onChange={(e) => setGroupConsistency(e.target.value)}
+              >
+                <MenuItem value="CRASH_CONSISTENT">Crash consistent</MenuItem>
+                <MenuItem value="FILESYSTEM_CONSISTENT">
+                  Filesystem quiesced
+                </MenuItem>
+                <MenuItem value="APPLICATION_CONSISTENT">
+                  Application consistent
+                </MenuItem>
+              </Select>
+            </FormControl>
+          </Box>
+          <Alert severity="info" sx={{ mt: 1.5 }}>
+            Every member session must already use this exact protection-group ID.
+            Dependency ordering is enforced by the coordinator API; no failover
+            action is exposed here.
+          </Alert>
+          <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              disabled={
+                actionBusy === 'group:configure' ||
+                !groupId.trim() ||
+                !groupName.trim() ||
+                groupMembers.length === 0
+              }
+              onClick={async () => {
+                setError('')
+                setNotice('')
+                setActionBusy('group:configure')
+                try {
+                  await replicationAPI.putProtectionGroup({
+                    id: groupId.trim(),
+                    name: groupName.trim(),
+                    session_ids: groupMembers,
+                    dependencies: {},
+                    consistency: groupConsistency,
+                  })
+                  setNotice(`Protection group ${groupId} configured.`)
+                } catch (reason) {
+                  setError(reason.message)
+                } finally {
+                  setActionBusy('')
+                }
+              }}
+              sx={{ textTransform: 'none' }}
+            >
+              {actionBusy === 'group:configure'
+                ? 'Configuring…'
+                : 'Configure group'}
+            </Button>
+            <Button
+              variant="contained"
+              disabled={
+                actionBusy === 'group:capture' ||
+                !groupId.trim() ||
+                groupMembers.length === 0
+              }
+              onClick={async () => {
+                setError('')
+                setNotice('')
+                setActionBusy('group:capture')
+                try {
+                  const checkpoint =
+                    await replicationAPI.captureProtectionGroup(groupId.trim())
+                  const payload =
+                    await replicationAPI.protectionGroupCheckpoints(
+                      groupId.trim()
+                    )
+                  setGroupCheckpoints(payload?.checkpoints || [])
+                  setNotice(
+                    `Coordinated protection-group checkpoint ${checkpoint.id} committed. This did not perform failover.`
+                  )
+                  await refresh()
+                } catch (reason) {
+                  setError(reason.message)
+                } finally {
+                  setActionBusy('')
+                }
+              }}
+              sx={{ textTransform: 'none' }}
+            >
+              {actionBusy === 'group:capture'
+                ? 'Capturing coordinated checkpoint…'
+                : 'Capture coordinated checkpoint'}
+            </Button>
+          </Box>
+          <Box sx={{ mt: 1.5, display: 'grid', gap: 0.75 }}>
+            {groupCheckpoints
+              .slice()
+              .reverse()
+              .map((checkpoint) => (
+                <Box
+                  key={checkpoint.id}
+                  sx={{
+                    p: 1,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 1,
+                  }}
+                >
+                  <Typography sx={{ fontSize: 11, fontWeight: 700 }}>
+                    {checkpoint.id}
+                  </Typography>
+                  <Typography
+                    sx={{ fontSize: 10, color: colors.text.secondary }}
+                  >
+                    {checkpoint.consistency} ·{' '}
+                    {Object.keys(checkpoint.checkpoints || {}).length} member
+                    checkpoint(s) · {dateText(checkpoint.committed_at)}
+                  </Typography>
+                </Box>
+              ))}
+          </Box>
+        </Surface>
+      )}
     </PageFrame>
   )
 }
