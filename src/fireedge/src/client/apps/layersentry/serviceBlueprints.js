@@ -1157,31 +1157,6 @@ export const getEndpointOptions = (draft, blueprint) => {
       return ['Direct service endpoint']
     case 'elasticsearch':
       return ['Native node list']
-    case 'elasticsearch':
-      return [
-        vol(
-          'Elasticsearch data',
-          'Per Elasticsearch data/combined VM',
-          d,
-          '/var/lib/elasticsearch'
-        ),
-        vol(
-          'Elasticsearch logs',
-          'Per Elasticsearch VM',
-          l,
-          '/var/log/elasticsearch'
-        ),
-        ...(String(draft.topology || '').startsWith('3 masters +')
-          ? [
-              vol(
-                'Elasticsearch master state',
-                'Per dedicated master VM',
-                20,
-                '/var/lib/elasticsearch-master'
-              ),
-            ]
-          : []),
-      ]
     case 'opensearch':
       return ['Native node list']
     case 'prometheus':
@@ -1675,6 +1650,31 @@ export const getStorageTemplate = (draft, blueprint) => {
           '/var/lib/jenkins'
         ),
       ]
+    case 'elasticsearch':
+      return [
+        vol(
+          'Elasticsearch data',
+          'Per Elasticsearch data/combined VM',
+          d,
+          '/var/lib/elasticsearch'
+        ),
+        vol(
+          'Elasticsearch logs',
+          'Per Elasticsearch VM',
+          l,
+          '/var/log/elasticsearch'
+        ),
+        ...(String(draft.topology || '').startsWith('3 masters +')
+          ? [
+              vol(
+                'Elasticsearch master state',
+                'Per dedicated master VM',
+                20,
+                '/var/lib/elasticsearch-master'
+              ),
+            ]
+          : []),
+      ]
     case 'opensearch':
       return [
         vol('Index data', 'Per OpenSearch data VM', d, '/var/lib/opensearch'),
@@ -1948,7 +1948,9 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
       storageRole === 'log' ||
       storageRole === 'tempdb'
     ) {
-      return [...new Set(nodeRoles.filter((role) => role !== 'mssql_config_only'))]
+      return [
+        ...new Set(nodeRoles.filter((role) => role !== 'mssql_config_only')),
+      ]
     }
   }
 
