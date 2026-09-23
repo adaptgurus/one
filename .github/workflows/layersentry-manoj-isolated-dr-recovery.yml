@@ -27,14 +27,44 @@ jobs:
           if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner: $env:RUNNER_NAME" }
           if ($env:COMPUTERNAME -ine 'MANOJ-TEST-INST') { throw "Wrong computer: $env:COMPUTERNAME" }
 
+          function Start-IsolatedKVM2 {
+            param([Microsoft.HyperV.PowerShell.VirtualMachine]$VM)
+            try {
+              Start-VM -VM $VM -ErrorAction Stop | Out-Null
+              return $true
+            } catch {
+              $message = $_.Exception.Message
+              if ($message -notmatch 'Not enough memory|memory resources') { throw }
+              Write-Host "KVM2_START_MEMORY_PRESSURE=YES"
+              return $false
+            }
+          }
+
           $vm = Get-VM -Name 'ls-kvm2' -ErrorAction Stop
           Write-Host "KVM2_INITIAL_STATE=$($vm.State)"
-          if ($vm.State -eq 'Off') {
-            Start-VM -VM $vm | Out-Null
+          if ($vm.State -eq 'Off' -or $vm.State -eq 'Saved') {
+            $started = Start-IsolatedKVM2 -VM $vm
+            if (-not $started) {
+              $reclaim = @('ls-appliance-4c4ac81-qual','ls-appliance-bootstrapfix-qual')
+              foreach ($candidate in $reclaim) {
+                $q = Get-VM -Name $candidate -ErrorAction SilentlyContinue
+                if ($null -eq $q -or $q.State -ne 'Running') { continue }
+                Write-Host "MEMORY_RECLAIM_SAVE_REQUESTED=$candidate"
+                Save-VM -VM $q -ErrorAction Stop
+                $saveDeadline = (Get-Date).AddMinutes(2)
+                do {
+                  Start-Sleep -Seconds 2
+                  $q = Get-VM -Name $candidate
+                } while ($q.State -ne 'Saved' -and (Get-Date) -lt $saveDeadline)
+                if ($q.State -ne 'Saved') { throw "Qualification VM $candidate did not reach Saved state" }
+                Write-Host "MEMORY_RECLAIM_SAVED=$candidate"
+                $vm = Get-VM -Name 'ls-kvm2'
+                $started = Start-IsolatedKVM2 -VM $vm
+                if ($started) { break }
+              }
+            }
+            if (-not $started) { throw 'ls-kvm2 still cannot start after bounded qualification-only memory reclaim' }
             Write-Host "KVM2_START_REQUESTED=YES"
-          } elseif ($vm.State -eq 'Saved') {
-            Start-VM -VM $vm | Out-Null
-            Write-Host "KVM2_RESUME_REQUESTED=YES"
           } elseif ($vm.State -ne 'Running') {
             throw "ls-kvm2 is in unexpected Hyper-V state $($vm.State)"
           }
