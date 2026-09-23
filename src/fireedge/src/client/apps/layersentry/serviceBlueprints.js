@@ -1942,18 +1942,6 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
     )
   }
 
-  if (id === 'mssql') {
-    if (
-      storageRole === 'data' ||
-      storageRole === 'log' ||
-      storageRole === 'tempdb'
-    ) {
-      return [
-        ...new Set(nodeRoles.filter((role) => role !== 'mssql_config_only')),
-      ]
-    }
-  }
-
   if (id === 'mongodb-community' || id === 'percona-mongodb') {
     const product =
       id === 'percona-mongodb'
@@ -2619,75 +2607,6 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
     )
   }
 
-  if (id === 'elasticsearch') {
-    fields.push(
-      select('elasticSecurity', 'Security configuration', [
-        'LayerSentry managed security configuration',
-        'Existing security configuration secret reference',
-      ])
-    )
-    if (
-      draft.elasticSecurity ===
-      'Existing security configuration secret reference'
-    ) {
-      fields.push(
-        text('elasticSecurityRef', 'Security configuration reference')
-      )
-    }
-    fields.push({
-      key: 'elasticKibana',
-      label: 'Install Kibana companion',
-      type: 'switch',
-      helper:
-        'Optional companion only; Elasticsearch cluster lifecycle remains independent.',
-    })
-
-    return fields
-  }
-
-  if (id === 'elasticsearch') {
-    if (topology === '3-node Production Cluster') {
-      return repeatPlatformRole('elasticsearch_combined', 3)
-    }
-
-    return [
-      ...repeatPlatformRole('elasticsearch_master', 3),
-      ...repeatPlatformRole('elasticsearch_data', count - 3),
-    ]
-  }
-
-  if (id === 'elasticsearch') {
-    if (storageRole === 'data') {
-      return [
-        ...new Set(
-          nodeRoles.filter(
-            (role) =>
-              role === 'elasticsearch_data' || role === 'elasticsearch_combined'
-          )
-        ),
-      ]
-    }
-    if (storageRole === 'logs') return [...new Set(nodeRoles)]
-    if (storageRole === 'master_state') {
-      return [
-        ...new Set(
-          nodeRoles.filter(
-            (role) =>
-              role === 'elasticsearch_master' ||
-              role === 'elasticsearch_combined'
-          )
-        ),
-      ]
-    }
-  }
-
-  if (id === 'elasticsearch') {
-    return (
-      draft.elasticSecurity +
-      (draft.elasticSecurityRef ? ' · reference configured' : '') +
-      (draft.elasticKibana ? ' · Kibana enabled' : '')
-    )
-  }
   if (id === 'opensearch') {
     const dataNodes = topology.indexOf('6 data') >= 0 ? 6 : 3
 
@@ -3290,6 +3209,32 @@ export const getProductConfigFields = (draft, blueprint) => {
         number('forgejoSshPort', 'Git SSH port', { min: 1, max: 65535 })
       )
     }
+
+    return fields
+  }
+
+  if (id === 'elasticsearch') {
+    fields.push(
+      select('elasticSecurity', 'Security configuration', [
+        'LayerSentry managed security configuration',
+        'Existing security configuration secret reference',
+      ])
+    )
+    if (
+      draft.elasticSecurity ===
+      'Existing security configuration secret reference'
+    ) {
+      fields.push(
+        text('elasticSecurityRef', 'Security configuration reference')
+      )
+    }
+    fields.push({
+      key: 'elasticKibana',
+      label: 'Install Kibana companion',
+      type: 'switch',
+      helper:
+        'Optional companion only; Elasticsearch cluster lifecycle remains independent.',
+    })
 
     return fields
   }
@@ -4963,6 +4908,13 @@ export const getProductSummary = (draft, blueprint) => {
       'Git HTTPS enabled; SSH ' +
       draft.forgejoSsh +
       (draft.forgejoSsh === 'Enabled' ? ' on ' + draft.forgejoSshPort : '')
+    )
+  }
+  if (id === 'elasticsearch') {
+    return (
+      draft.elasticSecurity +
+      (draft.elasticSecurityRef ? ' · reference configured' : '') +
+      (draft.elasticKibana ? ' · Kibana enabled' : '')
     )
   }
   if (id === 'opensearch') {
