@@ -66,10 +66,14 @@ const backendLabel = {
   FILE_COW: 'NFS / shared filesystem — COW checkpoints',
 }
 
-const recommendedBackend = (caps = {}) => {
-  if (caps.ceph_rbd) return 'CEPH_RBD'
-  if (caps.lvm_thin) return 'LVM_THIN'
-  if (caps.file_cow) return 'FILE_COW'
+const recommendedBackend = (caps = {}, allowed = [], catalogBound = false) => {
+  const available = (kind) =>
+    catalogBound ? allowed.includes(kind) : caps[kind.toLowerCase()] === true
+
+  if (available('CEPH_RBD')) return 'CEPH_RBD'
+  if (available('LVM_THIN')) return 'LVM_THIN'
+  if (available('FILE_COW')) return 'FILE_COW'
+
   return ''
 }
 
@@ -106,6 +110,7 @@ const ReplicationV2Workspace = () => {
   const [capabilities, setCapabilities] = useState({})
   const [localSiteId, setLocalSiteId] = useState('')
   const [targetSites, setTargetSites] = useState([])
+  const [targetBackends, setTargetBackends] = useState({})
   const [sessions, setSessions] = useState([])
   const [details, setDetails] = useState({})
   const [error, setError] = useState('')
@@ -168,6 +173,7 @@ const ReplicationV2Workspace = () => {
     setCapabilities(caps?.capabilities || {})
     setLocalSiteId(caps?.local_site_id || '')
     setTargetSites(caps?.target_site_ids || [])
+    setTargetBackends(caps?.target_backends || {})
     setSessions(sessionList)
     await loadSessionDetails(sessionList)
   }
@@ -181,6 +187,7 @@ const ReplicationV2Workspace = () => {
         setCapabilities(caps?.capabilities || {})
         setLocalSiteId(caps?.local_site_id || '')
         setTargetSites(caps?.target_site_ids || [])
+        setTargetBackends(caps?.target_backends || {})
         setSessions(sessionList)
         await loadSessionDetails(sessionList)
       })
@@ -197,10 +204,26 @@ const ReplicationV2Workspace = () => {
     [vms, vmId]
   )
   const disks = useMemo(() => vmDisks(selectedVm), [selectedVm])
+  const targetBackendCatalogBound =
+    Boolean(targetSite) &&
+    Object.prototype.hasOwnProperty.call(targetBackends, targetSite)
+  const allowedTargetBackends = targetBackendCatalogBound
+    ? toArray(targetBackends[targetSite])
+    : []
+  const backendAllowed = (kind) =>
+    targetBackendCatalogBound
+      ? allowedTargetBackends.includes(kind)
+      : capabilities[kind.toLowerCase()] === true
   const selectedBackend =
     backendChoice === 'AUTO'
-      ? recommendedBackend(capabilities)
-      : backendChoice
+      ? recommendedBackend(
+          capabilities,
+          allowedTargetBackends,
+          targetBackendCatalogBound
+        )
+      : backendAllowed(backendChoice)
+        ? backendChoice
+        : ''
 
   const request = useMemo(() => {
     if (!selectedVm || !targetSite || !selectedBackend) return null
@@ -412,9 +435,7 @@ const ReplicationV2Workspace = () => {
             >
               <MenuItem value="AUTO">Auto recommended</MenuItem>
               {Object.entries(backendLabel)
-                .filter(
-                  ([kind]) => capabilities[kind.toLowerCase()] === true
-                )
+                .filter(([kind]) => backendAllowed(kind))
                 .map(([kind, label]) => (
                   <MenuItem key={kind} value={kind}>
                     {label}
@@ -466,6 +487,12 @@ const ReplicationV2Workspace = () => {
           <Alert severity="warning" sx={{ mt: 1.5 }}>
             No LayerSentry replication target site is configured. Configure the
             remote site/transport before enabling protection.
+          </Alert>
+        )}
+        {targetSite && targetBackendCatalogBound && !allowedTargetBackends.length && (
+          <Alert severity="warning" sx={{ mt: 1.5 }}>
+            The selected recovery site has no qualified Replication v2 target
+            backend configured.
           </Alert>
         )}
         {consistency !== 'CRASH_CONSISTENT' && (
