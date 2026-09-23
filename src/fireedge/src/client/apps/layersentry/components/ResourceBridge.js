@@ -355,7 +355,7 @@ const ClusterInventory = () => {
         { label: 'Name', render: ({ NAME }) => NAME ?? '—' },
         { label: 'Hosts', render: ({ HOSTS }) => countIds(HOSTS) },
         {
-          label: 'Datastores',
+          label: 'Storage Pools',
           render: ({ DATASTORES }) => countIds(DATASTORES),
         },
         { label: 'Networks', render: ({ VNETS }) => countIds(VNETS) },
@@ -377,7 +377,7 @@ const DatastoreInventory = () => {
         { label: 'Type', render: ({ TYPE }) => TYPE ?? '—' },
         { label: 'State', render: ({ STATE }) => STATE ?? '—' },
         {
-          label: 'Drivers',
+          label: 'Technology',
           render: ({ DS_MAD, TM_MAD }) =>
             [DS_MAD, TM_MAD].filter(Boolean).join(' / ') || '—',
         },
