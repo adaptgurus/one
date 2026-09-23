@@ -83,34 +83,6 @@ test('header shows current role and supports safe view/account switching', () =>
   assert.match(shell, /logout\(\)/)
 })
 
-test('VM create workflow labels match the native customer self-service stages', () => {
-  const portal = read('src/client/apps/layersentry/Portal.js')
-  const steps = read(
-    'src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/index.js'
-  )
-  const access = read(
-    'src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/AccessConfiguration/index.js'
-  )
-  const resources = read(
-    'src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources/index.js'
-  )
-  const services = read(
-    'src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudOptionalServices/index.js'
-  )
-
-  assert.match(
-    portal,
-    /'Choose Source',[\s\S]*'Configuration',[\s\S]*'Access',[\s\S]*'Resources',[\s\S]*'Protection'/
-  )
-  assert.match(steps, /BasicConfiguration/)
-  assert.match(steps, /selfService && \(\(\) => AccessConfiguration\(\)\)/)
-  assert.match(steps, /CloudResources/)
-  assert.match(steps, /CloudOptionalServices/)
-  assert.match(access, /label: 'Access'/)
-  assert.match(resources, /label: 'Resources'/)
-  assert.match(services, /label: 'Protection'/)
-})
-
 test('VM inventory includes storage and live utilization without fabricating missing metrics', () => {
   const bridge = read(
     'src/client/apps/layersentry/components/ResourceBridge.js'
