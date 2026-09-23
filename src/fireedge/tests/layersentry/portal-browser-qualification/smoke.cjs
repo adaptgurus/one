@@ -113,6 +113,17 @@ const run = async () => {
 
     const input = page.getByLabel('Service name')
     await input.focus()
+    await page.waitForFunction(
+      (expected) => {
+        const root = document
+          .querySelector('[data-testid="qa-input"]')
+          .closest('.MuiFormControl-root')
+        const label = root.querySelector('.MuiInputLabel-root')
+        return getComputedStyle(label).color === expected
+      },
+      expectedBlue,
+      { timeout: 1500 }
+    )
     const focused = await page.evaluate(() => {
       const root = document
         .querySelector('[data-testid="qa-input"]')
