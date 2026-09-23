@@ -1,0 +1,105 @@
+name: LayerSentry Hyper-V Migration Qualification
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-hyperv-migration-qual-20260924
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    if: github.event.pull_request.head.ref == 'qual/hyperv-migration-live-20260924'
+    runs-on: Manoj-Test-Inst
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact Hyper-V host
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "QUAL_HOST runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME user=$env:USERNAME"
+          if($env:RUNNER_NAME -ne 'Manoj-Test-Inst'){throw "wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "wrong computer: $env:COMPUTERNAME"}
+          Get-Command Get-VM,Get-VHD,Get-VMHardDiskDrive,Get-VMNetworkAdapter,Get-VMSwitch -ErrorAction Stop | Out-Null
+
+      - name: Inventory Hyper-V VMs and disks
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host '===VMS==='
+          Get-VM | Sort-Object Name | ForEach-Object {
+            [pscustomobject]@{
+              Name=$_.Name; State=$_.State; Gen=$_.Generation; CPU=$_.ProcessorCount;
+              MemGB=[math]::Round($_.MemoryAssigned/1GB,1);
+              AutoCheckpoints=$_.AutomaticCheckpointsEnabled; Path=$_.Path
+            }
+          } | Format-Table -AutoSize
+
+          Write-Host '===DISKS==='
+          $rows=@()
+          foreach($vm in Get-VM){
+            foreach($d in Get-VMHardDiskDrive -VM $vm -ErrorAction SilentlyContinue){
+              $v=$null; try{$v=Get-VHD -Path $d.Path -ErrorAction Stop}catch{}
+              $rows += [pscustomobject]@{
+                VM=$vm.Name; Controller=$d.ControllerType; Location=$d.ControllerLocation;
+                Path=$d.Path; Format=if($v){$v.VhdFormat}else{'?'}; Type=if($v){$v.VhdType}else{'?'};
+                SizeGB=if($v){[math]::Round($v.Size/1GB,1)}else{0};
+                FileGB=if($v){[math]::Round($v.FileSize/1GB,1)}else{0};
+                Parent=if($v){$v.ParentPath}else{''}
+              }
+            }
+          }
+          $rows | Sort-Object VM,Location | Format-Table -AutoSize -Wrap
+
+      - name: Inventory VM networks and switches
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host '===NETWORKS==='
+          Get-VMNetworkAdapter -All | Sort-Object VMName,Name |
+            Select-Object VMName,Name,SwitchName,MacAddress,Status,IPAddresses |
+            Format-Table -AutoSize -Wrap
+          Write-Host '===SWITCHES==='
+          Get-VMSwitch | Select-Object Name,SwitchType,NetAdapterInterfaceDescription | Format-Table -AutoSize
+
+      - name: Inspect migration qualification assets
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          if(-not(Test-Path $root)){throw "missing $root"}
+          Write-Host '===QUAL_TOP==='
+          Get-ChildItem -LiteralPath $root -Force |
+            Select-Object Name,Length,LastWriteTime,Attributes |
+            Sort-Object Name | Format-Table -AutoSize
+          Write-Host '===MIGRATION_ASSETS==='
+          Get-ChildItem -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -match '(?i)(oneswap|migration|virtio|hyperv|qcow2)' } |
+            Select-Object -First 150 FullName,Length,LastWriteTime |
+            Format-Table -AutoSize -Wrap
+
+      - name: Read-only connectivity matrix
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $ips = New-Object System.Collections.Generic.HashSet[string]
+          foreach($a in Get-VMNetworkAdapter -All){
+            foreach($ip in $a.IPAddresses){
+              if($ip -match '^\d+\.\d+\.\d+\.\d+$' -and $ip -notmatch '^169\.254\.'){[void]$ips.Add($ip)}
+            }
+          }
+          foreach($ip in @('10.10.10.21','10.10.10.22','10.10.10.23','10.250.10.40')){[void]$ips.Add($ip)}
+          foreach($ip in ($ips | Sort-Object)){
+            foreach($port in @(22,2633,2616,9443)){
+              $r=Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
+              Write-Host "CONNECT ip=$ip port=$port tcp=$($r.TcpTestSucceeded)"
+            }
+          }
+          Write-Host '===HOST_STORAGE==='
+          Get-PSDrive -PSProvider FileSystem | ForEach-Object {
+            [pscustomobject]@{Name=$_.Name;FreeGB=[math]::Round($_.Free/1GB,1);UsedGB=[math]::Round($_.Used/1GB,1)}
+          } | Format-Table -AutoSize
