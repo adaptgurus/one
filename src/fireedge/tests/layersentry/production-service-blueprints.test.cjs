@@ -265,6 +265,20 @@ test('heterogeneous storage is attached only to the native roles that own it', (
 })
 
 
+test('SQL Server product summary includes edition topology and HA fencing state', () => {
+  const blueprint = api.getBlueprintById('mssql')
+  const standalone = api.createDraft('mssql')
+  assert.match(api.getProductSummary(standalone, blueprint), /Standard.*Standalone/)
+
+  const ha = api.createDraft('mssql')
+  ha.topology = 'Basic AG (2 SQL replicas + config-only quorum)'
+  ha.mssqlFencingRef = 'fencing://redfish/lab'
+  const summary = api.getProductSummary(ha, blueprint)
+  assert.match(summary, /Standard/)
+  assert.match(summary, /Basic AG/)
+  assert.match(summary, /fencing:\/\/redfish\/lab/)
+})
+
 test('SQL Server and Elasticsearch production flows enforce native topology safety', () => {
   const sql = api.getBlueprintById('mssql')
   const sqlDraft = api.createDraft('mssql')
