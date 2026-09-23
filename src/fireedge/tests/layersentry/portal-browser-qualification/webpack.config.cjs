@@ -18,6 +18,8 @@ module.exports = {
         use: {
           loader: 'babel-loader',
           options: {
+            babelrc: false,
+            configFile: false,
             presets: [
               ['@babel/preset-env', { targets: { chrome: '120' } }],
               ['@babel/preset-react', { runtime: 'automatic' }],
