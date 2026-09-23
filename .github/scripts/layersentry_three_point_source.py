@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# qualification-source: disposable-networked-ssh-v1
+# qualification-source: disposable-networked-ssh-v2
 import base64
 import bz2
 import csv
