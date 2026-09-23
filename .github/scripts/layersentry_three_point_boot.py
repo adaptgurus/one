@@ -17,6 +17,8 @@ ENDPOINT = "http://10.250.10.10:2633/RPC2"
 HOST_HTTP_IP = "10.250.10.1"
 HTTP_PORT = 18083
 DATASTORE_ID = 1
+TARGET_HOST = None
+TARGET_HOST_CANDIDATES = [x.strip() for x in os.environ.get("LAYERSENTRY_DR_TEST_HOSTS", "ls-kvm1,ls-kvm2").split(",") if x.strip()]
 
 def wait_image(one, auth, image_id, label):
     state = None
@@ -47,7 +49,7 @@ def wait_vm_running(one, auth, vm_id, label):
         histories = root.findall("./HISTORY_RECORDS/HISTORY")
         host = histories[-1].findtext("HOSTNAME") if histories else ""
         last = (state, lcm, host, deploy_id)
-        if state == 3 and lcm == 3 and host == "ls-kvm1" and deploy_id:
+        if state == 3 and lcm == 3 and host == TARGET_HOST and deploy_id:
             return host, deploy_id
         if state in (6, 7):
             raise RuntimeError(f"{label} VM terminal state={state} lcm={lcm}")
@@ -63,6 +65,37 @@ def wait_vm_done(one, auth, vm_id):
         if int(root.findtext("STATE")) == 6:
             return
         time.sleep(1)
+
+def select_safe_target_host(one, auth):
+    global TARGET_HOST
+    result = one.one.hostpool.info(auth, -2, -1, -1)
+    if not result[0]:
+        raise RuntimeError("independent OpenNebula host-pool query failed")
+    pool = ET.fromstring(result[1])
+    rejected = []
+    for name in TARGET_HOST_CANDIDATES:
+        matches = [h for h in pool.findall("HOST") if (h.findtext("NAME") or "").strip() == name]
+        if len(matches) != 1:
+            rejected.append(f"{name}:HOST_NOT_UNIQUE")
+            continue
+        host = matches[0]
+        policies = [(n.text or "").strip().upper() for n in host.findall(".//PIN_POLICY")]
+        pin_policy = next((v for v in policies if v), "")
+        vms_thread = next(((n.text or "").strip() for n in host.findall(".//VMS_THREAD") if (n.text or "").strip()), "1")
+        running = int(host.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
+        if pin_policy != "PINNED":
+            rejected.append(f"{name}:PIN_POLICY={pin_policy or 'UNSET'}")
+            continue
+        if vms_thread != "1":
+            rejected.append(f"{name}:VMS_THREAD={vms_thread}")
+            continue
+        if running != 0:
+            rejected.append(f"{name}:RUNNING_VMS={running}")
+            continue
+        TARGET_HOST = name
+        print(f"DR_CPU_ISOLATION_HOST=PASS HOST={name} PIN_POLICY={pin_policy} VMS_THREAD={vms_thread} PREEXISTING_RUNNING_VMS=0")
+        return
+    raise RuntimeError("no safe empty PINNED independent KVM host: " + ";".join(rejected))
 
 def main():
     manifest = json.loads((ROOT / "manifest.json").read_text(encoding="utf-8"))
@@ -88,6 +121,7 @@ def main():
     if not version[0] or str(version[1]) != "7.4.1":
         raise RuntimeError("independent OpenNebula version/auth check failed")
     print("INDEPENDENT_ONE_VERSION=" + str(version[1]))
+    select_safe_target_host(one, auth)
 
     class QuietHandler(http.server.SimpleHTTPRequestHandler):
         def log_message(self, fmt, *args):
@@ -122,8 +156,14 @@ DESCRIPTION="LayerSentry {label} independent DR boot qualification"
 CPU="1"
 VCPU="1"
 MEMORY="256"
+TOPOLOGY=[
+  PIN_POLICY="CORE",
+  CORES="1",
+  SOCKETS="1",
+  THREADS="1"
+]
 DISK=[IMAGE_ID="{image_id}"]
-SCHED_REQUIREMENTS="NAME = \"ls-kvm1\""
+SCHED_REQUIREMENTS="NAME = \"{TARGET_HOST}\""
 """
             va = one.one.vm.allocate(auth, vm_template, False)
             if not va[0]:
