@@ -55,6 +55,7 @@ export const PRODUCT_PATHS = Object.freeze({
   PROTECTION_BACKUP_PLANS: '/protection/backup-plans',
   PROTECTION_RECOVERY_POINTS: '/protection/recovery-points',
   PROTECTION_SITE_RECOVERY: '/protection/site-recovery',
+  PROTECTION_REPLICATION: '/protection/replication',
   SECURITY: '/security',
   OPERATIONS: '/operations',
   SUPPORT: '/support',
@@ -152,6 +153,12 @@ const cloudProtection = [
     path: PRODUCT_PATHS.PROTECTION_SITE_RECOVERY,
     icon: HistoricShield,
     capability: CAPABILITY_IDS.SITE_RECOVERY_DR,
+  },
+  {
+    label: 'VM Replication',
+    path: PRODUCT_PATHS.PROTECTION_REPLICATION,
+    icon: HistoricShield,
+    capability: CAPABILITY_IDS.REPLICATION_V2,
   },
 ]
 
