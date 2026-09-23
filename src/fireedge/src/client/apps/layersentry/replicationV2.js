@@ -44,4 +44,19 @@ export const replicationAPI = {
       method: 'POST',
       body: JSON.stringify({ sessionId }),
     }),
+  putProtectionGroup: (group) =>
+    json('/protection-groups', {
+      method: 'POST',
+      body: JSON.stringify({ group }),
+    }),
+  captureProtectionGroup: (groupId) =>
+    json('/protection-groups/capture', {
+      method: 'POST',
+      body: JSON.stringify({ groupId }),
+    }),
+  protectionGroupCheckpoints: (groupId) =>
+    json('/protection-groups/checkpoints', {
+      method: 'POST',
+      body: JSON.stringify({ groupId }),
+    }),
 }
