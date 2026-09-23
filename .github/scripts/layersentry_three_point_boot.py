@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 from xmlrpc.client import ServerProxy
 from dissect.target import Target
 
-ROOT = pathlib.Path(os.environ["RUNNER_TEMP"]) / "vm220-three-point"
+ROOT = pathlib.Path(os.environ["RUNNER_TEMP"]) / os.environ.get("LAYERSENTRY_THREE_POINT_DIR", "three-point")
 AUTH_IMAGE = pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
 ENDPOINT = "http://10.250.10.10:2633/RPC2"
 HOST_HTTP_IP = "10.250.10.1"
@@ -148,31 +148,19 @@ SCHED_REQUIREMENTS="NAME = \"ls-kvm1\""
                 "restic_snapshot_id": point["restic_snapshot_id"],
             })
 
-            action = one.one.vm.action(auth, "terminate-hard", vm_id)
-            if not action[0]:
-                raise RuntimeError(f"{label} cleanup terminate failed: {str(action[1])[:300]}")
-            wait_vm_done(one, auth, vm_id)
-            created_vms.remove(vm_id)
-
-            deleted = one.one.image.delete(auth, image_id)
-            if not deleted[0]:
-                raise RuntimeError(f"{label} image cleanup failed: {str(deleted[1])[:300]}")
-            created_images.remove(image_id)
-            print(f"POINT_CLEANUP_PASS={label}")
+            # Preserve the running qualification VM and its image. The owner
+            # explicitly requested that no running VM be stopped or deleted.
+            print(f"POINT_PRESERVED={label} VM_ID={vm_id} IMAGE_ID={image_id}")
 
         (ROOT / "manoj-boot-results.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
         print("T10_4_THREE_POINT_INDEPENDENT_BOOT=PASS")
     finally:
-        for vm_id in list(created_vms):
-            try:
-                one.one.vm.action(auth, "terminate-hard", vm_id)
-            except Exception:
-                pass
-        for image_id in list(created_images):
-            try:
-                one.one.image.delete(auth, image_id)
-            except Exception:
-                pass
+        # Never stop/terminate/delete any VM from this qualification path.
+        # Preserve exact owned IDs so cleanup can be an explicit later action.
+        if created_vms:
+            print("PRESERVED_VM_IDS=" + ",".join(map(str, created_vms)))
+        if created_images:
+            print("PRESERVED_IMAGE_IDS=" + ",".join(map(str, created_images)))
         server.shutdown()
 
 if __name__ == "__main__":
