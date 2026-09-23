@@ -235,6 +235,18 @@ const PortalShell = ({ children, endpoints }) => {
         },
         '& .MuiInputLabel-root.Mui-focused': { color: colors.brand.primary },
         '& .MuiFormHelperText-root': { color: colors.text.muted },
+        '& .MuiSwitch-switchBase.Mui-checked': {
+          color: colors.brand.primary,
+          '& + .MuiSwitch-track': {
+            backgroundColor: colors.brand.primary,
+          },
+        },
+        '& .MuiCheckbox-root.Mui-checked, & .MuiRadio-root.Mui-checked': {
+          color: colors.brand.primary,
+        },
+        '& .MuiStepIcon-root.Mui-active, & .MuiStepIcon-root.Mui-completed': {
+          color: colors.brand.primary,
+        },
       }}
     >
       {mobileOpen && (
