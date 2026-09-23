@@ -299,9 +299,9 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
             ) : undefined
           }
         >
-          No LayerSentry Backup Datastore is configured. Backup Plans and
-          restore require qualified backup storage such as Restic or Rsync
-          before they can execute successfully.
+          No LayerSentry backup storage is configured. Backup Plans and restore
+          require qualified backup storage such as Restic or Rsync before they
+          can execute successfully.
         </Alert>
       )}
       {!isAdmin && (
