@@ -1,0 +1,85 @@
+name: Manoj LayerSentry Full UI Audit
+
+on:
+  push:
+    branches:
+      - qa/manoj-full-ui-audit-20260924
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  manoj-ui-audit:
+    runs-on: self-hosted
+    timeout-minutes: 75
+    defaults:
+      run:
+        working-directory: src/fireedge
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Require Manoj runner
+        working-directory: .
+        run: |
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME"
+          Write-Host "COMPUTERNAME=$env:COMPUTERNAME"
+          if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') {
+            throw "Refusing non-Manoj runner: $env:RUNNER_NAME"
+          }
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+
+      - name: Locked FireEdge install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Full LayerSentry regression suite
+        run: |
+          $tests = Get-ChildItem -Path tests/layersentry -Filter *.test.cjs | ForEach-Object { $_.FullName }
+          node --test $tests
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: FireEdge client lint
+        run: npm run lint-client
+
+      - name: FireEdge production client build
+        env:
+          NODE_ENV: production
+        run: npm run build-client
+
+      - name: Install ephemeral Playwright
+        run: npm install --no-save --package-lock=false playwright@1.55.0
+
+      - name: Install Chromium
+        run: npx playwright install chromium
+
+      - name: Build LayerSentry palette browser harness
+        run: npx webpack --config tests/layersentry/portal-browser-qualification/webpack.config.cjs
+
+      - name: Run LayerSentry palette browser audit
+        env:
+          QUALIFIED_HEAD: fc0a31befba406ede3d5eab0aa338ed0556d7fcf
+        run: node tests/layersentry/portal-browser-qualification/smoke.cjs
+
+      - name: Build actual VM-create browser harness
+        run: npx webpack --config tests/layersentry/manoj-vm-create-browser/webpack.config.cjs
+
+      - name: Run actual VM-create flow audit
+        env:
+          QUALIFIED_HEAD: fc0a31befba406ede3d5eab0aa338ed0556d7fcf
+        run: node tests/layersentry/manoj-vm-create-browser/smoke.cjs
+
+      - name: Upload Manoj UI evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: manoj-layersentry-full-ui-evidence
+          path: |
+            src/fireedge/tests/layersentry/portal-browser-qualification/evidence
+            src/fireedge/tests/layersentry/manoj-vm-create-browser/evidence
+          if-no-files-found: warn
