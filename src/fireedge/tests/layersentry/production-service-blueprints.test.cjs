@@ -265,6 +265,37 @@ test('heterogeneous storage is attached only to the native roles that own it', (
 })
 
 
+test('MongoDB PBM mode is distribution-specific and serialized', () => {
+  const community = api.getBlueprintById('mongodb-community')
+  const percona = api.getBlueprintById('percona-mongodb')
+  assert.deepEqual(api.getPbmBackupModeOptions(community), ['Logical'])
+  assert.deepEqual(api.getPbmBackupModeOptions(percona), [
+    'Logical',
+    'Physical',
+    'Incremental',
+  ])
+
+  const communityDraft = makeValid(community)
+  communityDraft.mongoPbmMode = 'Logical'
+  let compiled = api.compilePlatformDesiredState(communityDraft, community)
+  assert.equal(compiled.product_options.pbm_backup_mode, 'Logical')
+  assert.equal(api.validateStep(5, communityDraft, community).length, 0)
+
+  communityDraft.mongoPbmMode = 'Physical'
+  assert.ok(
+    api
+      .validateStep(5, communityDraft, community)
+      .some(({ message }) => /PBM backup mode/i.test(message))
+  )
+
+  const perconaDraft = makeValid(percona)
+  perconaDraft.mongoPbmMode = 'Physical'
+  compiled = api.compilePlatformDesiredState(perconaDraft, percona)
+  assert.equal(compiled.product_options.pbm_backup_mode, 'Physical')
+  assert.equal(api.validateStep(5, perconaDraft, percona).length, 0)
+})
+
+
 test('SQL Server product summary includes edition topology and HA fencing state', () => {
   const blueprint = api.getBlueprintById('mssql')
   const standalone = api.createDraft('mssql')
@@ -454,10 +485,12 @@ test('MongoDB Community exposes qualified PBM logical backup and PITR intent', (
 
   assert.equal(blueprint.supportsPitr, true)
   assert.equal(profile.mode, 'direct')
+  assert.deepEqual(api.getPbmBackupModeOptions(blueprint), ['Logical'])
   assert.match(profile.engine, /PBM.*logical.*PITR/i)
   assert.match(profile.note, /physical\/incremental.*not exposed/i)
   assert.equal(draft.backupEnabled, true)
   assert.equal(draft.pitr, true)
+  assert.equal(draft.mongoPbmMode, 'Logical')
 
   draft.backupRepositoryRef = 'pbm-primary-repository'
   draft.pitrWindowHours = 72
@@ -820,8 +853,8 @@ test('frontend native product-option ownership matches backend contract for all 
     'mysql-family': ['database_bootstrap','database_name'],
     mssql: ['database_bootstrap','database_name','fencing_profile_ref','listener_name'],
     mariadb: ['database_bootstrap','database_name'],
-    'mongodb-community': ['credential_scope_mode','database_name'],
-    'percona-mongodb': ['credential_scope_mode','database_name'],
+    'mongodb-community': ['credential_scope_mode','database_name','pbm_backup_mode'],
+    'percona-mongodb': ['credential_scope_mode','database_name','pbm_backup_mode'],
     ferretdb: ['database_name'],
     redis: ['persistence_policy'],
     valkey: ['persistence_policy'],
