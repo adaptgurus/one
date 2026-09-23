@@ -271,7 +271,7 @@ export function CreateVm() {
     if (!selectedCloneVm) return
     if (!canCloneVm(selectedCloneVm)) {
       enqueueError(
-        'OpenNebula 7.4 requires the source VM to be powered off before a full VM clone can be created.'
+        'LayerSentry requires the source VM to be powered off before a full VM clone can be created.'
       )
 
       return
@@ -399,7 +399,7 @@ export function CreateVm() {
           ) : (
             <Stack gap={2}>
               <Alert severity="warning">
-                OpenNebula 7.4.1 supports a full VM save/clone only while the source VM is powered off. Running customer VMs are listed here, but the clone action stays blocked until they are powered off.
+                LayerSentry supports a full VM save/clone only while the source VM is powered off. Running customer VMs are listed here, but the clone action stays blocked until they are powered off.
               </Alert>
               <Table
                 columns={cloneColumns}
