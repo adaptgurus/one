@@ -200,6 +200,21 @@ test('firewall network target uses LayerSentry wording and validates the selecte
   )
 })
 
+test('backup plan create flow uses Backup Storage wording', () => {
+  const step = read(
+    'src/modules/resources/BackupJobs/Forms/CreateForm/Steps/DatastoreTable/index.js'
+  )
+  const schema = read(
+    'src/modules/resources/BackupJobs/Forms/CreateForm/Steps/DatastoreTable/schema.js'
+  )
+
+  assert.match(step, /label: 'Backup Storage'/)
+  assert.match(schema, /label: 'Backup Storage'/)
+  assert.doesNotMatch(step, /T\.SelectDatastores/)
+  assert.doesNotMatch(schema, /T\.SelectDatastores/)
+  assert.match(schema, /DATASTORE_TYPES\.BACKUP\.value/)
+})
+
 test('LayerSentry forms and primary actions use one product palette', () => {
   const shell = read(
     'src/client/apps/layersentry/components/PortalShell.js'
