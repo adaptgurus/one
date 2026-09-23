@@ -267,7 +267,7 @@ def copy_repo():
     if p.returncode != 0 or archive.stat().st_size == 0:
         raise RuntimeError("failed to copy Restic repository: " + p.stderr.decode("utf-8", "replace")[:300])
     digest = hashlib.sha256(archive.read_bytes()).hexdigest()
-    (RUNNER_TEMP / "vm220-three-point-restic.tar.gz.sha256").write_text(digest + "  " + archive.name + "\n")
+    (RUNNER_TEMP / f"vm{VM_ID}-three-point-restic.tar.gz.sha256").write_text(digest + "  " + archive.name + "\n")
     copied = RUNNER_TEMP / "recovery-copy"
     shutil.rmtree(copied, ignore_errors=True)
     copied.mkdir()
@@ -382,6 +382,8 @@ def main():
         passfile.unlink(missing_ok=True)
         manifest = {
             "qualification": "T10.4-three-point-independent-dr",
+            "source_vm_name": SOURCE_NAME,
+            "source_vm_owned_by_qualification": True,
             "source_site": "tester",
             "recovery_site": "manoj",
             "source_vm_id": VM_ID,
