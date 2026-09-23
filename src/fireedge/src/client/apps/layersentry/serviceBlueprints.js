@@ -35,6 +35,10 @@ export const LICENSE_NOTICES = Object.freeze({
     'Percona Server for MongoDB uses MongoDB-derived source-available licensing for current releases. Treat it separately from OSI-approved OSS.',
   redis:
     'Redis licensing varies by release. The production catalog must pin the approved exact artifact and license rather than assuming one license across versions.',
+  mssql:
+    'Microsoft SQL Server production use requires the customer-selected licensed edition and a qualified Microsoft package repository / entitlement path.',
+  elasticsearch:
+    'Elasticsearch distribution licensing must be presented accurately for the exact artifact; catalog presence is not an OSI-open-source claim.',
 })
 
 export const BACKUP_PROFILES = Object.freeze({
@@ -55,6 +59,12 @@ export const BACKUP_PROFILES = Object.freeze({
     default: true,
     engine: 'mariadb-backup + binary logs',
     note: 'PITR uses qualified backup plus binary-log retention.',
+  },
+  mssql: {
+    mode: 'direct',
+    default: true,
+    engine: 'SQL Server native full/differential/log backups',
+    note: 'PITR requires an intact native backup and transaction-log chain; AG replication is not a backup.',
   },
   'mongodb-community': {
     mode: 'direct',
@@ -176,6 +186,12 @@ export const BACKUP_PROFILES = Object.freeze({
     engine: 'Coordinated DB + repository/object storage recovery',
     note: 'Database-only recovery is insufficient because repository/object state must remain consistent.',
   },
+  elasticsearch: {
+    mode: 'direct',
+    default: true,
+    engine: 'Elasticsearch snapshot repository',
+    note: 'Snapshot API recovery is the supported application backup path; live data-directory copies are not advertised as backup.',
+  },
   opensearch: {
     mode: 'direct',
     default: true,
@@ -225,6 +241,14 @@ export const CAPACITY_PROFILES = Object.freeze({
     growth: true,
     dataLabel: 'Expected database data (GiB)',
     loadLabel: 'Expected DB client connections',
+    defaults: [8, 32, 500, 1000, 25],
+  },
+  mssql: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected SQL Server data (GiB)',
+    loadLabel: 'Expected SQL client connections',
     defaults: [8, 32, 500, 1000, 25],
   },
   'mongodb-community': {
@@ -379,6 +403,14 @@ export const CAPACITY_PROFILES = Object.freeze({
     loadLabel: 'Expected concurrent web/Git clients',
     defaults: [4, 8, 0, 500, 0],
   },
+  elasticsearch: {
+    data: true,
+    load: true,
+    growth: true,
+    dataLabel: 'Expected indexed data (GiB)',
+    loadLabel: 'Expected concurrent indexing/search clients',
+    defaults: [8, 32, 1000, 500, 40],
+  },
   opensearch: {
     data: true,
     load: true,
@@ -518,6 +550,25 @@ export const FALLBACK_BLUEPRINTS = [
     recommendedTopology: '3-node InnoDB Cluster',
     workloads: ['OLTP', 'OLAP', 'Mixed'],
     defaultPort: 3306,
+    supportsPitr: true,
+  }),
+  catalogItem({
+    id: 'mssql',
+    category: 'Databases & Data',
+    name: 'Microsoft SQL Server',
+    icon: 'MS',
+    description:
+      'Licensed SQL Server with edition-aware Linux HA and native recovery.',
+    versions: ['2025', '2022', '2019'],
+    editions: ['Standard', 'Enterprise'],
+    topologies: [
+      'Standalone',
+      'Basic AG (2 SQL replicas + config-only quorum)',
+      '3-replica Availability Group',
+    ],
+    recommendedTopology: 'Standalone',
+    workloads: ['OLTP', 'OLAP', 'Mixed'],
+    defaultPort: 1433,
     supportsPitr: true,
   }),
   catalogItem({
@@ -852,6 +903,24 @@ export const FALLBACK_BLUEPRINTS = [
     supportsPitr: true,
   }),
   catalogItem({
+    id: 'elasticsearch',
+    category: 'Search & Observability',
+    name: 'Elasticsearch',
+    icon: 'ES',
+    description:
+      'Search/analytics with first-formation-safe cluster bootstrap and snapshot recovery.',
+    versions: ['9.5', '8.19'],
+    topologies: [
+      '3-node Production Cluster',
+      '3 masters + 3 data',
+      '3 masters + 6 data',
+    ],
+    recommendedTopology: '3-node Production Cluster',
+    workloads: ['Search', 'Logs', 'Analytics'],
+    defaultPort: 9200,
+    supportsPitr: false,
+  }),
+  catalogItem({
     id: 'opensearch',
     category: 'Search & Observability',
     name: 'OpenSearch',
@@ -910,6 +979,10 @@ export const FALLBACK_BLUEPRINTS = [
 const PRODUCT_DEFAULTS = {
   sqlBootstrap: 'Create initial application database',
   sqlDbName: 'appdb',
+  mssqlFencingRef: '',
+  elasticSecurity: 'LayerSentry managed security configuration',
+  elasticSecurityRef: '',
+  elasticKibana: false,
   mongoScopeMode: 'Create application credential scope',
   mongoDbName: 'appdb',
   ferretDbName: 'appdb',
