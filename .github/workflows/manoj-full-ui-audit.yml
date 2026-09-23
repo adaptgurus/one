@@ -4,7 +4,7 @@ name: Manoj LayerSentry Full UI Audit
 on:
   push:
     branches:
-      - qa/manoj-full-ui-audit-20260924
+      - qa/manoj-final-ui-audit-20260924
   workflow_dispatch:
 
 permissions:
