@@ -1108,6 +1108,10 @@ export const getEndpointOptions = (draft, blueprint) => {
       return standalone
         ? ['Direct service endpoint', 'Existing load balancer']
         : ['Existing load balancer']
+    case 'mssql':
+      return standalone
+        ? ['Direct service endpoint', 'Existing load balancer']
+        : ['SQL Server Pacemaker listener']
     case 'mongodb-community':
     case 'percona-mongodb':
       return ['Native multi-host / replica-set discovery']
@@ -1151,6 +1155,23 @@ export const getEndpointOptions = (draft, blueprint) => {
         : ['Existing load balancer']
     case 'jenkins':
       return ['Direct service endpoint']
+    case 'elasticsearch':
+      return ['Native node list']
+    case 'elasticsearch':
+      return [
+        vol('Elasticsearch data', 'Per Elasticsearch data/combined VM', d, '/var/lib/elasticsearch'),
+        vol('Elasticsearch logs', 'Per Elasticsearch VM', l, '/var/log/elasticsearch'),
+        ...(String(draft.topology || '').startsWith('3 masters +')
+          ? [
+              vol(
+                'Elasticsearch master state',
+                'Per dedicated master VM',
+                20,
+                '/var/lib/elasticsearch-master'
+              ),
+            ]
+          : []),
+      ]
     case 'opensearch':
       return ['Native node list']
     case 'prometheus':
@@ -1175,6 +1196,13 @@ const endpointIntentMode = (endpointMode) => {
 
 export const getTopologyOptions = (draft, blueprint) => {
   if (!blueprint) return []
+
+  if (blueprint.id === 'mssql') {
+    return draft.edition === 'Standard'
+      ? ['Standalone', 'Basic AG (2 SQL replicas + config-only quorum)']
+      : ['Standalone', '3-replica Availability Group']
+  }
+
   if (blueprint.id !== 'mysql-family') return blueprint.topologies
 
   if (draft.edition === 'Percona Server for MySQL') {
@@ -1200,6 +1228,11 @@ export const getTopologyOptions = (draft, blueprint) => {
 
 export const getRecommendedTopology = (draft, blueprint) => {
   if (!blueprint) return ''
+  if (blueprint.id === 'mssql') {
+    return draft.edition === 'Standard'
+      ? 'Basic AG (2 SQL replicas + config-only quorum)'
+      : '3-replica Availability Group'
+  }
   if (blueprint.id === 'mysql-family') {
     if (draft.edition === 'Percona Server for MySQL') {
       return '3-node Group Replication'
@@ -1485,6 +1518,17 @@ export const getStorageTemplate = (draft, blueprint) => {
       return [
         vol('Data', 'Per database VM', d, '/var/lib/mysql'),
         vol('Redo / binary log', 'Per database VM', l, '/var/lib/mysql-binlog'),
+      ]
+    case 'mssql':
+      return [
+        vol('SQL Server data', 'Per SQL replica VM', d, '/var/opt/mssql/data'),
+        vol('SQL Server log', 'Per SQL replica VM', l, '/var/opt/mssql/log'),
+        vol(
+          'SQL Server tempdb',
+          'Per SQL replica VM',
+          Math.max(20, Math.ceil(d * 0.15)),
+          '/var/opt/mssql/tempdb'
+        ),
       ]
     case 'mongodb-community':
     case 'percona-mongodb':
