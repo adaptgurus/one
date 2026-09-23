@@ -121,25 +121,18 @@ jobs:
         run: |
           $ErrorActionPreference='Continue'
           $ips = New-Object System.Collections.Generic.HashSet[string]
-          foreach($vm in Get-VM){
+          foreach($vm in (Get-VM)){
             foreach($a in (Get-VMNetworkAdapter -VM $vm -ErrorAction SilentlyContinue)){
               foreach($ip in $a.IPAddresses){
-                if($ip -match '^\d+\.\d+\.\d+\.\d+,'10.10.10.22','10.10.10.23','10.250.10.40')){[void]$ips.Add($ip)}
-          foreach($ip in ($ips | Sort-Object)){
-            foreach($port in @(22,2633,2616,9443)){
-              $r=Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
-              Write-Host "CONNECT ip=$ip port=$port tcp=$($r.TcpTestSucceeded)"
-            }
-          }
-          Write-Host '===HOST_STORAGE==='
-          Get-PSDrive -PSProvider FileSystem | ForEach-Object {
-            [pscustomobject]@{Name=$_.Name;FreeGB=[math]::Round($_.Free/1GB,1);UsedGB=[math]::Round($_.Used/1GB,1)}
-          } | Format-Table -AutoSize
- -and $ip -notmatch '^169\.254\.'){[void]$ips.Add($ip)}
+                if($ip -match '^\d+\.\d+\.\d+\.\d+$' -and $ip -notmatch '^169\.254\.'){
+                  [void]$ips.Add($ip)
+                }
               }
             }
           }
-          foreach($ip in @('10.10.10.21','10.10.10.22','10.10.10.23','10.250.10.40')){[void]$ips.Add($ip)}
+          foreach($ip in @('10.10.10.21','10.10.10.22','10.10.10.23','10.250.10.40')){
+            [void]$ips.Add($ip)
+          }
           foreach($ip in ($ips | Sort-Object)){
             foreach($port in @(22,2633,2616,9443)){
               $r=Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
@@ -148,5 +141,9 @@ jobs:
           }
           Write-Host '===HOST_STORAGE==='
           Get-PSDrive -PSProvider FileSystem | ForEach-Object {
-            [pscustomobject]@{Name=$_.Name;FreeGB=[math]::Round($_.Free/1GB,1);UsedGB=[math]::Round($_.Used/1GB,1)}
+            [pscustomobject]@{
+              Name=$_.Name
+              FreeGB=[math]::Round($_.Free/1GB,1)
+              UsedGB=[math]::Round($_.Used/1GB,1)
+            }
           } | Format-Table -AutoSize
