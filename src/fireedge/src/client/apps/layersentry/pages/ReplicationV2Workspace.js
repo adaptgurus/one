@@ -214,6 +214,20 @@ const ReplicationV2Workspace = () => {
     targetBackendCatalogBound
       ? allowedTargetBackends.includes(kind)
       : capabilities[kind.toLowerCase()] === true
+  const multiWorkloadGroups =
+    capabilities.multi_workload_protection_groups === true
+  const filesystemConsistency =
+    capabilities.filesystem_consistency === true
+  const applicationConsistency =
+    capabilities.application_consistency === true
+  const groupModeQualified =
+    groupMembers.length <= 1 ||
+    multiWorkloadGroups
+  const groupConsistencyQualified =
+    groupConsistency === 'CRASH_CONSISTENT' ||
+    (groupConsistency === 'FILESYSTEM_CONSISTENT' && filesystemConsistency) ||
+    (groupConsistency === 'APPLICATION_CONSISTENT' && applicationConsistency)
+
   const selectedBackend =
     backendChoice === 'AUTO'
       ? recommendedBackend(
@@ -453,13 +467,13 @@ const ReplicationV2Workspace = () => {
               <MenuItem value="CRASH_CONSISTENT">Crash consistent</MenuItem>
               <MenuItem
                 value="FILESYSTEM_CONSISTENT"
-                disabled={!capabilities.application_consistency}
+                disabled={!filesystemConsistency}
               >
                 Filesystem quiesced · coordinated group
               </MenuItem>
               <MenuItem
                 value="APPLICATION_CONSISTENT"
-                disabled={!capabilities.application_consistency}
+                disabled={!applicationConsistency}
               >
                 Application consistent · coordinated group
               </MenuItem>
@@ -830,8 +844,11 @@ const ReplicationV2Workspace = () => {
                     key={session.id}
                     value={session.id}
                     disabled={
-                      Boolean(groupId) &&
-                      session.protection_group_id !== groupId
+                      (Boolean(groupId) &&
+                        session.protection_group_id !== groupId) ||
+                      (!multiWorkloadGroups &&
+                        groupMembers.length >= 1 &&
+                        !groupMembers.includes(session.id))
                     }
                   >
                     {session.id} · VM {session.workload_id} · group{' '}
@@ -872,10 +889,10 @@ const ReplicationV2Workspace = () => {
               </Select>
             </FormControl>
           </Box>
-          <Alert severity="info" sx={{ mt: 1.5 }}>
-            Every member session must already use this exact protection-group ID.
-            The dependency DAG is validated and retained for recovery planning;
-            no failover action is exposed here.
+          <Alert severity={groupModeQualified ? 'info' : 'warning'} sx={{ mt: 1.5 }}>
+            {multiWorkloadGroups
+              ? 'Every member session must already use this exact protection-group ID. The dependency DAG is validated and retained for recovery planning; no failover action is exposed here.'
+              : 'A qualified multi-workload quiesce provider is not configured. This site can create only single-session crash-consistent protection groups; multi-session and filesystem/application consistency remain unavailable.'}
           </Alert>
           <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button
@@ -884,7 +901,9 @@ const ReplicationV2Workspace = () => {
                 actionBusy === 'group:configure' ||
                 !groupId.trim() ||
                 !groupName.trim() ||
-                groupMembers.length === 0
+                groupMembers.length === 0 ||
+                !groupModeQualified ||
+                !groupConsistencyQualified
               }
               onClick={async () => {
                 setError('')
@@ -926,7 +945,9 @@ const ReplicationV2Workspace = () => {
               disabled={
                 actionBusy === 'group:capture' ||
                 !groupId.trim() ||
-                groupMembers.length === 0
+                groupMembers.length === 0 ||
+                !groupModeQualified ||
+                !groupConsistencyQualified
               }
               onClick={async () => {
                 setError('')
