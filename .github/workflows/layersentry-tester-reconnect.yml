@@ -1,0 +1,29 @@
+name: LayerSentry Tester Reconnect
+
+on:
+  push:
+    branches:
+      - qa/layersentry-ui-browser-20260924
+
+permissions:
+  contents: read
+
+jobs:
+  reconnect-testser:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Require testser and restore Sentinel
+        shell: bash
+        run: |
+          set -euo pipefail
+          host="$(hostname)"
+          echo "HOSTNAME=$host"
+          if [ "$host" != "testser" ]; then
+            echo "Refusing non-testser runner: $host" >&2
+            exit 42
+          fi
+          sudo systemctl restart sentinelx-cloud-core
+          sudo systemctl is-active sentinelx-cloud-core
+          curl -fsS --max-time 10 http://10.10.10.21:2616/fireedge/layersentry/ >/dev/null
+          echo "TESTSER_RECONNECTED"
