@@ -1,0 +1,2 @@
+Request tester-only reconnect for LayerSentry GUI qualification.
+Target must identify as hostname testser; non-testser runners must refuse.
