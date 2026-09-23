@@ -4212,7 +4212,8 @@ const storageNodeRolesFor = (blueprint, storageRole, nodeRoles) => {
       return [
         ...new Set(
           nodeRoles.filter(
-            (role) => role === 'elasticsearch_data' || role === 'elasticsearch_combined'
+            (role) =>
+              role === 'elasticsearch_data' || role === 'elasticsearch_combined'
           )
         ),
       ]
