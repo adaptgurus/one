@@ -1,4 +1,5 @@
 name: Manoj LayerSentry Full UI Audit
+# QA-only exact-head validation on MANOJ-TEST-INST
 
 on:
   push:
