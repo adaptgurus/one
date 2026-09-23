@@ -25,8 +25,11 @@ import {
   InputBase,
   MenuItem,
   Select,
+  ThemeProvider,
   Tooltip,
   Typography,
+  createTheme,
+  useTheme,
 } from '@mui/material'
 import {
   BellNotification,
@@ -123,6 +126,162 @@ NavItem.propTypes = {
 }
 
 const PortalShell = ({ children, endpoints }) => {
+  const baseTheme = useTheme()
+  const layerSentryTheme = useMemo(
+    () =>
+      createTheme(baseTheme, {
+        palette: {
+          primary: {
+            main: colors.brand.primary,
+            dark: colors.brand.primaryHover,
+          },
+          info: { main: colors.status.info },
+          success: { main: colors.status.success },
+          warning: { main: colors.status.warning },
+          error: { main: colors.status.danger },
+        },
+        shape: { borderRadius: radius.sm },
+        components: {
+          MuiButton: {
+            styleOverrides: {
+              root: {
+                textTransform: 'none',
+                borderRadius: radius.sm,
+                fontWeight: 650,
+              },
+            },
+          },
+          MuiDialog: {
+            styleOverrides: {
+              paper: { borderRadius: radius.lg },
+            },
+          },
+          MuiOutlinedInput: {
+            styleOverrides: {
+              root: {
+                backgroundColor: colors.surface,
+                borderRadius: radius.sm,
+                color: colors.text.primary,
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: colors.borderStrong,
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: colors.brand.accent,
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: colors.brand.primary,
+                  borderWidth: 2,
+                },
+              },
+            },
+          },
+          MuiInputLabel: {
+            styleOverrides: {
+              root: {
+                '&.Mui-focused': { color: colors.brand.primary },
+              },
+            },
+          },
+          MuiFormHelperText: {
+            styleOverrides: {
+              root: { color: colors.text.muted },
+            },
+          },
+          MuiSwitch: {
+            styleOverrides: {
+              switchBase: {
+                '&.Mui-checked': {
+                  color: colors.brand.primary,
+                  '& + .MuiSwitch-track': {
+                    backgroundColor: colors.brand.primary,
+                  },
+                },
+              },
+            },
+          },
+          MuiCheckbox: {
+            styleOverrides: {
+              root: {
+                '&.Mui-checked': { color: colors.brand.primary },
+              },
+            },
+          },
+          MuiRadio: {
+            styleOverrides: {
+              root: {
+                '&.Mui-checked': { color: colors.brand.primary },
+              },
+            },
+          },
+          MuiStepIcon: {
+            styleOverrides: {
+              root: {
+                '&.Mui-active, &.Mui-completed': {
+                  color: colors.brand.primary,
+                },
+              },
+            },
+          },
+          MuiTabs: {
+            styleOverrides: {
+              indicator: { backgroundColor: colors.brand.primary },
+            },
+          },
+          MuiTab: {
+            styleOverrides: {
+              root: {
+                textTransform: 'none',
+                color: colors.text.secondary,
+                fontWeight: 650,
+                '&.Mui-selected': { color: colors.brand.primary },
+              },
+            },
+          },
+          MuiLinearProgress: {
+            styleOverrides: {
+              root: { backgroundColor: colors.status.infoSoft },
+              bar: { backgroundColor: colors.brand.primary },
+            },
+          },
+          MuiCircularProgress: {
+            styleOverrides: {
+              root: { color: colors.brand.primary },
+            },
+          },
+          MuiSlider: {
+            styleOverrides: {
+              root: { color: colors.brand.primary },
+            },
+          },
+          MuiLink: {
+            styleOverrides: {
+              root: { color: colors.brand.primary },
+            },
+          },
+          MuiPaginationItem: {
+            styleOverrides: {
+              root: {
+                '&.Mui-selected': {
+                  color: colors.brand.primary,
+                  backgroundColor: colors.status.infoSoft,
+                },
+              },
+            },
+          },
+          MuiToggleButton: {
+            styleOverrides: {
+              root: {
+                '&.Mui-selected': {
+                  color: colors.brand.primary,
+                  backgroundColor: colors.status.infoSoft,
+                },
+              },
+            },
+          },
+        },
+      }),
+    [baseTheme]
+  )
   const history = useHistory()
   const location = useLocation()
   const { view, views = {} } = useViews()
@@ -192,8 +351,9 @@ const PortalShell = ({ children, endpoints }) => {
   }
 
   return (
-    <Box
-      sx={{
+    <ThemeProvider theme={layerSentryTheme}>
+      <Box
+        sx={{
         minHeight: '100vh',
         backgroundColor: colors.background,
         color: colors.text.primary,
@@ -632,8 +792,9 @@ const PortalShell = ({ children, endpoints }) => {
             </Alert>
           )}
         </Box>
+        </Box>
       </Box>
-    </Box>
+    </ThemeProvider>
   )
 }
 
