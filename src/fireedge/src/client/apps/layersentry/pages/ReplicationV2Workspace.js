@@ -674,7 +674,10 @@ const ReplicationV2Workspace = () => {
                           <Button
                             size="small"
                             variant="outlined"
-                            disabled={actionBusy === key}
+                            disabled={
+                              actionBusy === key ||
+                              !capabilities.recovery_materialization
+                            }
                             onClick={() =>
                               testRecovery(session.id, checkpoint.id)
                             }
