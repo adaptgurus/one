@@ -60,9 +60,16 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           Write-Host '===NETWORKS==='
-          Get-VMNetworkAdapter -All | Sort-Object VMName,Name |
-            Select-Object VMName,Name,SwitchName,MacAddress,Status,IPAddresses |
-            Format-Table -AutoSize -Wrap
+          $netrows=@()
+          foreach($vm in (Get-VM | Sort-Object Name)){
+            foreach($a in (Get-VMNetworkAdapter -VM $vm -ErrorAction SilentlyContinue)){
+              $netrows += [pscustomobject]@{
+                VM=$vm.Name; Name=$a.Name; Switch=$a.SwitchName; MAC=$a.MacAddress;
+                Status=$a.Status; IPs=($a.IPAddresses -join ',')
+              }
+            }
+          }
+          $netrows | Format-Table -AutoSize -Wrap
           Write-Host '===SWITCHES==='
           Get-VMSwitch | Select-Object Name,SwitchType,NetAdapterInterfaceDescription | Format-Table -AutoSize
 
@@ -76,20 +83,60 @@ jobs:
           Get-ChildItem -LiteralPath $root -Force |
             Select-Object Name,Length,LastWriteTime,Attributes |
             Sort-Object Name | Format-Table -AutoSize
+          Write-Host '===MIGRATION_CANDIDATES==='
+          foreach($name in @('ls-hv-migration-source','ls-hv-migration-source2','ls-hv-migration-source3','ls-hv-migration-source4','ls-migration-source-test')){
+            $vm=Get-VM -Name $name -ErrorAction SilentlyContinue
+            if(-not $vm){continue}
+            Write-Host "CANDIDATE name=$name state=$($vm.State) gen=$($vm.Generation) cpu=$($vm.ProcessorCount) mem_bytes=$($vm.MemoryAssigned) checkpoints=$((Get-VMSnapshot -VMName $name -ErrorAction SilentlyContinue | Measure-Object).Count)"
+            foreach($d in (Get-VMHardDiskDrive -VMName $name -ErrorAction SilentlyContinue)){
+              if(-not $d.Path){continue}
+              $v=Get-VHD -Path $d.Path -ErrorAction SilentlyContinue
+              Write-Host "CANDIDATE_DISK vm=$name path=$($d.Path) format=$($v.VhdFormat) type=$($v.VhdType) size=$($v.Size) file=$($v.FileSize) parent=$($v.ParentPath)"
+            }
+            foreach($a in (Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)){
+              Write-Host "CANDIDATE_NIC vm=$name switch=$($a.SwitchName) mac=$($a.MacAddress) ips=$($a.IPAddresses -join ',')"
+            }
+          }
+          Write-Host '===MIGRATION_SOURCE_TREE==='
+          $ms='C:\LayerSentryLab\migration-source'
+          if(Test-Path $ms){
+            Get-ChildItem -LiteralPath $ms -Recurse -Force -ErrorAction SilentlyContinue |
+              Select-Object -First 200 FullName,Length,LastWriteTime |
+              Format-Table -AutoSize -Wrap
+          }
           Write-Host '===MIGRATION_ASSETS==='
           Get-ChildItem -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue |
             Where-Object { $_.FullName -match '(?i)(oneswap|migration|virtio|hyperv|qcow2)' } |
-            Select-Object -First 150 FullName,Length,LastWriteTime |
+            Select-Object -First 200 FullName,Length,LastWriteTime |
             Format-Table -AutoSize -Wrap
+          Write-Host '===SOURCE_HOST_SSH==='
+          Get-Service sshd -ErrorAction SilentlyContinue | Select-Object Name,Status,StartType | Format-Table -AutoSize
+          Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object {$_.IPAddress -notmatch '^127\.'} |
+            Select-Object InterfaceAlias,IPAddress,PrefixLength |
+            Format-Table -AutoSize
 
       - name: Read-only connectivity matrix
         shell: powershell
         run: |
           $ErrorActionPreference='Continue'
           $ips = New-Object System.Collections.Generic.HashSet[string]
-          foreach($a in Get-VMNetworkAdapter -All){
-            foreach($ip in $a.IPAddresses){
-              if($ip -match '^\d+\.\d+\.\d+\.\d+$' -and $ip -notmatch '^169\.254\.'){[void]$ips.Add($ip)}
+          foreach($vm in Get-VM){
+            foreach($a in (Get-VMNetworkAdapter -VM $vm -ErrorAction SilentlyContinue)){
+              foreach($ip in $a.IPAddresses){
+                if($ip -match '^\d+\.\d+\.\d+\.\d+,'10.10.10.22','10.10.10.23','10.250.10.40')){[void]$ips.Add($ip)}
+          foreach($ip in ($ips | Sort-Object)){
+            foreach($port in @(22,2633,2616,9443)){
+              $r=Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
+              Write-Host "CONNECT ip=$ip port=$port tcp=$($r.TcpTestSucceeded)"
+            }
+          }
+          Write-Host '===HOST_STORAGE==='
+          Get-PSDrive -PSProvider FileSystem | ForEach-Object {
+            [pscustomobject]@{Name=$_.Name;FreeGB=[math]::Round($_.Free/1GB,1);UsedGB=[math]::Round($_.Used/1GB,1)}
+          } | Format-Table -AutoSize
+ -and $ip -notmatch '^169\.254\.'){[void]$ips.Add($ip)}
+              }
             }
           }
           foreach($ip in @('10.10.10.21','10.10.10.22','10.10.10.23','10.250.10.40')){[void]$ips.Add($ip)}
