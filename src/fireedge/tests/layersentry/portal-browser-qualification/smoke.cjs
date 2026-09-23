@@ -1,14 +1,34 @@
 /* SPDX-License-Identifier: Apache-2.0 */
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
+const http = require('node:http')
 const path = require('node:path')
 const { chromium } = require('playwright')
 
 const expectedBlue = 'rgb(37, 99, 235)'
 const expectedSuccess = 'rgb(4, 120, 87)'
 const expectedSuccessSoft = 'rgb(236, 253, 245)'
+const distRoot = path.join(__dirname, 'dist')
+
+const serve = (request, response) => {
+  const urlPath = request.url === '/' ? '/index.html' : request.url
+  const file = path.join(distRoot, urlPath.split('?')[0])
+  if (!file.startsWith(distRoot) || !fs.existsSync(file)) {
+    response.writeHead(404)
+    response.end('not found')
+    return
+  }
+  response.writeHead(200, {
+    'content-type': file.endsWith('.js')
+      ? 'application/javascript'
+      : 'text/html; charset=utf-8',
+  })
+  response.end(fs.readFileSync(file))
+}
 
 const run = async () => {
+  const server = http.createServer(serve)
+  await new Promise((resolve) => server.listen(4174, '127.0.0.1', resolve))
   const output = path.join(__dirname, 'evidence')
   fs.mkdirSync(output, { recursive: true })
 
@@ -266,6 +286,7 @@ const run = async () => {
     )
   } finally {
     await browser.close()
+    await new Promise((resolve) => server.close(resolve))
   }
 }
 
