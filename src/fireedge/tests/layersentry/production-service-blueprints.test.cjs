@@ -77,8 +77,8 @@ const makeValid = (blueprint) => {
   return draft
 }
 
-test('production-service catalog has 27 fail-closed product families and 8 steps', () => {
-  assert.equal(api.FALLBACK_BLUEPRINTS.length, 27)
+test('production-service catalog has 29 fail-closed product families and 8 steps', () => {
+  assert.equal(api.FALLBACK_BLUEPRINTS.length, 29)
   assert.equal(api.WIZARD_STEPS.length, 8)
   assert.deepEqual(api.WIZARD_STEPS, [
     'Choose Service',
@@ -262,6 +262,66 @@ test('heterogeneous storage is attached only to the native roles that own it', (
       }
     }
   }
+})
+
+
+test('SQL Server and Elasticsearch production flows enforce native topology safety', () => {
+  const sql = api.getBlueprintById('mssql')
+  const sqlDraft = api.createDraft('mssql')
+  assert.equal(sqlDraft.topology, 'Standalone')
+  assert.deepEqual(api.getTopologyOptions({ ...sqlDraft, edition: 'Standard' }, sql), [
+    'Standalone',
+    'Basic AG (2 SQL replicas + config-only quorum)',
+  ])
+  assert.deepEqual(api.getTopologyOptions({ ...sqlDraft, edition: 'Enterprise' }, sql), [
+    'Standalone',
+    '3-replica Availability Group',
+  ])
+
+  sqlDraft.topology = 'Basic AG (2 SQL replicas + config-only quorum)'
+  sqlDraft.mssqlFencingRef = 'fencing://redfish/lab'
+  sqlDraft.domain = 'prod.example.internal'
+  sqlDraft.serviceFqdn = 'mssql.prod.example.internal'
+  sqlDraft.backupRepositoryRef = 'backup-repository-primary'
+  sqlDraft.tlsCertificateRef = 'secret://tests/mssql/tls'
+  sqlDraft.credentialRef = 'secret://tests/mssql/credential'
+  const sqlPlan = api.getArchitecturePlan(sqlDraft, sql)
+  const sqlDesired = api.compilePlatformDesiredState(sqlDraft, sql)
+  assert.equal(sqlPlan.dedicated, 3)
+  assert.deepEqual(sqlDesired.network.nodes.map(({ role }) => role), [
+    'mssql_primary_candidate',
+    'mssql_secondary_candidate',
+    'mssql_config_only',
+  ])
+  assert.equal(sqlDesired.product_options.fencing_profile_ref, 'fencing://redfish/lab')
+  assert.equal(sqlDesired.product_options.listener_name, 'mssql.prod.example.internal')
+  for (const volume of sqlDesired.storage) {
+    assert.equal(volume.node_roles.includes('mssql_config_only'), false, volume.role)
+  }
+
+  const es = api.getBlueprintById('elasticsearch')
+  const esDraft = makeValid(es)
+  esDraft.topology = '3 masters + 3 data'
+  esDraft.storage = api.getStorageTemplate(esDraft, es)
+  const esPlan = api.getArchitecturePlan(esDraft, es)
+  const esDesired = api.compilePlatformDesiredState(esDraft, es)
+  assert.equal(esPlan.dedicated, 6)
+  assert.deepEqual(esDesired.network.nodes.map(({ role }) => role), [
+    'elasticsearch_master',
+    'elasticsearch_master',
+    'elasticsearch_master',
+    'elasticsearch_data',
+    'elasticsearch_data',
+    'elasticsearch_data',
+  ])
+  assert.deepEqual(
+    esDesired.storage.find(({ role }) => role === 'data').node_roles,
+    ['elasticsearch_data']
+  )
+  assert.deepEqual(
+    esDesired.storage.find(({ role }) => role === 'master_state').node_roles,
+    ['elasticsearch_master']
+  )
 })
 
 test('linked dependencies are reference-only and never add hidden VMs', () => {
@@ -540,7 +600,7 @@ test('every service family declares explicit recovery ownership', () => {
 })
 
 
-test('implemented React wizard renders the 27-family catalog and blocks incomplete progression', async () => {
+test('implemented React wizard renders the 29-family catalog and blocks incomplete progression', async () => {
   const Module = require('node:module')
   const { JSDOM } = require('jsdom')
   const React = require('react')
@@ -656,9 +716,9 @@ test('implemented React wizard renders the 27-family catalog and blocks incomple
     })
 
     assert.equal(
-      document.querySelectorAll('[data-testid^="service-"]').length,
-      27,
-      'all 27 service cards must render in the implemented React wizard'
+      document.querySelectorAll('[data-testid^="service-"]').length
+      29,
+      'all 29 service cards must render in the implemented React wizard'
     )
     assert.match(root.textContent, /Choose a production service/)
     assert.doesNotMatch(
@@ -727,10 +787,11 @@ test('implemented React wizard renders the 27-family catalog and blocks incomple
 })
 
 
-test('frontend native product-option ownership matches backend contract for all 27 families', () => {
+test('frontend native product-option ownership matches backend contract for all 29 families', () => {
   const expected = {
     postgresql: ['database_bootstrap','initial_databases','pgbouncer','pgbouncer_placement','pg_stat_statements','postgis','postgis_target','postgis_databases'],
     'mysql-family': ['database_bootstrap','database_name'],
+    mssql: ['database_bootstrap','database_name','fencing_profile_ref','listener_name'],
     mariadb: ['database_bootstrap','database_name'],
     'mongodb-community': ['credential_scope_mode','database_name'],
     'percona-mongodb': ['credential_scope_mode','database_name'],
@@ -752,13 +813,14 @@ test('frontend native product-option ownership matches backend contract for all 
     openbao: ['seal_mode','seal_ref'],
     jenkins: ['agent_source','agent_ref'],
     forgejo: ['git_ssh','git_ssh_port'],
+    elasticsearch: ['security_config_mode','security_config_ref','kibana_enabled'],
     opensearch: ['security_config_mode','security_config_ref'],
     prometheus: ['history_mode','history_ref','scrape_mode','scrape_ref','alerting_mode','alertmanager_ref'],
     grafana: ['datasource_mode','datasource_ref','session_mode','session_ref','alerting_ha_mode','alerting_ha_ref'],
     alloy: ['config_mode','config_ref'],
   }
 
-  assert.equal(Object.keys(expected).length, 27)
+  assert.equal(Object.keys(expected).length, 29)
   assert.deepEqual(Object.keys(api.NATIVE_PRODUCT_OPTION_BINDINGS).sort(), Object.keys(expected).sort())
   for (const [id, keys] of Object.entries(expected)) {
     assert.deepEqual(
@@ -1291,9 +1353,9 @@ test('runtime service-blueprint handlers delegate tuple authority and fail close
     const catalogResponse = await invokeAsync(handlers.list)
     assert.equal(catalogResponse.id, 200)
     assert.equal(catalogResponse.data.failClosed, true)
-    assert.equal(catalogResponse.data.items.length, 27)
+    assert.equal(catalogResponse.data.items.length, 29)
     assert.equal(catalogResponse.data.capabilities.available, true)
-    assert.equal(catalogResponse.data.capabilities.supportedBlueprints.length, 27)
+    assert.equal(catalogResponse.data.capabilities.supportedBlueprints.length, 29)
     assert.ok(
       catalogResponse.data.items.every(
         ({ sourceRoleAvailable }) => sourceRoleAvailable === true
