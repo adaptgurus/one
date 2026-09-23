@@ -3704,7 +3704,6 @@ const platformNodeAddresses = (draft) =>
     .map((value) => value.trim())
     .filter(Boolean)
 
-
 const repeatPlatformRole = (role, count) =>
   Array.from({ length: Math.max(0, Number(count) || 0) }, () => role)
 
