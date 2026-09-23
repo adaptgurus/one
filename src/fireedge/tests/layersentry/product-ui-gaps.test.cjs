@@ -159,3 +159,83 @@ test('LayerSentry customer UI does not expose OpenNebula branding', () => {
     )
   }
 })
+
+
+test('LayerSentry forms and primary actions use one product palette', () => {
+  const shell = read(
+    'src/client/apps/layersentry/components/PortalShell.js'
+  )
+  const tokens = read('src/client/apps/layersentry/theme/tokens.js')
+
+  assert.match(tokens, /mobileDrawer:/)
+  assert.match(tokens, /scrim:/)
+  assert.match(shell, /MuiButton-containedPrimary/)
+  assert.match(shell, /backgroundColor: colors\\.brand\\.primary/)
+  assert.match(shell, /backgroundColor: colors\\.brand\\.primaryHover/)
+  assert.match(shell, /MuiOutlinedInput-root/)
+  assert.match(shell, /borderColor: colors\\.borderStrong/)
+  assert.match(shell, /borderColor: colors\\.brand\\.primary/)
+  assert.match(shell, /MuiInputLabel-root\\.Mui-focused/)
+  assert.match(shell, /backgroundColor: colors\\.overlay\\.scrim/)
+  assert.match(shell, /colors\\.shadow\\.mobileDrawer/)
+  assert.doesNotMatch(shell, /rgba\\(/)
+})
+
+test('customer storage wording stays simple and hides provider datastore jargon', () => {
+  const portal = read('src/client/apps/layersentry/Portal.js')
+  const bridge = read(
+    'src/client/apps/layersentry/components/ResourceBridge.js'
+  )
+  const backup = read(
+    'src/client/apps/layersentry/pages/BackupStorageWorkspace.js'
+  )
+  const protection = read(
+    'src/client/apps/layersentry/pages/ProtectionWorkspace.js'
+  )
+
+  assert.match(bridge, /label: 'Storage Pools'/)
+  assert.match(bridge, /label: 'Technology'/)
+  assert.doesNotMatch(bridge, /label: 'Datastores'/)
+  assert.doesNotMatch(portal, /Backup Datastore/)
+  assert.doesNotMatch(backup, /Backup Datastore/)
+  assert.doesNotMatch(protection, /Backup Datastore/)
+  assert.match(backup, /label="Backup Storage"/)
+})
+
+test('LayerSentry text and status colors meet readable contrast targets', () => {
+  const tokens = read('src/client/apps/layersentry/theme/tokens.js')
+  const value = (name) => {
+    const match = tokens.match(new RegExp(name + ": '(#[0-9A-Fa-f]{6})'"))
+    assert.ok(match, 'missing color token ' + name)
+    return match[1]
+  }
+  const luminance = (hex) => {
+    const channels = [1, 3, 5].map((offset) =>
+      parseInt(hex.slice(offset, offset + 2), 16) / 255
+    )
+    const linear = channels.map((channel) =>
+      channel <= 0.04045
+        ? channel / 12.92
+        : Math.pow((channel + 0.055) / 1.055, 2.4)
+    )
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+  }
+  const ratio = (foreground, background) => {
+    const a = luminance(foreground)
+    const b = luminance(background)
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+  }
+
+  for (const [foreground, background] of [
+    ['successText', 'successSoft'],
+    ['warningText', 'warningSoft'],
+    ['dangerText', 'dangerSoft'],
+    ['infoText', 'infoSoft'],
+  ]) {
+    assert.ok(
+      ratio(value(foreground), value(background)) >= 4.5,
+      foreground + ' must meet 4.5:1 contrast'
+    )
+  }
+  assert.ok(ratio(value('focus'), value('surface')) >= 3)
+})
