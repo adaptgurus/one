@@ -9,6 +9,13 @@ on:
       - .github/workflows/layersentry-three-point-independent-dr.yml
       - .github/scripts/layersentry_three_point_source.py
       - .github/scripts/layersentry_three_point_boot.py
+  pull_request:
+    branches:
+      - fix/layersentry-vm-network-backup-20260921
+    paths:
+      - .github/workflows/layersentry-three-point-independent-dr.yml
+      - .github/scripts/layersentry_three_point_source.py
+      - .github/scripts/layersentry_three_point_boot.py
   workflow_dispatch:
 
 permissions:
