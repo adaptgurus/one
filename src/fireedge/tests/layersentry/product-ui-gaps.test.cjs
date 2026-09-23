@@ -206,6 +206,29 @@ test('customer storage wording stays simple and hides provider datastore jargon'
   assert.match(backup, /label="Backup Storage"/)
 })
 
+test('LayerSentry application keeps literal colors in the token module only', () => {
+  const app = path.join(root, 'src/client/apps/layersentry')
+  const files = []
+  const visit = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const target = path.join(dir, entry.name)
+      if (entry.isDirectory()) visit(target)
+      else if (entry.isFile() && entry.name.endsWith('.js')) files.push(target)
+    }
+  }
+  visit(app)
+
+  for (const file of files) {
+    if (file.endsWith(path.join('theme', 'tokens.js'))) continue
+    const source = fs.readFileSync(file, 'utf8')
+    assert.doesNotMatch(
+      source,
+      /#[0-9A-Fa-f]{3,8}\b|rgba?\(|hsla?\(/i,
+      'literal color escaped LayerSentry tokens in ' + path.relative(root, file)
+    )
+  }
+})
+
 test('LayerSentry text and status colors meet readable contrast targets', () => {
   const tokens = read('src/client/apps/layersentry/theme/tokens.js')
   const value = (name) => {
