@@ -40,15 +40,18 @@ module.exports = {
   resolve: {
     alias: {
       '@FeaturesModule': path.resolve(__dirname, 'features-stub.js'),
-      'client/apps/layersentry/navigation$': path.resolve(
+      'client/apps/layersentry/navigation': path.resolve(
         __dirname,
         'navigation-stub.js'
       ),
-      'client/apps/layersentry/capabilities$': path.resolve(
+      'client/apps/layersentry/capabilities': path.resolve(
         __dirname,
         'capabilities-stub.js'
       ),
-      client: path.resolve(__dirname, '../../../src/client'),
+      'client/apps/layersentry/theme/tokens': path.resolve(
+        __dirname,
+        '../../../src/client/apps/layersentry/theme/tokens.js'
+      ),
     },
     extensions: ['.js', '.jsx'],
   },
