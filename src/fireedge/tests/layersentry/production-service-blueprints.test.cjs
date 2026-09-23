@@ -182,6 +182,7 @@ test('backup ownership is product-specific and never genericized', () => {
   for (const id of [
     'postgresql',
     'mysql-family',
+    'mongodb-community',
     'redis',
     'opensearch',
     'openbao',
@@ -223,6 +224,24 @@ test('backup ownership is product-specific and never genericized', () => {
     assert.equal(profile.mode, 'none', id)
     assert.equal(draft.backupEnabled, false, id)
   }
+})
+
+
+test('MongoDB Community exposes qualified PBM logical backup and PITR intent', () => {
+  const blueprint = api.getBlueprintById('mongodb-community')
+  const profile = api.getBackupProfile(blueprint)
+  const draft = api.createDraft('mongodb-community')
+
+  assert.equal(blueprint.supportsPitr, true)
+  assert.equal(profile.mode, 'direct')
+  assert.match(profile.engine, /PBM.*logical.*PITR/i)
+  assert.match(profile.note, /physical\/incremental.*not exposed/i)
+  assert.equal(draft.backupEnabled, true)
+  assert.equal(draft.pitr, true)
+
+  draft.backupRepositoryRef = 'pbm-primary-repository'
+  draft.pitrWindowHours = 72
+  assert.deepEqual(api.validateStep(5, draft, blueprint), [])
 })
 
 test('advanced network validation rejects bad static-IP, DNS and port input', () => {
