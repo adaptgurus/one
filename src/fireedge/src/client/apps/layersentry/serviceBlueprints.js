@@ -2918,16 +2918,6 @@ export const getProductConfigFields = (draft, blueprint) => {
     return fields
   }
 
-  if (id === 'mssql') {
-    return (
-      draft.edition +
-      ' · ' +
-      draft.topology +
-      (draft.topology !== 'Standalone'
-        ? ' · fencing: ' + (draft.mssqlFencingRef || 'required')
-        : '')
-    )
-  }
   if (id === 'mysql-family' || id === 'mariadb') {
     fields.push(
       select('sqlBootstrap', 'Application database', [
@@ -4777,6 +4767,16 @@ export const getProductSummary = (draft, blueprint) => {
       'Create initial database(s) during deployment'
         ? draft.initialDatabases
         : 'create later')
+    )
+  }
+  if (id === 'mssql') {
+    return (
+      draft.edition +
+      ' · ' +
+      draft.topology +
+      (draft.topology !== 'Standalone'
+        ? ' · fencing: ' + (draft.mssqlFencingRef || 'required')
+        : '')
     )
   }
   if (id === 'mysql-family' || id === 'mariadb') {
