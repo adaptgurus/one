@@ -1,6 +1,11 @@
 name: Tester Recovery Read-Only Preflight
 
 on:
+  push:
+    branches:
+      - dr-threepoint-ssh-20260924
+    paths:
+      - ".github/workflows/tester-recovery-readonly.yml"
   pull_request:
     branches:
       - fix/layersentry-vm-network-backup-20260921
@@ -49,6 +54,52 @@ jobs:
             Select-Object Name,State,ProcessorCount,@{n='MemoryAssignedGB';e={[math]::Round($_.MemoryAssigned/1GB,2)}},Uptime |
             Sort-Object Name |
             Format-Table -AutoSize
+
+      - name: Read-only independent OpenNebula KVM2 identities
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $script = @'
+          import pathlib
+          import xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+
+          auth_image = pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
+          target = Target.open(str(auth_image))
+          auth = target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          one = ServerProxy("http://10.250.10.10:2633/RPC2", allow_none=True)
+          hp = one.one.hostpool.info(auth, -2, -1, -1)
+          if not hp[0]:
+              raise SystemExit("host pool query failed")
+          pool = ET.fromstring(hp[1])
+          hosts = [h for h in pool.findall("HOST") if (h.findtext("NAME") or "").strip()=="ls-kvm2"]
+          if len(hosts)!=1:
+              raise SystemExit(f"ls-kvm2 host count={len(hosts)}")
+          h=hosts[0]
+          ids=[int((n.text or "-1").strip()) for n in h.findall("./VMS/ID") if (n.text or "").strip()]
+          rows=[]
+          for vmid in ids:
+              info=one.one.vm.info(auth,vmid,False)
+              if not info[0]:
+                  rows.append({"id":vmid,"error":str(info[1])[:200]})
+                  continue
+              vm=ET.fromstring(info[1])
+              histories=vm.findall("./HISTORY_RECORDS/HISTORY")
+              rows.append({
+                  "id":vmid,
+                  "name":(vm.findtext("NAME") or "").strip(),
+                  "state":int(vm.findtext("STATE") or -1),
+                  "lcm_state":int(vm.findtext("LCM_STATE") or -1),
+                  "host": histories[-1].findtext("HOSTNAME") if histories else "",
+              })
+          print("KVM2_RUNNING_VMS=" + str(h.findtext("./HOST_SHARE/RUNNING_VMS") or ""))
+          print("KVM2_VM_DIAGNOSTICS=" + repr(rows))
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'kvm2_readonly.py'
+          Set-Content -Path $path -Value $script -Encoding UTF8
+          & 'C:\LayerSentryLab\tools\Python313\python.exe' $path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Read-only runner and network inventory
         shell: powershell
