@@ -13,6 +13,9 @@ const Actions = {
   CHECKPOINTS: 'replicationv2.checkpoints',
   CLONE: 'replicationv2.clone',
   REBASELINE: 'replicationv2.rebaseline',
+  PUT_PROTECTION_GROUP: 'replicationv2.putProtectionGroup',
+  CAPTURE_PROTECTION_GROUP: 'replicationv2.captureProtectionGroup',
+  PROTECTION_GROUP_CHECKPOINTS: 'replicationv2.protectionGroupCheckpoints',
 }
 
 module.exports = {
@@ -75,6 +78,24 @@ module.exports = {
       httpMethod: POST,
       auth: true,
       params: { sessionId: { from: postBody } },
+    },
+    [Actions.PUT_PROTECTION_GROUP]: {
+      path: basepath + '/protection-groups',
+      httpMethod: POST,
+      auth: true,
+      params: { group: { from: postBody } },
+    },
+    [Actions.CAPTURE_PROTECTION_GROUP]: {
+      path: basepath + '/protection-groups/capture',
+      httpMethod: POST,
+      auth: true,
+      params: { groupId: { from: postBody } },
+    },
+    [Actions.PROTECTION_GROUP_CHECKPOINTS]: {
+      path: basepath + '/protection-groups/checkpoints',
+      httpMethod: POST,
+      auth: true,
+      params: { groupId: { from: postBody } },
     },
   },
 }
