@@ -98,11 +98,13 @@ const Portal = ({ endpoints }) => {
               legacyPath: '/vm/create',
               returnTo: PRODUCT_PATHS.COMPUTE,
               steps: [
-                'Choose Source',
-                'Configuration',
-                'Access',
-                'Resources',
-                'Protection',
+                'Basics',
+                'Operating System',
+                'Size',
+                'Storage',
+                'Network',
+                'Security',
+                'Review',
               ],
             })
           }
