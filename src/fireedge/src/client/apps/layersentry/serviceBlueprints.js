@@ -4250,6 +4250,44 @@ const storageNodeRolesFor = (blueprint, storageRole, nodeRoles) => {
   if (!nodeRoles.length) return []
   const id = blueprint?.id
 
+  if (id === 'mssql') {
+    if (
+      storageRole === 'data' ||
+      storageRole === 'log' ||
+      storageRole === 'tempdb'
+    ) {
+      return [
+        ...new Set(nodeRoles.filter((role) => role !== 'mssql_config_only')),
+      ]
+    }
+  }
+
+  if (id === 'elasticsearch') {
+    if (storageRole === 'data') {
+      return [
+        ...new Set(
+          nodeRoles.filter(
+            (role) =>
+              role === 'elasticsearch_data' ||
+              role === 'elasticsearch_combined'
+          )
+        ),
+      ]
+    }
+    if (storageRole === 'logs') return [...new Set(nodeRoles)]
+    if (storageRole === 'master_state') {
+      return [
+        ...new Set(
+          nodeRoles.filter(
+            (role) =>
+              role === 'elasticsearch_master' ||
+              role === 'elasticsearch_combined'
+          )
+        ),
+      ]
+    }
+  }
+
   if (id === 'mongodb-community' || id === 'percona-mongodb') {
     if (storageRole === 'data' || storageRole === 'journal') {
       return [...new Set(nodeRoles.filter((role) => role !== 'mongos'))]
