@@ -29,9 +29,17 @@ jobs:
         run: |
           $ErrorActionPreference = 'Continue'
           Write-Host "=== WSL STATUS ==="
-          wsl.exe --status
+          & wsl.exe --status 2>&1 | Out-Host
+          $wslStatus = $LASTEXITCODE
           Write-Host "=== WSL DISTROS ==="
-          wsl.exe -l -v
+          & wsl.exe -l -v 2>&1 | Out-Host
+          $wslList = $LASTEXITCODE
+          if ($wslStatus -ne 0 -or $wslList -ne 0) {
+            Write-Host "WSL_UNAVAILABLE_OR_UNCONFIGURED=YES"
+          } else {
+            Write-Host "WSL_AVAILABLE=YES"
+          }
+          $global:LASTEXITCODE = 0
 
       - name: Read-only Hyper-V VM inventory
         shell: powershell
