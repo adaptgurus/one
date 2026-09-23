@@ -59,8 +59,8 @@ export const BACKUP_PROFILES = Object.freeze({
   'mongodb-community': {
     mode: 'direct',
     default: true,
-    engine: 'Qualified MongoDB Community backup / snapshot workflow',
-    note: 'Application-level PITR is not advertised until an exact qualified recovery chain exists.',
+    engine: 'Percona Backup for MongoDB (PBM) logical backup + PITR',
+    note: 'MongoDB Community uses PBM logical backup plus PITR only when the exact PBM/MongoDB tuple is qualified; physical/incremental PBM backup is not exposed.',
   },
   'percona-mongodb': {
     mode: 'direct',
@@ -289,7 +289,7 @@ export const FALLBACK_BLUEPRINTS = [
     recommendedTopology: '3-node Replica Set',
     workloads: ['Transactional', 'Document', 'Mixed'],
     defaultPort: 27017,
-    supportsPitr: false,
+    supportsPitr: true,
   }),
   catalogItem({
     id: 'percona-mongodb',
