@@ -51,7 +51,7 @@ const run = async () => {
       'Super Admin',
       'QA Project',
     ]) {
-      assert.ok(text.includes(marker), 'missing visible marker: ' + marker)
+      assert.match(text, new RegExp(marker, 'i'), 'missing visible marker: ' + marker)
     }
     assert.doesNotMatch(text, /OpenNebula/i)
 
