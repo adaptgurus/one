@@ -26,7 +26,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useEffect, useMemo, useState } from 'react'
-import { VmAPI, ZoneAPI } from '@FeaturesModule'
+import { VmAPI } from '@FeaturesModule'
 import {
   MetricCard,
   PageFrame,
@@ -101,11 +101,11 @@ const dateText = (value) => {
 
 const ReplicationV2Workspace = () => {
   const vmQuery = VmAPI.useGetVmsQuery({ extended: true })
-  const zoneQuery = ZoneAPI.useGetZonesQuery()
   const vms = toArray(vmQuery.data)
-  const zones = toArray(zoneQuery.data)
 
   const [capabilities, setCapabilities] = useState({})
+  const [localSiteId, setLocalSiteId] = useState('')
+  const [targetSites, setTargetSites] = useState([])
   const [sessions, setSessions] = useState([])
   const [details, setDetails] = useState({})
   const [error, setError] = useState('')
@@ -166,6 +166,8 @@ const ReplicationV2Workspace = () => {
     ])
     const sessionList = sessionPayload?.sessions || []
     setCapabilities(caps?.capabilities || {})
+    setLocalSiteId(caps?.local_site_id || '')
+    setTargetSites(caps?.target_site_ids || [])
     setSessions(sessionList)
     await loadSessionDetails(sessionList)
   }
@@ -177,6 +179,8 @@ const ReplicationV2Workspace = () => {
         if (!active) return
         const sessionList = sessionPayload?.sessions || []
         setCapabilities(caps?.capabilities || {})
+        setLocalSiteId(caps?.local_site_id || '')
+        setTargetSites(caps?.target_site_ids || [])
         setSessions(sessionList)
         await loadSessionDetails(sessionList)
       })
@@ -204,7 +208,7 @@ const ReplicationV2Workspace = () => {
       id: `vm-${selectedVm.ID}-to-${targetSite}`,
       protection_group_id: protectionGroupId.trim() || `vm-${selectedVm.ID}`,
       workload_id: String(selectedVm.ID),
-      source_site_id: 'current',
+      source_site_id: localSiteId,
       target_site_id: String(targetSite),
       backend: selectedBackend,
       disks: disks.map(({ label: _label, ...disk }) => disk),
@@ -222,6 +226,7 @@ const ReplicationV2Workspace = () => {
     disks,
     retention,
     protectionGroupId,
+    localSiteId,
     selectedBackend,
     selectedVm,
     targetSite,
@@ -373,9 +378,9 @@ const ReplicationV2Workspace = () => {
               label="Recovery site"
               onChange={(e) => setTargetSite(e.target.value)}
             >
-              {zones.map((zone) => (
-                <MenuItem key={zone.ID} value={`zone:${zone.ID}`}>
-                  {zone.NAME || `Zone ${zone.ID}`}
+              {targetSites.map((site) => (
+                <MenuItem key={site} value={site}>
+                  {site}
                 </MenuItem>
               ))}
             </Select>
@@ -425,11 +430,17 @@ const ReplicationV2Workspace = () => {
               onChange={(e) => setConsistency(e.target.value)}
             >
               <MenuItem value="CRASH_CONSISTENT">Crash consistent</MenuItem>
-              <MenuItem value="FILESYSTEM_CONSISTENT">
-                Filesystem quiesced
+              <MenuItem
+                value="FILESYSTEM_CONSISTENT"
+                disabled={!capabilities.application_consistency}
+              >
+                Filesystem quiesced · coordinated group
               </MenuItem>
-              <MenuItem value="APPLICATION_CONSISTENT">
-                Application consistent
+              <MenuItem
+                value="APPLICATION_CONSISTENT"
+                disabled={!capabilities.application_consistency}
+              >
+                Application consistent · coordinated group
               </MenuItem>
             </Select>
           </FormControl>
@@ -451,6 +462,19 @@ const ReplicationV2Workspace = () => {
           />
         </Box>
 
+        {!targetSites.length && (
+          <Alert severity="warning" sx={{ mt: 1.5 }}>
+            No LayerSentry replication target site is configured. Configure the
+            remote site/transport before enabling protection.
+          </Alert>
+        )}
+        {consistency !== 'CRASH_CONSISTENT' && (
+          <Alert severity="info" sx={{ mt: 1.5 }}>
+            Filesystem/application consistency is produced only by a coordinated
+            protection-group capture using the qualified quiesce provider.
+          </Alert>
+        )}
+
         <Box
           sx={{
             mt: 2,
@@ -470,7 +494,8 @@ const ReplicationV2Workspace = () => {
             {selectedBackend
               ? backendLabel[selectedBackend]
               : 'No qualified DR backend available'}{' '}
-            · target checkpoint RPO {secondsToText(checkpointSeconds)}.
+            · {localSiteId || 'unconfigured source site'} → {targetSite || 'no target site'} ·
+            target checkpoint RPO {secondsToText(checkpointSeconds)}.
           </Typography>
           {disks.map((disk) => (
             <Typography
@@ -805,19 +830,25 @@ const ReplicationV2Workspace = () => {
                 onChange={(e) => setGroupConsistency(e.target.value)}
               >
                 <MenuItem value="CRASH_CONSISTENT">Crash consistent</MenuItem>
-                <MenuItem value="FILESYSTEM_CONSISTENT">
-                  Filesystem quiesced
-                </MenuItem>
-                <MenuItem value="APPLICATION_CONSISTENT">
-                  Application consistent
-                </MenuItem>
+                <MenuItem
+                value="FILESYSTEM_CONSISTENT"
+                disabled={!capabilities.application_consistency}
+              >
+                Filesystem quiesced
+              </MenuItem>
+              <MenuItem
+                value="APPLICATION_CONSISTENT"
+                disabled={!capabilities.application_consistency}
+              >
+                Application consistent
+              </MenuItem>
               </Select>
             </FormControl>
           </Box>
           <Alert severity="info" sx={{ mt: 1.5 }}>
             Every member session must already use this exact protection-group ID.
-            Dependency ordering is enforced by the coordinator API; no failover
-            action is exposed here.
+            The dependency DAG is validated and retained for recovery planning;
+            no failover action is exposed here.
           </Alert>
           <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button
