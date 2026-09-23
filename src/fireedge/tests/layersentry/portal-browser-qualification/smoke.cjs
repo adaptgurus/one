@@ -119,12 +119,35 @@ const run = async () => {
         .closest('.MuiFormControl-root')
       const outline = root.querySelector('.MuiOutlinedInput-notchedOutline')
       const label = root.querySelector('.MuiInputLabel-root')
+      const matchingRules = []
+      for (const sheet of [...document.styleSheets]) {
+        try {
+          for (const rule of [...(sheet.cssRules || [])]) {
+            const cssText = rule.cssText || ''
+            if (
+              cssText.includes('focus-within') ||
+              cssText.includes('MuiInputLabel-root.Mui-focused')
+            ) {
+              matchingRules.push(cssText.slice(0, 800))
+            }
+          }
+        } catch (error) {
+          matchingRules.push('stylesheet-unreadable:' + error.message)
+        }
+      }
       return {
         outlineColor: getComputedStyle(outline).borderColor,
         outlineWidth: getComputedStyle(outline).borderWidth,
         labelColor: getComputedStyle(label).color,
+        labelClass: label.className,
+        rootClass: root.className,
+        rootFocusWithin: root.matches(':focus-within'),
+        activeTag: document.activeElement?.tagName || '',
+        activeClass: document.activeElement?.className || '',
+        matchingRules,
       }
     })
+    console.log('FOCUS_DIAGNOSTIC=' + JSON.stringify(focused))
     assert.equal(focused.outlineColor, expectedBlue)
     assert.equal(focused.outlineWidth, '2px')
     assert.equal(focused.labelColor, expectedBlue)
