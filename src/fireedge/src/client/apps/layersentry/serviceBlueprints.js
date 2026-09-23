@@ -1228,11 +1228,7 @@ export const getTopologyOptions = (draft, blueprint) => {
 
 export const getRecommendedTopology = (draft, blueprint) => {
   if (!blueprint) return ''
-  if (blueprint.id === 'mssql') {
-    return draft.edition === 'Standard'
-      ? 'Basic AG (2 SQL replicas + config-only quorum)'
-      : '3-replica Availability Group'
-  }
+  if (blueprint.id === 'mssql') return 'Standalone'
   if (blueprint.id === 'mysql-family') {
     if (draft.edition === 'Percona Server for MySQL') {
       return '3-node Group Replication'
@@ -2601,6 +2597,32 @@ const getBaseArchitecturePlan = (draft, blueprint) => {
     )
   }
 
+  if (id === 'elasticsearch') {
+    fields.push(
+      select('elasticSecurity', 'Security configuration', [
+        'LayerSentry managed security configuration',
+        'Existing security configuration secret reference',
+      ])
+    )
+    if (
+      draft.elasticSecurity ===
+      'Existing security configuration secret reference'
+    ) {
+      fields.push(
+        text('elasticSecurityRef', 'Security configuration reference')
+      )
+    }
+    fields.push({
+      key: 'elasticKibana',
+      label: 'Install Kibana companion',
+      type: 'switch',
+      helper:
+        'Optional companion only; Elasticsearch cluster lifecycle remains independent.',
+    })
+
+    return fields
+  }
+
   if (id === 'opensearch') {
     const dataNodes = topology.indexOf('6 data') >= 0 ? 6 : 3
 
@@ -2881,6 +2903,28 @@ export const getProductConfigFields = (draft, blueprint) => {
           text('postgisDatabases', 'Existing/restored database name(s)')
         )
       }
+    }
+
+    return fields
+  }
+
+  if (id === 'mssql') {
+    fields.push(
+      select('sqlBootstrap', 'Application database', [
+        'Create initial application database',
+        'Create database later',
+      ])
+    )
+    if (draft.sqlBootstrap === 'Create initial application database') {
+      fields.push(text('sqlDbName', 'Initial application database name'))
+    }
+    if (draft.topology !== 'Standalone') {
+      fields.push(
+        text('mssqlFencingRef', 'Qualified fencing / STONITH profile reference', {
+          helper:
+            'Production Pacemaker HA is blocked without an explicit, tested fencing profile.',
+        })
+      )
     }
 
     return fields
@@ -3302,7 +3346,7 @@ export const getProductConfigErrors = (draft, blueprint) => {
   const id = blueprint.id
 
   if (
-    (id === 'mysql-family' || id === 'mariadb') &&
+    (id === 'mysql-family' || id === 'mariadb' || id === 'mssql') &&
     draft.sqlBootstrap === 'Create initial application database' &&
     !dbNamePattern.test(String(draft.sqlDbName || '').trim())
   ) {
@@ -3318,6 +3362,16 @@ export const getProductConfigErrors = (draft, blueprint) => {
   ) {
     errors.push(
       'Enter the MongoDB application database / credential scope name.'
+    )
+  }
+
+  if (
+    id === 'mssql' &&
+    draft.topology !== 'Standalone' &&
+    !nonEmpty(draft.mssqlFencingRef)
+  ) {
+    errors.push(
+      'SQL Server Pacemaker HA requires a qualified fencing / STONITH profile reference.'
     )
   }
 
@@ -3477,6 +3531,17 @@ export const getProductConfigErrors = (draft, blueprint) => {
   ) {
     errors.push(
       'Forgejo Git-over-SSH requires a valid TCP port between 1 and 65535.'
+    )
+  }
+
+  if (
+    id === 'elasticsearch' &&
+    draft.elasticSecurity ===
+      'Existing security configuration secret reference' &&
+    !nonEmpty(draft.elasticSecurityRef)
+  ) {
+    errors.push(
+      'Elasticsearch existing security configuration requires a secret/config reference.'
     )
   }
 
