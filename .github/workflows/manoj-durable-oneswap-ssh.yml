@@ -1,0 +1,110 @@
+name: Manoj Durable OneSwap SSH Authority
+
+on:
+  push:
+    branches:
+      - qual/hyperv-migration-manoj-20260924
+    paths:
+      - '.github/workflows/manoj-durable-oneswap-ssh.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-durable-oneswap-ssh
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw 'wrong runner'}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'wrong host'}
+          if((Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop).State -ne 'Running'){throw 'source not Running'}
+          if((Get-VM -Name 'ls-appliance-durable-qual' -ErrorAction Stop).State -ne 'Running'){throw 'durable appliance not Running'}
+          Write-Host 'BOUND=PASS'
+
+      - name: Resolve presented host key against stored pins
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.42'
+          $root='C:\LayerSentryLab\qualification'
+          $scan=Join-Path $env:RUNNER_TEMP 'durable-keyscan.txt'
+          & ssh-keyscan.exe -T 3 -t ed25519,rsa $ip 2>$null | Set-Content -LiteralPath $scan -Encoding ascii
+          if(-not(Test-Path $scan) -or (Get-Item $scan).Length -eq 0){throw 'ssh-keyscan returned no host key'}
+          Write-Host 'PRESENTED_HOST_KEYS:'
+          & ssh-keygen.exe -lf $scan | ForEach-Object {Write-Host $_}
+
+          $present=@{}
+          foreach($line in Get-Content $scan){
+            $p=$line.Trim().Split(' ',[System.StringSplitOptions]::RemoveEmptyEntries)
+            if($p.Count -ge 3){$present["$($p[1]) $($p[2])"]=$true}
+          }
+          $matches=@()
+          foreach($file in @(Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue | Where-Object {$_.Name -like 'known_hosts*'})){
+            foreach($line in Get-Content -LiteralPath $file.FullName -ErrorAction SilentlyContinue){
+              $t=$line.Trim()
+              if(-not $t -or $t.StartsWith('#')){continue}
+              $p=$t.Split(' ',[System.StringSplitOptions]::RemoveEmptyEntries)
+              if($p.Count -ge 3){
+                $key="$($p[1]) $($p[2])"
+                if($present.ContainsKey($key)){
+                  Write-Host "PIN_MATCH file=$($file.FullName) stored_host=$($p[0])"
+                  $matches += [pscustomobject]@{File=$file.FullName;KeyType=$p[1];KeyData=$p[2]}
+                }
+              }
+            }
+          }
+          if($matches.Count -eq 0){throw 'presented durable appliance host key does not match any stored pin'}
+          $known=Join-Path $env:RUNNER_TEMP 'durable-known_hosts'
+          $matches | Select-Object -Unique KeyType,KeyData | ForEach-Object {"$ip $($_.KeyType) $($_.KeyData)"} | Set-Content -LiteralPath $known -Encoding ascii
+          "DURABLE_KNOWN=$known" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "DURABLE_IP=$ip" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'DURABLE_HOSTKEY_PIN=PASS'
+
+      - name: Resolve existing pinned login
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe -ErrorAction Stop).Source
+          $candidates=@(
+            [pscustomobject]@{User='ci';Key='C:\LayerSentryLab\qualification\oneswap-seed\id_ed25519'},
+            [pscustomobject]@{User='ci';Key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'},
+            [pscustomobject]@{User='layersentry-bootstrap';Key='C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519'},
+            [pscustomobject]@{User='debian';Key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'},
+            [pscustomobject]@{User='opc';Key='C:\LayerSentryLab\qualification\dr-maint-key'}
+          )
+          $selected=$null
+          foreach($c in $candidates){
+            if(-not(Test-Path $c.Key)){continue}
+            Write-Host "LOGIN_CANDIDATE user=$($c.User) key=$($c.Key)"
+            & $ssh -o BatchMode=yes -o ConnectTimeout=4 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:DURABLE_KNOWN" -o IdentitiesOnly=yes -i $c.Key "$($c.User)@$env:DURABLE_IP" "hostname; id -un"
+            if($LASTEXITCODE -eq 0){$selected=$c;break}
+          }
+          if(-not $selected){throw 'no existing pinned qualification login authenticated to durable appliance'}
+          "DURABLE_USER=$($selected.User)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "DURABLE_KEY=$($selected.Key)" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "DURABLE_LOGIN=PASS user=$($selected.User) key=$($selected.Key)"
+
+      - name: Read-only OneSwap capability check
+        shell: powershell
+        run: |
+          $ssh=(Get-Command ssh.exe).Source
+          $remote=@'
+          set -e
+          echo "HOST=$(hostname) USER=$(id -un)"
+          command -v oneswap-hyperv || true
+          command -v virt-v2v || true
+          command -v virt-v2v-in-place || true
+          for p in /etc/one/oneswap.yaml /etc/layersentry/oneswapd/config.json; do [ -f "$p" ] && echo "CONFIG_PRESENT=$p"; done
+          for s in layersentry-oneswapd oneswapd; do systemctl is-active "$s" 2>/dev/null && echo "SERVICE_ACTIVE=$s" || true; done
+          echo DURABLE_ONESWAP_READONLY=PASS
+          '@
+          & $ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:DURABLE_KNOWN" -o IdentitiesOnly=yes -i $env:DURABLE_KEY "$env:DURABLE_USER@$env:DURABLE_IP" $remote
+          if($LASTEXITCODE -ne 0){throw 'durable appliance capability check failed'}
