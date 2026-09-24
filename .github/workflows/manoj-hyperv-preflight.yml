@@ -65,7 +65,7 @@ jobs:
           $appliance='10.250.10.32'
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
           $op='manoj-hv-ls-migration-source-test-20260924'
-          $cmd="sudo /usr/bin/oneswap-hyperv ls-migration-source-test --hot --preflight --operation-id $op --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --qemu-ga 2>&1"
+          $cmd="sudo /usr/bin/oneswap-hyperv ls-migration-source-test --hot --preflight --operation-id $op --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --qemu-ga --datastore 1 2>&1"
           $out=& ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@$appliance" $cmd
           $rc=$LASTEXITCODE
           $out | ForEach-Object {Write-Host ('PREFLIGHT_OUT=' + $_)}
