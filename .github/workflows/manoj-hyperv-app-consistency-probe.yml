@@ -15,42 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  probe:
+  superseded:
+    if: false
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 10
     steps:
-      - name: Inspect production-checkpoint prerequisites read-only
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
-          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
-          $name='ls-migration-source-test'
-          $vm=Get-VM -Name $name -ErrorAction Stop
-          if($vm.State -ne 'Running'){throw "Source must remain Running: $($vm.State)"}
-          Write-Host "VM_CHECKPOINT_TYPE=$($vm.CheckpointType)"
-          Write-Host "VM_AUTOMATIC_CHECKPOINTS=$($vm.AutomaticCheckpointsEnabled)"
-          Write-Host "VM_GENERATION=$($vm.Generation)"
-          Write-Host "VM_VERSION=$($vm.Version)"
-          $ints=@(Get-VMIntegrationService -VMName $name -ErrorAction Stop)
-          foreach($i in $ints){
-            Write-Host ("INTEGRATION name={0} enabled={1} primary={2} secondary={3}" -f $i.Name,$i.Enabled,$i.PrimaryStatusDescription,$i.SecondaryStatusDescription)
-          }
-          $drives=@(Get-VMHardDiskDrive -VMName $name -ErrorAction Stop | Sort-Object ControllerNumber,ControllerLocation)
-          foreach($d in $drives){
-            $v=Get-VHD -Path $d.Path -ErrorAction Stop
-            Write-Host ("DISK path={0} controller={1}:{2}:{3} id={4} type={5} size={6}" -f $d.Path,$d.ControllerType,$d.ControllerNumber,$d.ControllerLocation,$v.DiskIdentifier,$v.VhdType,$v.Size)
-          }
-          Write-Host 'APP_CONSISTENCY_PREREQ_PROBE=PASS'
-
-      - name: Verify source invariant
-        if: always()
-        shell: powershell
-        run: |
-          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
-          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
-          Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
-          Write-Host "SOURCE_AFTER_CHECKPOINTS=$n"
-          if($vm.State -ne 'Running'){throw 'probe changed source state'}
-          if($n -ne 0){throw 'probe found/created user checkpoint'}
-          Write-Host 'SOURCE_INVARIANT=PASS'
+      - run: echo superseded-after-source-off
