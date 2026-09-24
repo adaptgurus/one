@@ -94,6 +94,65 @@ jobs:
           & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" $cmd
           if($LASTEXITCODE -ne 0){throw 'PREPARED admission failed'}
 
+      - name: Require current OpenNebula target capacity before shutdown
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $beforeText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:ONESWAP_BLOCKS_BEFORE_B64))
+          $before=@($beforeText -split [Environment]::NewLine | Where-Object {$_})
+          $after=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          if($LASTEXITCODE -ne 0){throw 'appliance block inventory failed'}
+          $new=@($after | Where-Object {$before -notcontains $_})
+          if($new.Count -ne 1){throw "Expected one authority disk; found $($new.Count)"}
+          $dev='/dev/'+$new[0]
+          $script=@'
+          set -euo pipefail
+          dev="__DEV__"
+          auth=""
+          for p in /var/lib/one/.one/one_auth /etc/one/one_auth; do
+            exists=$(sudo guestfish --ro -a "$dev" -i exists "$p" 2>/dev/null || echo false)
+            if [ "$exists" = "true" ]; then auth=$(sudo guestfish --ro -a "$dev" -i cat "$p"); break; fi
+          done
+          [ -n "$auth" ]
+          tmp=$(mktemp)
+          trap 'rm -f "$tmp" /tmp/ls-host-capacity.xml' EXIT
+          printf '%s\n' "$auth" > "$tmp"
+          chmod 600 "$tmp"
+          export ONE_AUTH="$tmp"
+          export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
+          onehost list --xml > /tmp/ls-host-capacity.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          root=ET.parse('/tmp/ls-host-capacity.xml').getroot()
+          need_cpu=200
+          need_mem=4294967296
+          eligible=[]
+          for h in root.findall('HOST'):
+              hid=h.findtext('ID') or ''
+              name=h.findtext('NAME') or ''
+              state=int(h.findtext('STATE') or '-1')
+              share=h.find('HOST_SHARE')
+              max_cpu=int(share.findtext('MAX_CPU') or '0') if share is not None else 0
+              used_cpu=int(share.findtext('CPU_USAGE') or '0') if share is not None else 0
+              max_mem=int(share.findtext('MAX_MEM') or '0') if share is not None else 0
+              used_mem=int(share.findtext('MEM_USAGE') or '0') if share is not None else 0
+              free_cpu=max_cpu-used_cpu
+              free_mem=max_mem-used_mem
+              print(f'TARGET_HOST id={hid} name={name} state={state} free_cpu={free_cpu} free_mem={free_mem} max_cpu={max_cpu} max_mem={max_mem}')
+              if free_cpu >= need_cpu and free_mem >= need_mem:
+                  eligible.append((hid,name,state,free_cpu,free_mem))
+          if not eligible:
+              raise SystemExit('TARGET_CAPACITY_BLOCKED: no host has 2 vCPU/4GiB free')
+          print('TARGET_CAPACITY_CANDIDATES='+','.join(x[1] for x in eligible))
+          print('TARGET_CAPACITY_GATE=PASS')
+          PY
+          '@
+          $script=$script.Replace('__DEV__',$dev)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Target capacity gate failed; refusing source shutdown'}
+
       - name: Run OneSwap final RCT commit and import
         shell: powershell
         run: |
