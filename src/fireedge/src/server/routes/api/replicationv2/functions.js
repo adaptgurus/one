@@ -343,7 +343,7 @@ const drEnvironmentNetworks = (
     res,
     next,
     platformRequest(
-      { method: 'GET', path: '/v1/dr/environment-networks' },
+      { method: 'GET', path: '/v1/replication-product/environment-networks' },
       userData,
       oneConnection
     )
@@ -367,7 +367,7 @@ const drPairSite = (
     res,
     next,
     platformRequest(
-      { method: 'POST', path: '/v1/dr/site-pairs', data: request },
+      { method: 'POST', path: '/v1/replication-product/site-pairs', data: request },
       userData,
       oneConnection
     )
@@ -395,7 +395,7 @@ const drManagementBackupPolicies = (
       {
         method: 'GET',
         path:
-          '/v1/dr/management-backup-policies?dc=' +
+          '/v1/replication-product/management-backup-policies?dc=' +
           encodeURIComponent(dc) +
           '&dr=' +
           encodeURIComponent(dr),
@@ -427,9 +427,7 @@ const drVMCheckpoints = (
       {
         method: 'GET',
         path:
-          '/v1/dr/protection-groups/' +
-          encodeURIComponent(groupId) +
-          '/vm-checkpoints?site=' +
+          '/v1/replication-product/vm-checkpoints?site=' +
           encodeURIComponent(siteId),
       },
       userData,
@@ -458,7 +456,7 @@ const drPutRecoveryMapping = (
     platformRequest(
       {
         method: 'POST',
-        path: '/v1/dr/recovery-mappings',
+        path: '/v1/replication-product/recovery-mappings',
         data: request,
       },
       userData,
@@ -488,7 +486,7 @@ const drGetRecoveryMapping = (
       {
         method: 'GET',
         path:
-          '/v1/dr/protection-groups/' +
+          '/v1/replication-product/' +
           encodeURIComponent(groupId) +
           '/recovery-mappings/' +
           encodeURIComponent(siteId),
