@@ -1,0 +1,135 @@
+name: Manoj HyperV Stale PREPARED Cleanup
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-stale-prepared-cleanup.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-stale-prepared-cleanup
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Prove source and Hyper-V baseline are safe to rebuild
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source must be Running: $($vm.State)"}
+          $snaps=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue)
+          if($snaps.Count -ne 0){throw "Source has $($snaps.Count) user-visible checkpoints"}
+          $ns='root\virtualization\v2'
+          $refs=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'" -ErrorAction Stop)
+          $cs=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem -Filter "Name='$($vm.VMId.Guid)'"
+          $recovery=@($cs | Get-CimAssociatedInstance -Association Msvm_SnapshotOfVirtualSystem -ResultClassName Msvm_VirtualSystemSettingData | Where-Object {$_.VirtualSystemType -eq 'Microsoft:Hyper-V:Snapshot:Recovery'})
+          Write-Host "STALE_REBUILD_REFERENCE_COUNT=$($refs.Count)"
+          Write-Host "STALE_REBUILD_RECOVERY_COUNT=$($recovery.Count)"
+          if($refs.Count -ne 0){throw 'RCT reference still exists; stale PREPARED cleanup is unsafe'}
+          if($recovery.Count -ne 0){throw 'Recovery checkpoint still exists; stale PREPARED cleanup is unsafe'}
+          $export='C:\LayerSentryMigration\layersentry-hot-manoj-hv-ls-migration-source-test-20260924'
+          Write-Host "STALE_REBUILD_EXPORT_PRESENT=$(Test-Path -LiteralPath $export)"
+          if(Test-Path -LiteralPath $export){throw 'Operation export tree still exists; reconcile it before local PREPARED cleanup'}
+          Write-Host 'STALE_PREPARED_SOURCE_GUARD=PASS'
+
+      - name: Prepare restricted appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-stale-prepared.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Remove only invalid operation PREPARED directory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          operation="manoj-hv-ls-migration-source-test-20260924"
+          ruby -rdigest -ryaml -rjson -e '
+            op=ARGV[0]
+            cfg=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=(cfg["work_dir"]||cfg[:work_dir]||"/var/tmp").to_s
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_")
+            suffix=Digest::SHA256.hexdigest(op)[0,16]
+            dir=File.expand_path(File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}"))
+            state=File.join(dir,"state.json")
+            root=File.expand_path(File.join(work,"oneswap-hyperv-hot"))
+            unless dir.start_with?(root+File::SEPARATOR)
+              abort("operation directory escaped durable-state root")
+            end
+            unless File.basename(dir)=="#{safe}-#{suffix}"
+              abort("operation directory leaf mismatch")
+            end
+            abort("durable PREPARED state missing") unless File.file?(state)
+            s=JSON.parse(File.read(state))
+            puts "STALE_STATE_PATH=#{state}"
+            puts "STALE_STATE_PHASE=#{s["phase"]}"
+            puts "STALE_STATE_REFERENCE=#{s["reference_point_id"]}"
+            puts "STALE_STATE_SOURCE=#{s["source_vm_id"]}"
+            abort("state is not PREPARED") unless s["phase"]=="PREPARED"
+            abort("source id mismatch") unless s["source_vm_id"].to_s.downcase=="52baa8a1-675f-4225-8f37-66a60933b30c"
+            abort("cutover already started") if s.key?("cutover_started_at") || s.key?("source_off_at")
+            abort("target import already started") if s.key?("template_id") || s.key?("import_started_at") || s.key?("imported_at")
+            imports=Array(s["image_imports"])
+            abort("image import records already exist") unless imports.empty?
+            disks=Array(s["disks"])
+            abort("prepared disk count mismatch") unless disks.length==2
+            disks.each_with_index do |d,i|
+              p=d["prepared_raw_path"].to_s
+              abort("prepared disk #{i} is outside operation directory") unless File.expand_path(p).start_with?(dir+File::SEPARATOR)
+            end
+            FileUtils.rm_rf(dir) if defined?(FileUtils)
+          ' "$operation"
+          # FileUtils is not loaded by the probe above; perform deletion only after all Ruby guards pass.
+          dir=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]
+            cfg=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=(cfg["work_dir"]||cfg[:work_dir]||"/var/tmp").to_s
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_")
+            suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.expand_path(File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}"))
+          ' "$operation")
+          test -f "$dir/state.json"
+          rm -rf -- "$dir"
+          test ! -e "$dir"
+          echo "STALE_PREPARED_LOCAL_CLEANUP=PASS dir=$dir"
+          '@
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Stale PREPARED cleanup failed'}
+
+      - name: Verify clean rebuild baseline
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue)
+          $ns='root\virtualization\v2'
+          $refs=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
+          $cs=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem -Filter "Name='$($vm.VMId.Guid)'"
+          $recovery=@($cs | Get-CimAssociatedInstance -Association Msvm_SnapshotOfVirtualSystem -ResultClassName Msvm_VirtualSystemSettingData | Where-Object {$_.VirtualSystemType -eq 'Microsoft:Hyper-V:Snapshot:Recovery'})
+          Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$($snaps.Count)"
+          Write-Host "REFERENCE_AFTER_COUNT=$($refs.Count)"
+          Write-Host "RECOVERY_AFTER_COUNT=$($recovery.Count)"
+          if($vm.State -ne 'Running' -or $snaps.Count -ne 0 -or $refs.Count -ne 0 -or $recovery.Count -ne 0){throw 'Clean rebuild baseline was not restored'}
+          Write-Host 'STALE_PREPARED_REBUILD_BASELINE=PASS'
