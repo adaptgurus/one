@@ -41,8 +41,16 @@ module.exports = [
     action: actions.protectionGroupCheckpoints,
   },
   {
+    ...Commands[Actions.DR_SITES],
+    action: actions.drSites,
+  },
+  {
     ...Commands[Actions.DR_ENVIRONMENT_NETWORKS],
     action: actions.drEnvironmentNetworks,
+  },
+  {
+    ...Commands[Actions.DR_PROVISION_ENVIRONMENT_NETWORKS],
+    action: actions.drProvisionEnvironmentNetworks,
   },
   {
     ...Commands[Actions.DR_PAIR_SITE],
@@ -51,6 +59,14 @@ module.exports = [
   {
     ...Commands[Actions.DR_MANAGEMENT_BACKUP_POLICIES],
     action: actions.drManagementBackupPolicies,
+  },
+  {
+    ...Commands[Actions.DR_RUN_MANAGEMENT_BACKUP],
+    action: actions.drRunManagementBackup,
+  },
+  {
+    ...Commands[Actions.DR_MANAGEMENT_BACKUP_STATUS],
+    action: actions.drManagementBackupStatus,
   },
   {
     ...Commands[Actions.DR_VM_CHECKPOINTS],
