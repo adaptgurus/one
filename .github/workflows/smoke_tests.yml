@@ -3387,7 +3387,7 @@ jobs:
 
 
   manoj-target-endpoint-local-topology:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -3450,6 +3450,83 @@ jobs:
           $script=$script -replace [char]13,''
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
           & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'OneSwap appliance endpoint probe failed'}
+          Write-Host 'TARGET_ENDPOINT_PROBE=PASS'
+
+      - name: Confirm protected migration path remains intact
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance changed state: $($active.State)"}
+          Write-Host 'PROTECTED_PATH_AFTER=PASS'
+
+
+  manoj-target-endpoint-probe-v2:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind Manoj and protect active migration path
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance is not Running: $($active.State)"}
+          Write-Host 'PROTECTED_PATH_BEFORE=PASS'
+
+      - name: Prepare restricted OneSwap appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-endpoint-probe.key'
+          Copy-Item -Force $srcKey $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          $pub=(& ssh-keygen.exe -y -f $tmp 2>$null | Select-Object -First 1)
+          if($LASTEXITCODE -ne 0 -or -not $pub){throw 'restricted OneSwap key validation failed'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'ONESWAP_TEMP_KEY=PASS'
+
+      - name: Probe target XMLRPC endpoints from active OneSwap appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          any=0
+          for ep in \
+            http://10.250.10.11:2633/RPC2 \
+            http://10.250.10.12:2633/RPC2 \
+            http://10.250.10.13:2633/RPC2 \
+            http://10.10.10.20:2633/RPC2 \
+            http://10.10.10.21:2633/RPC2 \
+            http://10.10.10.22:2633/RPC2 \
+            http://10.10.10.23:2633/RPC2
+          do
+            host=$(printf '%s' "$ep" | sed -E 's#http://([^:/]+).*#\1#')
+            if timeout 3 bash -c "</dev/tcp/$host/2633" 2>/dev/null; then
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=true"
+              any=1
+            else
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=false"
+            fi
+          done
+          echo "TARGET_XMLRPC_ANY=$any"
+          '@
+          $script=$script -replace [char]13,''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           if($LASTEXITCODE -ne 0){throw 'OneSwap appliance endpoint probe failed'}
           Write-Host 'TARGET_ENDPOINT_PROBE=PASS'
 
