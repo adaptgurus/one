@@ -1,4 +1,5 @@
 name: Manoj HyperV Target Capacity Gate
+# lab-target-0.5cpu-2vcpu-2560mb
 
 on:
   push:
@@ -93,8 +94,8 @@ jobs:
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
           hosts=ET.parse('/tmp/hosts.xml').getroot()
-          need_cpu=200
-          need_mem=4194304
+          need_cpu=50
+          need_mem=2621440
           eligible=[]
           for h in hosts.findall('HOST'):
               hid=h.findtext('ID') or ''
@@ -112,6 +113,7 @@ jobs:
                   eligible.append(name)
           print('TARGET_CAPACITY_ELIGIBLE='+(','.join(eligible) if eligible else 'NONE'))
           print('TARGET_CAPACITY_GATE='+('PASS' if eligible else 'BLOCKED'))
+          if not eligible: raise SystemExit('No MONITORED host fits CPU=0.5/VCPU=2/MEMORY=2560MB lab target')
           PY
           echo '===ACTIVE_VMS==='
           onevm list
