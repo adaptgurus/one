@@ -1,0 +1,68 @@
+name: Manoj OneSwap PowerShell Transport Inspect
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-powershell-transport-inspect.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and source invariant
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source not Running"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_BEFORE=PASS'
+
+      - name: Prepare restricted appliance key
+        shell: powershell
+        run: |
+          $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-powershell-inspect.key'
+          Copy-Item -Force $srcKey $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Inspect installed transport methods
+        shell: powershell
+        run: |
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $cmd=@'
+          set -euo pipefail
+          h=/usr/lib/one/ruby/cli/one_helper/hyperv_helper.rb
+          hot=/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb
+          echo '=== HELPER 120-230 ==='
+          sudo sed -n '120,230p' "$h"
+          echo '=== HOT 18-52 ==='
+          sudo sed -n '18,52p' "$hot"
+          echo '=== TRANSPORT SYMBOLS ==='
+          sudo grep -nE 'ssh_argv|powershell_invocation|run_capture|EncodedCommand|stream_powershell|stdin.write' "$h" "$hot" || true
+          echo TRANSPORT_INSPECT=PASS
+          '@
+          $cmd=[regex]::Replace($cmd,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cmd))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'transport inspection failed'}
+
+      - name: Source invariant after inspect
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          if($src.State -ne 'Running' -or $n -ne 0){throw 'Source invariant changed'}
+          Write-Host 'SOURCE_AFTER=PASS'
