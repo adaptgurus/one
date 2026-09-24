@@ -69,12 +69,17 @@ jobs:
             $v=Get-VHD -Path $d.Path -ErrorAction Stop
             Write-Host "APPLIANCE_DISK path=$($d.Path) type=$($v.VhdType) format=$($v.VhdFormat) virtual=$($v.Size) file=$($v.FileSize)"
           }
+          $mem=Get-VMMemory -VMName $name -ErrorAction Stop
+          Write-Host "APPLIANCE_MEMORY startup=$($mem.Startup) dynamic=$($mem.DynamicMemoryEnabled) minimum=$($mem.Minimum) maximum=$($mem.Maximum)"
           if($vm.State -eq 'Saved'){
+            Remove-VMSavedState -VMName $name -Confirm:$false
+            Write-Host 'APPLIANCE_SAVED_STATE_DISCARDED=YES'
+            $vm=Get-VM -Name $name -ErrorAction Stop
+            if($vm.State -ne 'Off'){throw "appliance did not become Off after saved-state removal: $($vm.State)"}
+          }
+          if($vm.State -eq 'Off'){
             Start-VM -Name $name
-            Write-Host 'APPLIANCE_START_REQUESTED=YES_FROM_SAVED'
-          }elseif($vm.State -eq 'Off'){
-            Start-VM -Name $name
-            Write-Host 'APPLIANCE_START_REQUESTED=YES_FROM_OFF'
+            Write-Host 'APPLIANCE_CLEAN_START_REQUESTED=YES'
           }elseif($vm.State -ne 'Running'){
             throw "unexpected appliance state $($vm.State)"
           }
