@@ -3251,7 +3251,7 @@ jobs:
 
 
   manoj-builder-seed-audit:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
@@ -3374,6 +3374,84 @@ jobs:
             }
           }
           Write-Host 'BUILDER_SEED_ISO_AUDIT=PASS'
+
+      - name: Confirm protected migration path remains intact
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance changed state: $($active.State)"}
+          Write-Host 'PROTECTED_PATH_AFTER=PASS'
+
+
+  manoj-target-endpoint-local-topology:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind Manoj and protect active migration path
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance is not Running: $($active.State)"}
+          Write-Host 'PROTECTED_PATH_BEFORE=PASS'
+
+      - name: Inventory local FE topology read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($name in @('ls-fe1','ls-fe2','ls-fe3')){
+            $vm=Get-VM -Name $name -ErrorAction SilentlyContinue
+            if(-not $vm){Write-Host "FE_VM name=$name present=false"; continue}
+            Write-Host "FE_VM name=$name state=$($vm.State) cpu=$($vm.ProcessorCount) assigned_mib=$([math]::Round($vm.MemoryAssigned/1MB,1))"
+            foreach($nic in @(Get-VMNetworkAdapter -VM $vm -ErrorAction SilentlyContinue)){
+              $ips=@($nic.IPAddresses | Where-Object {$_ -match '^\d+\.\d+\.\d+\.\d+$'})
+              Write-Host "FE_NIC name=$name switch=$($nic.SwitchName) mac=$($nic.MacAddress) ips=$($ips -join ',')"
+            }
+          }
+          Write-Host 'FE_TOPOLOGY_INVENTORY=PASS'
+
+      - name: Probe target XMLRPC endpoints from active OneSwap appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          any=0
+          for ep in \
+            http://10.250.10.11:2633/RPC2 \
+            http://10.250.10.12:2633/RPC2 \
+            http://10.250.10.13:2633/RPC2 \
+            http://10.10.10.20:2633/RPC2 \
+            http://10.10.10.21:2633/RPC2 \
+            http://10.10.10.22:2633/RPC2 \
+            http://10.10.10.23:2633/RPC2
+          do
+            host=$(printf '%s' "$ep" | sed -E 's#http://([^:/]+).*#\1#')
+            if timeout 3 bash -c "</dev/tcp/$host/2633" 2>/dev/null; then
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=true"
+              any=1
+            else
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=false"
+            fi
+          done
+          echo "TARGET_XMLRPC_ANY=$any"
+          '@
+          $script=$script -replace [char]13,''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'OneSwap appliance endpoint probe failed'}
+          Write-Host 'TARGET_ENDPOINT_PROBE=PASS'
 
       - name: Confirm protected migration path remains intact
         shell: powershell
