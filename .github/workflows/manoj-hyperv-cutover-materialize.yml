@@ -69,25 +69,28 @@ jobs:
           $ErrorActionPreference='Stop'
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
           $operation='manoj-hv-ls-migration-source-test-20260924'
-          $cmd="sudo python3 - <<'PY'
-import json,os
-p='/var/tmp/oneswap-hyperv-hot/manoj-hv-ls-migration-source-test-20260924/state.json'
-if not os.path.isfile(p): raise SystemExit('prepared state missing')
-s=json.load(open(p))
-print('ADMISSION_PHASE='+str(s.get('phase')))
-print('ADMISSION_VM_ID='+str(s.get('source_vm_id')))
-print('ADMISSION_REFERENCE='+str(s.get('reference_point_id')))
-if s.get('phase')!='PREPARED': raise SystemExit('state is not PREPARED')
-if s.get('source_vm_id')!='52baa8a1-675f-4225-8f37-66a60933b30c': raise SystemExit('source VM identity mismatch')
-d=s.get('disks',[])
-if len(d)!=2: raise SystemExit('expected two prepared disks')
-for i,x in enumerate(d):
- q=x.get('prepared_raw_path','')
- if not q or not os.path.isfile(q): raise SystemExit(f'prepared disk {i} missing')
- if os.path.getsize(q)!=int(x.get('virtual_size',-1)): raise SystemExit(f'prepared disk {i} size mismatch')
- print(f'ADMISSION_DISK_{i}_SIZE={os.path.getsize(q)}')
-print('CUTOVER_PREPARED_ADMISSION=PASS')
-PY"
+          $cmd=@'
+          sudo python3 - <<'PY'
+          import json,os
+          p='/var/tmp/oneswap-hyperv-hot/manoj-hv-ls-migration-source-test-20260924/state.json'
+          if not os.path.isfile(p): raise SystemExit('prepared state missing')
+          s=json.load(open(p))
+          print('ADMISSION_PHASE='+str(s.get('phase')))
+          print('ADMISSION_VM_ID='+str(s.get('source_vm_id')))
+          print('ADMISSION_REFERENCE='+str(s.get('reference_point_id')))
+          if s.get('phase')!='PREPARED': raise SystemExit('state is not PREPARED')
+          if s.get('source_vm_id')!='52baa8a1-675f-4225-8f37-66a60933b30c': raise SystemExit('source VM identity mismatch')
+          d=s.get('disks',[])
+          if len(d)!=2: raise SystemExit('expected two prepared disks')
+          for i,x in enumerate(d):
+              q=x.get('prepared_raw_path','')
+              if not q or not os.path.isfile(q): raise SystemExit(f'prepared disk {i} missing')
+              if os.path.getsize(q)!=int(x.get('virtual_size',-1)): raise SystemExit(f'prepared disk {i} size mismatch')
+              print(f'ADMISSION_DISK_{i}_SIZE={os.path.getsize(q)}')
+          print('CUTOVER_PREPARED_ADMISSION=PASS')
+          PY
+          '@
+          $cmd=[regex]::Replace($cmd,'\r','')
           & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" $cmd
           if($LASTEXITCODE -ne 0){throw 'PREPARED admission failed'}
 
