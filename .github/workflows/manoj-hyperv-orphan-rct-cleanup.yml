@@ -80,6 +80,7 @@ jobs:
           $line=@($out | Where-Object {$_ -like 'STAGING_DIR=*'} | Select-Object -Last 1)
           if(-not $line){throw 'staging_dir was not returned'}
           $staging=$line.Substring('STAGING_DIR='.Length)
+          while($staging.Contains('\\')){$staging=$staging.Replace('\\','\')}
           if([string]::IsNullOrWhiteSpace($staging)){throw 'staging_dir empty'}
           "HYPERV_STAGING_DIR=$staging" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
@@ -97,7 +98,7 @@ jobs:
           if($ref.InstanceID -ne $expected){throw "Unexpected reference id: $($ref.InstanceID)"}
           $vd=@($ref.VirtualDiskIdentifiers)
           $ri=@($ref.ResilientChangeTrackingIdentifiers)
-          $usable=@($ri | Where-Object {-not [string]::IsNullOrWhiteSpace([string]$_})
+          $usable=@($ri | Where-Object {-not [string]::IsNullOrWhiteSpace([string]$_)})
           Write-Host "ORPHAN_INSTANCE=$($ref.InstanceID)"
           Write-Host "ORPHAN_TYPE=$($ref.ReferencePointType)"
           Write-Host "ORPHAN_CONSISTENCY=$($ref.ConsistencyLevel)"
