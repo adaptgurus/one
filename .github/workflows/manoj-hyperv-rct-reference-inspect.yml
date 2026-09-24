@@ -1,0 +1,72 @@
+name: Manoj HyperV RCT Reference Inspect
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-rct-reference-inspect.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-rct-reference-inspect
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Inspect source and RCT reference-point payloads
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source must remain Running: $($vm.State)"}
+          Write-Host "SOURCE_VM_ID=$($vm.VMId.Guid)"
+          $disks=@(Get-VMHardDiskDrive -VM $vm | Sort-Object ControllerNumber,ControllerLocation | ForEach-Object {
+            $v=Get-VHD -Path $_.Path -ErrorAction Stop
+            [pscustomobject]@{
+              Path=$_.Path
+              DiskIdentifier=[string]$v.DiskIdentifier
+              VhdType=[string]$v.VhdType
+              VhdFormat=[string]$v.VhdFormat
+              Size=[int64]$v.Size
+            }
+          })
+          Write-Host "SOURCE_DISK_COUNT=$($disks.Count)"
+          $disks | ForEach-Object { Write-Host "SOURCE_DISK path=$($_.Path) id=$($_.DiskIdentifier) type=$($_.VhdType) format=$($_.VhdFormat) size=$($_.Size)" }
+
+          $ns='root\virtualization\v2'
+          $refs=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
+          Write-Host "REFERENCE_COUNT=$($refs.Count)"
+          $i=0
+          foreach($ref in $refs){
+            $vd=@($ref.VirtualDiskIdentifiers)
+            $ri=@($ref.ResilientChangeTrackingIdentifiers)
+            Write-Host "REFERENCE[$i]_INSTANCE=$($ref.InstanceID)"
+            Write-Host "REFERENCE[$i]_TYPE=$($ref.ReferencePointType)"
+            Write-Host "REFERENCE[$i]_CONSISTENCY=$($ref.ConsistencyLevel)"
+            Write-Host "REFERENCE[$i]_HAS_ASSOCIATED_DATA=$($ref.HasAssociatedData)"
+            Write-Host "REFERENCE[$i]_VD_COUNT=$($vd.Count)"
+            Write-Host "REFERENCE[$i]_RCT_COUNT=$($ri.Count)"
+            for($x=0;$x -lt $vd.Count;$x++){ Write-Host "REFERENCE[$i]_VD[$x]=$($vd[$x])" }
+            for($x=0;$x -lt $ri.Count;$x++){ Write-Host "REFERENCE[$i]_RCT[$x]=$($ri[$x])" }
+            $i++
+          }
+          Write-Host 'RCT_REFERENCE_INSPECT=PASS'
+
+      - name: Verify source invariant
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue)
+          Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$($snaps.Count)"
+          if($vm.State -ne 'Running'){throw 'Inspect changed source state'}
+          if($snaps.Count -ne 0){throw 'Inspect found/created user-visible checkpoint'}
+          Write-Host 'SOURCE_INVARIANT=PASS'
