@@ -2147,7 +2147,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-inventory-target-authority:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
@@ -2224,6 +2224,91 @@ jobs:
           wsl.exe -d Ubuntu-22.04 -u opc -- bash --noprofile --norc -lc $cmd
           if($LASTEXITCODE -ne 0){throw 'Manoj WSL target authority discovery failed'}
           Write-Host 'TARGET_AUTHORITY_DISCOVERY=PASS'
+
+      - name: Confirm source remains Running and checkpoint-free
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-opennebula-target-authority-native:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Inventory non-secret target authority hints on Manoj
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          Write-Host '=== SSH CONFIG METADATA ==='
+          foreach($cfg in @('C:\Users\opc\.ssh\config','C:\ProgramData\ssh\ssh_config')){
+            if(Test-Path $cfg){
+              Write-Host "SSH_CONFIG_FILE=$cfg"
+              Get-Content -LiteralPath $cfg | Where-Object {
+                $_ -match '(?i)^\s*(Host|HostName|User|IdentityFile|Port)\b' -and $_ -notmatch '(?i)password|secret|token'
+              } | Select-Object -First 120 | ForEach-Object {Write-Host ('SSH_META=' + $_.Trim())}
+            }
+          }
+          Write-Host '=== KNOWN HOST FILES ==='
+          Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Name -match '(?i)^known_hosts'} |
+            ForEach-Object {Write-Host "KNOWN_HOST_FILE=$($_.FullName) length=$($_.Length)"}
+          Write-Host '=== SAFE TARGET HINTS ==='
+          $files=Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Extension -in @('.ps1','.sh','.py','.txt','.md','.json','.yaml','.yml','.conf')}
+          foreach($file in $files){
+            $hits=Select-String -Path $file.FullName -Pattern 'rocky-01|10\.10\.10\.|ONE_XMLRPC|one_auth|onehost list|onedatastore list|onevnet list|2633/RPC2|OpenNebula' -AllMatches -ErrorAction SilentlyContinue
+            foreach($h in $hits | Select-Object -First 20){
+              $line=$h.Line
+              if($line -match '(?i)password|passwd|secret|token|private.?key|authorization|one_auth\s*='){continue}
+              if($line.Length -gt 240){$line=$line.Substring(0,240)}
+              Write-Host "TARGET_HINT file=$($file.Name) line=$($line.Trim())"
+            }
+          }
+          Write-Host 'TARGET_HINT_INVENTORY=PASS'
+
+      - name: Probe likely OpenNebula controller endpoints read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ips=New-Object System.Collections.Generic.HashSet[string]
+          $root='C:\LayerSentryLab\qualification'
+          Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Extension -in @('.ps1','.sh','.py','.txt','.md','.json','.yaml','.yml','.conf')} |
+            ForEach-Object {
+              $text=Get-Content -LiteralPath $_.FullName -Raw -ErrorAction SilentlyContinue
+              if($text){
+                [regex]::Matches($text,'\b10\.10\.10\.(?:[1-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])\b') | ForEach-Object {[void]$ips.Add($_.Value)}
+              }
+            }
+          foreach($ip in @('10.10.10.11','10.10.10.12','10.10.10.13')){[void]$ips.Add($ip)}
+          foreach($ip in ($ips | Sort-Object)){
+            foreach($port in @(22,2633,2616,9869)){
+              $client=New-Object Net.Sockets.TcpClient
+              $ok=$false
+              try{
+                $iar=$client.BeginConnect($ip,$port,$null,$null)
+                $ok=$iar.AsyncWaitHandle.WaitOne(800,$false) -and $client.Connected
+                if($ok){$client.EndConnect($iar)}
+              }catch{}finally{$client.Close()}
+              if($ok){Write-Host "TARGET_TCP ip=$ip port=$port open=true"}
+            }
+          }
+          Write-Host 'TARGET_TCP_PROBE=PASS'
 
       - name: Confirm source remains Running and checkpoint-free
         shell: powershell
