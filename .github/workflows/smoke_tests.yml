@@ -569,7 +569,7 @@ jobs:
 
 
   manoj-oneswap-seed-lineage:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -621,3 +621,38 @@ jobs:
                 }
             }
           Write-Host 'ONESWAP_SEED_LINEAGE=PASS'
+
+
+  manoj-oneswap-v4-intent:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+      - name: Inspect v4 cloud-init intent without secrets
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $seed='C:\LayerSentryLab\qualification\oneswap-seed'
+          foreach($name in @('meta-data-v4','user-data-v4','network-config')){
+            $p=Join-Path $seed $name
+            if(-not(Test-Path $p)){throw "Missing $p"}
+            Write-Host "=== $name ==="
+            Get-Content -LiteralPath $p |
+              ForEach-Object {
+                $line=$_
+                if($line -match '(?i)ssh-ed25519|ssh-rsa'){
+                  Write-Host '      <authorized-public-key-redacted>'
+                } elseif($line -match '(?i)password|passwd:|secret|token|private.?key'){
+                  Write-Host '      <sensitive-field-redacted>'
+                } else {
+                  Write-Host $line
+                }
+              }
+          }
+          Write-Host 'ONESWAP_V4_INTENT=PASS'
