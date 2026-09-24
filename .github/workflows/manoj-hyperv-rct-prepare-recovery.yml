@@ -1,0 +1,259 @@
+name: Manoj HyperV RCT Prepare Recovery
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-rct-prepare-recovery.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-rct-prepare-recovery
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 150
+    steps:
+      - name: Bind Manoj and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Recovery prepare requires source Running; state=$($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has user-visible checkpoints'}
+          if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
+          if((Get-VM -Name 'ls-fe2' -ErrorAction Stop).State -ne 'Off'){throw 'FE2 authority VM must remain Off'}
+          Write-Host 'RECOVERY_PREPARE_SOURCE_GATE=PASS'
+
+      - name: Prepare restricted appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-rct-recovery.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Reconcile durable state or exact state-less orphan
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $stateCmd=@'
+          set -euo pipefail
+          op="manoj-hv-ls-migration-source-test-20260924"
+          state="/var/tmp/oneswap-hyperv-hot/$op/state.json"
+          ruby -ryaml -e '
+            c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            h=c["hyperv_connections"]||c[:hyperv_connections]||{}
+            p=h["manoj-qual"]||h[:"manoj-qual"]||{}
+            s=p["staging_dir"]||p[:staging_dir]
+            abort("staging_dir missing") if s.to_s.empty?
+            puts "STAGING_DIR=#{s}"
+          '
+          if [ -f "$state" ]; then
+            python3 - "$state" <<'PY'
+          import json,sys
+          s=json.load(open(sys.argv[1]))
+          print("STATE_PRESENT=1")
+          print("STATE_PHASE="+str(s.get("phase")))
+          print("STATE_SOURCE_VM_ID="+str(s.get("source_vm_id")))
+          print("STATE_REFERENCE="+str(s.get("reference_point_id")))
+          PY
+          else
+            echo "STATE_PRESENT=0"
+          fi
+          '@
+          $stateCmd=[regex]::Replace($stateCmd,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($stateCmd))
+          $out=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Unable to inspect durable prepare state'}
+          $out | ForEach-Object {Write-Host $_}
+          $present=(@($out | Where-Object {$_ -eq 'STATE_PRESENT=1'}).Count -eq 1)
+          $stagingLine=@($out | Where-Object {$_ -like 'STAGING_DIR=*'} | Select-Object -Last 1)
+          if(-not $stagingLine){throw 'staging_dir unavailable'}
+          $staging=$stagingLine.Substring('STAGING_DIR='.Length)
+          while($staging.Contains('\\')){$staging=$staging.Replace('\\','\')}
+          "HYPERV_STAGING_DIR=$staging" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          if($present){
+            $phase=(@($out | Where-Object {$_ -like 'STATE_PHASE=*'} | Select-Object -Last 1)).Substring('STATE_PHASE='.Length)
+            $vmid=(@($out | Where-Object {$_ -like 'STATE_SOURCE_VM_ID=*'} | Select-Object -Last 1)).Substring('STATE_SOURCE_VM_ID='.Length)
+            if($vmid -ne '52baa8a1-675f-4225-8f37-66a60933b30c'){throw "Durable state belongs to unexpected source $vmid"}
+            if($phase -eq 'PREPARED'){
+              "PREPARED_ALREADY=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              Write-Host 'PREPARED_STATE_ADOPTED=PASS'
+              exit 0
+            }
+            throw "Durable state phase $phase requires reconciliation; refusing prepare replay"
+          }
+
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $ns='root\virtualization\v2'
+          $refs=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
+          $cs=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem -Filter "Name='$($vm.VMId.Guid)'"
+          $recovery=@($cs | Get-CimAssociatedInstance -Association Msvm_SnapshotOfVirtualSystem -ResultClassName Msvm_VirtualSystemSettingData | Where-Object {$_.VirtualSystemType -eq 'Microsoft:Hyper-V:Snapshot:Recovery'})
+          if($recovery.Count -ne 0){throw "State-less recovery checkpoint exists; manual reconciliation required count=$($recovery.Count)"}
+          if($refs.Count -eq 0){
+            Write-Host 'CLEAN_RCT_BASELINE=PASS'
+            "PREPARED_ALREADY=0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            exit 0
+          }
+          if($refs.Count -ne 1){throw "Unexpected state-less RCT reference count=$($refs.Count)"}
+          $ref=$refs[0]
+          $vd=@($ref.VirtualDiskIdentifiers)
+          $ri=@($ref.ResilientChangeTrackingIdentifiers)
+          $usable=@($ri | Where-Object {-not [string]::IsNullOrWhiteSpace([string]$_)})
+          if([int]$ref.ReferencePointType -ne 2 -or [bool]$ref.HasAssociatedData){throw 'State-less reference is not a clean RCT reference'}
+          if([int]$ref.ConsistencyLevel -notin @(1,2)){throw "Unexpected RCT consistency=$($ref.ConsistencyLevel)"}
+          if($vd.Count -ne 2 -or $ri.Count -ne 2 -or $usable.Count -ne 2){throw 'State-less RCT shape is not the expected two-disk migration baseline'}
+          $safeOp='layersentry-hot-manoj-hv-ls-migration-source-test-20260924'
+          $exportDir=Join-Path $staging $safeOp
+          $full=[IO.Path]::GetFullPath($exportDir)
+          $base=[IO.Path]::GetFullPath($staging)
+          if(-not $full.StartsWith($base,[StringComparison]::OrdinalIgnoreCase) -or (Split-Path $full -Leaf) -ne $safeOp){throw 'Operation export path failed containment check'}
+          if(-not (Test-Path -LiteralPath $full)){throw 'State-less reference exists but operation export directory is absent; refusing automatic cleanup'}
+          Write-Host "RECOVERING_STATELESS_REFERENCE=$($ref.InstanceID)"
+          $svc=Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePointService
+          $r=$svc.DestroyReferencePoint($ref)
+          if($r.ReturnValue -eq 4096){
+            $job=[wmi]$r.Job
+            $deadline=(Get-Date).AddMinutes(5)
+            while(($job.JobState -eq 3 -or $job.JobState -eq 4) -and (Get-Date) -lt $deadline){Start-Sleep 1;$job.Get()}
+            if($job.JobState -ne 7){throw "DestroyReferencePoint failed state=$($job.JobState) error=$($job.ErrorDescription)"}
+          } elseif($r.ReturnValue -ne 0){throw "DestroyReferencePoint failed code=$($r.ReturnValue)"}
+          Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction Stop
+          $remaining=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
+          if($remaining.Count -ne 0){throw 'State-less RCT cleanup incomplete'}
+          "PREPARED_ALREADY=0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'STATELESS_RCT_RECOVERY=PASS'
+
+      - name: Attach FE2 read-only authority child
+        if: env.PREPARED_ALREADY != '1'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $fe2=(Get-VMHardDiskDrive -VMName 'ls-fe2' -ErrorAction Stop | Where-Object {$_.Path} | Sort-Object ControllerNumber,ControllerLocation | Select-Object -First 1).Path
+          if(-not $fe2){throw 'FE2 disk missing'}
+          $audit=Join-Path 'C:\LayerSentryLab\qualification' ("fe2-rct-recovery-$env:GITHUB_RUN_ID.vhdx")
+          New-VHD -Path $audit -ParentPath $fe2 -Differencing -ErrorAction Stop | Out-Null
+          Add-VMHardDiskDrive -VMName 'ls-appliance-qual' -ControllerType SCSI -Path $audit -ErrorAction Stop
+          "FE2_AUDIT_VHD=$audit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Start-Sleep -Seconds 3
+
+      - name: Run authenticated OneSwap RCT prepare with full profile timeout
+        if: env.PREPARED_ALREADY != '1'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $before=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          if($LASTEXITCODE -ne 0){throw 'appliance block inventory failed'}
+          # The FE2 child is the only disk newly attached after the key/setup phase.
+          $devCandidates=@($before | Where-Object {$_ -match '^sd[a-z]+$'})
+          # Discover the authority child by probing for one_auth read-only; avoid assuming Linux disk order.
+          $script=@'
+          set -euo pipefail
+          authority_dev=""
+          for n in $(lsblk -dnro NAME | sort); do
+            d="/dev/$n"
+            for p in /var/lib/one/.one/one_auth /etc/one/one_auth; do
+              exists=$(sudo guestfish --ro -a "$d" -i exists "$p" 2>/dev/null || echo false)
+              if [ "$exists" = "true" ]; then authority_dev="$d"; break 2; fi
+            done
+          done
+          [ -n "$authority_dev" ]
+          auth=""
+          for p in /var/lib/one/.one/one_auth /etc/one/one_auth; do
+            exists=$(sudo guestfish --ro -a "$authority_dev" -i exists "$p" 2>/dev/null || echo false)
+            if [ "$exists" = "true" ]; then auth=$(sudo guestfish --ro -a "$authority_dev" -i cat "$p"); break; fi
+          done
+          [ -n "$auth" ]
+          tmp=$(mktemp)
+          trap 'rm -f "$tmp"' EXIT
+          printf '%s\n' "$auth" > "$tmp"
+          chmod 600 "$tmp"
+          export ONE_AUTH="$tmp"
+          export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
+          operation="manoj-hv-ls-migration-source-test-20260924"
+          set +e
+          out=$(timeout --signal=TERM --kill-after=20s 7200s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --prepare --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0 2>&1)
+          rc=$?
+          set -e
+          printf '%s\n' "$out" | sed -E 's/(password|secret|token|authorization|one_auth)[^ ]*/\1=<redacted>/Ig'
+          [ "$rc" -eq 0 ] || { echo "ONESWAP_RCT_PREPARE_RECOVERY=FAIL rc=$rc"; exit "$rc"; }
+          echo 'ONESWAP_RCT_PREPARE_RECOVERY=PASS'
+          '@
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Recovery prepare failed'}
+
+      - name: Verify durable PREPARED state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $cmd=@'
+          set -euo pipefail
+          state="/var/tmp/oneswap-hyperv-hot/manoj-hv-ls-migration-source-test-20260924/state.json"
+          [ -f "$state" ]
+          python3 - "$state" <<'PY'
+          import json,os,sys
+          s=json.load(open(sys.argv[1]))
+          print("FINAL_PREPARE_PHASE="+str(s.get("phase")))
+          print("FINAL_PREPARE_REFERENCE="+str(s.get("reference_point_id")))
+          if s.get("phase")!="PREPARED": raise SystemExit("state is not PREPARED")
+          if s.get("source_vm_id")!="52baa8a1-675f-4225-8f37-66A60933B30C".lower():
+              # compare case-insensitively below
+              if str(s.get("source_vm_id","")).lower()!="52baa8a1-675f-4225-8f37-66a60933b30c": raise SystemExit("source id mismatch")
+          d=s.get("disks",[])
+          if len(d)!=2: raise SystemExit("prepared disk count mismatch")
+          for i,x in enumerate(d):
+              p=x.get("prepared_raw_path","")
+              if not p or not os.path.isfile(p): raise SystemExit(f"prepared disk {i} missing")
+              if os.path.getsize(p)!=int(x.get("virtual_size",-1)): raise SystemExit(f"prepared disk {i} size mismatch")
+              print(f"PREPARED_DISK_{i}_SIZE={os.path.getsize(p)}")
+          print("DURABLE_PREPARED_STATE=PASS")
+          PY
+          '@
+          $cmd=[regex]::Replace($cmd,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cmd))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Durable PREPARED verification failed'}
+
+      - name: Detach and delete FE2 authority child
+        if: always()
+        shell: powershell
+        run: |
+          $audit=$env:FE2_AUDIT_VHD
+          if($audit){
+            Get-VMHardDiskDrive -VMName 'ls-appliance-qual' -ErrorAction SilentlyContinue | Where-Object {$_.Path -eq $audit} | Remove-VMHardDiskDrive -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+            if(Test-Path $audit){Remove-Item -Force $audit -ErrorAction Stop}
+          }
+          Write-Host 'FE2_RCT_RECOVERY_CHILD_CLEANUP=PASS'
+
+      - name: Verify source remains Running after prepare
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_AFTER_PREPARE_STATE=$($src.State)"
+          Write-Host "SOURCE_AFTER_PREPARE_CHECKPOINTS=$n"
+          if($src.State -ne 'Running'){throw "Prepare/recovery changed source state: $($src.State)"}
+          if($n -ne 0){throw 'Prepare/recovery created user-visible checkpoint'}
+          Write-Host 'SOURCE_AFTER_PREPARE=PASS'
