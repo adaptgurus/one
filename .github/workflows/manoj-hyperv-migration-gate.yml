@@ -24,7 +24,6 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           Write-Host "runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME user=$env:USERNAME os=$env:RUNNER_OS"
-          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
           if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
           Get-Command Get-VM,Get-VHD,Get-VMHardDiskDrive,Get-VMNetworkAdapter,Get-VMSnapshot -ErrorAction Stop | Out-Null
           if(-not (Test-Path 'C:\LayerSentryLab\qualification')){throw 'LayerSentry qualification workspace missing'}
