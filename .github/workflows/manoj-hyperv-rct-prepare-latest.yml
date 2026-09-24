@@ -2,6 +2,7 @@ name: Manoj HyperV RCT Prepare Latest
 # latest-after-pr20-cim-path-and-rct-map-fixes
 # rerun-after-crash-baseline-fix
 # corrected-state-path-and-live-reference-gate
+# lab-target-sizing-0.5cpu-2vcpu-2560mb
 
 on:
   push:
@@ -19,7 +20,6 @@ concurrency:
 
 jobs:
   prepare:
-    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 150
     steps:
@@ -105,7 +105,7 @@ jobs:
           echo "RCT_PREPARE_TARGET datastore=1 network=0"
           echo "RCT_PREPARE_SOURCE=ls-migration-source-test"
           set +e
-          out=$(timeout --signal=TERM --kill-after=20s 7200s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --prepare --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0 2>&1)
+          out=$(timeout --signal=TERM --kill-after=20s 7200s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --prepare --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --cpu 0.5 --vcpu 2 --memory-mb 2560 --datastore 1 --network 0 2>&1)
           rc=$?
           set -e
           printf '%s\n' "$out" | sed -E 's/(password|secret|token|authorization|one_auth)[^ ]*/\1=<redacted>/Ig'
