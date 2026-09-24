@@ -26,6 +26,7 @@ import {
   Typography,
 } from '@mui/material'
 import { useEffect, useMemo, useState } from 'react'
+import PropTypes from 'prop-types'
 import {
   SectionHeader,
   Surface,
@@ -540,6 +541,12 @@ const DRProductPanel = ({ localSiteId = '', targetSites = [], vms = [] }) => {
       </Box>
     </Surface>
   )
+}
+
+DRProductPanel.propTypes = {
+  localSiteId: PropTypes.string,
+  targetSites: PropTypes.arrayOf(PropTypes.string),
+  vms: PropTypes.arrayOf(PropTypes.object),
 }
 
 export default DRProductPanel
