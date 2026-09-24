@@ -88,7 +88,7 @@ jobs:
           print('ADMISSION_PHASE='+str(s.get('phase')))
           print('ADMISSION_VM_ID='+str(s.get('source_vm_id')))
           print('ADMISSION_REFERENCE='+str(s.get('reference_point_id')))
-          if s.get('phase')!='PREPARED': raise SystemExit('state is not PREPARED')
+          if s.get('phase') not in ('PREPARED','CUTOVER_STARTED'): raise SystemExit('state is not safely resumable')
           if str(s.get('source_vm_id','')).lower()!='52baa8a1-675f-4225-8f37-66a60933b30c': raise SystemExit('source VM identity mismatch')
           d=s.get('disks',[])
           if len(d)!=2: raise SystemExit('expected two prepared disks')
