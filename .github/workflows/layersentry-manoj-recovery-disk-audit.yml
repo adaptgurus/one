@@ -1,0 +1,68 @@
+name: LayerSentry Manoj Recovery Disk Offline Audit
+
+on:
+  push:
+    branches:
+      - dr-threepoint-ssh-20260924
+    paths:
+      - ".github/workflows/layersentry-manoj-recovery-disk-audit.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect staged recovery filesystem
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner" }
+          $script = @'
+          import pathlib
+          from dissect.target import Target
+          disk=pathlib.Path(r"C:\LayerSentryLab\dr-recovery\tester-vm220-20260923\vm220-dr-recovered.qcow2")
+          if not disk.is_file():
+              raise SystemExit("recovery disk missing")
+          t=Target.open(str(disk))
+          print("DISK_SIZE="+str(disk.stat().st_size))
+          for path in [
+              "/etc/os-release",
+              "/etc/network/interfaces",
+              "/etc/hostname",
+              "/etc/layersentry-dr-point",
+              "/etc/rc.conf",
+          ]:
+              try:
+                  p=t.fs.path(path)
+                  if p.exists():
+                      raw=p.open("rb").read(65536)
+                      print("FILE_BEGIN="+path)
+                      print(raw.decode("utf-8","replace"))
+                      print("FILE_END="+path)
+              except Exception as e:
+                  print("FILE_ERROR="+path+" "+str(e))
+          for directory in ["/etc/init.d","/etc/runlevels/default","/etc/systemd/system","/etc/systemd/system/multi-user.target.wants"]:
+              try:
+                  p=t.fs.path(directory)
+                  if p.exists():
+                      names=sorted(x.name for x in p.iterdir())
+                      print("DIR="+directory+" ITEMS="+",".join(names[:300]))
+              except Exception as e:
+                  print("DIR_ERROR="+directory+" "+str(e))
+          for name in ["sshd","dropbear","nginx","apache2","httpd","mariadb","mysql","postgresql","redis","docker","qemu-guest-agent","networking","networkmanager"]:
+              found=[]
+              for base in ["/etc/init.d","/etc/runlevels/default","/etc/systemd/system","/etc/systemd/system/multi-user.target.wants"]:
+                  try:
+                      p=t.fs.path(base+"/"+name)
+                      if p.exists(): found.append(str(p))
+                  except Exception: pass
+              if found: print("SERVICE_CANDIDATE="+name+" PATHS="+",".join(found))
+          '@
+          $p=Join-Path $env:RUNNER_TEMP 'audit-recovery-disk.py'
+          Set-Content -Path $p -Value $script -Encoding UTF8
+          & 'C:\LayerSentryLab\tools\Python313\python.exe' $p
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
