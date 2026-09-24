@@ -1,4 +1,4 @@
-name: Manoj HyperV Migration Readonly Gate
+name: Manoj HyperV Migration Source Gate
 
 on:
   push:
@@ -30,13 +30,12 @@ jobs:
           if(-not (Test-Path 'C:\LayerSentryLab\qualification')){throw 'LayerSentry qualification workspace missing'}
           Write-Host 'MANOJ_RUNNER_BOUND=PASS'
 
-      - name: Fail-closed disposable source qualification
+      - name: Qualify and start disposable migration source
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           $name='ls-migration-source-test'
           $vm=Get-VM -Name $name -ErrorAction Stop
-          if($vm.State -ne 'Running'){throw "source must be Running for warm prepare; state=$($vm.State)"}
           if($vm.Generation -notin @(1,2)){throw "unsupported VM generation $($vm.Generation)"}
           $snaps=@(Get-VMSnapshot -VMName $name -ErrorAction SilentlyContinue)
           if($snaps.Count -ne 0){throw "source has $($snaps.Count) checkpoints"}
@@ -49,6 +48,25 @@ jobs:
             if($v.VhdType -eq 'Differencing' -or $v.ParentPath){throw "parent/differencing disk blocked: $($d.Path)"}
             Write-Host "SOURCE_DISK path=$($d.Path) type=$($v.VhdType) virtual=$($v.Size) file=$($v.FileSize)"
           }
+          Write-Host "SOURCE_BEFORE state=$($vm.State) autoCheckpoints=$($vm.AutomaticCheckpointsEnabled)"
+          if($vm.AutomaticCheckpointsEnabled){
+            Set-VM -Name $name -AutomaticCheckpointsEnabled $false
+            Write-Host 'SOURCE_AUTOMATIC_CHECKPOINTS=DISABLED'
+          }
+          if($vm.State -eq 'Off'){
+            Start-VM -Name $name
+            Write-Host 'SOURCE_START_REQUESTED=YES'
+          } elseif($vm.State -ne 'Running'){
+            throw "source is neither Off nor Running; state=$($vm.State)"
+          }
+          $deadline=(Get-Date).AddSeconds(120)
+          do {
+            Start-Sleep -Seconds 2
+            $vm=Get-VM -Name $name -ErrorAction Stop
+            Write-Host "SOURCE_STATE=$($vm.State)"
+            if($vm.State -eq 'Running'){break}
+          } while((Get-Date) -lt $deadline)
+          if($vm.State -ne 'Running'){throw "source did not reach Running; state=$($vm.State)"}
           foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction Stop)){
             Write-Host "SOURCE_NIC switch=$($nic.SwitchName) mac=$($nic.MacAddress) ips=$($nic.IPAddresses -join ',')"
           }
