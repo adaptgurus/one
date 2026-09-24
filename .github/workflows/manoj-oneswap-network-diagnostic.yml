@@ -71,6 +71,7 @@ jobs:
           Get-NetRoute -AddressFamily IPv4 -ErrorAction SilentlyContinue |
             Where-Object { $_.DestinationPrefix -like '10.250.10*' -or $_.NextHop -like '10.250.10*' } |
             Select-Object DestinationPrefix,NextHop,InterfaceAlias,RouteMetric | Format-Table -AutoSize
+          exit 0
 
       - name: Inspect current seed inputs without secrets
         shell: powershell
