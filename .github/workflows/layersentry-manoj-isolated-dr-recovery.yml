@@ -136,14 +136,19 @@ jobs:
           initial_running = int(host.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
           print(f"KVM2_PRE_MONITOR_RUNNING_VMS={initial_running}")
 
-          # Hyper-V was just started; stale HOST_SHARE counters are not an
-          # authoritative safety decision. Enable monitoring first, then require
-          # a fresh host readback before checking occupancy.
-          status = one.one.host.status(auth, host_id, 0)
-          if not status[0]:
-              raise SystemExit("enable host failed: " + str(status[1])[:400])
+          # Do not reset a host that is already MONITORED. Re-enabling an
+          # already healthy host clears/ages capacity counters in this nested
+          # lab and can create a false readiness timeout.
+          initial_state = int(host.findtext("STATE") or -1)
+          initial_cpu = int(host.findtext("./HOST_SHARE/MAX_CPU") or host.findtext("./HOST_SHARE/TOTAL_CPU") or 0)
+          if initial_state != 2:
+              status = one.one.host.status(auth, host_id, 0)
+              if not status[0]:
+                  raise SystemExit("enable host failed: " + str(status[1])[:400])
+          else:
+              print(f"KVM2_ALREADY_MONITORED=YES MAX_CPU={initial_cpu}")
 
-          deadline = time.time() + 120
+          deadline = time.time() + 240
           refreshed = None
           while time.time() < deadline:
               info = one.one.host.info(auth, host_id, False)
