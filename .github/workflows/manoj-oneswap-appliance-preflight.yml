@@ -82,7 +82,7 @@ jobs:
             $builder=Get-VM -Name 'ls-iso-builder' -ErrorAction SilentlyContinue
             if($builder -and $builder.State -eq 'Running'){
               Write-Host "MEMORY_RECLAIM requesting graceful shutdown of disposable ls-iso-builder assigned=$($builder.MemoryAssigned)"
-              Stop-VM -Name 'ls-iso-builder' -Shutdown
+              Stop-VM -Name 'ls-iso-builder' -Confirm:$false
               $deadlineBuilder=(Get-Date).AddSeconds(90)
               do{
                 Start-Sleep -Seconds 2
