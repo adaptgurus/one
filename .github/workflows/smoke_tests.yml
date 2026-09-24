@@ -915,7 +915,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-v5-ssh-policy-audit:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 6
     steps:
@@ -944,6 +944,124 @@ jobs:
             }
           }
           Write-Host 'V5_SSH_POLICY_AUDIT=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-v6-stable-hostkey:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Build v6 seed preserving SSH host identity
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $hostName='Manoj-Test-Inst'
+          $base='C:\LayerSentryLab\qualification\oneswap-seed'
+          $seedBase=Join-Path $base 'cidata.vhdx'
+          $seedV6=Join-Path $base 'cidata-v6.vhdx'
+          $userV4=Join-Path $base 'user-data-v4'
+          $userV6=Join-Path $base 'user-data-v6'
+          $network=Join-Path $base 'network-config'
+          $metaV6=Join-Path $base 'meta-data-v6'
+          foreach($p in @($seedBase,$userV4,$network)){if(-not(Test-Path $p)){throw "Missing seed input: $p"}}
+          @('instance-id: oneswap-qual-20260924-v6','local-hostname: oneswap-qual') | Set-Content -LiteralPath $metaV6 -Encoding ascii
+          $ud=Get-Content -LiteralPath $userV4 -Raw
+          if($ud -notmatch '(?m)^#cloud-config\s*$'){throw 'user-data-v4 is not cloud-config'}
+          if($ud -match '(?m)^ssh_deletekeys\s*:'){
+            $ud=[regex]::Replace($ud,'(?m)^ssh_deletekeys\s*:.*$','ssh_deletekeys: false')
+          } else {
+            $ud=$ud -replace '(?m)^#cloud-config\s*$','#cloud-config`r`nssh_deletekeys: false'
+          }
+          Set-Content -LiteralPath $userV6 -Value $ud -Encoding ascii
+          Copy-Item -Force $seedBase $seedV6
+          $vhd=Mount-VHD -ComputerName $hostName -Path $seedV6 -Passthru
+          try {
+            $disk=$vhd | Get-Disk
+            $part=$disk | Get-Partition | Where-Object {$_.Type -ne 'Reserved'} | Select-Object -First 1
+            if(-not $part.DriveLetter){
+              $part | Add-PartitionAccessPath -AssignDriveLetter
+              $part=$disk | Get-Partition | Where-Object {$_.DriveLetter} | Select-Object -First 1
+            }
+            if(-not $part.DriveLetter){throw 'Seed partition has no drive letter'}
+            $root=($part.DriveLetter + ':\')
+            Copy-Item -Force $userV6 (Join-Path $root 'user-data')
+            Copy-Item -Force $metaV6 (Join-Path $root 'meta-data')
+            Copy-Item -Force $network (Join-Path $root 'network-config')
+          } finally {
+            Dismount-VHD -ComputerName $hostName -Path $seedV6
+          }
+          $hash=(Get-FileHash -Algorithm SHA256 $seedV6).Hash
+          Write-Host "CIDATA_V6_SHA256=$hash"
+          Write-Host 'CIDATA_V6_BUILD=PASS'
+
+      - name: Gracefully attach v6 and boot appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm='ls-appliance-qual'
+          $seedV6='C:\LayerSentryLab\qualification\oneswap-seed\cidata-v6.vhdx'
+          $state=(Get-VM -Name $vm -ErrorAction Stop).State
+          if($state -eq 'Running'){
+            Stop-VM -Name $vm -Shutdown -Confirm:$false
+            $deadline=(Get-Date).AddSeconds(120)
+            do{
+              Start-Sleep -Seconds 3
+              $state=(Get-VM -Name $vm).State
+              Write-Host "APPLIANCE_SHUTDOWN state=$state"
+            }while($state -ne 'Off' -and (Get-Date) -lt $deadline)
+            if($state -ne 'Off'){throw 'Appliance did not shut down gracefully; refusing forced power-off'}
+          } elseif($state -ne 'Off'){
+            throw "Unexpected appliance state: $state"
+          }
+          Set-VMNetworkAdapter -VMName $vm -StaticMacAddress '00155D001C05'
+          Set-VMHardDiskDrive -VMName $vm -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 3 -Path $seedV6
+          $os=Get-VMHardDiskDrive -VMName $vm -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0 -ErrorAction Stop
+          Set-VMFirmware -VMName $vm -FirstBootDevice $os
+          Start-VM -Name $vm | Out-Null
+          Write-Host 'APPLIANCE_V6_BOOT_STARTED=PASS'
+
+      - name: Require old pinned SSH identity and authoritative network
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance.paramiko'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $ready=$false
+          for($i=1;$i -le 36;$i++){
+            $client=New-Object Net.Sockets.TcpClient
+            $tcp=$false
+            try{
+              $iar=$client.BeginConnect($ip,22,$null,$null)
+              $ok=$iar.AsyncWaitHandle.WaitOne(1000,$false)
+              if($ok -and $client.Connected){$client.EndConnect($iar);$tcp=$true}
+            }catch{}finally{$client.Close()}
+            Write-Host "V6_WAIT attempt=$i ssh22=$tcp"
+            if($tcp){$ready=$true;break}
+            Start-Sleep -Seconds 5
+          }
+          if(-not $ready){throw 'v6 boot did not restore authoritative SSH endpoint'}
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=6 -i $key "ci@$ip" 'id -un; hostname; ip -4 -brief addr; cloud-init status --long || true'
+          if($LASTEXITCODE -ne 0){throw 'Pinned SSH identity still mismatches after host-key-preserving v6 seed'}
+          Write-Host 'ONESWAP_V6_PINNED_SSH=PASS'
 
       - name: Verify source remained untouched
         shell: powershell
