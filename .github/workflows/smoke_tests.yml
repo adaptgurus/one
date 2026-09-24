@@ -142,7 +142,7 @@ jobs:
 
 
   manoj-hyperv-runtime-discovery:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 15
     steps:
@@ -255,3 +255,83 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api -X POST repos/${{ github.repository }}/actions/runs/35989706816/cancel || true
+
+
+  manoj-oneswap-service-inspect:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host 'MANOJ_BOUND=PASS'
+
+      - name: Verify pinned appliance host key and select login
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance.paramiko'
+          foreach($p in @($key,$known)){ if(-not (Test-Path $p)){throw "Missing authority: $p"} }
+          Write-Host "KEY_LENGTH=$((Get-Item $key).Length) KNOWN_HOSTS_LENGTH=$((Get-Item $known).Length)"
+          & ssh-keygen.exe -F '10.250.10.42' -f $known
+          if($LASTEXITCODE -ne 0){ throw 'Pinned known_hosts does not authorize 10.250.10.42' }
+          $users=@('oneadmin','root','opc','rocky','cloud-user')
+          $selected=$null
+          foreach($u in $users){
+            & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=5 -i $key "$u@10.250.10.42" "printf 'LAYERSENTRY_SSH_OK user=%s host=%s\n' \$(id -un) \$(hostname)" 2>$null
+            if($LASTEXITCODE -eq 0){$selected=$u;break}
+          }
+          if(-not $selected){throw 'No approved appliance login accepted the pinned key'}
+          Write-Host "ONESWAP_SSH_USER=$selected"
+          "ONESWAP_SSH_USER=$selected" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Inspect OneSwap API service read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance.paramiko'
+          $remote=@'
+          set -eu
+          echo "=== identity ==="
+          id
+          hostname
+          echo "=== oneswap service ==="
+          if command -v systemctl >/dev/null 2>&1; then
+            systemctl is-enabled layersentry-oneswap.service 2>/dev/null || true
+            systemctl is-active layersentry-oneswap.service 2>/dev/null || true
+            systemctl is-enabled oneswapd.service 2>/dev/null || true
+            systemctl is-active oneswapd.service 2>/dev/null || true
+            systemctl --no-pager --full status layersentry-oneswap.service 2>/dev/null | head -40 || true
+            systemctl --no-pager --full status oneswapd.service 2>/dev/null | head -40 || true
+          fi
+          echo "=== listener ==="
+          ss -lntp 2>/dev/null | grep -E ':(22|9443|9444)[[:space:]]' || true
+          echo "=== install metadata ==="
+          command -v oneswap-hyperv || true
+          command -v oneswap || true
+          test -f /etc/layersentry/oneswapd/config.json && python3 - <<'PY'
+          import json
+          p='/etc/layersentry/oneswapd/config.json'
+          d=json.load(open(p))
+          safe={k:v for k,v in d.items() if k not in {'tls_key'}}
+          for k in sorted(safe):
+              v=safe[k]
+              if any(x in k.lower() for x in ('key','auth','secret','password','token')):
+                  print(f"{k}=<redacted>")
+              else:
+                  print(f"{k}={v}")
+          PY
+          echo "=== service journal tail ==="
+          journalctl -u layersentry-oneswap.service -u oneswapd.service --no-pager -n 80 2>/dev/null || true
+          '@
+          $tmp=Join-Path $env:RUNNER_TEMP 'inspect-oneswap.sh'
+          [IO.File]::WriteAllText($tmp,$remote,(New-Object Text.UTF8Encoding($false)))
+          Get-Content $tmp | & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key "$env:ONESWAP_SSH_USER@10.250.10.42" 'bash -s'
+          if($LASTEXITCODE -ne 0){throw "Read-only appliance inspection failed: $LASTEXITCODE"}
+          Write-Host 'ONESWAP_SERVICE_INSPECTION=PASS'
