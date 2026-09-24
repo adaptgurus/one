@@ -71,22 +71,48 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          $env:GIT_TERMINAL_PROMPT='0'
           $repo=$env:LAYERENTRY_PLATFORM
-          git -C $repo fetch origin d47641e9eeb6656ad61b2739a6c5195409558ec3
-          if($LASTEXITCODE -ne 0){throw 'Unable to fetch exact PR103 head.'}
+          $wanted='d47641e9eeb6656ad61b2739a6c5195409558ec3'
+          $branch='feat/replication-v2-site-pair-env-dr-20260924'
+
+          git -C $repo cat-file -e "$wanted^{commit}" 2>$null
+          if($LASTEXITCODE -ne 0){
+            Write-Host "Exact object not local; fetching branch $branch noninteractively."
+            $refspec='+refs/heads/' + $branch + ':refs/remotes/origin/' + $branch
+            git -C $repo fetch --no-tags --prune origin $refspec
+            if($LASTEXITCODE -ne 0){throw 'Unable to fetch PR103 branch noninteractively.'}
+          } else {
+            Write-Host 'EXACT_OBJECT_ALREADY_LOCAL=PASS'
+          }
+
+          $resolved=(git -C $repo rev-parse $wanted 2>$null).Trim()
+          if($LASTEXITCODE -ne 0 -or $resolved -ne $wanted){
+            throw "Exact PR103 commit unavailable after fetch: $resolved"
+          }
+
+          $remoteRef='refs/remotes/origin/' + $branch
+          $remoteHead=(git -C $repo rev-parse $remoteRef 2>$null)
+          if($LASTEXITCODE -eq 0){
+            $remoteHead=$remoteHead.Trim()
+            if($remoteHead -ne $wanted){
+              throw "Remote PR103 branch moved: expected=$wanted actual=$remoteHead"
+            }
+          }
+
           $wt='C:\LayerSentryLab\qualification\replication-v2-pr103-live'
           if(Test-Path $wt){
-            try { git -C $repo worktree remove --force $wt 2>$null } catch {}
+            git -C $repo worktree remove --force $wt 2>$null
             if(Test-Path $wt){Remove-Item $wt -Recurse -Force}
           }
-          git -C $repo worktree add --detach $wt d47641e9eeb6656ad61b2739a6c5195409558ec3
+          git -C $repo worktree prune
+          git -C $repo worktree add --detach $wt $wanted
           if($LASTEXITCODE -ne 0){throw 'Unable to create exact-head worktree.'}
           $head=(git -C $wt rev-parse HEAD).Trim()
-          if($head -ne 'd47641e9eeb6656ad61b2739a6c5195409558ec3'){throw "Wrong exact head: $head"}
+          if($head -ne $wanted){throw "Wrong exact head: $head"}
           "RV2_WORKTREE=$wt" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "EXACT_HEAD=$head"
           Write-Host 'EXACT_HEAD_BIND=PASS'
-
       - name: Validate exact source and qualification script
         shell: powershell
         run: |
