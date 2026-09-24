@@ -2985,7 +2985,7 @@ jobs:
 
 
   manoj-builder-memory-recovery:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 15
     steps:
@@ -3103,6 +3103,72 @@ jobs:
           & ssh.exe -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           if($LASTEXITCODE -ne 0){throw 'No target XMLRPC endpoint reachable from OneSwap appliance'}
           Write-Host 'TARGET_XMLRPC_REACHABILITY=PASS'
+
+      - name: Confirm protected migration path remains intact
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance changed state: $($active.State)"}
+          Write-Host 'PROTECTED_PATH_AFTER=PASS'
+
+
+  manoj-builder-account-discovery:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind exact Manoj runner and protect active migration path
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          $builder=Get-VM -Name 'ls-iso-builder' -ErrorAction Stop
+          if($builder.State -ne 'Running'){throw "Builder is not Running: $($builder.State)"}
+          Write-Host 'PROTECTED_PATH_BEFORE=PASS'
+
+      - name: Discover existing builder SSH account using pinned key only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $ip='10.250.10.40'
+          & ssh-keygen.exe -F $ip -f $known 2>$null | Out-Null
+          if($LASTEXITCODE -ne 0){throw 'Builder host is not pinned in known_hosts_builder'}
+          $selected=$null
+          foreach($u in @('builder','opc','rocky','cloud-user','oneadmin')){
+            $out=& ssh.exe -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o PreferredAuthentications=publickey -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=5 -i $key "$u@$ip" "printf 'SSH_ACCOUNT_OK user=%s host=%s\n' \`$(id -un) \`$(hostname)" 2>&1
+            $rc=$LASTEXITCODE
+            if($rc -eq 0){
+              $out | ForEach-Object {Write-Host $_}
+              $selected=$u
+              "BUILDER_USER=$u" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+              break
+            } else {
+              Write-Host "SSH_ACCOUNT_REJECTED user=$u rc=$rc"
+            }
+          }
+          if(-not $selected){throw 'Existing builder key is not authorized for any qualified candidate account'}
+          Write-Host "BUILDER_ACCOUNT_DISCOVERY=PASS user=$selected"
+
+      - name: Inspect FE1 target authority metadata only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $ip='10.250.10.40'
+          $cmd='set -euo pipefail; p=/mnt/layersentry-work/ha-private/fe1/one_auth; if [ -f "$p" ]; then stat -c "FE1_AUTH_PRESENT=1 mode=%a uid=%u gid=%g size=%s" "$p"; else echo FE1_AUTH_PRESENT=0; exit 42; fi; grep -RhoE "http://10\.250\.10\.[0-9]+:2633/RPC2" /mnt/layersentry-work 2>/dev/null | sort -u | head -20'
+          & ssh.exe -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o PreferredAuthentications=publickey -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "$env:BUILDER_USER@$ip" $cmd
+          if($LASTEXITCODE -ne 0){throw 'Builder FE1 authority metadata validation failed'}
+          Write-Host 'BUILDER_FE1_AUTHORITY_METADATA=PASS'
 
       - name: Confirm protected migration path remains intact
         shell: powershell
