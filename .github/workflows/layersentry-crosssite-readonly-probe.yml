@@ -78,12 +78,17 @@ jobs:
           $reachable = @($rows | Where-Object { $_.reachable }).Count
           Write-Host "CROSS_SITE_TCP_REACHABLE=$reachable/$($rows.Count)"
 
+          $savedPreference = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
           $sshOutput = & ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=NUL -o ConnectTimeout=3 opc@10.10.10.21 hostname 2>&1
-          if ($LASTEXITCODE -eq 0) {
+          $sshExit = $LASTEXITCODE
+          $ErrorActionPreference = $savedPreference
+          if ($sshExit -eq 0) {
             Write-Host "CROSS_SITE_SOURCE_SSH=PASS"
             Write-Host ("CROSS_SITE_SOURCE_HOST=" + (($sshOutput | Out-String).Trim()))
           } else {
             Write-Host "CROSS_SITE_SOURCE_SSH=NO_AUTH_OR_ROUTE"
+            Write-Host ("CROSS_SITE_SOURCE_SSH_DETAIL=" + (($sshOutput | Out-String).Trim()))
           }
           $global:LASTEXITCODE = 0
           Write-Host "CROSS_SITE_PROBE_COMPLETE=PASS"
