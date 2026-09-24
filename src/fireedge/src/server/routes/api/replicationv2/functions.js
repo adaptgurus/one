@@ -291,7 +291,7 @@ const captureProtectionGroup = (
         method: 'POST',
         path:
           '/v1/replication/protection-groups/' +
-          encodeURIComponent(workloadId) +
+          encodeURIComponent(groupId) +
           '/capture',
       },
       userData,
@@ -597,7 +597,7 @@ const drGetRecoveryMapping = (
         method: 'GET',
         path:
           '/v1/replication-product/recovery-mappings/' +
-          encodeURIComponent(groupId) +
+          encodeURIComponent(workloadId) +
           '/' +
           encodeURIComponent(siteId),
       },
