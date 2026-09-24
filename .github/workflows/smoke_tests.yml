@@ -244,8 +244,8 @@ jobs:
     if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
     runs-on: ubuntu-latest
     steps:
-      - name: Cancel only stale Manoj discovery run
+      - name: Cancel second stale Manoj discovery run
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh api -X POST repos/${{ github.repository }}/actions/runs/35989622716/cancel || true
+          gh api -X POST repos/${{ github.repository }}/actions/runs/35989706816/cancel || true
