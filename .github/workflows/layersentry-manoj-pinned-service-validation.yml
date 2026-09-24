@@ -205,7 +205,7 @@ jobs:
               else: raise SystemExit("service image did not become READY")
 
           vm_template=f'''NAME="{vm_name}"
-          CPU="1"
+          CPU="0.5"
           VCPU="1"
           MEMORY="256"
           FEATURES=[GUEST_AGENT="YES"]
@@ -317,3 +317,5 @@ jobs:
 # host-id-order-fix: 2026-09-24T15:11+05:30
 
 # resume-service-validation-live-run: 2026-09-24T15:11+05:30
+
+# half-cpu-accounting-fix: 2026-09-24T15:11+05:30
