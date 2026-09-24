@@ -1,0 +1,59 @@
+name: Manoj Replication v2 Site Inventory
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-replication-v2-site-inventory.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Discover exactly two OpenNebula sites
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $rows=@()
+          Get-VM | Where-Object State -eq 'Running' | ForEach-Object {
+            $vm=$_
+            Get-VMNetworkAdapter -VMName $vm.Name -ErrorAction SilentlyContinue | ForEach-Object {
+              $adapter=$_
+              $adapter.IPAddresses | Where-Object {
+                $_ -match '^10\.' -or $_ -match '^192\.168\.' -or $_ -match '^172\.(1[6-9]|2[0-9]|3[01])\.'
+              } | ForEach-Object {
+                $rows += [pscustomobject]@{VM=$vm.Name;IP=$_;Switch=$adapter.SwitchName}
+              }
+            }
+          }
+          $verified=@()
+          foreach($row in ($rows | Sort-Object VM,IP -Unique)){
+            if(-not (Test-NetConnection -ComputerName $row.IP -Port 22 -InformationLevel Quiet -WarningAction SilentlyContinue)){continue}
+            $target="opc@$($row.IP)"
+            $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+            $out=& ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new $target "sudo -n bash -lc 'systemctl is-active opennebula >/dev/null && command -v onehost >/dev/null && onehost list >/dev/null && cat /etc/machine-id'" 2>$null
+            $rc=$LASTEXITCODE
+            $ErrorActionPreference=$old
+            if($rc -eq 0 -and ($out -join '').Trim()){
+              $verified += [pscustomobject]@{VM=$row.VM;IP=$row.IP;Switch=$row.Switch;MachineId=($out -join '').Trim()}
+            }
+          }
+          $verified=@($verified | Sort-Object VM,IP -Unique)
+          $verified | Format-Table -AutoSize
+          Write-Host "VERIFIED_SITE_COUNT=$($verified.Count)"
+          if($verified.Count -ne 2){throw "Expected exactly two OpenNebula sites; found $($verified.Count)"}
+          Write-Host "SITE_A_VM=$($verified[0].VM)"
+          Write-Host "SITE_A_IP=$($verified[0].IP)"
+          Write-Host "SITE_A_MACHINE=$($verified[0].MachineId)"
+          Write-Host "SITE_B_VM=$($verified[1].VM)"
+          Write-Host "SITE_B_IP=$($verified[1].IP)"
+          Write-Host "SITE_B_MACHINE=$($verified[1].MachineId)"
+          if($verified[0].MachineId -eq $verified[1].MachineId){throw 'Both candidates resolve to same machine identity'}
+          Write-Host 'TWO_SITE_INVENTORY=PASS'
