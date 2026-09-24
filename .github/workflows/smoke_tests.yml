@@ -3659,7 +3659,7 @@ jobs:
 
 
   manoj-fe2-authority-via-oneswap:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 12
     steps:
