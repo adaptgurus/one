@@ -1,0 +1,81 @@
+name: Manoj HyperV Orphan RCT Cleanup
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-orphan-rct-cleanup.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-orphan-rct-cleanup
+  cancel-in-progress: true
+
+jobs:
+  cleanup:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Remove exact orphan reference from failed prepare
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source must stay Running: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has user-visible checkpoints'}
+
+          $expected='Microsoft:6135125C-AD5D-4C29-8764-65A68D2747CB'
+          $ns='root\virtualization\v2'
+          $all=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
+          Write-Host "ORPHAN_CLEANUP_BEFORE_COUNT=$($all.Count)"
+          $ref=@($all | Where-Object {$_.InstanceID -eq $expected})
+          if($ref.Count -ne 1){throw "Exact orphan reference not found uniquely; count=$($ref.Count)"}
+          $ref=$ref[0]
+          $vd=@($ref.VirtualDiskIdentifiers)
+          $ri=@($ref.ResilientChangeTrackingIdentifiers)
+          Write-Host "ORPHAN_INSTANCE=$($ref.InstanceID)"
+          Write-Host "ORPHAN_TYPE=$($ref.ReferencePointType)"
+          Write-Host "ORPHAN_CONSISTENCY=$($ref.ConsistencyLevel)"
+          Write-Host "ORPHAN_HAS_ASSOCIATED_DATA=$($ref.HasAssociatedData)"
+          Write-Host "ORPHAN_VD_COUNT=$($vd.Count)"
+          Write-Host "ORPHAN_RCT_COUNT=$($ri.Count)"
+          if($vd.Count -ne 2){throw "Refusing cleanup: expected two virtual disks; found $($vd.Count)"}
+          if($ri.Count -eq $vd.Count -and @($ri | Where-Object {-not [string]::IsNullOrWhiteSpace([string]$_)}).Count -eq $vd.Count){
+            throw 'Refusing cleanup: reference now contains a complete usable RCT baseline'
+          }
+
+          $svc=Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePointService
+          $r=$svc.DestroyReferencePoint($ref)
+          Write-Host "ORPHAN_DESTROY_RETURN=$($r.ReturnValue)"
+          if($r.ReturnValue -eq 4096){
+            $job=[wmi]$r.Job
+            $deadline=(Get-Date).AddMinutes(5)
+            while(($job.JobState -eq 3 -or $job.JobState -eq 4) -and (Get-Date) -lt $deadline){
+              Start-Sleep 1
+              $job.Get()
+            }
+            if($job.JobState -ne 7){throw "DestroyReferencePoint failed state=$($job.JobState) error=$($job.ErrorDescription)"}
+          } elseif($r.ReturnValue -ne 0) {
+            throw "DestroyReferencePoint failed code=$($r.ReturnValue)"
+          }
+
+          $after=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
+          Write-Host "ORPHAN_CLEANUP_AFTER_COUNT=$($after.Count)"
+          if(@($after | Where-Object {$_.InstanceID -eq $expected}).Count -ne 0){throw 'Exact orphan reference still exists'}
+          Write-Host 'ORPHAN_RCT_CLEANUP=PASS'
+
+      - name: Verify source invariant
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$n"
+          if($vm.State -ne 'Running'){throw 'Cleanup changed source state'}
+          if($n -ne 0){throw 'Cleanup created user-visible checkpoint'}
+          Write-Host 'SOURCE_INVARIANT=PASS'
