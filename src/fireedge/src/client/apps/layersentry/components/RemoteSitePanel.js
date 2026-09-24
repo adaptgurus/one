@@ -6,18 +6,13 @@
  * a copy of the License at                                                  *
  *                                                                           *
  * http://www.apache.org/licenses/LICENSE-2.0                                *
- *                                                                           *
- * Unless required by applicable law or agreed to in writing, software       *
- * distributed under the License is distributed on an "AS IS" BASIS,         *
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
- * See the License for the specific language governing permissions and       *
- * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import {
   Alert,
   Box,
   Button,
+  Chip,
   FormControl,
   InputLabel,
   LinearProgress,
@@ -40,120 +35,162 @@ const slug = (value) =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '')
 
-const REMOTE_CAPABILITIES = [
-  'RESTIC_CHECKPOINT',
-  'OPENNEBULA_RECOVERY',
-  'CBT_SOURCE',
-  'CEPH_RBD_MIRROR',
-  'ARRAY_REPLICATION',
-  'REDFISH_FENCING',
-]
-
 const RemoteSitePanel = ({ isAdmin }) => {
-  const sitesQuery = DrAPI.useGetRemoteSitesQuery(undefined, { skip: !isAdmin })
-  const [createSite, createState] = DrAPI.useCreateRemoteSiteMutation()
-  const [name, setName] = useState('')
-  const [siteId, setSiteId] = useState('')
-  const [endpoint, setEndpoint] = useState('')
-  const [clusterUuid, setClusterUuid] = useState('')
-  const [tlsFingerprint, setTlsFingerprint] = useState('')
-  const [capabilities, setCapabilities] = useState([
-    'RESTIC_CHECKPOINT',
-    'OPENNEBULA_RECOVERY',
-  ])
+  const identityQuery = DrAPI.useGetLocalSiteIdentityQuery(undefined, {
+    skip: !isAdmin,
+  })
+  const capabilitiesQuery = DrAPI.useGetDrCapabilitiesQuery(undefined, {
+    skip: !isAdmin,
+  })
+  const pairsQuery = DrAPI.useGetSitePairsQuery(undefined, { skip: !isAdmin })
+  const [createPair, createState] = DrAPI.useCreateSitePairMutation()
 
-  const sites = toArray(sitesQuery.data)
+  const [remoteSiteId, setRemoteSiteId] = useState('')
+  const [endpoint, setEndpoint] = useState('')
+  const [username, setUsername] = useState('oneadmin')
+  const [password, setPassword] = useState('')
+  const [mode, setMode] = useState('NDR')
+
+  const local = identityQuery.data ?? {}
+  const pairs = toArray(pairsQuery.data)
+  const metroAvailable = capabilitiesQuery.data?.features?.metroDR === true
+  const ndrAvailable = capabilitiesQuery.data?.features?.ndr === true
+  const pairId = useMemo(
+    () => slug(`${local.site_id ?? 'local'}-${remoteSiteId || 'remote'}`),
+    [local.site_id, remoteSiteId]
+  )
+
   const validationError = useMemo(() => {
-    const id = siteId.trim() || slug(name)
-    if (!name.trim()) return 'Remote Site name is required.'
-    if (!id) return 'Remote Site ID is required.'
+    if (!local.site_id || !local.cluster_uuid)
+      return 'Local LayerSentry Site identity is not ready.'
+    if (!remoteSiteId.trim()) return 'Remote Site ID is required.'
+    if (remoteSiteId.trim() === local.site_id)
+      return 'Remote Site ID must differ from the local Site ID.'
     if (!/^https:\/\/[^\s/]+(?::\d+)?(?:\/[^\s]*)?$/.test(endpoint.trim()))
-      return 'Remote Site Endpoint must be an HTTPS URL.'
-    if (!clusterUuid.trim())
-      return 'Remote LayerSentry cluster UUID is required.'
-    if (
-      tlsFingerprint.trim() &&
-      !/^(?:sha256:)?[a-fA-F0-9]{64}$/.test(tlsFingerprint.trim())
-    )
-      return 'TLS fingerprint must be a SHA-256 fingerprint.'
-    if (capabilities.length === 0)
-      return 'Select at least one qualified remote-site capability.'
+      return 'Remote LayerSentry Endpoint must be an HTTPS URL.'
+    if (!username.trim()) return 'Remote administrator username is required.'
+    if (!password) return 'Remote administrator password is required.'
+    if (mode === 'METRO_DR' && !metroAvailable)
+      return 'Metro DR is not qualified for this LayerSentry deployment.'
+    if (mode === 'NDR' && !ndrAvailable)
+      return 'NDR is not qualified for this LayerSentry deployment.'
 
     return ''
-  }, [name, siteId, endpoint, clusterUuid, tlsFingerprint, capabilities])
+  }, [
+    local.site_id,
+    local.cluster_uuid,
+    remoteSiteId,
+    endpoint,
+    username,
+    password,
+    mode,
+    metroAvailable,
+    ndrAvailable,
+  ])
 
   const submit = async () => {
     if (validationError) return
-    await createSite({
-      id: siteId.trim() || slug(name),
-      name: name.trim(),
-      endpoint: endpoint.trim().replace(/\/$/, ''),
-      cluster_uuid: clusterUuid.trim(),
-      tls_fingerprint_sha256: tlsFingerprint.trim(),
-      capabilities,
-    }).unwrap()
-    await sitesQuery.refetch()
-    setName('')
-    setSiteId('')
-    setEndpoint('')
-    setClusterUuid('')
-    setTlsFingerprint('')
-    setCapabilities(['RESTIC_CHECKPOINT', 'OPENNEBULA_RECOVERY'])
+    try {
+      await createPair({
+        id: pairId,
+        local_site_id: local.site_id,
+        remote_site_id: remoteSiteId.trim(),
+        remote_endpoint: endpoint.trim().replace(/\/$/, ''),
+        username: username.trim(),
+        password,
+        mode,
+      }).unwrap()
+      setPassword('')
+      await pairsQuery.refetch()
+    } finally {
+      // Never retain the bootstrap password in component state after an attempt.
+      setPassword('')
+    }
   }
 
   if (!isAdmin) return null
 
   return (
-    <Surface sx={{ p: 2 }} data-layersentry-remote-sites>
+    <Surface sx={{ p: 2 }} data-layersentry-site-pairs>
       <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
-        Remote Sites
+        LayerSentry Site Pairing
       </Typography>
       <Typography sx={{ mt: 0.5, fontSize: 12, color: colors.text.secondary }}>
-        Register the remote LayerSentry cluster identity before assigning it to
-        a Protection Domain. Registration alone does not certify failover.
+        Connect two LayerSentry sites once with remote administrator
+        credentials. After identity/TLS validation, LayerSentry replaces the
+        password with a scoped site-to-site API credential.
       </Typography>
 
-      {sitesQuery.isLoading || sitesQuery.isFetching ? (
+      {identityQuery.isLoading || pairsQuery.isLoading ? (
         <LinearProgress sx={{ mt: 2 }} />
-      ) : sitesQuery.isError ? (
+      ) : identityQuery.isError || pairsQuery.isError ? (
         <Alert severity="warning" sx={{ mt: 2 }}>
-          Remote Site registry is unavailable. New Protection Domains remain
-          fail-closed.
-        </Alert>
-      ) : sites.length === 0 ? (
-        <Alert severity="info" sx={{ mt: 2 }}>
-          No Remote Sites are registered.
+          Site pairing is unavailable until the local DR service and durable
+          pairing registry are healthy.
         </Alert>
       ) : (
-        <Box sx={{ mt: 2, display: 'grid', gap: 1 }}>
-          {sites.map((site) => (
-            <Box
-              key={site.id}
-              sx={{
-                p: 1.5,
-                border: `1px solid ${colors.border}`,
-                borderRadius: 1.5,
-              }}
-            >
-              <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
-                {site.name || site.id}
-              </Typography>
-              <Typography
-                sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
-              >
-                {site.id} · {site.cluster_uuid} · {site.endpoint}
-              </Typography>
-              <Typography
-                sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}
-              >
-                {toArray(site.capabilities).join(', ') || 'No capabilities'}
-                {site.last_seen_at
-                  ? ` · last verified ${site.last_seen_at}`
-                  : ' · transport observation pending'}
-              </Typography>
+        <>
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Local Site: <strong>{local.site_name || local.site_id}</strong> ·{' '}
+            {local.site_id} · cluster {local.cluster_uuid}
+          </Alert>
+
+          {pairs.length === 0 ? (
+            <Alert severity="info" sx={{ mt: 1.5 }}>
+              No LayerSentry site pair is configured.
+            </Alert>
+          ) : (
+            <Box sx={{ mt: 1.5, display: 'grid', gap: 1 }}>
+              {pairs.map((pair) => (
+                <Box
+                  key={pair.id}
+                  sx={{
+                    p: 1.5,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 1.5,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: 'flex',
+                      gap: 1,
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+                      {pair.local_site_id} → {pair.remote_site_id}
+                    </Typography>
+                    <Chip
+                      size="small"
+                      label={pair.mode === 'METRO_DR' ? 'Metro DR' : 'NDR'}
+                    />
+                    <Chip
+                      size="small"
+                      label={pair.state}
+                      color={pair.state === 'PAIRED' ? 'success' : 'warning'}
+                    />
+                  </Box>
+                  <Typography
+                    sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
+                  >
+                    {pair.remote_endpoint}
+                  </Typography>
+                  <Typography
+                    sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}
+                  >
+                    Remote cluster {pair.remote_cluster_uuid}
+                    {pair.last_validated_at
+                      ? ` · verified ${new Date(
+                          pair.last_validated_at
+                        ).toLocaleString()}`
+                      : ''}
+                  </Typography>
+                </Box>
+              ))}
             </Box>
-          ))}
-        </Box>
+          )}
+        </>
       )}
 
       <Box
@@ -165,50 +202,45 @@ const RemoteSitePanel = ({ isAdmin }) => {
         }}
       >
         <TextField
-          label="Remote Site name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <TextField
           label="Remote Site ID"
-          placeholder="manoj"
-          value={siteId}
-          onChange={(e) => setSiteId(e.target.value)}
+          placeholder="dr"
+          value={remoteSiteId}
+          onChange={(e) => setRemoteSiteId(e.target.value)}
         />
         <TextField
-          label="Remote Site Endpoint"
-          placeholder="https://manoj-site.example"
+          label="Remote LayerSentry Endpoint"
+          placeholder="https://dr.layersentry.example:9444"
           value={endpoint}
           onChange={(e) => setEndpoint(e.target.value)}
         />
         <TextField
-          label="Remote Cluster UUID"
-          value={clusterUuid}
-          onChange={(e) => setClusterUuid(e.target.value)}
+          label="Remote Administrator"
+          value={username}
+          autoComplete="username"
+          onChange={(e) => setUsername(e.target.value)}
         />
         <TextField
-          label="TLS SHA-256 fingerprint"
-          placeholder="sha256:..."
-          value={tlsFingerprint}
-          onChange={(e) => setTlsFingerprint(e.target.value)}
-          sx={{ gridColumn: { md: '1 / -1' } }}
+          label="Remote Administrator Password"
+          type="password"
+          value={password}
+          autoComplete="new-password"
+          onChange={(e) => setPassword(e.target.value)}
+          helperText="Used only for pairing bootstrap; never retained as the site credential."
         />
         <FormControl sx={{ gridColumn: { md: '1 / -1' } }}>
-          <InputLabel id="remote-site-capabilities-label">
-            Capabilities
-          </InputLabel>
+          <InputLabel id="layersentry-dr-mode-label">DR mode</InputLabel>
           <Select
-            labelId="remote-site-capabilities-label"
-            label="Capabilities"
-            multiple
-            value={capabilities}
-            onChange={(e) => setCapabilities(e.target.value)}
+            labelId="layersentry-dr-mode-label"
+            label="DR mode"
+            value={mode}
+            onChange={(e) => setMode(e.target.value)}
           >
-            {REMOTE_CAPABILITIES.map((capability) => (
-              <MenuItem key={capability} value={capability}>
-                {capability}
-              </MenuItem>
-            ))}
+            <MenuItem value="NDR" disabled={!ndrAvailable}>
+              NDR · asynchronous checkpoints · 5-minute RPO target
+            </MenuItem>
+            <MenuItem value="METRO_DR" disabled={!metroAvailable}>
+              Metro DR · synchronous/mirrored storage only when qualified
+            </MenuItem>
           </Select>
         </FormControl>
       </Box>
@@ -222,21 +254,21 @@ const RemoteSitePanel = ({ isAdmin }) => {
         <Alert severity="error" sx={{ mt: 1.5 }}>
           {createState.error?.data?.message ??
             createState.error?.data?.error ??
-            'Remote Site registration failed.'}
+            'LayerSentry site pairing failed.'}
         </Alert>
       )}
       <Button
         variant="contained"
         disabled={
           Boolean(validationError) ||
-          sitesQuery.isError ||
-          sitesQuery.isLoading ||
+          identityQuery.isLoading ||
+          pairsQuery.isLoading ||
           createState.isLoading
         }
         onClick={submit}
         sx={{ mt: 1.5, textTransform: 'none' }}
       >
-        Register Remote Site
+        Pair LayerSentry Sites
       </Button>
     </Surface>
   )
