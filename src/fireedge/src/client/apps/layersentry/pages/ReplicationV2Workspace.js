@@ -872,6 +872,176 @@ const ReplicationV2Workspace = () => {
 
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
+          title="Recovery network mapping and VM checkpoints"
+          description="Keep one logical VM at the DR site and choose a retained checkpoint when you recover it. Map the source network to a DR VNet, then use DHCP or an explicitly validated static DR address."
+        />
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' },
+            gap: 1.5,
+          }}
+        >
+          <TextField
+            label="Target cluster ID"
+            value={targetClusterId}
+            onChange={(e) => setTargetClusterId(e.target.value)}
+          />
+          <TextField
+            label="Target datastore ID"
+            value={targetDatastoreId}
+            onChange={(e) => setTargetDatastoreId(e.target.value)}
+          />
+          <TextField
+            label="Target DR VNet ID"
+            value={targetNetworkId}
+            onChange={(e) => setTargetNetworkId(e.target.value)}
+            placeholder="DR VNet ID"
+            helperText={
+              primaryNic
+                ? `Source NIC ${primaryNic.id}: ${primaryNic.sourceNetworkName} (network ${primaryNic.sourceNetworkId})`
+                : 'Choose a VM to resolve its source network.'
+            }
+          />
+          <FormControl fullWidth>
+            <InputLabel>DR address</InputLabel>
+            <Select
+              value={addressMode}
+              label="DR address"
+              onChange={(e) => setAddressMode(e.target.value)}
+            >
+              <MenuItem value="DHCP">DHCP from target DR VNet</MenuItem>
+              <MenuItem value="STATIC">Static DR IP</MenuItem>
+            </Select>
+          </FormControl>
+          {addressMode === 'STATIC' && (
+            <>
+              <TextField
+                label="Static DR IP"
+                value={staticIp}
+                onChange={(e) => setStaticIp(e.target.value)}
+                placeholder="10.40.50.60"
+              />
+              <TextField
+                label="Prefix length"
+                type="number"
+                value={staticPrefix}
+                onChange={(e) => setStaticPrefix(Number(e.target.value))}
+                inputProps={{ min: 0, max: 128 }}
+              />
+              <TextField
+                label="DR gateway"
+                value={staticGateway}
+                onChange={(e) => setStaticGateway(e.target.value)}
+                placeholder="10.40.50.1"
+              />
+              <TextField
+                label="DR DNS"
+                value={staticDns}
+                onChange={(e) => setStaticDns(e.target.value)}
+                placeholder="10.40.50.53 10.40.50.54"
+              />
+            </>
+          )}
+        </Box>
+
+        {nics.length > 1 && (
+          <Alert severity="warning" sx={{ mt: 1.5 }}>
+            This VM has {nics.length} NICs. The simple mapper will not save an
+            incomplete mapping. Use the ordered per-NIC advanced mapper before
+            failover so every captured NIC is mapped explicitly.
+          </Alert>
+        )}
+
+        <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Button
+            variant="outlined"
+            disabled={
+              mappingBusy ||
+              !selectedVm ||
+              !targetSite ||
+              !targetNetworkId.trim() ||
+              nics.length !== 1
+            }
+            onClick={saveRecoveryMapping}
+            sx={{ textTransform: 'none' }}
+          >
+            {mappingBusy ? 'Saving mapping…' : 'Save recovery network mapping'}
+          </Button>
+          <Button
+            variant="outlined"
+            disabled={!selectedVm || !targetSite}
+            onClick={loadVMCheckpointCatalog}
+            sx={{ textTransform: 'none' }}
+          >
+            Load all retained VM checkpoints
+          </Button>
+        </Box>
+
+        <Box sx={{ mt: 2 }}>
+          {checkpointCatalog.map((vmCatalog) => (
+            <Box
+              key={vmCatalog.workload_id}
+              sx={{
+                mb: 1.5,
+                p: 1.5,
+                border: `1px solid ${colors.border}`,
+                borderRadius: 1.5,
+              }}
+            >
+              <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+                {vmCatalog.vm_name}
+              </Typography>
+              <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+                One logical DR VM · workload {vmCatalog.workload_id} ·{' '}
+                {vmCatalog.checkpoints?.length || 0} retained checkpoint(s)
+              </Typography>
+              {(vmCatalog.checkpoints || []).map((checkpoint) => (
+                <Box
+                  key={checkpoint.recovery_point_id}
+                  sx={{
+                    mt: 0.75,
+                    p: 1,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 1,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    gap: 1,
+                    flexWrap: 'wrap',
+                  }}
+                >
+                  <Typography sx={{ fontSize: 11, color: colors.text.secondary }}>
+                    {dateText(checkpoint.captured_at)} · {checkpoint.kind} ·{' '}
+                    {checkpoint.state}
+                  </Typography>
+                  <Typography
+                    sx={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: checkpoint.available_at_site
+                        ? colors.status.success
+                        : colors.status.warning,
+                    }}
+                  >
+                    {checkpoint.available_at_site
+                      ? 'Available at selected DR site'
+                      : 'Not available at selected DR site'}
+                  </Typography>
+                </Box>
+              ))}
+            </Box>
+          ))}
+          {!checkpointCatalog.length && (
+            <Typography sx={{ fontSize: 11, color: colors.text.muted }}>
+              Load the catalog to see every retained five-minute-RPO recovery
+              point for the selected VM.
+            </Typography>
+          )}
+        </Box>
+      </Surface>
+
+      <Surface sx={{ mt: 2, p: 2.5 }}>
+        <SectionHeader
           title="Replication sessions"
           description="Measured RPO and backlog are runtime evidence. Configured interval alone is never shown as achieved RPO."
         />
