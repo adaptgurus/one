@@ -96,8 +96,9 @@ jobs:
           export ONE_AUTH="$tmp"
           export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
           operation="manoj-hv-ls-migration-source-test-20260924"
+          echo "TARGET_NETWORK_POLICY=explicit-test-map source=10.250.10.31/24 target_vnet=0 target_name=dev_web_network preserve_source_l2=false"
           set +e
-          out=$(sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --preflight --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --qemu-ga --datastore 1 2>&1)
+          out=$(sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --preflight --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --qemu-ga --datastore 1 --network 0 2>&1)
           rc=$?
           set -e
           printf '%s\n' "$out" | sed -E 's/(password|secret|token|authorization|one_auth)[^ ]*/\1=<redacted>/Ig'
@@ -105,7 +106,7 @@ jobs:
             echo "ONESWAP_HOT_PREFLIGHT=FAIL rc=$rc"
             exit "$rc"
           fi
-          echo "ONESWAP_HOT_PREFLIGHT=PASS operation_id=$operation datastore=1"
+          echo "ONESWAP_HOT_PREFLIGHT=PASS operation_id=$operation datastore=1 network=0"
           '@
           $script=$script.Replace('__DEV__',$dev)
           $script=[regex]::Replace($script,'\r','')
