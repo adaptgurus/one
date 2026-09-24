@@ -1,7 +1,5 @@
 name: Manoj OneSwap PR20 RCT Baseline Deploy
-# deploy-ci-green-crash-baseline-support
-# redeploy-after-cim-path-escape-fix
-# redeploy-after-orphan-cleanup
+# deploy-ci-green-target-sizing-head
 
 on:
   push:
@@ -20,7 +18,7 @@ concurrency:
 jobs:
   deploy:
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Bind Manoj and prove clean RCT baseline
         shell: powershell
@@ -38,8 +36,8 @@ jobs:
           $recovery=@($cs | Get-CimAssociatedInstance -Association Msvm_SnapshotOfVirtualSystem -ResultClassName Msvm_VirtualSystemSettingData | Where-Object {$_.VirtualSystemType -eq 'Microsoft:Hyper-V:Snapshot:Recovery'})
           Write-Host "BASELINE_REFERENCE_COUNT=$($refs.Count)"
           Write-Host "BASELINE_RECOVERY_CHECKPOINT_COUNT=$($recovery.Count)"
-          if($refs.Count -ne 0){throw 'Refusing deploy/test with existing reference points'}
-          if($recovery.Count -ne 0){throw 'Refusing deploy/test with existing recovery checkpoints'}
+          if($refs.Count -ne 0){throw 'Refusing deploy with existing reference points'}
+          if($recovery.Count -ne 0){throw 'Refusing deploy with existing recovery checkpoints'}
           if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
           Write-Host 'CLEAN_RCT_BASELINE=PASS'
 
@@ -48,7 +46,7 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
-          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-pr20-rct-baseline.key'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-pr20-sizing.key'
           Copy-Item -Force $src $tmp
           & icacls.exe $tmp /inheritance:r | Out-Null
           & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
@@ -57,54 +55,103 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
           "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Download exact PR20 helper
+      - name: Download exact CI-green PR20 runtime files
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $sha='876558a8d6215ec50b06eff7687a22b4372c252c'
-          $url="https://raw.githubusercontent.com/adaptgurus/one-swap/$sha/hyperv_hot_helper.rb"
-          $file=Join-Path $env:RUNNER_TEMP 'hyperv_hot_helper.pr20.rb'
-          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 30 -o $file $url
-          if($LASTEXITCODE -ne 0){throw "PR20 helper curl failed rc=$LASTEXITCODE"}
-          if(-not (Test-Path $file)){throw 'PR20 helper download failed'}
-          $hash=(Get-FileHash -Algorithm SHA256 $file).Hash.ToLower()
-          Write-Host "PR20_LOCAL_SHA256=$hash"
-          "PR20_HELPER=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          "PR20_SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $head='a81aac6a8912f2d6d144b9ab981dba04ee4626a5'
+          $specs=@(
+            @{name='oneswap-hyperv'; remote='oneswap-hyperv'},
+            @{name='hyperv_helper.rb'; remote='hyperv_helper.rb'},
+            @{name='hyperv_hot_helper.rb'; remote='hyperv_hot_helper.rb'}
+          )
+          foreach($s in $specs){
+            $url="https://raw.githubusercontent.com/adaptgurus/one-swap/$head/$($s.remote)"
+            $local=Join-Path $env:RUNNER_TEMP ("pr20-" + $s.name)
+            & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $local $url
+            if($LASTEXITCODE -ne 0){throw "download failed for $($s.name) rc=$LASTEXITCODE"}
+            if(-not (Test-Path $local)){throw "download missing for $($s.name)"}
+            $hash=(Get-FileHash -Algorithm SHA256 $local).Hash.ToLower()
+            Write-Host "PR20_FILE name=$($s.name) sha256=$hash"
+            $key=($s.name -replace '[^A-Za-z0-9]','_').ToUpper()
+            ("PR20_" + $key + "_PATH=" + $local) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            ("PR20_" + $key + "_SHA=" + $hash) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+          "PR20_HEAD=$head" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Install exact PR20 helper
+      - name: Copy exact runtime files to OneSwap appliance
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
-          $remote='/tmp/hyperv_hot_helper.pr20.rb'
-          & scp.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY $env:PR20_HELPER "ci@10.250.10.32:$remote"
-          if($LASTEXITCODE -ne 0){throw "scp PR20 helper failed rc=$LASTEXITCODE"}
-          $cmd=@'
+          $common=@('-o','LogLevel=ERROR','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-o','ConnectTimeout=8','-i',$env:ONESWAP_TEMP_KEY)
+          & scp.exe @common $env:PR20_ONESWAP_HYPERV_PATH "ci@10.250.10.32:/tmp/oneswap-hyperv.pr20"
+          if($LASTEXITCODE -ne 0){throw 'scp oneswap-hyperv failed'}
+          & scp.exe @common $env:PR20_HYPERV_HELPER_RB_PATH "ci@10.250.10.32:/tmp/hyperv_helper.pr20.rb"
+          if($LASTEXITCODE -ne 0){throw 'scp hyperv_helper failed'}
+          & scp.exe @common $env:PR20_HYPERV_HOT_HELPER_RB_PATH "ci@10.250.10.32:/tmp/hyperv_hot_helper.pr20.rb"
+          if($LASTEXITCODE -ne 0){throw 'scp hyperv_hot_helper failed'}
+          Write-Host 'PR20_RUNTIME_SCP=PASS'
+
+      - name: Install exact CI-green runtime atomically
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
           set -euo pipefail
-          src=/tmp/hyperv_hot_helper.pr20.rb
-          dst=/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb
-          expected="__EXPECTED__"
-          actual=$(sha256sum "$src" | awk '{print $1}')
-          [ "$actual" = "$expected" ]
-          sudo ruby -c "$src"
+          head="__HEAD__"
+          cli_src=/tmp/oneswap-hyperv.pr20
+          helper_src=/tmp/hyperv_helper.pr20.rb
+          hot_src=/tmp/hyperv_hot_helper.pr20.rb
+          cli_dst=/usr/bin/oneswap-hyperv
+          helper_dst=/usr/lib/one/ruby/cli/one_helper/hyperv_helper.rb
+          hot_dst=/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb
+          cli_sha="__CLI_SHA__"
+          helper_sha="__HELPER_SHA__"
+          hot_sha="__HOT_SHA__"
+
+          [ "$(sha256sum "$cli_src" | awk '{print $1}')" = "$cli_sha" ]
+          [ "$(sha256sum "$helper_src" | awk '{print $1}')" = "$helper_sha" ]
+          [ "$(sha256sum "$hot_src" | awk '{print $1}')" = "$hot_sha" ]
+          ruby -c "$cli_src"
+          ruby -c "$helper_src"
+          ruby -c "$hot_src"
+
           stamp=$(date -u +%Y%m%dT%H%M%SZ)
-          sudo cp -a "$dst" "$dst.before-pr20-$stamp"
-          sudo install -o root -g root -m 0644 "$src" "$dst"
-          installed=$(sudo sha256sum "$dst" | awk '{print $1}')
-          [ "$installed" = "$expected" ]
-          sudo ruby -c "$dst"
-          sudo grep -q 'SnapshotType=\[uint16\]32768' "$dst"
-          sudo grep -q 'ExportSystemDefinition' "$dst"
-          sudo grep -q 'ConvertToReferencePoint' "$dst"
-          sudo grep -q 'DestroySnapshot' "$dst"
-          rm -f "$src"
-          echo "ONESWAP_PR20_RCT_BASELINE_DEPLOY=PASS sha256=$installed"
+          sudo cp -a "$cli_dst" "$cli_dst.before-pr20-sizing-$stamp"
+          sudo cp -a "$helper_dst" "$helper_dst.before-pr20-sizing-$stamp"
+          sudo cp -a "$hot_dst" "$hot_dst.before-pr20-sizing-$stamp"
+          sudo install -o root -g root -m 0755 "$cli_src" "$cli_dst"
+          sudo install -o root -g root -m 0644 "$helper_src" "$helper_dst"
+          sudo install -o root -g root -m 0644 "$hot_src" "$hot_dst"
+
+          [ "$(sudo sha256sum "$cli_dst" | awk '{print $1}')" = "$cli_sha" ]
+          [ "$(sudo sha256sum "$helper_dst" | awk '{print $1}')" = "$helper_sha" ]
+          [ "$(sudo sha256sum "$hot_dst" | awk '{print $1}')" = "$hot_sha" ]
+          sudo ruby -c "$cli_dst"
+          sudo ruby -c "$helper_dst"
+          sudo ruby -c "$hot_dst"
+
+          sudo grep -Fq "opts.on('--cpu CPU', Float" "$cli_dst"
+          sudo grep -Fq "opts.on('--memory-mb MB', Integer" "$cli_dst"
+          sudo grep -Fq "@options[:memory_mb]" "$helper_dst"
+          sudo grep -Fq "'CPU' => cpu_weight.to_s" "$helper_dst"
+          sudo grep -Fq "'VCPU' => vcpu.to_s" "$helper_dst"
+          sudo grep -Fq "'memory_mb'=>@options[:memory_mb]" "$hot_dst"
+          sudo grep -Fq "validate_baseline_consistency!" "$hot_dst"
+          sudo grep -Fq "SnapshotType=[uint16]32768" "$hot_dst"
+          rm -f "$cli_src" "$helper_src" "$hot_src"
+          echo "ONESWAP_PR20_RUNTIME_DEPLOY=PASS head=$head cli=$cli_sha helper=$helper_sha hot=$hot_sha"
           '@
-          $cmd=$cmd.Replace('__EXPECTED__',$env:PR20_SHA256)
-          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($cmd,'\r',''))))
+          $script=$script.Replace('__HEAD__',$env:PR20_HEAD)
+          $script=$script.Replace('__CLI_SHA__',$env:PR20_ONESWAP_HYPERV_SHA)
+          $script=$script.Replace('__HELPER_SHA__',$env:PR20_HYPERV_HELPER_RB_SHA)
+          $script=$script.Replace('__HOT_SHA__',$env:PR20_HYPERV_HOT_HELPER_RB_SHA)
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
           & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
-          if($LASTEXITCODE -ne 0){throw "PR20 install failed rc=$LASTEXITCODE"}
+          if($LASTEXITCODE -ne 0){throw "PR20 runtime install failed rc=$LASTEXITCODE"}
 
       - name: Verify source invariant
         if: always()
