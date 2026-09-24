@@ -40,4 +40,28 @@ module.exports = [
     ...Commands[Actions.PROTECTION_GROUP_CHECKPOINTS],
     action: actions.protectionGroupCheckpoints,
   },
+  {
+    ...Commands[Actions.DR_ENVIRONMENT_NETWORKS],
+    action: actions.drEnvironmentNetworks,
+  },
+  {
+    ...Commands[Actions.DR_PAIR_SITE],
+    action: actions.drPairSite,
+  },
+  {
+    ...Commands[Actions.DR_MANAGEMENT_BACKUP_POLICIES],
+    action: actions.drManagementBackupPolicies,
+  },
+  {
+    ...Commands[Actions.DR_VM_CHECKPOINTS],
+    action: actions.drVMCheckpoints,
+  },
+  {
+    ...Commands[Actions.DR_PUT_RECOVERY_MAPPING],
+    action: actions.drPutRecoveryMapping,
+  },
+  {
+    ...Commands[Actions.DR_GET_RECOVERY_MAPPING],
+    action: actions.drGetRecoveryMapping,
+  },
 ]
