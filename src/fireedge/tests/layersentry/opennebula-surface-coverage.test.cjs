@@ -110,12 +110,12 @@ test('network blueprint creation remains administrator-only', () => {
     /createTo: isAdmin \? '\/network-template\/create' : undefined/
   )
 })
-test('backup storage lists only real OpenNebula backup datastores', () => {
+test('backup storage lists only real backup storage pools', () => {
   const storage = read(
     'src/client/apps/layersentry/pages/BackupStorageWorkspace.js'
   )
   assert.match(storage, /DATASTORE_TYPES\.BACKUP\.id/)
-  assert.match(storage, /Only TYPE=BACKUP_DS is counted/)
+  assert.match(storage, /Qualified backup storage pools only/)
   assert.doesNotMatch(storage, /legacyPath="\/datastore"/)
 })
 

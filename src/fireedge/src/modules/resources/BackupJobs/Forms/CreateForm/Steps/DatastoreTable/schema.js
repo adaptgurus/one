@@ -15,7 +15,7 @@
  * ------------------------------------------------------------------------- */
 import { object, ObjectSchema, string } from 'yup'
 
-import { DATASTORE_TYPES, INPUT_TYPES, T } from '@ConstantsModule'
+import { DATASTORE_TYPES, INPUT_TYPES } from '@ConstantsModule'
 import { datastoreTable } from '@ModelsModule'
 import { Field, getValidationFromFields } from '@UtilsModule'
 
@@ -49,7 +49,7 @@ const backupDatastoreTable = {
 export const FIELDS = [
   {
     name: DATASTORE_FIELD,
-    label: T.SelectDatastores,
+    label: 'Backup Storage',
     type: INPUT_TYPES.TABLE,
     model: backupDatastoreTable,
     singleSelect: true,

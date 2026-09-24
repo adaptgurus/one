@@ -161,3 +161,209 @@ test('LayerSentry customer UI does not expose OpenNebula branding', () => {
     )
   }
 })
+
+
+test('bridged customer creation flows do not expose OpenNebula branding', () => {
+  const customerBridges = [
+    'src/modules/containers/VirtualMachines/Create.js',
+    'src/modules/containers/VmTemplates/Instantiate.js',
+    'src/modules/containers/VirtualNetworks/Create.js',
+    'src/modules/containers/SecurityGroups/Create.js',
+    'src/modules/containers/BackupJobs/Create.js',
+    'src/modules/containers/Images/Create.js',
+    'src/modules/containers/OneKs/Create.js',
+    'src/modules/containers/VmGroups/Create.js',
+    'src/modules/containers/VnTemplates/Instantiate.js',
+    'src/modules/containers/VrTemplates/Instantiate.js',
+  ]
+
+  for (const relative of customerBridges) {
+    const source = read(relative)
+    const customerSource = source.split('\n').slice(16).join('\n')
+    assert.doesNotMatch(
+      customerSource,
+      /OpenNebula/,
+      'backend brand leaked in bridged customer flow ' + relative
+    )
+  }
+})
+
+test('firewall network target uses LayerSentry wording and validates the selected target', () => {
+  const rules = read(
+    'src/modules/resources/SecurityGroups/Forms/CreateForm/Steps/Rules/schema.js'
+  )
+
+  assert.match(rules, /LAYERSENTRY_VIRTUAL_NETWORK = 'LayerSentry Network'/)
+  assert.doesNotMatch(rules, /T\.OpennebulaVirtualNetwork/)
+  assert.match(rules, /mixed\(\)\.when\(TARGET\.name/)
+  assert.match(
+    rules,
+    /target === LAYERSENTRY_VIRTUAL_NETWORK/
+  )
+})
+
+test('backup plan create flow uses Backup Storage wording', () => {
+  const step = read(
+    'src/modules/resources/BackupJobs/Forms/CreateForm/Steps/DatastoreTable/index.js'
+  )
+  const schema = read(
+    'src/modules/resources/BackupJobs/Forms/CreateForm/Steps/DatastoreTable/schema.js'
+  )
+
+  assert.match(step, /label: 'Backup Storage'/)
+  assert.match(schema, /label: 'Backup Storage'/)
+  assert.doesNotMatch(step, /T\.SelectDatastores/)
+  assert.doesNotMatch(schema, /T\.SelectDatastores/)
+  assert.match(schema, /DATASTORE_TYPES\.BACKUP\.value/)
+})
+
+test('VM GPU self-service help stays LayerSentry-only', () => {
+  const gpu = read(
+    'src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/ExtraConfiguration/gpu/index.js'
+  )
+
+  assert.match(gpu, /LayerSentry-approved GPU profile/)
+  assert.match(gpu, /LayerSentry schedules a/)
+  assert.doesNotMatch(gpu.split('\n').slice(1).join('\n'), /OpenNebula/)
+})
+
+test('admin storage create flow uses LayerSentry storage terminology', () => {
+  const general = read(
+    'src/modules/resources/Datastore/Forms/CreateForm/Steps/General/schema.js'
+  )
+  const common = read(
+    'src/modules/resources/Datastore/Forms/CreateForm/Steps/ConfigurationAttributes/Fields/common.js'
+  )
+  const linstor = read(
+    'src/modules/resources/Datastore/Forms/CreateForm/Steps/ConfigurationAttributes/Fields/layersentry.js'
+  )
+  const config = read(
+    'src/modules/resources/Datastore/Forms/CreateForm/Steps/ConfigurationAttributes/schema.js'
+  )
+
+  assert.match(general, /label: 'Storage Type'/)
+  assert.match(general, /label: 'Storage Driver'/)
+  assert.match(common, /label: 'Compute hosts'/)
+  assert.match(common, /Select at least one compute host/)
+  assert.match(config, /label: 'Compatible System Storage Pools'/)
+  assert.match(linstor, /LayerSentry LINSTOR integration/)
+  assert.doesNotMatch(common.split('\n').slice(16).join('\n'), /OpenNebula host/)
+  assert.doesNotMatch(linstor.split('\n').slice(1).join('\n'), /OpenNebula integration/)
+})
+
+test('LayerSentry forms and primary actions use one product palette', () => {
+  const shell = read(
+    'src/client/apps/layersentry/components/PortalShell.js'
+  )
+  const tokens = read('src/client/apps/layersentry/theme/tokens.js')
+
+  assert.match(tokens, /mobileDrawer:/)
+  assert.match(tokens, /scrim:/)
+  assert.match(shell, /MuiButton-containedPrimary/)
+  assert.match(shell, /backgroundColor: colors\.brand\.primary/)
+  assert.match(shell, /backgroundColor: colors\.brand\.primaryHover/)
+  assert.match(shell, /MuiOutlinedInput-root/)
+  assert.match(shell, /borderColor: colors\.borderStrong/)
+  assert.match(shell, /borderColor: colors\.brand\.primary/)
+  assert.match(shell, /MuiInputLabel-root\.Mui-focused/)
+  assert.ok(
+    shell.includes(
+      '&& .MuiInputLabel-root.Mui-focused, && .MuiFormControl-root:focus-within .MuiInputLabel-root'
+    )
+  )
+  assert.match(shell, /color: `\$\{colors\.brand\.primary\} !important`/)
+  assert.ok(shell.includes('MuiSwitch-switchBase.Mui-checked'))
+  assert.ok(shell.includes('MuiCheckbox-root.Mui-checked'))
+  assert.ok(shell.includes('MuiRadio-root.Mui-checked'))
+  assert.ok(shell.includes('MuiStepIcon-root.Mui-active'))
+  assert.ok(shell.includes('MuiTabs-indicator'))
+  assert.ok(shell.includes('MuiTab-root'))
+  assert.ok(shell.includes('MuiLinearProgress-root'))
+  assert.ok(shell.includes('MuiPaginationItem-root.Mui-selected'))
+  assert.ok(shell.includes('MuiToggleButton-root.Mui-selected'))
+  assert.match(shell, /backgroundColor: colors\.overlay\.scrim/)
+  assert.match(shell, /colors\.shadow\.mobileDrawer/)
+  assert.doesNotMatch(shell, /rgba\(/)
+})
+
+test('customer storage wording stays simple and hides provider datastore jargon', () => {
+  const portal = read('src/client/apps/layersentry/Portal.js')
+  const bridge = read(
+    'src/client/apps/layersentry/components/ResourceBridge.js'
+  )
+  const backup = read(
+    'src/client/apps/layersentry/pages/BackupStorageWorkspace.js'
+  )
+  const protection = read(
+    'src/client/apps/layersentry/pages/ProtectionWorkspace.js'
+  )
+
+  assert.match(bridge, /label: 'Storage Pools'/)
+  assert.match(bridge, /label: 'Technology'/)
+  assert.doesNotMatch(bridge, /label: 'Datastores'/)
+  assert.doesNotMatch(portal, /Backup Datastore/)
+  assert.doesNotMatch(backup, /Backup Datastore/)
+  assert.doesNotMatch(protection, /Backup Datastore/)
+  assert.match(backup, /label="Backup Storage"/)
+})
+
+test('LayerSentry application keeps literal colors in the token module only', () => {
+  const app = path.join(root, 'src/client/apps/layersentry')
+  const files = []
+  const visit = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const target = path.join(dir, entry.name)
+      if (entry.isDirectory()) visit(target)
+      else if (entry.isFile() && entry.name.endsWith('.js')) files.push(target)
+    }
+  }
+  visit(app)
+
+  for (const file of files) {
+    if (file.endsWith(path.join('theme', 'tokens.js'))) continue
+    const source = fs.readFileSync(file, 'utf8')
+    assert.doesNotMatch(
+      source,
+      /#[0-9A-Fa-f]{3,8}\b|rgba?\(|hsla?\(/i,
+      'literal color escaped LayerSentry tokens in ' + path.relative(root, file)
+    )
+  }
+})
+
+test('LayerSentry text and status colors meet readable contrast targets', () => {
+  const tokens = read('src/client/apps/layersentry/theme/tokens.js')
+  const value = (name) => {
+    const match = tokens.match(new RegExp(name + ": '(#[0-9A-Fa-f]{6})'"))
+    assert.ok(match, 'missing color token ' + name)
+    return match[1]
+  }
+  const luminance = (hex) => {
+    const channels = [1, 3, 5].map((offset) =>
+      parseInt(hex.slice(offset, offset + 2), 16) / 255
+    )
+    const linear = channels.map((channel) =>
+      channel <= 0.04045
+        ? channel / 12.92
+        : Math.pow((channel + 0.055) / 1.055, 2.4)
+    )
+    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+  }
+  const ratio = (foreground, background) => {
+    const a = luminance(foreground)
+    const b = luminance(background)
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+  }
+
+  for (const [foreground, background] of [
+    ['successText', 'successSoft'],
+    ['warningText', 'warningSoft'],
+    ['dangerText', 'dangerSoft'],
+    ['infoText', 'infoSoft'],
+  ]) {
+    assert.ok(
+      ratio(value(foreground), value(background)) >= 4.5,
+      foreground + ' must meet 4.5:1 contrast'
+    )
+  }
+  assert.ok(ratio(value('focus'), value('surface')) >= 3)
+})

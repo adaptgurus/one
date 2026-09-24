@@ -455,7 +455,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Create Backup Storage',
                 description:
-                  'Create a LayerSentry Backup Datastore using a qualified Restic, Rsync or custom backup backend.',
+                  'Create LayerSentry backup storage using a qualified Restic, Rsync or custom backup backend.',
                 legacyPath: '/datastore/create',
                 returnTo: PRODUCT_PATHS.INFRA_BACKUP_STORAGE,
                 steps: ['Type', 'Backend', 'Capacity', 'Validation', 'Review'],
