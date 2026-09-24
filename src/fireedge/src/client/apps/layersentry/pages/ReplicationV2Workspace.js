@@ -383,7 +383,7 @@ const ReplicationV2Workspace = () => {
     setPairBusy(true)
     try {
       const result = await replicationAPI.drPairSite({
-        site_id: pairSiteId.trim(),
+        id: pairSiteId.trim(),
         name: pairSiteName.trim(),
         endpoint: pairEndpoint.trim(),
         username: pairUsername.trim(),
@@ -401,10 +401,12 @@ const ReplicationV2Workspace = () => {
       }
       const dc = localSiteId || 'dc'
       const dr = result?.site?.id || pairSiteId.trim()
-      const policies = await replicationAPI
+      const policyPayload = await replicationAPI
         .drManagementBackupPolicies(dc, dr)
-        .catch(() => [])
-      setManagementPolicies(Array.isArray(policies) ? policies : [])
+        .catch(() => ({ policies: [] }))
+      setManagementPolicies(
+        Array.isArray(policyPayload?.policies) ? policyPayload.policies : []
+      )
       setNotice(
         `Site ${result?.site?.name || dr} paired. Bootstrap password was discarded; ongoing communication uses ${result?.auth_method || 'scoped API identity'}.`
       )
@@ -449,36 +451,24 @@ const ReplicationV2Workspace = () => {
             }
           : { mode: 'DHCP' }
       await replicationAPI.drPutRecoveryMapping({
+        workload_id: String(selectedVm.ID),
+        target_site_id: String(targetSite),
         mapping: {
-          protection_group_id: group,
-          target_site_id: String(targetSite),
-          workloads: [
+          workload_id: String(selectedVm.ID),
+          target_cluster_id: targetClusterId.trim(),
+          target_datastore_id: targetDatastoreId.trim(),
+          nics: [
             {
-              workload_id: String(selectedVm.ID),
-              target_cluster_id: targetClusterId.trim(),
-              target_datastore_id: targetDatastoreId.trim(),
-              nic_mappings: [
-                {
-                  source_nic_id: Number(primaryNic.id),
-                  source_network_id: primaryNic.sourceNetworkId,
-                  target_network_id: targetNetworkId.trim(),
-                  order: 0,
-                },
-              ],
+              source_nic_id: Number(primaryNic.id),
+              source_network_id: primaryNic.sourceNetworkId,
+              target_network_id: targetNetworkId.trim(),
+              address_mode: addressChoice.mode,
+              target_ip: addressChoice.target_ip || undefined,
+              guest_network: addressChoice.guest_network || undefined,
+              order: 0,
             },
           ],
         },
-        address_plans: [
-          {
-            workload_id: String(selectedVm.ID),
-            nics: [
-              {
-                source_nic_id: Number(primaryNic.id),
-                choice: addressChoice,
-              },
-            ],
-          },
-        ],
       })
       setNotice(
         `Recovery network mapping saved for ${selectedVm.NAME || selectedVm.ID}: ${primaryNic.sourceNetworkName} → target VNet ${targetNetworkId.trim()} using ${addressMode}.`
@@ -498,8 +488,8 @@ const ReplicationV2Workspace = () => {
     }
     const group = protectionGroupId.trim() || `vm-${selectedVm.ID}`
     try {
-      const catalog = await replicationAPI.drVMCheckpoints(group, targetSite)
-      setCheckpointCatalog(Array.isArray(catalog) ? catalog : [])
+      const payload = await replicationAPI.drVMCheckpoints(group, targetSite)
+      setCheckpointCatalog(Array.isArray(payload?.vms) ? payload.vms : [])
     } catch (reason) {
       setError(reason.message)
     }
