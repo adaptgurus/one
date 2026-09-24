@@ -72,7 +72,14 @@ jobs:
           $cmd=@'
           sudo python3 - <<'PY'
           import json,os
-          p='/var/tmp/oneswap-hyperv-hot/manoj-hv-ls-migration-source-test-20260924/state.json'
+          import hashlib,yaml
+          op='manoj-hv-ls-migration-source-test-20260924'
+          cfg=yaml.safe_load(open('/etc/layersentry/oneswap/manoj-qual.yaml')) or {}
+          work=cfg.get('work_dir') or '/var/tmp'
+          safe=''.join(ch if ch.isalnum() or ch in '._-' else '_' for ch in op)
+          suffix=hashlib.sha256(op.encode()).hexdigest()[:16]
+          p=os.path.join(work,'oneswap-hyperv-hot',safe+'-'+suffix,'state.json')
+          print('ADMISSION_STATE_PATH='+p)
           if not os.path.isfile(p): raise SystemExit('prepared state missing')
           s=json.load(open(p))
           print('ADMISSION_PHASE='+str(s.get('phase')))
@@ -242,7 +249,16 @@ jobs:
           chmod 600 "$tmp"
           export ONE_AUTH="$tmp"
           export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
-          state="/var/tmp/oneswap-hyperv-hot/manoj-hv-ls-migration-source-test-20260924/state.json"
+          operation="manoj-hv-ls-migration-source-test-20260924"
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]
+            c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_")
+            suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$operation")
+          echo "MATERIALIZE_STATE_PATH=$state"
           template_id=$(python3 - "$state" <<'PY'
           import json,sys
           print(json.load(open(sys.argv[1]))["template_id"])
@@ -313,7 +329,16 @@ jobs:
           operation="manoj-hv-ls-migration-source-test-20260924"
           sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --verify-source-off --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0
           sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --finalize-success --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0
-          python3 - "/var/tmp/oneswap-hyperv-hot/$operation/state.json" <<'PY'
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]
+            c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_")
+            suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$operation")
+          echo "FINAL_STATE_PATH=$state"
+          python3 - "$state" <<'PY'
           import json,sys
           s=json.load(open(sys.argv[1]))
           print("FINAL_PHASE="+str(s.get("phase")))
