@@ -82,9 +82,7 @@ jobs:
           cat >/tmp/ls-legacy-digest/reproduce.rb <<'RUBY'
           require 'yaml'
           require 'json'
-          $LOAD_PATH << '/usr/lib/one/ruby'
-          $LOAD_PATH << '/usr/lib/one/ruby/cli'
-          require 'opennebula'
+          class OneSwapHelper; end
           require '/tmp/ls-legacy-digest/hyperv_helper.rb'
           require '/tmp/ls-legacy-digest/hyperv_hot_helper.rb'
 
