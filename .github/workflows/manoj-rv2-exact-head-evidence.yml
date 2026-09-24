@@ -1,0 +1,137 @@
+name: Manoj Replication v2 Exact Head Evidence
+
+on:
+  push:
+    branches: [qual/rv2-manoj-exact-head-20260925]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-rv2-exact-head-evidence
+  cancel-in-progress: true
+
+jobs:
+  evidence:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 30
+    steps:
+      - name: Bind Manoj runner and exact source if locally available
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host "MANOJ_RUNNER_BIND=PASS runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME"
+
+          $target='f47a7b9afe479ffef32a1513a3c25dbd0f891a4c'
+          $branch='feat/replication-v2-site-pair-env-dr-20260924'
+          $roots=@(
+            'C:\LayerSentryLab\qualification',
+            'C:\LayerSentryLab',
+            (Join-Path $env:USERPROFILE 'actions-runner\_work'),
+            (Join-Path $env:USERPROFILE 'actions-runner-one\_work')
+          ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
+          $repos=@()
+          foreach($root in $roots){
+            Get-ChildItem -LiteralPath $root -Directory -Recurse -Depth 5 -ErrorAction SilentlyContinue |
+              ForEach-Object {
+                if(Test-Path (Join-Path $_.FullName '.git')){
+                  try {
+                    $remote=(git -C $_.FullName remote get-url origin 2>$null)
+                    if($LASTEXITCODE -eq 0 -and $remote -match 'adaptgurus/layersentry-platform'){
+                      $repos += $_.FullName
+                    }
+                  } catch {}
+                }
+              }
+          }
+          $repos=$repos | Sort-Object -Unique
+          Write-Host "LOCAL_PLATFORM_REPO_COUNT=$($repos.Count)"
+          $repos | ForEach-Object { Write-Host "LOCAL_PLATFORM_REPO=$_" }
+
+          $selected=$null
+          foreach($repo in $repos){
+            & git -C $repo cat-file -e "$target^{commit}" 2>$null
+            if($LASTEXITCODE -ne 0){
+              $env:GIT_TERMINAL_PROMPT='0'
+              & git -C $repo fetch origin $branch --quiet 2>$null
+            }
+            & git -C $repo cat-file -e "$target^{commit}" 2>$null
+            if($LASTEXITCODE -eq 0){ $selected=$repo; break }
+          }
+
+          if(-not $selected){
+            Write-Host 'MANOJ_EXACT_SOURCE=BLOCKED_LOCAL_PRIVATE_REPO_UNAVAILABLE'
+            exit 0
+          }
+
+          Write-Host "MANOJ_EXACT_SOURCE_REPO=$selected"
+          $work='C:\LayerSentryLab\qualification\rv2-exact-f47a7b9'
+          if(Test-Path $work){ Remove-Item -LiteralPath $work -Recurse -Force }
+          & git -C $selected worktree add --detach $work $target
+          if($LASTEXITCODE -ne 0){ throw 'Unable to create exact-head worktree' }
+          try {
+            Push-Location $work
+            $go=(Get-Command go -ErrorAction SilentlyContinue)
+            if(-not $go){
+              $candidates=@('C:\Program Files\Go\bin\go.exe','C:\LayerSentryLab\tools\go\bin\go.exe')
+              $found=$candidates | Where-Object {Test-Path $_} | Select-Object -First 1
+              if(-not $found){
+                Write-Host 'MANOJ_EXACT_SOURCE=BLOCKED_GO_UNAVAILABLE'
+                Pop-Location
+                exit 0
+              }
+              $env:PATH="$(Split-Path $found);$env:PATH"
+            }
+            go version
+            $dirty=(gofmt -l pkg/replicationv2 internal/replicationv2 internal/adapters/opennebula internal/adapters/replication/opennebulaproduct cmd/layersentry-replication-v2)
+            if($dirty){ $dirty | ForEach-Object {Write-Host "GOFMT_REQUIRED=$_"}; throw 'gofmt gate failed' }
+            go test -count=1 ./pkg/replicationv2 ./internal/replicationv2 ./internal/adapters/opennebula
+            if($LASTEXITCODE -ne 0){throw 'focused tests failed'}
+            go vet ./pkg/replicationv2 ./internal/replicationv2 ./internal/adapters/opennebula ./internal/adapters/replication/opennebulaproduct ./cmd/layersentry-replication-v2
+            if($LASTEXITCODE -ne 0){throw 'vet failed'}
+            Write-Host 'MANOJ_EXACT_SOURCE=PASS'
+            Pop-Location
+          } finally {
+            & git -C $selected worktree remove --force $work 2>$null
+          }
+
+      - name: Read-only live topology evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          function Test-Port([string]$ip,[int]$port,[int]$timeout=300){
+            $client=New-Object Net.Sockets.TcpClient
+            try {
+              $iar=$client.BeginConnect($ip,$port,$null,$null)
+              if(-not $iar.AsyncWaitHandle.WaitOne($timeout,$false)){return $false}
+              $client.EndConnect($iar)
+              return $true
+            } catch { return $false } finally { $client.Close() }
+          }
+
+          $local=@('10.250.10.10','10.250.10.11','10.250.10.13')
+          foreach($ip in $local){
+            Write-Host "LOCAL ip=$ip one2633=$(Test-Port $ip 2633) api19444=$(Test-Port $ip 19444) rx19445=$(Test-Port $ip 19445) ssh22=$(Test-Port $ip 22)"
+          }
+
+          $found=@()
+          foreach($i in 1..62){
+            $ip="172.28.0.$i"
+            $one=Test-Port $ip 2633
+            $api=Test-Port $ip 19444
+            $rx=Test-Port $ip 19445
+            if($one -or $api -or $rx){
+              $found += [pscustomobject]@{IP=$ip;ONE2633=$one;API19444=$api;RX19445=$rx}
+            }
+          }
+          $found | Format-Table -AutoSize
+          Write-Host "OCI_SECOND_SITE_CANDIDATE_COUNT=$($found.Count)"
+          if($found.Count -eq 0){
+            Write-Host 'INDEPENDENT_TWO_SITE_LIVE=BLOCKED_NO_SECOND_SITE'
+          } else {
+            Write-Host 'INDEPENDENT_TWO_SITE_CANDIDATE=FOUND'
+          }
