@@ -1,0 +1,47 @@
+name: LayerSentry Manoj VNet Read-Only Inventory
+
+on:
+  push:
+    branches:
+      - dr-threepoint-ssh-20260924
+    paths:
+      - ".github/workflows/layersentry-manoj-vnet-inventory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: List independent OpenNebula VNETs
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner" }
+          $script = @'
+          import pathlib, xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+          t=Target.open(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
+          auth=t.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          one=ServerProxy("http://10.250.10.10:2633/RPC2", allow_none=True)
+          res=one.one.vnpool.info(auth,-2,-1,-1)
+          if not res[0]: raise SystemExit("vnet pool failed: "+str(res[1]))
+          root=ET.fromstring(res[1])
+          for v in root.findall("VNET"):
+              print("VNET id=%s name=%s bridge=%s type=%s vlan=%s gateway=%s dns=%s" % (
+                  v.findtext("ID"),v.findtext("NAME"),v.findtext("./TEMPLATE/BRIDGE"),
+                  v.findtext("./TEMPLATE/VN_MAD"),v.findtext("./TEMPLATE/VLAN_ID"),
+                  v.findtext("./TEMPLATE/GATEWAY"),v.findtext("./TEMPLATE/DNS")))
+              for ar in v.findall("./AR_POOL/AR"):
+                  print("AR vnet=%s arid=%s type=%s ip=%s size=%s lease_count=%s" % (
+                      v.findtext("ID"), ar.findtext("AR_ID"),ar.findtext("TYPE"),
+                      ar.findtext("IP"),ar.findtext("SIZE"),len(ar.findall("./LEASES/LEASE"))))
+          '@
+          $p=Join-Path $env:RUNNER_TEMP 'vnet-inventory.py'
+          Set-Content -Path $p -Value $script -Encoding UTF8
+          & 'C:\LayerSentryLab\tools\Python313\python.exe' $p
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
