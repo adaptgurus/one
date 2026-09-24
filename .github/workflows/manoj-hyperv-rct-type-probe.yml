@@ -1,0 +1,101 @@
+name: Manoj HyperV RCT Type Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-rct-type-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-rct-type-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Probe reference-point type 2 and clean it
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source must stay Running: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has user checkpoints'}
+
+          $ns='root\virtualization\v2'
+          $svc=Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePointService
+          $cs=Get-WmiObject -Namespace $ns -Class Msvm_ComputerSystem -Filter "Name='$($vm.VMId.Guid)'"
+          $before=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'" | ForEach-Object {$_.InstanceID})
+          $settingClass=Get-WmiObject -Namespace $ns -List | Where-Object {$_.Name -eq 'Msvm_VirtualSystemReferencePointSettingData'}
+          if($null -eq $settingClass){throw 'reference point settings class missing'}
+          $setting=$settingClass.CreateInstance()
+          $setting.ConsistencyLevel=[byte]1
+
+          Write-Host "TYPE2_PROBE_BEFORE_COUNT=$($before.Count)"
+          $created=$svc.CreateReferencePoint($cs,$setting.GetText(1),[uint16]2)
+          Write-Host "TYPE2_CREATE_RETURN=$($created.ReturnValue)"
+          if($created.ReturnValue -eq 4096){
+            $job=[wmi]$created.Job
+            $deadline=(Get-Date).AddMinutes(5)
+            while(($job.JobState -eq 3 -or $job.JobState -eq 4) -and (Get-Date) -lt $deadline){
+              Start-Sleep 1
+              $job.Get()
+            }
+            Write-Host "TYPE2_JOB_STATE=$($job.JobState)"
+            if($job.JobState -ne 7){throw "type2 CreateReferencePoint job failed state=$($job.JobState) error=$($job.ErrorDescription)"}
+          } elseif($created.ReturnValue -ne 0) {
+            throw "type2 CreateReferencePoint failed code=$($created.ReturnValue)"
+          }
+
+          $refs=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'" | Where-Object {$before -notcontains $_.InstanceID})
+          Write-Host "TYPE2_NEW_REFERENCE_COUNT=$($refs.Count)"
+          if($refs.Count -ne 1){throw "type2 probe expected one new reference; found $($refs.Count)"}
+          $ref=$refs[0]
+          $vd=@($ref.VirtualDiskIdentifiers)
+          $ri=@($ref.ResilientChangeTrackingIdentifiers)
+          Write-Host "TYPE2_INSTANCE=$($ref.InstanceID)"
+          Write-Host "TYPE2_REFERENCE_TYPE=$($ref.ReferencePointType)"
+          Write-Host "TYPE2_CONSISTENCY=$($ref.ConsistencyLevel)"
+          Write-Host "TYPE2_HAS_ASSOCIATED_DATA=$($ref.HasAssociatedData)"
+          Write-Host "TYPE2_VD_COUNT=$($vd.Count)"
+          Write-Host "TYPE2_RCT_COUNT=$($ri.Count)"
+          for($i=0;$i -lt $vd.Count;$i++){Write-Host "TYPE2_VD[$i]=$($vd[$i])"}
+          for($i=0;$i -lt $ri.Count;$i++){Write-Host "TYPE2_RCT[$i]=$($ri[$i])"}
+
+          $destroy=$svc.DestroyReferencePoint($ref)
+          Write-Host "TYPE2_DESTROY_RETURN=$($destroy.ReturnValue)"
+          if($destroy.ReturnValue -eq 4096){
+            $job=[wmi]$destroy.Job
+            $deadline=(Get-Date).AddMinutes(5)
+            while(($job.JobState -eq 3 -or $job.JobState -eq 4) -and (Get-Date) -lt $deadline){
+              Start-Sleep 1
+              $job.Get()
+            }
+            if($job.JobState -ne 7){throw "type2 cleanup failed state=$($job.JobState) error=$($job.ErrorDescription)"}
+          } elseif($destroy.ReturnValue -ne 0) {
+            throw "type2 cleanup failed code=$($destroy.ReturnValue)"
+          }
+
+          $after=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
+          Write-Host "TYPE2_PROBE_AFTER_COUNT=$($after.Count)"
+          if($after.Count -ne $before.Count){throw 'temporary type2 reference was not fully cleaned'}
+          Write-Host 'TYPE2_REFERENCE_PROBE=PASS'
+
+      - name: Verify source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$n"
+          if($vm.State -ne 'Running'){throw 'type probe changed source state'}
+          if($n -ne 0){throw 'type probe created user-visible checkpoint'}
+          Write-Host 'SOURCE_INVARIANT=PASS'
