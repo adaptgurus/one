@@ -1,0 +1,138 @@
+name: Manoj HyperV Target Capacity Gate
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-target-capacity-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-target-capacity-gate
+  cancel-in-progress: true
+
+jobs:
+  capacity:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind Manoj and inspect nested target hosts
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          Write-Host "SOURCE_STATE=$($src.State) SOURCE_CPU=$($src.ProcessorCount) SOURCE_MEMORY_STARTUP=$($src.MemoryStartup)"
+          if($src.State -ne 'Running'){throw 'Source must remain Running before target capacity qualification'}
+          foreach($n in @('ls-kvm1','ls-kvm2')){
+            $v=Get-VM -Name $n -ErrorAction SilentlyContinue
+            if($v){
+              $m=Get-VMMemory -VMName $n -ErrorAction SilentlyContinue
+              Write-Host "NESTED_TARGET name=$n state=$($v.State) cpu=$($v.ProcessorCount) assigned=$($v.MemoryAssigned) startup=$($v.MemoryStartup) dyn=$($v.DynamicMemoryEnabled) min=$($m.Minimum) max=$($m.Maximum)"
+            } else {
+              Write-Host "NESTED_TARGET name=$n present=false"
+            }
+          }
+          Write-Host 'MANOJ_TARGET_HOST_INVENTORY=PASS'
+
+      - name: Prepare restricted appliance key and authority child
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-target-capacity.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $fe2=(Get-VMHardDiskDrive -VMName 'ls-fe2' -ErrorAction Stop | Where-Object {$_.Path} | Sort-Object ControllerNumber,ControllerLocation | Select-Object -First 1).Path
+          if(-not $fe2){throw 'FE2 disk missing'}
+          $audit=Join-Path 'C:\LayerSentryLab\qualification' ("fe2-capacity-$env:GITHUB_RUN_ID.vhdx")
+          New-VHD -Path $audit -ParentPath $fe2 -Differencing -ErrorAction Stop | Out-Null
+          Add-VMHardDiskDrive -VMName 'ls-appliance-qual' -ControllerType SCSI -Path $audit -ErrorAction Stop
+          "FE2_AUDIT_VHD=$audit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Start-Sleep -Seconds 3
+
+      - name: Read current OpenNebula host capacity and active VMs
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          authority_dev=""
+          for n in $(lsblk -dnro NAME | sort); do
+            d="/dev/$n"
+            for p in /var/lib/one/.one/one_auth /etc/one/one_auth; do
+              exists=$(sudo guestfish --ro -a "$d" -i exists "$p" 2>/dev/null || echo false)
+              if [ "$exists" = "true" ]; then authority_dev="$d"; break 2; fi
+            done
+          done
+          [ -n "$authority_dev" ]
+          auth=""
+          for p in /var/lib/one/.one/one_auth /etc/one/one_auth; do
+            exists=$(sudo guestfish --ro -a "$authority_dev" -i exists "$p" 2>/dev/null || echo false)
+            if [ "$exists" = "true" ]; then auth=$(sudo guestfish --ro -a "$authority_dev" -i cat "$p"); break; fi
+          done
+          [ -n "$auth" ]
+          tmp=$(mktemp)
+          trap 'rm -f "$tmp" /tmp/hosts.xml /tmp/vms.xml' EXIT
+          printf '%s\n' "$auth" > "$tmp"
+          chmod 600 "$tmp"
+          export ONE_AUTH="$tmp"
+          export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
+          onehost list --xml > /tmp/hosts.xml
+          onevm list --xml > /tmp/vms.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          hosts=ET.parse('/tmp/hosts.xml').getroot()
+          need_cpu=200
+          need_mem=4194304
+          eligible=[]
+          for h in hosts.findall('HOST'):
+              hid=h.findtext('ID') or ''
+              name=h.findtext('NAME') or ''
+              state=int(h.findtext('STATE') or '-1')
+              sh=h.find('HOST_SHARE')
+              max_cpu=int(sh.findtext('MAX_CPU') or 0) if sh is not None else 0
+              used_cpu=int(sh.findtext('CPU_USAGE') or 0) if sh is not None else 0
+              max_mem=int(sh.findtext('MAX_MEM') or 0) if sh is not None else 0
+              used_mem=int(sh.findtext('MEM_USAGE') or 0) if sh is not None else 0
+              free_cpu=max_cpu-used_cpu
+              free_mem=max_mem-used_mem
+              print(f'ONE_HOST id={hid} name={name} state={state} max_cpu={max_cpu} used_cpu={used_cpu} free_cpu={free_cpu} max_mem_kb={max_mem} used_mem_kb={used_mem} free_mem_kb={free_mem}')
+              if state==2 and free_cpu>=need_cpu and free_mem>=need_mem:
+                  eligible.append(name)
+          print('TARGET_CAPACITY_ELIGIBLE='+(','.join(eligible) if eligible else 'NONE'))
+          print('TARGET_CAPACITY_GATE='+('PASS' if eligible else 'BLOCKED'))
+          PY
+          echo '===ACTIVE_VMS==='
+          onevm list
+          '@
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'OpenNebula capacity inventory failed'}
+
+      - name: Cleanup authority child and preserve source
+        if: always()
+        shell: powershell
+        run: |
+          $audit=$env:FE2_AUDIT_VHD
+          if($audit){
+            Get-VMHardDiskDrive -VMName 'ls-appliance-qual' -ErrorAction SilentlyContinue | Where-Object {$_.Path -eq $audit} | Remove-VMHardDiskDrive -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+            if(Test-Path $audit){Remove-Item -Force $audit -ErrorAction Stop}
+          }
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_AFTER_STATE=$($src.State) SOURCE_AFTER_CHECKPOINTS=$n"
+          if($src.State -ne 'Running' -or $n -ne 0){throw 'Capacity probe changed source invariant'}
+          Write-Host 'TARGET_CAPACITY_PROBE_CLEANUP=PASS'
