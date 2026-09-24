@@ -3465,7 +3465,7 @@ jobs:
 
 
   manoj-target-endpoint-probe-v2:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -3538,4 +3538,121 @@ jobs:
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
           $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
           if($active.State -ne 'Running'){throw "Active OneSwap appliance changed state: $($active.State)"}
+          Write-Host 'PROTECTED_PATH_AFTER=PASS'
+
+
+  manoj-fe2-offline-authority-audit:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Bind Manoj and protect active migration path
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance is not Running: $($active.State)"}
+          $fe2=Get-VM -Name 'ls-fe2' -ErrorAction Stop
+          if($fe2.State -ne 'Off'){throw "FE2 must already be Off for offline audit; state=$($fe2.State)"}
+          Write-Host 'PROTECTED_PATH_BEFORE=PASS'
+
+      - name: Inventory FE2 offline disks
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $disks=@(Get-VMHardDiskDrive -VMName 'ls-fe2' -ErrorAction Stop | Where-Object {$_.Path})
+          if($disks.Count -eq 0){throw 'FE2 has no attached VHD'}
+          foreach($d in $disks){
+            $v=Get-VHD -Path $d.Path -ErrorAction Stop
+            Write-Host "FE2_DISK controller=$($d.ControllerType) slot=$($d.ControllerNumber):$($d.ControllerLocation) path=$($d.Path) format=$($v.VhdFormat) type=$($v.VhdType) virtual_bytes=$($v.Size) file_bytes=$($v.FileSize)"
+          }
+          $osDisk=($disks | Sort-Object ControllerNumber,ControllerLocation | Select-Object -First 1).Path
+          "FE2_OS_VHD=$osDisk" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "FE2_OS_VHD_SELECTED=$osDisk"
+
+      - name: Mount FE2 VHD read-only in WSL and locate one_auth metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Get-Command wsl.exe -ErrorAction Stop | Out-Null
+          $before=& wsl.exe -d Ubuntu-22.04 -u root -- bash --noprofile --norc -lc "lsblk -dnro NAME | sort" 2>$null
+          if($LASTEXITCODE -ne 0){throw 'Unable to inventory WSL block devices before mount'}
+          $beforeSet=@{}
+          foreach($x in $before){$beforeSet[$x.Trim()]=$true}
+
+          & wsl.exe --mount "$env:FE2_OS_VHD" --vhd --bare
+          if($LASTEXITCODE -ne 0){throw 'WSL failed to attach FE2 VHD'}
+          "FE2_WSL_ATTACHED=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Start-Sleep -Seconds 2
+
+          $after=& wsl.exe -d Ubuntu-22.04 -u root -- bash --noprofile --norc -lc "lsblk -dnro NAME | sort" 2>$null
+          if($LASTEXITCODE -ne 0){throw 'Unable to inventory WSL block devices after mount'}
+          $new=@($after | Where-Object {-not $beforeSet.ContainsKey($_.Trim())})
+          if($new.Count -ne 1){throw "Expected exactly one new WSL disk, found $($new.Count): $($new -join ',')"}
+          $dev='/dev/'+$new[0].Trim()
+          Write-Host "FE2_WSL_DEVICE=$dev"
+
+          $script=@'
+          set -euo pipefail
+          dev="__DEV__"
+          found=0
+          echo "FE2_BLOCK_DEVICE=$dev"
+          lsblk -f "$dev"
+          while read -r node fstype type; do
+            [ "$type" = "part" ] || continue
+            [ -n "$fstype" ] || continue
+            mp="/mnt/fe2-audit-$(basename "$node")"
+            mkdir -p "$mp"
+            opts="ro"
+            case "$fstype" in
+              ext2|ext3|ext4) opts="ro,noload" ;;
+              xfs) opts="ro,norecovery" ;;
+              *) continue ;;
+            esac
+            if mount -o "$opts" "$node" "$mp" 2>/dev/null; then
+              for p in "$mp/var/lib/one/.one/one_auth" "$mp/etc/one/one_auth"; do
+                if [ -f "$p" ]; then
+                  stat -c 'FE2_AUTH_FILE=%n mode=%a uid=%u gid=%g size=%s' "$p"
+                  sha256sum "$p" | sed 's# .*# FE2_AUTH_SHA256#'
+                  found=1
+                fi
+              done
+              umount "$mp"
+            fi
+            rmdir "$mp" 2>/dev/null || true
+          done < <(lsblk -pnro NAME,FSTYPE,TYPE "$dev")
+          echo "FE2_AUTH_FOUND=$found"
+          [ "$found" -eq 1 ]
+          '@
+          $script=$script.Replace('__DEV__',$dev) -replace [char]13,''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & wsl.exe -d Ubuntu-22.04 -u root -- bash --noprofile --norc -lc "echo $b64 | base64 -d | bash"
+          if($LASTEXITCODE -ne 0){throw 'FE2 offline disk does not expose a qualified one_auth file'}
+          Write-Host 'FE2_OFFLINE_AUTHORITY_AUDIT=PASS'
+
+      - name: Detach FE2 VHD from WSL
+        if: always()
+        shell: powershell
+        run: |
+          if($env:FE2_WSL_ATTACHED -eq '1'){
+            wsl.exe --unmount "$env:FE2_OS_VHD"
+            if($LASTEXITCODE -ne 0){throw 'Failed to detach FE2 VHD from WSL'}
+          }
+          Write-Host 'FE2_WSL_DETACH=PASS'
+
+      - name: Confirm protected migration path remains intact
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance changed state: $($active.State)"}
+          $fe2=Get-VM -Name 'ls-fe2' -ErrorAction Stop
+          if($fe2.State -ne 'Off'){throw "FE2 state changed during offline audit: $($fe2.State)"}
           Write-Host 'PROTECTED_PATH_AFTER=PASS'
