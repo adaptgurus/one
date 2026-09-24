@@ -76,7 +76,13 @@ export const replicationAPI = {
       method: 'POST',
       body: JSON.stringify({ groupId }),
     }),
+  drSites: () => json('/dr/sites'),
   drEnvironmentNetworks: () => json('/dr/environment-networks'),
+  drProvisionEnvironmentNetworks: (plan) =>
+    json('/dr/environment-networks/provision', {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    }),
   drPairSite: (request) =>
     json('/dr/site-pairs', {
       method: 'POST',
@@ -86,6 +92,16 @@ export const replicationAPI = {
     json('/dr/management-backup-policies', {
       method: 'POST',
       body: JSON.stringify({ dc, dr }),
+    }),
+  drRunManagementBackup: (source, target) =>
+    json('/dr/management-backups/run', {
+      method: 'POST',
+      body: JSON.stringify({ source, target }),
+    }),
+  drManagementBackupStatus: (source, target) =>
+    json('/dr/management-backups/status', {
+      method: 'POST',
+      body: JSON.stringify({ source, target }),
     }),
   drVMCheckpoints: (groupId, siteId) =>
     json('/dr/vm-checkpoints', {
@@ -97,9 +113,9 @@ export const replicationAPI = {
       method: 'POST',
       body: JSON.stringify({ request }),
     }),
-  drGetRecoveryMapping: (groupId, siteId) =>
+  drGetRecoveryMapping: (workloadId, siteId) =>
     json('/dr/recovery-mappings/get', {
       method: 'POST',
-      body: JSON.stringify({ groupId, siteId }),
+      body: JSON.stringify({ workloadId, siteId }),
     }),
 }
