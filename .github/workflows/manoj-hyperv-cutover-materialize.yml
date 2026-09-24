@@ -19,18 +19,18 @@ jobs:
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
     steps:
-      - name: Bind Manoj and require source running
+      - name: Bind Manoj and require source Off for restart-safe resume
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
           if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
-          if($src.State -ne 'Running'){throw "Cutover admission requires source Running; state=$($src.State)"}
+          if($src.State -ne 'Off'){throw "Restart-safe resume requires source Off; state=$($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has user-visible checkpoints'}
           if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
           if((Get-VM -Name 'ls-fe2' -ErrorAction Stop).State -ne 'Off'){throw 'FE2 authority VM must remain Off'}
-          Write-Host 'CUTOVER_SOURCE_ADMISSION=PASS'
+          Write-Host 'POST_SHUTDOWN_SOURCE_ADMISSION=PASS'
 
       - name: Prepare restricted appliance key and block baseline
         shell: powershell
@@ -88,7 +88,10 @@ jobs:
           print('ADMISSION_PHASE='+str(s.get('phase')))
           print('ADMISSION_VM_ID='+str(s.get('source_vm_id')))
           print('ADMISSION_REFERENCE='+str(s.get('reference_point_id')))
-          if s.get('phase') not in ('PREPARED','CUTOVER_STARTED'): raise SystemExit('state is not safely resumable')
+          if s.get('phase')!='CUTOVER_STARTED': raise SystemExit('state is not CUTOVER_STARTED')
+          if s.get('target_digest')!='08ca0b8c72cd657aee9b5cd810cdc6c27433365c4463aeff8a01691544543697': raise SystemExit('target digest is not current-runtime digest')
+          if s.get('source_off_at') or s.get('delta_applied_at') or s.get('template_id'): raise SystemExit('unexpected later-phase evidence')
+          if s.get('image_imports'): raise SystemExit('unexpected image import evidence')
           if str(s.get('source_vm_id','')).lower()!='52baa8a1-675f-4225-8f37-66a60933b30c': raise SystemExit('source VM identity mismatch')
           d=s.get('disks',[])
           if len(d)!=2: raise SystemExit('expected two prepared disks')
@@ -115,7 +118,7 @@ jobs:
           if([string]::IsNullOrWhiteSpace($expectedRef)){throw 'PREPARED state reference id is empty'}
 
           $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
-          if($vm.State -ne 'Running'){throw "Source changed state before RCT reference admission: $($vm.State)"}
+          if($vm.State -ne 'Off'){throw "Source must remain Off before RCT reference admission: $($vm.State)"}
           $ns='root\virtualization\v2'
           $refs=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'" -ErrorAction Stop)
           Write-Host "CUTOVER_REFERENCE_COUNT=$($refs.Count)"
@@ -233,7 +236,15 @@ jobs:
             exit "$rc"
           fi
           echo "ONESWAP_RCT_COMMIT=PASS"
-          state="/var/tmp/oneswap-hyperv-hot/$operation/state.json"
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]
+            c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_")
+            suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$operation")
+          echo "COMMIT_STATE_PATH=$state"
           python3 - "$state" <<'PY'
           import json,sys
           s=json.load(open(sys.argv[1]))
@@ -363,7 +374,7 @@ jobs:
           export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
           operation="manoj-hv-ls-migration-source-test-20260924"
           sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --verify-source-off --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --cpu 0.5 --vcpu 2 --memory-mb 2560 --datastore 1 --network 0
-          sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --finalize-success --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0
+          sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --finalize-success --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --cpu 0.5 --vcpu 2 --memory-mb 2560 --datastore 1 --network 0
           state=$(ruby -rdigest -ryaml -e '
             op=ARGV[0]
             c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
