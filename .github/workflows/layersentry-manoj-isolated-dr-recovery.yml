@@ -329,7 +329,7 @@ jobs:
             THREADS="1"
           ]
           DISK=[IMAGE_ID="{image_id}"]
-          SCHED_REQUIREMENTS="NAME = \"{TARGET_HOST}\""
+          SCHED_REQUIREMENTS="NAME = \\\"{TARGET_HOST}\\\""
           '''
           va = one.one.vm.allocate(auth, vm_template, False)
           if not va[0]:
