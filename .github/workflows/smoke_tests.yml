@@ -1283,8 +1283,9 @@ jobs:
           Write-Host ('CI_USER_DECLARED=' + [bool]($names -contains 'ci'))
           $matches=[regex]::Matches($text,'(?m)(ssh-(?:ed25519|rsa))\s+([A-Za-z0-9+/=]+)')
           Write-Host ('AUTHORIZED_KEY_COUNT=' + $matches.Count)
-          $clientPub=(& ssh-keygen.exe -y -f $clientKey).Trim()
-          if($LASTEXITCODE -ne 0){throw 'Unable to derive client public key'}
+          $clientPubPath=$clientKey + '.pub'
+          if(-not(Test-Path $clientPubPath)){throw 'Client public-key sidecar is missing'}
+          $clientPub=(Get-Content -LiteralPath $clientPubPath -Raw).Trim()
           $cp=$clientPub -split '\s+'
           $clientId=$cp[0] + ' ' + $cp[1]
           $found=$false
