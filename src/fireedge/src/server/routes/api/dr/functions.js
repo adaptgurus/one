@@ -141,6 +141,9 @@ const action =
 const capabilities = action((_, userData) =>
   proxy({ path: '/v1/dr/capabilities', userData })
 )
+const siteIdentity = action((_, userData) =>
+  proxy({ path: '/v1/dr/site-identity', userData })
+)
 const sites = action((_, userData) => proxy({ path: '/v1/dr/sites', userData }))
 const createSite = action(({ site }, userData) =>
   proxy({
@@ -264,6 +267,7 @@ const checkpoint = action(({ id }, userData) =>
 
 module.exports = {
   capabilities,
+  siteIdentity,
   sites,
   createSite,
   sitePairs,
