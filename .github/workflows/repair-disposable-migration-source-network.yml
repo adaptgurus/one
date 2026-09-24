@@ -1,0 +1,105 @@
+name: Repair Disposable Migration Source Network
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repair-disposable-migration-source-network
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    if: github.event.pull_request.head.ref == 'qual/hyperv-migration-live-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact disposable source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "wrong runner $env:RUNNER_NAME"}
+          $name='ls-migration-source-test'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.Path -notlike 'C:\ProgramData\Microsoft\Windows\Hyper-V*'){throw "unexpected VM path $($vm.Path)"}
+          $disks=@(Get-VMHardDiskDrive -VM $vm)
+          if(-not($disks.Path -contains 'C:\LayerSentryLab\qualification\ls-migration-source-test\os.vhdx')){throw 'source OS disk identity mismatch'}
+          Write-Host "BOUND_DISPOSABLE_SOURCE name=$name state=$($vm.State) id=$($vm.Id)"
+
+      - name: Inspect seed definition
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification\ls-migration-source-test'
+          Write-Host '===NETWORK_CONFIG==='
+          Get-Content -LiteralPath (Join-Path $root 'network-config')
+          Write-Host '===META_DATA==='
+          Get-Content -LiteralPath (Join-Path $root 'meta-data')
+          Write-Host '===USER_DATA_NON_SECRET==='
+          Get-Content -LiteralPath (Join-Path $root 'user-data') | Where-Object {$_ -notmatch 'ssh-' -and $_ -notmatch '^\s+-\s+[A-Za-z0-9+/=]{30,}'}
+
+      - name: Rebuild seed and reboot disposable source only if IPv4 absent
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-migration-source-test'
+          $root='C:\LayerSentryLab\qualification\ls-migration-source-test'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $existing=@(Get-VMNetworkAdapter -VM $vm).IPAddresses | Where-Object {$_ -eq '10.250.10.31'}
+          if($existing){
+            Write-Host 'SOURCE_IPV4_ALREADY_PRESENT=true'
+            exit 0
+          }
+          $meta=Join-Path $root 'meta-data'
+          $metaText=Get-Content -Raw -LiteralPath $meta
+          $newId='ls-migration-source-test-' + (Get-Date -Format 'yyyyMMddHHmmss')
+          if($metaText -match '(?m)^instance-id:'){
+            $metaText=[regex]::Replace($metaText,'(?m)^instance-id:.*$',"instance-id: $newId")
+          } else {
+            $metaText="instance-id: $newId`n"+$metaText
+          }
+          Set-Content -LiteralPath $meta -Value $metaText -Encoding ascii
+          $maker=Join-Path $root 'make_seed.py'
+          if(-not(Test-Path $maker)){throw 'seed builder missing'}
+          python.exe $maker
+          if($LASTEXITCODE -ne 0){throw "seed rebuild failed $LASTEXITCODE"}
+          $seed=Join-Path $root 'cidata-source.vhdx'
+          if(-not(Test-Path $seed)){throw 'rebuilt seed VHDX missing'}
+          if($vm.State -ne 'Off'){
+            Stop-VM -Name $name -Shutdown -ErrorAction Stop
+            $deadline=(Get-Date).AddSeconds(90)
+            do{Start-Sleep -Seconds 2;$vm=Get-VM -Name $name}while($vm.State -ne 'Off' -and (Get-Date)-lt $deadline)
+            if($vm.State -ne 'Off'){throw 'disposable source did not shut down gracefully'}
+          }
+          $seedDisk=Get-VMHardDiskDrive -VMName $name | Where-Object {$_.ControllerLocation -eq 1}
+          if($seedDisk){
+            Set-VMHardDiskDrive -VMHardDiskDrive $seedDisk -Path $seed
+          } else {
+            Add-VMHardDiskDrive -VMName $name -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 1 -Path $seed
+          }
+          Start-VM -Name $name | Out-Null
+          Write-Host "SOURCE_REBOOTED_FOR_NETWORK_REPAIR=true instance_id=$newId"
+
+      - name: Verify repaired guest IPv4 and SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-migration-source-test'
+          $deadline=(Get-Date).AddSeconds(120)
+          $ip=$null
+          do{
+            Start-Sleep -Seconds 3
+            $ip=@(Get-VMNetworkAdapter -VMName $name).IPAddresses | Where-Object {$_ -eq '10.250.10.31'} | Select-Object -First 1
+          }while(-not $ip -and (Get-Date)-lt $deadline)
+          if(-not $ip){throw 'repaired disposable source still has no 10.250.10.31 address'}
+          $root='C:\LayerSentryLab\qualification\ls-migration-source-test'
+          $key=Join-Path $root 'source_ci_ed25519'
+          $known=Join-Path $env:RUNNER_TEMP 'source-repair-known'
+          ssh-keyscan.exe -T 5 $ip 2>$null | Out-File -FilePath $known -Encoding ascii
+          if((Get-Item $known).Length -eq 0){throw 'repaired source has IPv4 but SSH is unavailable'}
+          ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key "ci@$ip" "hostname; id -un; uname -a; ip -4 -brief address; ip route; lsblk -b -o NAME,TYPE,SIZE,MOUNTPOINTS"
+          if($LASTEXITCODE -ne 0){throw "repaired source SSH failed $LASTEXITCODE"}
+          Write-Host 'DISPOSABLE_SOURCE_NETWORK_REPAIR=PASS'
