@@ -1,0 +1,121 @@
+name: Manoj HyperV Inventory and Target Authority
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-authority.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-authority
+  cancel-in-progress: true
+
+jobs:
+  authority:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Prepare LocalSystem-only appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmpKey=Join-Path $env:RUNNER_TEMP 'oneswap_qual_ed25519.system'
+          Copy-Item -Force $srcKey $tmpKey
+          & icacls.exe $tmpKey /inheritance:r | Out-Null
+          & icacls.exe $tmpKey /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmpKey /setowner '*S-1-5-18' | Out-Null
+          $derived=(& ssh-keygen.exe -y -f $tmpKey 2>&1 | Where-Object {$_ -match '^ssh-'} | Select-Object -First 1)
+          if($LASTEXITCODE -ne 0 -or -not $derived){throw 'temporary SSH key invalid'}
+          "ONESWAP_TEMP_KEY=$tmpKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Capture authoritative OneSwap inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $appliance='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $cmd="sudo /usr/bin/oneswap-hyperv ls-migration-source-test --inventory --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml 2>&1"
+          $out=& ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@$appliance" $cmd
+          $rc=$LASTEXITCODE
+          $out | ForEach-Object {Write-Host ('INVENTORY_OUT=' + $_)}
+          if($rc -ne 0){throw "OneSwap inventory failed rc=$rc"}
+          $jsonLine=@($out | Where-Object {$_.Trim().StartsWith('{') -and $_ -match 'source_disk_bytes'} | Select-Object -Last 1)
+          if($jsonLine.Count -eq 0){throw 'OneSwap inventory returned no structured JSON'}
+          $inv=$jsonLine[-1] | ConvertFrom-Json
+          Write-Host "INVENTORY_SOURCE_STATE=$($inv.source_vm_state)"
+          Write-Host "INVENTORY_DISK_COUNT=$($inv.disk_count)"
+          Write-Host "INVENTORY_SOURCE_DISK_BYTES=$($inv.source_disk_bytes)"
+          Write-Host "INVENTORY_GENERATION=$($inv.generation)"
+          Write-Host "INVENTORY_PROCESSOR_COUNT=$($inv.processor_count)"
+          if($inv.source_vm_state -notmatch '(?i)running'){throw "Inventory source state not Running: $($inv.source_vm_state)"}
+          if([int64]$inv.source_disk_bytes -le 0 -or [int]$inv.disk_count -le 0){throw 'Inventory capacity invalid'}
+          Write-Host 'ONESWAP_STRUCTURED_INVENTORY=PASS'
+
+      - name: Discover target OpenNebula authority read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $cmd=@'
+          set -euo pipefail
+          echo WSL_HOST=$(hostname)
+          echo WSL_USER=$(id -un)
+          if ssh -o BatchMode=yes -o ConnectTimeout=6 rocky-01 '
+            hostname
+            whoami
+            echo ===HOSTS===
+            onehost list
+            echo ===DATASTORES===
+            onedatastore list
+            echo ===VNETS===
+            onevnet list
+            echo ===IMAGES===
+            oneimage list
+            echo ===VMS===
+            onevm list
+          '; then
+            echo TARGET_ROCKY01_SSH=PASS
+          else
+            echo TARGET_ROCKY01_SSH=FAIL
+            exit 31
+          fi
+          '@
+          $cmd=$cmd.Replace([char]13,'')
+          wsl.exe -d Ubuntu-22.04 -u opc -- bash --noprofile --norc -lc $cmd
+          if($LASTEXITCODE -ne 0){throw 'Manoj WSL target authority discovery failed'}
+          Write-Host 'TARGET_AUTHORITY_DISCOVERY=PASS'
+
+      - name: Inspect source seed OS hints without secrets
+        shell: powershell
+        run: |
+          $root='C:\LayerSentryLab\qualification\ls-migration-source-test'
+          foreach($n in @('meta-data','network-config')){
+            $p=Join-Path $root $n
+            if(Test-Path $p){
+              Write-Host "=== $n ==="
+              Get-Content $p | Where-Object {$_ -match '(?i)instance-id|local-hostname|hostname|version|renderer|ethernets|dhcp|addresses|gateway|nameservers'} | Select-Object -First 80
+            }
+          }
+
+      - name: Confirm source remains protected
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
