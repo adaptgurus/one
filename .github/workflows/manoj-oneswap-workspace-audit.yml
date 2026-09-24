@@ -15,11 +15,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  audit:
+  provision:
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
-      - name: Bind Manoj and source invariant
+      - name: Bind Manoj and protect source
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -28,70 +28,156 @@ jobs:
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           if($src.State -ne 'Running'){throw "Source not Running: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
-          Write-Host 'SOURCE_BEFORE=PASS'
+          $app=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($app.State -ne 'Running'){throw "OneSwap appliance not Running: $($app.State)"}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
 
-      - name: Prepare restricted appliance key
+      - name: Prepare restricted appliance key and baseline
         shell: powershell
         run: |
+          $ErrorActionPreference='Stop'
           $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
-          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-workspace-audit.key'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-reflink-workspace.key'
           Copy-Item -Force $srcKey $tmp
           & icacls.exe $tmp /inheritance:r | Out-Null
           & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
           & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
           "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $before=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $tmp "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          if($LASTEXITCODE -ne 0){throw 'Unable to capture appliance block baseline'}
+          "ONESWAP_BLOCKS_BEFORE_B64=$([Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($before -join [Environment]::NewLine))))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Audit filesystems capacity and reflink support
+      - name: Create or attach dedicated reflink VHDX
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $path='C:\LayerSentryLab\qualification\oneswap-reflink-workspace-96g.vhdx'
+          if(-not (Test-Path $path)){
+            New-VHD -Path $path -Dynamic -SizeBytes 96GB -BlockSizeBytes 32MB -LogicalSectorSizeBytes 4096 -ErrorAction Stop | Out-Null
+            Write-Host "REFLINK_VHDX_CREATED=$path"
+          } else {
+            Write-Host "REFLINK_VHDX_EXISTS=$path"
+          }
+          $attached=@(Get-VMHardDiskDrive -VMName 'ls-appliance-qual' -ErrorAction Stop | Where-Object {$_.Path -eq $path})
+          if($attached.Count -eq 0){
+            Add-VMHardDiskDrive -VMName 'ls-appliance-qual' -ControllerType SCSI -Path $path -ErrorAction Stop
+            Write-Host 'REFLINK_VHDX_ATTACHED=PASS'
+            Start-Sleep -Seconds 5
+          } else {
+            Write-Host 'REFLINK_VHDX_ALREADY_ATTACHED=PASS'
+          }
+          "REFLINK_VHDX=$path" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Format and mount XFS reflink workspace
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $beforeText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:ONESWAP_BLOCKS_BEFORE_B64))
+          $before=@($beforeText -split [Environment]::NewLine | Where-Object {$_})
+          $after=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          if($LASTEXITCODE -ne 0){throw 'Unable to capture appliance block inventory'}
+          $new=@($after | Where-Object {$before -notcontains $_})
+          if($new.Count -gt 1){throw "Ambiguous new appliance disks: $($new -join ',')"}
+          $dev=''
+          if($new.Count -eq 1){$dev='/dev/'+$new[0]}
           $script=@'
           set -euo pipefail
-          echo '=== LSBLK ==='
-          lsblk -o NAME,SIZE,FSTYPE,TYPE,MOUNTPOINTS
-          echo '=== DF ==='
-          df -hT
-          echo '=== FINDMNT ==='
-          findmnt -o TARGET,SOURCE,FSTYPE,OPTIONS
-          echo '=== XFS INFO ==='
-          for p in / /var /var/tmp /var/cache /var/cache/layersentry-oneswap /srv /mnt; do
-            [ -e "$p" ] || continue
-            echo "PATH=$p"
-            df -PT "$p" | tail -1
-            sudo xfs_info "$p" 2>&1 | grep -E 'meta-data|reflink=' || true
-          done
-          echo '=== CONFIG WORK DIR ==='
-          sudo grep -nE '^[[:space:]]*:?(work_dir|format|http_transfer|http_host|http_port):' /etc/layersentry/oneswap/manoj-qual.yaml || true
-          echo '=== REFLINK PROBES ==='
-          for p in /var/tmp /var/cache/layersentry-oneswap /srv /mnt; do
-            [ -d "$p" ] || continue
-            src="$p/.ls-reflink-src-$$"
-            dst="$p/.ls-reflink-dst-$$"
-            set +e
-            printf 'layersentry-reflink-probe' | sudo tee "$src" >/dev/null
-            sudo cp --reflink=always --sparse=auto -- "$src" "$dst" >/tmp/reflink.out 2>/tmp/reflink.err
-            rc=$?
-            set -e
-            if [ "$rc" -eq 0 ]; then
-              echo "REFLINK_PROBE path=$p result=PASS"
-            else
-              echo "REFLINK_PROBE path=$p result=FAIL rc=$rc error=$(tr '\n' ' ' </tmp/reflink.err)"
+          mountpoint=/var/lib/layersentry-oneswap/reflink-work
+          dev="__DEV__"
+
+          if mountpoint -q "$mountpoint"; then
+            dev=$(findmnt -n -o SOURCE --target "$mountpoint")
+            echo "REFLINK_WORKSPACE_ALREADY_MOUNTED=$dev"
+          else
+            if [ -z "$dev" ]; then
+              dev=$(lsblk -dnpo NAME,SIZE,FSTYPE | awk '$2 ~ /^96G/ && $3 == "" {print $1; exit}')
             fi
-            sudo rm -f "$src" "$dst" /tmp/reflink.out /tmp/reflink.err
-          done
-          echo WORKSPACE_AUDIT=PASS
+            [ -b "$dev" ] || { echo "No dedicated reflink block device found"; exit 51; }
+
+            if ! command -v mkfs.xfs >/dev/null 2>&1; then
+              if command -v apt-get >/dev/null 2>&1; then
+                sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+                sudo DEBIAN_FRONTEND=noninteractive apt-get install -y xfsprogs
+              elif command -v dnf >/dev/null 2>&1; then
+                sudo dnf install -y xfsprogs
+              else
+                echo "xfsprogs unavailable and no supported package manager found"
+                exit 52
+              fi
+            fi
+
+            fstype=$(lsblk -dnro FSTYPE "$dev" | tr -d '[:space:]')
+            if [ -z "$fstype" ]; then
+              sudo mkfs.xfs -f -m reflink=1 -L LSWORK "$dev"
+            elif [ "$fstype" != "xfs" ]; then
+              echo "Dedicated device unexpectedly contains filesystem $fstype"
+              exit 53
+            fi
+
+            sudo mkdir -p "$mountpoint"
+            uuid=$(sudo blkid -s UUID -o value "$dev")
+            [ -n "$uuid" ]
+            if ! grep -qE "^[^#].*[[:space:]]$mountpoint[[:space:]]" /etc/fstab; then
+              echo "UUID=$uuid $mountpoint xfs defaults,nofail 0 2" | sudo tee -a /etc/fstab >/dev/null
+            fi
+            sudo mount "$mountpoint"
+          fi
+
+          sudo chown root:root "$mountpoint"
+          sudo chmod 0755 "$mountpoint"
+          echo '=== XFS INFO ==='
+          sudo xfs_info "$mountpoint" | grep -E 'meta-data|reflink='
+
+          probe_src="$mountpoint/.reflink-probe-src-$$"
+          probe_dst="$mountpoint/.reflink-probe-dst-$$"
+          printf 'layersentry-reflink' | sudo tee "$probe_src" >/dev/null
+          sudo cp --reflink=always --sparse=auto -- "$probe_src" "$probe_dst"
+          sudo rm -f "$probe_src" "$probe_dst"
+          echo REFLINK_FILESYSTEM_GATE=PASS
+
+          cfg=/etc/layersentry/oneswap/manoj-qual.yaml
+          sudo cp -a "$cfg" "${cfg}.pre-reflink-workspace"
+          sudo python3 - "$cfg" "$mountpoint" <<'PY'
+          import pathlib, re, sys
+          p=pathlib.Path(sys.argv[1])
+          mount=sys.argv[2]
+          s=p.read_text()
+          line=f":work_dir: '{mount}'"
+          pat=re.compile(r"(?m)^\s*:work_dir:\s*.*$")
+          if pat.search(s):
+              s=pat.sub(line,s,count=1)
+          else:
+              if not s.endswith("\n"): s+="\n"
+              s+=line+"\n"
+          p.write_text(s)
+          PY
+          sudo grep -nE '^[[:space:]]*:work_dir:' "$cfg"
+          echo ONESWAP_WORK_DIR_PATCH=PASS
+
+          work=$(sudo ruby -e "require 'yaml'; h=YAML.load_file('$cfg'); puts(h[:work_dir] || h['work_dir'] || '')")
+          [ "$work" = "$mountpoint" ] || { echo "Parsed work_dir mismatch: $work"; exit 54; }
+          test -w "$mountpoint"
+          df -hT "$mountpoint"
+          echo ONESWAP_REFLINK_WORKSPACE=PASS
           '@
+          $script=$script.Replace('__DEV__',$dev)
           $script=[regex]::Replace($script,'\r','')
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
           & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
-          if($LASTEXITCODE -ne 0){throw "Workspace audit failed rc=$LASTEXITCODE"}
+          if($LASTEXITCODE -ne 0){throw "Reflink workspace provisioning failed rc=$LASTEXITCODE"}
 
-      - name: Source invariant after audit
+      - name: Verify source and appliance invariants
         if: always()
         shell: powershell
         run: |
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_AFTER_STATE=$($src.State)"
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$n"
           if($src.State -ne 'Running' -or $n -ne 0){throw 'Source invariant changed'}
-          Write-Host 'SOURCE_AFTER=PASS'
+          if((Get-VM -Name 'ls-appliance-qual').State -ne 'Running'){throw 'OneSwap appliance state changed'}
+          Write-Host 'PROTECTED_PATH_AFTER=PASS'
