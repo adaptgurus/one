@@ -1,0 +1,57 @@
+name: LayerSentry Manoj Recovered VM12 Diagnostics
+
+on:
+  push:
+    branches:
+      - dr-threepoint-ssh-20260924
+    paths:
+      - ".github/workflows/layersentry-manoj-vm12-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect recovered VM 12
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner" }
+          $script = @'
+          import pathlib, xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+          t=Target.open(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
+          auth=t.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          one=ServerProxy("http://10.250.10.10:2633/RPC2", allow_none=True)
+          res=one.one.vm.info(auth,12,False)
+          if not res[0]: raise SystemExit("vm info failed: "+str(res[1]))
+          root=ET.fromstring(res[1])
+          print("VM12_STATE="+str(root.findtext("STATE")))
+          print("VM12_LCM_STATE="+str(root.findtext("LCM_STATE")))
+          print("VM12_DEPLOY_ID="+str(root.findtext("DEPLOY_ID") or ""))
+          histories=root.findall("./HISTORY_RECORDS/HISTORY")
+          print("VM12_HOST="+str(histories[-1].findtext("HOSTNAME") if histories else ""))
+          print("VM12_PIN_POLICY="+str(root.findtext("./TEMPLATE/TOPOLOGY/PIN_POLICY") or ""))
+          print("VM12_NUMA_CPUS="+repr([x.text for x in root.findall("./TEMPLATE/NUMA_NODE/CPUS") if x.text]))
+          nics=[]
+          for n in root.findall("./TEMPLATE/NIC"):
+              nics.append({
+                "nic_id": n.findtext("NIC_ID"),
+                "network": n.findtext("NETWORK"),
+                "network_id": n.findtext("NETWORK_ID"),
+                "ip": n.findtext("IP"),
+                "mac": n.findtext("MAC"),
+              })
+          print("VM12_NICS="+repr(nics))
+          print("VM12_GUEST_AGENT="+str(root.findtext("./TEMPLATE/FEATURES/GUEST_AGENT") or ""))
+          print("VM12_CONTEXT_NETWORK="+str(root.findtext("./TEMPLATE/CONTEXT/NETWORK") or ""))
+          '@
+          $p=Join-Path $env:RUNNER_TEMP 'vm12diag.py'
+          Set-Content -Path $p -Value $script -Encoding UTF8
+          & 'C:\LayerSentryLab\tools\Python313\python.exe' $p
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
