@@ -33,6 +33,12 @@ const Actions = {
   PUT_PROTECTION_GROUP: 'replicationv2.putProtectionGroup',
   CAPTURE_PROTECTION_GROUP: 'replicationv2.captureProtectionGroup',
   PROTECTION_GROUP_CHECKPOINTS: 'replicationv2.protectionGroupCheckpoints',
+  DR_ENVIRONMENT_NETWORKS: 'replicationv2.drEnvironmentNetworks',
+  DR_PAIR_SITE: 'replicationv2.drPairSite',
+  DR_MANAGEMENT_BACKUP_POLICIES: 'replicationv2.drManagementBackupPolicies',
+  DR_VM_CHECKPOINTS: 'replicationv2.drVMCheckpoints',
+  DR_PUT_RECOVERY_MAPPING: 'replicationv2.drPutRecoveryMapping',
+  DR_GET_RECOVERY_MAPPING: 'replicationv2.drGetRecoveryMapping',
 }
 
 module.exports = {
@@ -113,6 +119,51 @@ module.exports = {
       httpMethod: POST,
       auth: true,
       params: { groupId: { from: postBody } },
+    },
+    [Actions.DR_ENVIRONMENT_NETWORKS]: {
+      path: basepath + '/dr/environment-networks',
+      httpMethod: GET,
+      auth: true,
+      params: {},
+    },
+    [Actions.DR_PAIR_SITE]: {
+      path: basepath + '/dr/site-pairs',
+      httpMethod: POST,
+      auth: true,
+      params: { request: { from: postBody } },
+    },
+    [Actions.DR_MANAGEMENT_BACKUP_POLICIES]: {
+      path: basepath + '/dr/management-backup-policies',
+      httpMethod: POST,
+      auth: true,
+      params: {
+        dc: { from: postBody },
+        dr: { from: postBody },
+      },
+    },
+    [Actions.DR_VM_CHECKPOINTS]: {
+      path: basepath + '/dr/vm-checkpoints',
+      httpMethod: POST,
+      auth: true,
+      params: {
+        groupId: { from: postBody },
+        siteId: { from: postBody },
+      },
+    },
+    [Actions.DR_PUT_RECOVERY_MAPPING]: {
+      path: basepath + '/dr/recovery-mappings',
+      httpMethod: POST,
+      auth: true,
+      params: { request: { from: postBody } },
+    },
+    [Actions.DR_GET_RECOVERY_MAPPING]: {
+      path: basepath + '/dr/recovery-mappings/get',
+      httpMethod: POST,
+      auth: true,
+      params: {
+        groupId: { from: postBody },
+        siteId: { from: postBody },
+      },
     },
   },
 }
