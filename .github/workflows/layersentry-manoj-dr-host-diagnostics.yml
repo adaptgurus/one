@@ -1,0 +1,62 @@
+name: LayerSentry Manoj DR Host Diagnostics
+
+on:
+  push:
+    branches:
+      - dr-threepoint-ssh-20260924
+    paths:
+      - ".github/workflows/layersentry-manoj-dr-host-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Read-only independent OpenNebula and KVM2 state
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner" }
+          $script = @'
+          import pathlib, xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+          endpoint="http://10.250.10.10:2633/RPC2"
+          auth_img=pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
+          t=Target.open(str(auth_img))
+          auth=t.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          one=ServerProxy(endpoint, allow_none=True)
+          print("ONE_VERSION=", one.one.system.version(auth))
+          hp=one.one.hostpool.info(auth,-2,-1,-1)
+          print("HOSTPOOL_OK=", hp[0])
+          root=ET.fromstring(hp[1])
+          for h in root.findall("HOST"):
+              name=(h.findtext("NAME") or "").strip()
+              if name!="ls-kvm2": continue
+              print("KVM2_STATE=", h.findtext("STATE"))
+              print("KVM2_MAX_CPU=", h.findtext("./HOST_SHARE/MAX_CPU"))
+              print("KVM2_FREE_CPU=", h.findtext("./HOST_SHARE/FREE_CPU"))
+              print("KVM2_MAX_MEM=", h.findtext("./HOST_SHARE/MAX_MEM"))
+              print("KVM2_FREE_MEM=", h.findtext("./HOST_SHARE/FREE_MEM"))
+              print("KVM2_RUNNING_VMS=", h.findtext("./HOST_SHARE/RUNNING_VMS"))
+              print("KVM2_PIN_POLICY=", h.findtext("./TEMPLATE/PIN_POLICY"))
+              print("KVM2_VMS_THREAD=", h.findtext("./TEMPLATE/VMS_THREAD"))
+              print("KVM2_ERROR=", h.findtext("./TEMPLATE/ERROR"))
+              print("KVM2_IM_MAD=", h.findtext("IM_MAD"))
+              print("KVM2_LAST_MON_TIME=", h.findtext("LAST_MON_TIME"))
+              print("KVM2_VMS=", [x.text for x in h.findall("./VMS/ID")])
+          '@
+          $p=Join-Path $env:RUNNER_TEMP 'dr-host-diagnostics.py'
+          Set-Content -Path $p -Value $script -Encoding UTF8
+          & 'C:\LayerSentryLab\tools\Python313\python.exe' $p
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          Write-Host "=== KVM2 Hyper-V ==="
+          Get-VM -Name 'ls-kvm2' | Select-Object Name,State,ProcessorCount,MemoryAssigned,Uptime | Format-List
+          Write-Host "=== KVM2 SSH ==="
+          Test-NetConnection -ComputerName 10.250.10.21 -Port 22 -WarningAction SilentlyContinue |
+            Select-Object ComputerName,RemotePort,TcpTestSucceeded | Format-List
