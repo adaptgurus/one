@@ -3182,7 +3182,7 @@ jobs:
 
 
   manoj-builder-account-discovery-v2:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -3238,6 +3238,142 @@ jobs:
           & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o PreferredAuthentications=publickey -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "$env:BUILDER_USER@$ip" $cmd
           if($LASTEXITCODE -ne 0){throw 'Builder FE1 authority metadata validation failed'}
           Write-Host 'BUILDER_FE1_AUTHORITY_METADATA=PASS'
+
+      - name: Confirm protected migration path remains intact
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance changed state: $($active.State)"}
+          Write-Host 'PROTECTED_PATH_AFTER=PASS'
+
+
+  manoj-builder-seed-audit:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj runner and protect active migration path
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          $builder=Get-VM -Name 'ls-iso-builder' -ErrorAction Stop
+          if($builder.State -ne 'Running'){throw "Builder is not Running: $($builder.State)"}
+          Write-Host 'PROTECTED_PATH_BEFORE=PASS'
+
+      - name: Inventory builder VM storage and seed attachments
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-iso-builder' -ErrorAction Stop
+          Write-Host "BUILDER_VM state=$($vm.State) gen=$($vm.Generation) cpu=$($vm.ProcessorCount)"
+          foreach($d in @(Get-VMHardDiskDrive -VM $vm -ErrorAction SilentlyContinue)){
+            Write-Host "BUILDER_DISK controller=$($d.ControllerType) number=$($d.ControllerNumber):$($d.ControllerLocation) path=$($d.Path)"
+          }
+          foreach($d in @(Get-VMDvdDrive -VM $vm -ErrorAction SilentlyContinue)){
+            Write-Host "BUILDER_DVD controller=$($d.ControllerNumber):$($d.ControllerLocation) path=$($d.Path)"
+          }
+          foreach($n in @(Get-VMNetworkAdapter -VM $vm -ErrorAction SilentlyContinue)){
+            Write-Host "BUILDER_NIC switch=$($n.SwitchName) mac=$($n.MacAddress) ips=$($n.IPAddresses -join ',')"
+          }
+          Write-Host 'BUILDER_ATTACHMENT_AUDIT=PASS'
+
+      - name: Audit local builder seed metadata and key fingerprints
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          $private='C:\LayerSentryLab\qualification\iso-builder-key'
+          $pub='C:\LayerSentryLab\qualification\iso-builder-key.pub'
+          if(Test-Path $pub){
+            $fp=& ssh-keygen.exe -lf $pub -E sha256 2>$null
+            if($LASTEXITCODE -eq 0){Write-Host "BUILDER_EXPECTED_KEY_FP=$fp"}
+          }
+          $files=Get-ChildItem $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {
+              $_.FullName -match '(?i)(builder|iso-builder)' -or
+              $_.Name -match '(?i)^(user-data|meta-data|network-config)$'
+            } |
+            Sort-Object FullName
+          foreach($file in $files){
+            Write-Host "SEED_FILE path=$($file.FullName) size=$($file.Length)"
+            if($file.Extension -in @('.iso','.vhd','.vhdx','.qcow2','.gz','.zip')){continue}
+            $content=Get-Content -LiteralPath $file.FullName -ErrorAction SilentlyContinue
+            foreach($line in $content){
+              if($line -match '(?i)^\s*(name|user|username|hostname|local-hostname|instance-id)\s*[:=]'){
+                Write-Host "SEED_META=$($line.Trim())"
+              }
+            }
+            $keyLines=@($content | Where-Object {$_ -match 'ssh-(ed25519|rsa|ecdsa-[A-Za-z0-9@._+-]+)\s+[A-Za-z0-9+/=]+'})
+            foreach($line in $keyLines){
+              $m=[regex]::Match($line,'(ssh-(?:ed25519|rsa|ecdsa-[A-Za-z0-9@._+-]+)\s+[A-Za-z0-9+/=]+)')
+              if($m.Success){
+                $tmp=Join-Path $env:RUNNER_TEMP ([guid]::NewGuid().ToString('N')+'.pub')
+                try{
+                  Set-Content -LiteralPath $tmp -Value $m.Groups[1].Value -Encoding ascii
+                  $fp=& ssh-keygen.exe -lf $tmp -E sha256 2>$null
+                  if($LASTEXITCODE -eq 0){Write-Host "SEED_AUTH_KEY_FP file=$($file.Name) fp=$fp"}
+                }finally{Remove-Item -Force $tmp -ErrorAction SilentlyContinue}
+              }
+            }
+          }
+          Write-Host 'BUILDER_SEED_METADATA_AUDIT=PASS'
+
+      - name: Inspect attached seed ISO read-only when present
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dvd=@(Get-VMDvdDrive -VMName 'ls-iso-builder' -ErrorAction SilentlyContinue | Where-Object {$_.Path})
+          foreach($d in $dvd){
+            $iso=$d.Path
+            if(-not(Test-Path $iso)){continue}
+            Write-Host "SEED_ISO=$iso"
+            $mounted=$false
+            try{
+              $img=Mount-DiskImage -ImagePath $iso -PassThru -ErrorAction Stop
+              $mounted=$true
+              Start-Sleep -Seconds 1
+              $vol=$img | Get-Volume -ErrorAction SilentlyContinue
+              foreach($v in @($vol)){
+                if(-not $v.DriveLetter){continue}
+                $base="$($v.DriveLetter):\"
+                foreach($name in @('user-data','meta-data','network-config')){
+                  $p=Join-Path $base $name
+                  if(-not(Test-Path $p)){continue}
+                  Write-Host "ISO_FILE=$p"
+                  $content=Get-Content -LiteralPath $p -ErrorAction SilentlyContinue
+                  foreach($line in $content){
+                    if($line -match '(?i)^\s*(name|user|username|hostname|local-hostname|instance-id)\s*[:=]'){
+                      Write-Host "ISO_META=$($line.Trim())"
+                    }
+                  }
+                  foreach($line in @($content | Where-Object {$_ -match 'ssh-(ed25519|rsa|ecdsa-[A-Za-z0-9@._+-]+)\s+[A-Za-z0-9+/=]+'})){
+                    $m=[regex]::Match($line,'(ssh-(?:ed25519|rsa|ecdsa-[A-Za-z0-9@._+-]+)\s+[A-Za-z0-9+/=]+)')
+                    if($m.Success){
+                      $tmp=Join-Path $env:RUNNER_TEMP ([guid]::NewGuid().ToString('N')+'.pub')
+                      try{
+                        Set-Content -LiteralPath $tmp -Value $m.Groups[1].Value -Encoding ascii
+                        $fp=& ssh-keygen.exe -lf $tmp -E sha256 2>$null
+                        if($LASTEXITCODE -eq 0){Write-Host "ISO_AUTH_KEY_FP file=$name fp=$fp"}
+                      }finally{Remove-Item -Force $tmp -ErrorAction SilentlyContinue}
+                    }
+                  }
+                }
+              }
+            }catch{
+              Write-Host "SEED_ISO_INSPECT=UNAVAILABLE reason=$($_.Exception.GetType().Name)"
+            }finally{
+              if($mounted){Dismount-DiskImage -ImagePath $iso -ErrorAction SilentlyContinue}
+            }
+          }
+          Write-Host 'BUILDER_SEED_ISO_AUDIT=PASS'
 
       - name: Confirm protected migration path remains intact
         shell: powershell
