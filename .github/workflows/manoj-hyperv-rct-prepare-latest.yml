@@ -19,6 +19,7 @@ concurrency:
 
 jobs:
   prepare:
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 150
     steps:
