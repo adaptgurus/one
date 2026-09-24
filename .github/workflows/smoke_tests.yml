@@ -6,6 +6,7 @@ on: [push, pull_request, workflow_dispatch]
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 jobs:
   smoke-tests:
@@ -191,28 +192,60 @@ jobs:
             }
           }
 
-      - name: Probe candidate OneSwap service addresses
+      - name: Probe exact OneSwap service addresses
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           $candidates = New-Object System.Collections.Generic.HashSet[string]
-          $seed='C:\LayerSentryLab\qualification\oneswap-seed\network-config'
+          $seed='C:\\LayerSentryLab\\qualification\\oneswap-seed\\network-config'
           if(Test-Path $seed){
             foreach($line in Get-Content -LiteralPath $seed){
-              foreach($m in [regex]::Matches($line,'(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)')){
-                [void]$candidates.Add($m.Value)
+              foreach($m in [regex]::Matches($line,'(?<!\\d)(?:\\d{1,3}\\.){3}\\d{1,3}(?!\\d)')){
+                if($m.Value -match '^10\\.') {[void]$candidates.Add($m.Value)}
               }
             }
           }
+          $macs=@()
+          foreach($name in @('ls-appliance-qual','ls-appliance-dbe-qual')){
+            foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)){
+              $macs += (($nic.MacAddress -replace '[-:]','').ToUpper())
+            }
+          }
           foreach($n in Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue){
-            if($n.State -ne 'Unreachable' -and $n.IPAddress -match '^10\.'){
+            $nm=(($n.LinkLayerAddress -replace '[-:]','').ToUpper())
+            if($macs -contains $nm -and $n.IPAddress -match '^10\\.'){
               [void]$candidates.Add($n.IPAddress)
             }
           }
+          Write-Host "EXACT_CANDIDATES=$($candidates -join ',')"
           foreach($ip in $candidates){
             foreach($port in @(22,9443,9444)){
-              $ok=Test-NetConnection -ComputerName $ip -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue
-              if($ok){Write-Host "ONESWAP_CANDIDATE ip=$ip port=$port tcp=true"}
+              $client=New-Object System.Net.Sockets.TcpClient
+              try{
+                $iar=$client.BeginConnect($ip,$port,$null,$null)
+                $ok=$iar.AsyncWaitHandle.WaitOne(1500,$false)
+                if($ok -and $client.Connected){
+                  $client.EndConnect($iar)
+                  Write-Host "ONESWAP_CANDIDATE ip=$ip port=$port tcp=true"
+                } else {
+                  Write-Host "ONESWAP_CANDIDATE ip=$ip port=$port tcp=false"
+                }
+              } catch {
+                Write-Host "ONESWAP_CANDIDATE ip=$ip port=$port tcp=false"
+              } finally {
+                $client.Close()
+              }
             }
           }
           Write-Host 'RUNTIME_DISCOVERY=PASS'
+
+
+  cancel-stale-migration-discovery:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel only stale Manoj discovery run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST repos/${{ github.repository }}/actions/runs/35989622716/cancel || true
