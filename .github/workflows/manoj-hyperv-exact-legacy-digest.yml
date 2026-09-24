@@ -49,7 +49,20 @@ jobs:
         run: |
           $ErrorActionPreference='Stop'
           $head='a81aac6a8912f2d6d144b9ab981dba04ee4626a5'
-          foreach($name in @('hyperv_helper.rb','hyperv_hot_helper.rb')){
+          foreach($name in @(
+            'hyperv_helper.rb',
+            'hyperv_hot_helper.rb',
+            'hyperv_hot_hardening.rb',
+            'hyperv_hot_edge_hardening.rb',
+            'hyperv_virtio_hardening.rb',
+            'hyperv_final_safety_hardening.rb',
+            'hyperv_network_hardening.rb',
+            'hyperv_state_hardening.rb',
+            'hyperv_source_security_hardening.rb',
+            'hyperv_materialization_guard.rb',
+            'hyperv_import_recovery.rb',
+            'hyperv_import_recovery_hardening.rb'
+          )){
             $local=Join-Path $env:RUNNER_TEMP ("legacy-" + $name)
             $url="https://raw.githubusercontent.com/adaptgurus/one-swap/$head/$name"
             & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $local $url
@@ -59,19 +72,27 @@ jobs:
           }
           Write-Host "LEGACY_CODE_HEAD=$head"
 
-      - name: Copy exact old helpers to appliance temp directory
+      - name: Copy exact old runtime files to appliance temp directory
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $known='C:\\LayerSentryLab\\qualification\\oneswap-seed\\known_hosts_appliance_v7'
           $common=@('-o','LogLevel=ERROR','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-o','ConnectTimeout=8','-i',$env:ONESWAP_TEMP_KEY)
           & ssh.exe @common "ci@10.250.10.32" "rm -rf /tmp/ls-legacy-digest && mkdir -m 700 /tmp/ls-legacy-digest"
           if($LASTEXITCODE -ne 0){throw 'legacy temp dir creation failed'}
-          & scp.exe @common $env:LEGACY_HYPERV_HELPER_RB_PATH "ci@10.250.10.32:/tmp/ls-legacy-digest/hyperv_helper.rb"
-          if($LASTEXITCODE -ne 0){throw 'copy hyperv_helper failed'}
-          & scp.exe @common $env:LEGACY_HYPERV_HOT_HELPER_RB_PATH "ci@10.250.10.32:/tmp/ls-legacy-digest/hyperv_hot_helper.rb"
-          if($LASTEXITCODE -ne 0){throw 'copy hyperv_hot_helper failed'}
-
+          $files=@(
+            'hyperv_helper.rb','hyperv_hot_helper.rb','hyperv_hot_hardening.rb','hyperv_hot_edge_hardening.rb',
+            'hyperv_virtio_hardening.rb','hyperv_final_safety_hardening.rb','hyperv_network_hardening.rb',
+            'hyperv_state_hardening.rb','hyperv_source_security_hardening.rb','hyperv_materialization_guard.rb',
+            'hyperv_import_recovery.rb','hyperv_import_recovery_hardening.rb'
+          )
+          foreach($name in $files){
+            $key=($name -replace '[^A-Za-z0-9]','_').ToUpper()
+            $local=[Environment]::GetEnvironmentVariable(('LEGACY_' + $key + '_PATH'))
+            if(-not $local){throw "missing staged path for $name"}
+            & scp.exe @common $local "ci@10.250.10.32:/tmp/ls-legacy-digest/$name"
+            if($LASTEXITCODE -ne 0){throw "copy failed for $name"}
+          }
       - name: Reproduce exact old target digest without migration actions
         shell: powershell
         run: |
@@ -82,9 +103,33 @@ jobs:
           cat >/tmp/ls-legacy-digest/reproduce.rb <<'RUBY'
           require 'yaml'
           require 'json'
-          class OneSwapHelper; end
+          one_location=ENV['ONE_LOCATION']
+          if one_location
+            ruby_lib=File.join(one_location,'lib','ruby')
+            gems=File.join(one_location,'share','gems')
+          else
+            ruby_lib='/usr/lib/one/ruby'
+            gems='/usr/share/one/gems'
+          end
+          if File.directory?(gems)
+            begin
+              require 'rubygems'
+              Gem.use_paths(File.realpath(gems))
+            rescue StandardError
+            end
+          end
+          $LOAD_PATH << ruby_lib
+          $LOAD_PATH << File.join(ruby_lib,'cli')
+          require 'opennebula'
+          require 'one_helper/oneswap_helper'
+          $LOAD_PATH.unshift('/tmp/ls-legacy-digest')
           require '/tmp/ls-legacy-digest/hyperv_helper.rb'
           require '/tmp/ls-legacy-digest/hyperv_hot_helper.rb'
+          require '/tmp/ls-legacy-digest/hyperv_hot_hardening.rb'
+          require '/tmp/ls-legacy-digest/hyperv_hot_edge_hardening.rb'
+          require '/tmp/ls-legacy-digest/hyperv_virtio_hardening.rb'
+          require '/tmp/ls-legacy-digest/hyperv_final_safety_hardening.rb'
+          require '/tmp/ls-legacy-digest/hyperv_network_hardening.rb'
 
           loaded=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml') || {}
           normalized={}
@@ -114,8 +159,9 @@ jobs:
             v=options[k]
             puts "EXACT_OPTION key=#{k} class=#{v.class} value=#{v.inspect}"
           end
-          state_dir=OneSwapHyperV::HotUtil.state_dir(options,'manoj-hv-ls-migration-source-test-20260924')
-          state=JSON.parse(File.read(File.join(state_dir,'state.json')))
+          candidates=Dir['/var/lib/layersentry-oneswap/reflink-work/oneswap-hyperv-hot/manoj-hv-ls-migration-source-test-20260924*/state.json']
+          abort('durable state not unique') unless candidates.length==1
+          state=JSON.parse(File.read(candidates.first))
           puts "STORED_TARGET_DIGEST=#{state['target_digest']}"
           abort('exact old helper digest does not match stored durable digest') unless digest==state['target_digest']
           puts 'EXACT_LEGACY_DIGEST_REPRODUCTION=PASS'
