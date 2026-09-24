@@ -1423,7 +1423,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-client-key-acl-audit:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 5
     steps:
@@ -1460,6 +1460,56 @@ jobs:
           try { $fs=[IO.File]::Open($key,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read); $fs.Close(); $canRead=$true } catch { Write-Host ('KEY_READ_ERROR=' + $_.Exception.Message) }
           Write-Host ('KEY_READABLE=' + $canRead)
           Write-Host 'CLIENT_KEY_ACL_AUDIT=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-client-key-acl-fix:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          if((& whoami.exe).Trim() -ine 'nt authority\system'){throw "Runner is not LocalSystem: $(& whoami.exe)"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Grant SYSTEM read on exact client key only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          if(-not(Test-Path $key)){throw 'client private key missing'}
+          & icacls.exe $key /grant:r '*S-1-5-18:R'
+          if($LASTEXITCODE -ne 0){throw 'failed to grant SYSTEM read on client key'}
+          $acl=Get-Acl -LiteralPath $key
+          $systemAce=@($acl.Access | Where-Object {$_.IdentityReference -match 'SYSTEM' -and $_.AccessControlType -eq 'Allow'})
+          if($systemAce.Count -eq 0){throw 'SYSTEM read ACE not present after ACL update'}
+          $fs=[IO.File]::Open($key,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read); $fs.Close()
+          Write-Host 'CLIENT_KEY_SYSTEM_READ=PASS'
+
+      - name: Verify pinned appliance SSH after ACL fix
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "ci@$ip" 'id -un; hostname; cloud-init status --long || true'
+          if($LASTEXITCODE -ne 0){throw 'Pinned SSH failed after narrow SYSTEM ACL fix'}
+          Write-Host 'ONESWAP_PINNED_SSH_AFTER_ACL=PASS'
 
       - name: Verify source remained untouched
         shell: powershell
