@@ -154,7 +154,7 @@ jobs:
           if(-not $line){throw 'remote export directory missing from durable state'}
           $remote=$line.Substring('REMOTE_EXPORT_DIR='.Length).Trim()
           if([string]::IsNullOrWhiteSpace($remote)){throw 'remote export directory is empty'}
-          if($remote -notlike 'C:\\LayerSentryLab\\qualification\\*'){throw "Refusing unexpected remote export path: $remote"}
+          if($remote -notlike 'C:\\LayerSentryMigration\\*'){throw "Refusing unexpected remote export path: $remote"}
           Write-Host "HYPERV_REMOTE_EXPORT_DIR=$remote"
           if(-not (Test-Path -LiteralPath $remote)){throw "Hyper-V remote export directory missing: $remote"}
           $files=@(Get-ChildItem -LiteralPath $remote -Recurse -File -ErrorAction Stop | Sort-Object FullName)
