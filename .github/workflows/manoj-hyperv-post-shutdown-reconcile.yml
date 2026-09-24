@@ -119,6 +119,54 @@ jobs:
           & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           if($LASTEXITCODE -ne 0){throw 'Durable state inspection failed'}
 
+      - name: Inspect timed-out final-delta workspaces read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\\LayerSentryLab\\qualification\\oneswap-seed\\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          state=$(find /var/lib/layersentry-oneswap/reflink-work/oneswap-hyperv-hot -maxdepth 2 -type f -name state.json -path '*manoj-hv-ls-migration-source-test-20260924*' -print)
+          [ "$(printf '%s\n' "$state" | sed '/^$/d' | wc -l)" -eq 1 ]
+          python3 - "$state" <<'PY'
+          import json,os,sys
+          p=sys.argv[1]; s=json.load(open(p)); root=os.path.dirname(p)
+          print("REMOTE_EXPORT_DIR="+str(s.get("remote_export_dir") or ""))
+          print("APPLIANCE_STATE_DIR="+root)
+          d=os.path.join(root,"deltas")
+          print("APPLIANCE_DELTA_DIR="+d)
+          if os.path.isdir(d):
+              for name in sorted(os.listdir(d)):
+                  q=os.path.join(d,name)
+                  if os.path.isfile(q):
+                      st=os.stat(q)
+                      print(f"APPLIANCE_DELTA_FILE name={name} bytes={st.st_size} mtime_ns={st.st_mtime_ns}")
+          else:
+              print("APPLIANCE_DELTA_DIR_PRESENT=false")
+          PY
+          '@
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          $out=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'OneSwap timeout-workspace inspection failed'}
+          $out | ForEach-Object {Write-Host $_}
+          $line=@($out | Where-Object {$_ -like 'REMOTE_EXPORT_DIR=*'} | Select-Object -Last 1)
+          if(-not $line){throw 'remote export directory missing from durable state'}
+          $remote=$line.Substring('REMOTE_EXPORT_DIR='.Length).Trim()
+          if([string]::IsNullOrWhiteSpace($remote)){throw 'remote export directory is empty'}
+          if($remote -notlike 'C:\\LayerSentryLab\\qualification\\*'){throw "Refusing unexpected remote export path: $remote"}
+          Write-Host "HYPERV_REMOTE_EXPORT_DIR=$remote"
+          if(-not (Test-Path -LiteralPath $remote)){throw "Hyper-V remote export directory missing: $remote"}
+          $files=@(Get-ChildItem -LiteralPath $remote -Recurse -File -ErrorAction Stop | Sort-Object FullName)
+          Write-Host "HYPERV_REMOTE_FILE_COUNT=$($files.Count)"
+          foreach($item in $files){
+            Write-Host ("HYPERV_REMOTE_FILE path={0} bytes={1} modified={2}" -f $item.FullName,$item.Length,$item.LastWriteTimeUtc.ToString('o'))
+          }
+          $deltas=@($files | Where-Object {$_.Name -like 'delta-*.lshv'})
+          Write-Host "HYPERV_REMOTE_DELTA_COUNT=$($deltas.Count)"
+          Write-Host "HYPERV_REMOTE_DELTA_BYTES=$(($deltas | Measure-Object -Property Length -Sum).Sum)"
+          Write-Host 'DELTA_TIMEOUT_WORKSPACE_DIAGNOSTIC=PASS'
+
       - name: Inspect OpenNebula target artifacts read-only
         shell: powershell
         run: |
