@@ -1581,7 +1581,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-private-public-key-match-audit:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 6
     steps:
@@ -1623,6 +1623,64 @@ jobs:
           Write-Host ('PRIVATE_PUBLIC_ID_SHA256=' + $h1)
           Write-Host ('SIDECAR_PUBLIC_ID_SHA256=' + $h2)
           Write-Host 'PRIVATE_PUBLIC_KEY_MATCH_AUDIT=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-runner-private-key-copy:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          if((& whoami.exe).Trim() -ine 'nt authority\system'){throw "Runner is not LocalSystem"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Create LocalSystem-only temporary client key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmpKey=Join-Path $env:RUNNER_TEMP 'oneswap_qual_ed25519.system'
+          if(-not(Test-Path $srcKey)){throw 'source client key missing'}
+          Copy-Item -Force $srcKey $tmpKey
+          & icacls.exe $tmpKey /inheritance:r
+          if($LASTEXITCODE -ne 0){throw 'failed to remove inheritance on temporary key'}
+          & icacls.exe $tmpKey /grant:r '*S-1-5-18:F'
+          if($LASTEXITCODE -ne 0){throw 'failed to grant LocalSystem on temporary key'}
+          & icacls.exe $tmpKey /setowner '*S-1-5-18'
+          if($LASTEXITCODE -ne 0){throw 'failed to set LocalSystem owner on temporary key'}
+          $derived=(& ssh-keygen.exe -y -f $tmpKey 2>&1 | Where-Object {$_ -match '^ssh-'} | Select-Object -First 1)
+          if($LASTEXITCODE -ne 0 -or -not $derived){throw 'temporary key still fails OpenSSH permission validation'}
+          $dp=$derived.Trim() -split '\s+'
+          $derivedId=$dp[0]+' '+$dp[1]
+          $ud=Get-Content -LiteralPath 'C:\LayerSentryLab\qualification\oneswap-seed\user-data-v8' -Raw
+          if($ud -notmatch [regex]::Escape($derivedId)){throw 'v8 does not authorize the actual private-key identity'}
+          "ONESWAP_TEMP_KEY=$tmpKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'RUNNER_PRIVATE_KEY_COPY=PASS'
+
+      - name: Verify strict pinned SSH using LocalSystem-only key copy
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@$ip" 'id -un; hostname; cloud-init status --long || true'
+          if($LASTEXITCODE -ne 0){throw 'Pinned SSH failed with LocalSystem-only temporary key'}
+          Write-Host 'ONESWAP_PINNED_SSH_SYSTEM_KEY=PASS'
 
       - name: Verify source remained untouched
         shell: powershell
