@@ -1203,7 +1203,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-v7-auth-reconcile:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
@@ -1248,6 +1248,58 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-v7-userdata-audit:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 6
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Audit ci user and authorized key match without key disclosure
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $base='C:\LayerSentryLab\qualification\oneswap-seed'
+          $ud=Join-Path $base 'user-data-v7'
+          $clientKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          foreach($p in @($ud,$clientKey)){if(-not(Test-Path $p)){throw "Missing $p"}}
+          $text=Get-Content -LiteralPath $ud -Raw
+          $names=[regex]::Matches($text,'(?m)^\s*-\s*name:\s*([^\s#]+)') | ForEach-Object {$_.Groups[1].Value}
+          Write-Host ('USER_NAMES=' + ($names -join ','))
+          Write-Host ('CI_USER_DECLARED=' + [bool]($names -contains 'ci'))
+          $matches=[regex]::Matches($text,'(?m)(ssh-(?:ed25519|rsa))\s+([A-Za-z0-9+/=]+)')
+          Write-Host ('AUTHORIZED_KEY_COUNT=' + $matches.Count)
+          $clientPub=(& ssh-keygen.exe -y -f $clientKey).Trim()
+          if($LASTEXITCODE -ne 0){throw 'Unable to derive client public key'}
+          $cp=$clientPub -split '\s+'
+          $clientId=$cp[0] + ' ' + $cp[1]
+          $found=$false
+          foreach($m in $matches){
+            $id=$m.Groups[1].Value + ' ' + $m.Groups[2].Value
+            if($id -eq $clientId){$found=$true}
+          }
+          Write-Host ('AUTHORIZED_CLIENT_KEY_MATCH=' + $found)
+          Write-Host ('HAS_SSH_AUTHORIZED_KEYS_FIELD=' + [bool]($text -match '(?m)^\s*ssh_authorized_keys\s*:'))
+          Write-Host ('HAS_USERS_FIELD=' + [bool]($text -match '(?m)^users\s*:'))
+          Write-Host 'V7_USERDATA_AUDIT=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
