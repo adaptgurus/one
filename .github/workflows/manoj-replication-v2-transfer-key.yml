@@ -1,0 +1,49 @@
+name: Manoj Replication v2 Transfer Key
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-replication-v2-transfer-key.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  key:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Generate local-only transfer key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $openssl=(Get-Command openssl -ErrorAction SilentlyContinue)
+          if(-not $openssl){
+            $candidates=@('C:\Program Files\Git\usr\bin\openssl.exe','C:\Program Files\Git\mingw64\bin\openssl.exe')
+            $path=$candidates | Where-Object {Test-Path $_} | Select-Object -First 1
+            if(-not $path){throw 'OpenSSL unavailable'}
+            $openssl=[pscustomobject]@{Source=$path}
+          }
+          $dir='C:\LayerSentryLab\qualification\rv2-secure-transfer'
+          New-Item -ItemType Directory -Path $dir -Force | Out-Null
+          $priv=Join-Path $dir 'manoj-rv2-transfer-private.pem'
+          $pub=Join-Path $dir 'manoj-rv2-transfer-public.pem'
+          if(-not (Test-Path $priv)){
+            & $openssl.Source genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out $priv
+            if($LASTEXITCODE -ne 0){throw 'RSA private key generation failed'}
+          }
+          & $openssl.Source pkey -in $priv -pubout -out $pub
+          if($LASTEXITCODE -ne 0){throw 'RSA public key export failed'}
+          & icacls.exe $priv /inheritance:r | Out-Null
+          & icacls.exe $priv /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $priv /setowner '*S-1-5-18' | Out-Null
+          $pubRaw=[IO.File]::ReadAllBytes($pub)
+          $pubB64=[Convert]::ToBase64String($pubRaw)
+          $fp=(& $openssl.Source pkey -pubin -in $pub -outform DER | & $openssl.Source dgst -sha256).Trim()
+          Write-Host "RV2_TRANSFER_PUBLIC_KEY_B64=$pubB64"
+          Write-Host "RV2_TRANSFER_PUBLIC_KEY_FINGERPRINT=$fp"
+          Write-Host 'RV2_TRANSFER_PRIVATE_KEY_LOCAL_ONLY=PASS'
