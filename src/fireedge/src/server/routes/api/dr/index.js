@@ -16,6 +16,7 @@
 const { Actions, Commands } = require('server/routes/api/dr/routes')
 const {
   capabilities,
+  siteIdentity,
   sites,
   createSite,
   sitePairs,
@@ -38,6 +39,7 @@ const {
 
 module.exports = [
   { ...Commands[Actions.CAPABILITIES], action: capabilities },
+  { ...Commands[Actions.SITE_IDENTITY], action: siteIdentity },
   { ...Commands[Actions.SITES], action: sites },
   { ...Commands[Actions.SITE_CREATE], action: createSite },
   { ...Commands[Actions.SITE_PAIRS], action: sitePairs },
