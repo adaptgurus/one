@@ -66,3 +66,5 @@ jobs:
           Set-Content -Path $p -Value $script -Encoding UTF8
           & 'C:\LayerSentryLab\tools\Python313\python.exe' $p
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# resume-trigger: 2026-09-24T15:11+05:30
