@@ -116,34 +116,67 @@ jobs:
             Select-Object InterfaceAlias,IPAddress,PrefixLength |
             Format-Table -AutoSize
 
-      - name: Read-only connectivity matrix
+      - name: Current migration path connectivity
         shell: powershell
         run: |
           $ErrorActionPreference='Continue'
-          $ips = New-Object System.Collections.Generic.HashSet[string]
-          foreach($vm in (Get-VM)){
-            foreach($a in (Get-VMNetworkAdapter -VM $vm -ErrorAction SilentlyContinue)){
-              foreach($ip in $a.IPAddresses){
-                if($ip -match '^\d+\.\d+\.\d+\.\d+$' -and $ip -notmatch '^169\.254\.'){
-                  [void]$ips.Add($ip)
-                }
-              }
+          function Test-TcpFast([string]$ip,[int]$port){
+            $client=New-Object System.Net.Sockets.TcpClient
+            try{
+              $iar=$client.BeginConnect($ip,$port,$null,$null)
+              if(-not $iar.AsyncWaitHandle.WaitOne(2500)){ return $false }
+              $client.EndConnect($iar)
+              return $client.Connected
+            }catch{return $false}finally{$client.Close()}
+          }
+          foreach($ip in @('10.250.10.40','10.250.10.41','10.250.10.42','10.250.10.43')){
+            foreach($port in @(22,9443)){
+              $ok=Test-TcpFast $ip $port
+              Write-Host "CONNECT ip=$ip port=$port tcp=$ok"
             }
           }
-          foreach($ip in @('10.10.10.21','10.10.10.22','10.10.10.23','10.250.10.40')){
-            [void]$ips.Add($ip)
-          }
-          foreach($ip in ($ips | Sort-Object)){
-            foreach($port in @(22,2633,2616,9443)){
-              $r=Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
-              Write-Host "CONNECT ip=$ip port=$port tcp=$($r.TcpTestSucceeded)"
-            }
-          }
-          Write-Host '===HOST_STORAGE==='
           Get-PSDrive -PSProvider FileSystem | ForEach-Object {
-            [pscustomobject]@{
-              Name=$_.Name
-              FreeGB=[math]::Round($_.Free/1GB,1)
-              UsedGB=[math]::Round($_.Used/1GB,1)
-            }
-          } | Format-Table -AutoSize
+            Write-Host "HOST_STORAGE drive=$($_.Name) free_gb=$([math]::Round($_.Free/1GB,1)) used_gb=$([math]::Round($_.Used/1GB,1))"
+          }
+
+      - name: Bind disposable guest seed and SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification\ls-migration-source-test'
+          $network=Get-Content -Raw -LiteralPath (Join-Path $root 'network-config')
+          $userData=Get-Content -Raw -LiteralPath (Join-Path $root 'user-data')
+          $ipv4=[regex]::Matches($network,'(?<![0-9])(?:10|172|192)\.[0-9]+\.[0-9]+\.[0-9]+') |
+            ForEach-Object {$_.Value} | Where-Object {$_ -ne '10.250.10.1'} | Select-Object -First 1
+          $userMatch=[regex]::Match($userData,'(?m)^\s*-?\s*name:\s*([A-Za-z0-9_.-]+)\s*$')
+          if(-not $ipv4){throw 'no seeded source IPv4 found'}
+          if(-not $userMatch.Success){throw 'no seeded source SSH username found'}
+          $user=$userMatch.Groups[1].Value
+          Write-Host "SOURCE_SEED ip=$ipv4 user=$user"
+          $key=Join-Path $root 'source_ci_ed25519'
+          $known=Join-Path $env:RUNNER_TEMP 'source-known-hosts'
+          ssh-keyscan.exe -T 5 $ipv4 2>$null | Out-File -FilePath $known -Encoding ascii
+          if(-not(Test-Path $known) -or (Get-Item $known).Length -eq 0){throw "source guest SSH unavailable at $ipv4"}
+          ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key "$user@$ipv4" "hostname; id -un; uname -a; lsblk -b -o NAME,TYPE,SIZE,MOUNTPOINTS"
+          if($LASTEXITCODE -ne 0){throw "source guest SSH failed: $LASTEXITCODE"}
+          Write-Host 'SOURCE_GUEST_SSH=PASS'
+
+      - name: Bind authorized builder and exact migration source
+        shell: powershell
+        env:
+          EXPECTED_SHA: e5a0c7e0101b47dc80e1378cbd69b7614e905ca1
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $discover='set -e; for p in /home/builder/layersentry-platform /home/builder/*/layersentry-platform /opt/layersentry-platform /srv/layersentry-platform; do [ -d "$p/.git" ] || continue; echo "BUILDER_REPO=$p"; git -C "$p" rev-parse HEAD; done'
+          $out=& ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $discover
+          if($LASTEXITCODE -ne 0){throw "builder discovery failed: $LASTEXITCODE"}
+          $out | Write-Host
+          $repoLine=$out | Where-Object {$_ -like 'BUILDER_REPO=*'} | Select-Object -First 1
+          if(-not $repoLine){throw 'builder has no LayerSentry source checkout'}
+          $remoteRepo=$repoLine.Substring('BUILDER_REPO='.Length)
+          $sha=$env:EXPECTED_SHA
+          $check="set -e; repo='$remoteRepo'; sha='$sha'; if ! git -C \"$remoteRepo\" cat-file -e \"$sha^{commit}\" 2>/dev/null; then git -C \"$remoteRepo\" fetch --depth=1 origin \"$sha\"; fi; git -C \"$remoteRepo\" cat-file -e \"$sha^{commit}\"; echo EXACT_SOURCE=$sha"
+          & ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $check
+          if($LASTEXITCODE -ne 0){throw "exact source unavailable on builder: $LASTEXITCODE"}
