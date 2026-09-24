@@ -1072,7 +1072,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-v7-pinned-hostkey:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 18
     steps:
@@ -1197,6 +1197,58 @@ jobs:
       - name: Verify source remained untouched
         shell: powershell
         run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-v7-auth-reconcile:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj runner and reconcile v7
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "v7 appliance is not Running: $($vm.State)"}
+          $seed=Get-VMHardDiskDrive -VMName $vm.Name -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 3 -ErrorAction Stop
+          if($seed.Path -ne 'C:\LayerSentryLab\qualification\oneswap-seed\cidata-v7.vhdx'){throw "Unexpected appliance seed: $($seed.Path)"}
+          $hash=(Get-FileHash -Algorithm SHA256 $seed.Path).Hash
+          if($hash -ne '4CB4FAE4B10762FA2C2C369C94EBE4F1F2E4644F771AA0C224FFA005D1BC30A2'){throw "v7 seed hash mismatch: $hash"}
+          Write-Host 'V7_RECONCILE=PASS'
+
+      - name: Require pre-pinned host identity and wait for ci authorization
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $ip='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $ok=$false
+          for($i=1;$i -le 30;$i++){
+            $out=& ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=5 -i $key "ci@$ip" 'id -un; hostname; cloud-init status --long || true' 2>&1
+            $rc=$LASTEXITCODE
+            Write-Host "V7_AUTH attempt=$i rc=$rc"
+            $out | ForEach-Object {
+              if($_ -match '(?i)PRIVATE KEY|BEGIN OPENSSH'){Write-Host '<redacted>'} else {Write-Host $_}
+            }
+            if($rc -eq 0){$ok=$true;break}
+            Start-Sleep -Seconds 5
+          }
+          if(-not $ok){throw 'ci public-key authorization did not converge on trusted v7 appliance'}
+          Write-Host 'ONESWAP_V7_PINNED_SSH_AUTH=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
