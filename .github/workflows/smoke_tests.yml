@@ -475,7 +475,7 @@ jobs:
 
 
   manoj-oneswap-hyperv-network-audit:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -515,3 +515,54 @@ jobs:
             Where-Object {$_.IPAddress -eq '10.250.10.32'} |
             Format-List *
           Write-Host 'ONESWAP_HYPERV_NETWORK_AUDIT=PASS'
+
+
+  manoj-oneswap-boot-seed-audit:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+      - name: Audit appliance storage and firmware read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-qual'
+          Write-Host '=== VM ==='
+          Get-VM -Name $name | Select-Object Name,State,Generation,AutomaticStartAction,AutomaticStopAction | Format-List
+          Write-Host '=== HARD DISKS ==='
+          Get-VMHardDiskDrive -VMName $name | Select-Object ControllerType,ControllerNumber,ControllerLocation,Path,DiskNumber,SupportPersistentReservations | Format-List
+          Write-Host '=== DVD ==='
+          Get-VMDvdDrive -VMName $name -ErrorAction SilentlyContinue | Select-Object ControllerNumber,ControllerLocation,Path | Format-List
+          Write-Host '=== FIRMWARE ==='
+          $fw=Get-VMFirmware -VMName $name
+          $fw | Select-Object SecureBoot,SecureBootTemplate,BootOrder | Format-List
+          Write-Host '=== NETWORK ==='
+          Get-VMNetworkAdapter -VMName $name | Select-Object SwitchName,MacAddress,DynamicMacAddressEnabled,Status,IPAddresses | Format-List
+          Write-Host '=== INTEGRATION SERVICES ==='
+          Get-VMIntegrationService -VMName $name | Select-Object Name,Enabled,PrimaryStatusDescription,SecondaryStatusDescription | Format-Table -AutoSize
+          Write-Host 'ONESWAP_BOOT_SEED_AUDIT=PASS'
+
+      - name: Extract non-secret boot and seed hints from existing scripts
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          foreach($name in @('fix-oneswap-bootorder.ps1','probe-oneswap-boot.ps1','swap-oneswap-qualified.ps1')){
+            $p=Join-Path $root $name
+            if(-not(Test-Path $p)){continue}
+            Write-Host "=== SCRIPT_HINTS $name ==="
+            Get-Content -LiteralPath $p |
+              Where-Object {
+                $_ -match '(?i)Get-VM|Set-VM|Start-VM|Stop-VM|VHD|DVD|firmware|boot|seed|network|10\.250\.10\.|ls-appliance|oneswap' -and
+                $_ -notmatch '(?i)password|secret|token|private.?key|authorization'
+              } |
+              ForEach-Object {Write-Host $_}
+          }
+          Write-Host 'ONESWAP_BOOT_SCRIPT_HINTS=PASS'
