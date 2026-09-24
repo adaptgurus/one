@@ -71,18 +71,24 @@ jobs:
           vp=ET.fromstring(vmp[1])
           used=set()
           active=[]
-          for vm in vp.findall("VM"):
-              histories=vm.findall("./HISTORY_RECORDS/HISTORY")
+          for summary in vp.findall("VM"):
+              histories=summary.findall("./HISTORY_RECORDS/HISTORY")
               host=histories[-1].findtext("HOSTNAME") if histories else ""
               if host!=TARGET_HOST: continue
-              vm_state=int(vm.findtext("STATE") or -1)
-              deploy=(vm.findtext("DEPLOY_ID") or "").strip()
-              if vm_state==3 and deploy:
-                  cpus=[x.text for x in vm.findall("./TEMPLATE/NUMA_NODE/CPUS") if x.text]
-                  for value in cpus:
-                      for part in value.replace(",", " ").split():
-                          if part.isdigit(): used.add(int(part))
-                  active.append((vm.findtext("ID"),vm.findtext("NAME"),cpus))
+              vm_state=int(summary.findtext("STATE") or -1)
+              deploy=(summary.findtext("DEPLOY_ID") or "").strip()
+              if vm_state!=3 or not deploy:
+                  continue
+              vm_id=int(summary.findtext("ID"))
+              full=one.one.vm.info(auth,vm_id,False)
+              if not full[0]:
+                  raise SystemExit(f"cannot read active VM {vm_id} for CPU isolation")
+              vm=ET.fromstring(full[1])
+              cpus=[x.text for x in vm.findall("./TEMPLATE/NUMA_NODE/CPUS") if x.text]
+              for value in cpus:
+                  for part in value.replace(",", " ").split():
+                      if part.isdigit(): used.add(int(part))
+              active.append((str(vm_id),vm.findtext("NAME"),cpus))
           total_cores=max_cpu//100
           print("PINNED_ACTIVE_VMS="+repr(active))
           print("PINNED_USED_CPUS="+repr(sorted(used)))
@@ -99,24 +105,34 @@ jobs:
           run_id=os.environ.get("GITHUB_RUN_ID","manual")
           image_name="ls-dr-service-image-"+run_id
           vm_name="ls-dr-service-vm-"+run_id
-          image_template=f'''NAME="{image_name}"
-          PATH="http://{HOST_HTTP_IP}:{HTTP_PORT}/{DISK.name}"
-          TYPE="OS"
-          PERSISTENT="NO"
-          DESCRIPTION="LayerSentry pinned service recovery validation"
-          '''
-          alloc=one.one.image.allocate(auth,image_template,DATASTORE_ID)
-          if not alloc[0]: raise SystemExit("service image allocate failed: "+str(alloc[1])[:500])
-          image_id=int(alloc[1])
-          print("SERVICE_IMAGE_ID="+str(image_id))
-          for _ in range(180):
-              info=one.one.image.info(auth,image_id,False)
-              if not info[0]: raise SystemExit("service image info failed")
-              ir=ET.fromstring(info[1]); st=int(ir.findtext("STATE") or -1)
-              if st==1: break
-              if st in (5,7): raise SystemExit("service image failed: "+str(ir.findtext("./TEMPLATE/ERROR") or ""))
-              time.sleep(2)
-          else: raise SystemExit("service image did not become READY")
+          image_id=4
+          reusable=one.one.image.info(auth,image_id,False)
+          if reusable[0]:
+              reusable_root=ET.fromstring(reusable[1])
+              reusable_state=int(reusable_root.findtext("STATE") or -1)
+          else:
+              reusable_state=-1
+          if reusable_state==1:
+              print("SERVICE_IMAGE_REUSE=PASS IMAGE_ID=4")
+          else:
+              image_template=f'''NAME="{image_name}"
+              PATH="http://{HOST_HTTP_IP}:{HTTP_PORT}/{DISK.name}"
+              TYPE="OS"
+              PERSISTENT="NO"
+              DESCRIPTION="LayerSentry pinned service recovery validation"
+              '''
+              alloc=one.one.image.allocate(auth,image_template,DATASTORE_ID)
+              if not alloc[0]: raise SystemExit("service image allocate failed: "+str(alloc[1])[:500])
+              image_id=int(alloc[1])
+              print("SERVICE_IMAGE_ID="+str(image_id))
+              for _ in range(180):
+                  info=one.one.image.info(auth,image_id,False)
+                  if not info[0]: raise SystemExit("service image info failed")
+                  ir=ET.fromstring(info[1]); st=int(ir.findtext("STATE") or -1)
+                  if st==1: break
+                  if st in (5,7): raise SystemExit("service image failed: "+str(ir.findtext("./TEMPLATE/ERROR") or ""))
+                  time.sleep(2)
+              else: raise SystemExit("service image did not become READY")
 
           vm_template=f'''NAME="{vm_name}"
           CPU="1"
@@ -130,7 +146,7 @@ jobs:
             THREADS="1"
           ]
           DISK=[IMAGE_ID="{image_id}"]
-          SCHED_REQUIREMENTS="NAME = \"{TARGET_HOST}\""
+          SCHED_REQUIREMENTS="NAME = \\\"{TARGET_HOST}\\\""
           '''
           va=one.one.vm.allocate(auth,vm_template,False)
           if not va[0]: raise SystemExit("service VM allocate failed: "+str(va[1])[:500])
