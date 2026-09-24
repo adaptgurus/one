@@ -17,9 +17,9 @@ concurrency:
 jobs:
   cleanup:
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 12
+    timeout-minutes: 15
     steps:
-      - name: Remove exact orphan reference from failed prepare
+      - name: Bind Manoj and prove source safety
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -28,27 +28,85 @@ jobs:
           $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           if($vm.State -ne 'Running'){throw "Source must stay Running: $($vm.State)"}
           if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has user-visible checkpoints'}
+          $ns='root\virtualization\v2'
+          $cs=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem -Filter "Name='$($vm.VMId.Guid)'"
+          $recovery=@($cs | Get-CimAssociatedInstance -Association Msvm_SnapshotOfVirtualSystem -ResultClassName Msvm_VirtualSystemSettingData | Where-Object {$_.VirtualSystemType -eq 'Microsoft:Hyper-V:Snapshot:Recovery'})
+          if($recovery.Count -ne 0){throw "Recovery checkpoint still exists; refusing RCT orphan cleanup count=$($recovery.Count)"}
+          Write-Host 'SOURCE_SAFETY_BEFORE=PASS'
 
-          $expected='Microsoft:6135125C-AD5D-4C29-8764-65A68D2747CB'
+      - name: Verify no durable PREPARED state and discover staging directory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-orphan-cleanup.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $cmd=@'
+          set -euo pipefail
+          op="manoj-hv-ls-migration-source-test-20260924"
+          state="/var/tmp/oneswap-hyperv-hot/$op/state.json"
+          if [ -f "$state" ]; then
+            echo "DURABLE_STATE_PRESENT"
+            python3 - "$state" <<'PY'
+          import json,sys
+          s=json.load(open(sys.argv[1]))
+          print("STATE_PHASE="+str(s.get("phase")))
+          print("STATE_REFERENCE="+str(s.get("reference_point_id")))
+          PY
+            exit 41
+          fi
+          ruby -ryaml -e '
+            c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            h=c["hyperv_connections"]||c[:hyperv_connections]||{}
+            p=h["manoj-qual"]||h[:"manoj-qual"]||{}
+            s=p["staging_dir"]||p[:staging_dir]
+            abort("staging_dir missing") if s.to_s.empty?
+            puts "STAGING_DIR=#{s}"
+          '
+          echo 'NO_DURABLE_PREPARED_STATE=PASS'
+          '@
+          $cmd=[regex]::Replace($cmd,'\r','')
+          $out=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $tmp "ci@10.250.10.32" $cmd
+          $rc=$LASTEXITCODE
+          $out | ForEach-Object {Write-Host $_}
+          if($rc -ne 0){throw "Durable-state/staging guard failed rc=$rc"}
+          $line=@($out | Where-Object {$_ -like 'STAGING_DIR=*'} | Select-Object -Last 1)
+          if(-not $line){throw 'staging_dir was not returned'}
+          $staging=$line.Substring('STAGING_DIR='.Length)
+          if([string]::IsNullOrWhiteSpace($staging)){throw 'staging_dir empty'}
+          "HYPERV_STAGING_DIR=$staging" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Remove exact failed-baseline RCT reference and export tree
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $expected='Microsoft:5BFE564B-9115-4FBA-B7DC-FB19C5493319'
           $ns='root\virtualization\v2'
           $all=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
           Write-Host "ORPHAN_CLEANUP_BEFORE_COUNT=$($all.Count)"
-          $ref=@($all | Where-Object {$_.InstanceID -eq $expected})
-          if($ref.Count -ne 1){throw "Exact orphan reference not found uniquely; count=$($ref.Count)"}
-          $ref=$ref[0]
+          if($all.Count -ne 1){throw "Expected exactly one reference point; found $($all.Count)"}
+          $ref=$all[0]
+          if($ref.InstanceID -ne $expected){throw "Unexpected reference id: $($ref.InstanceID)"}
           $vd=@($ref.VirtualDiskIdentifiers)
           $ri=@($ref.ResilientChangeTrackingIdentifiers)
+          $usable=@($ri | Where-Object {-not [string]::IsNullOrWhiteSpace([string]$_})
           Write-Host "ORPHAN_INSTANCE=$($ref.InstanceID)"
           Write-Host "ORPHAN_TYPE=$($ref.ReferencePointType)"
           Write-Host "ORPHAN_CONSISTENCY=$($ref.ConsistencyLevel)"
           Write-Host "ORPHAN_HAS_ASSOCIATED_DATA=$($ref.HasAssociatedData)"
           Write-Host "ORPHAN_VD_COUNT=$($vd.Count)"
           Write-Host "ORPHAN_RCT_COUNT=$($ri.Count)"
-          if($vd.Count -ne 2){throw "Refusing cleanup: expected two virtual disks; found $($vd.Count)"}
-          if($ri.Count -eq $vd.Count -and @($ri | Where-Object {-not [string]::IsNullOrWhiteSpace([string]$_)}).Count -eq $vd.Count){
-            throw 'Refusing cleanup: reference now contains a complete usable RCT baseline'
-          }
-
+          if([int]$ref.ReferencePointType -ne 2){throw 'Reference is not RCT type 2'}
+          if([int]$ref.ConsistencyLevel -ne 2){throw 'Expected crash-consistent orphan level 2'}
+          if([bool]$ref.HasAssociatedData){throw 'Unexpected associated log data on RCT reference'}
+          if($vd.Count -ne 2 -or $ri.Count -ne 2 -or $usable.Count -ne 2){throw 'RCT reference shape does not match failed baseline evidence'}
           $svc=Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePointService
           $r=$svc.DestroyReferencePoint($ref)
           Write-Host "ORPHAN_DESTROY_RETURN=$($r.ReturnValue)"
@@ -64,18 +122,36 @@ jobs:
             throw "DestroyReferencePoint failed code=$($r.ReturnValue)"
           }
 
+          $safeOp='layersentry-hot-manoj-hv-ls-migration-source-test-20260924'
+          $exportDir=Join-Path $env:HYPERV_STAGING_DIR $safeOp
+          $full=[IO.Path]::GetFullPath($exportDir)
+          $base=[IO.Path]::GetFullPath($env:HYPERV_STAGING_DIR)
+          if(-not $full.StartsWith($base,[StringComparison]::OrdinalIgnoreCase)){throw 'Export path escaped staging root'}
+          if((Split-Path $full -Leaf) -ne $safeOp){throw 'Export directory leaf mismatch'}
+          if(Test-Path -LiteralPath $full){
+            Write-Host "ORPHAN_EXPORT_DIR=$full"
+            Remove-Item -LiteralPath $full -Recurse -Force -ErrorAction Stop
+          } else {
+            Write-Host "ORPHAN_EXPORT_DIR_ABSENT=$full"
+          }
+
           $after=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
-          Write-Host "ORPHAN_CLEANUP_AFTER_COUNT=$($after.Count)"
-          if(@($after | Where-Object {$_.InstanceID -eq $expected}).Count -ne 0){throw 'Exact orphan reference still exists'}
+          if($after.Count -ne 0){throw "Reference cleanup incomplete; remaining=$($after.Count)"}
           Write-Host 'ORPHAN_RCT_CLEANUP=PASS'
 
-      - name: Verify source invariant
+      - name: Verify clean baseline and source invariant
         shell: powershell
         run: |
           $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          $ns='root\virtualization\v2'
+          $refs=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
+          $cs=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem -Filter "Name='$($vm.VMId.Guid)'"
+          $recovery=@($cs | Get-CimAssociatedInstance -Association Msvm_SnapshotOfVirtualSystem -ResultClassName Msvm_VirtualSystemSettingData | Where-Object {$_.VirtualSystemType -eq 'Microsoft:Hyper-V:Snapshot:Recovery'})
           Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
           Write-Host "SOURCE_AFTER_CHECKPOINTS=$n"
+          Write-Host "REFERENCE_AFTER_COUNT=$($refs.Count)"
+          Write-Host "RECOVERY_AFTER_COUNT=$($recovery.Count)"
           if($vm.State -ne 'Running'){throw 'Cleanup changed source state'}
-          if($n -ne 0){throw 'Cleanup created user-visible checkpoint'}
-          Write-Host 'SOURCE_INVARIANT=PASS'
+          if($n -ne 0 -or $refs.Count -ne 0 -or $recovery.Count -ne 0){throw 'Clean RCT baseline not restored'}
+          Write-Host 'CLEAN_RCT_BASELINE_AFTER=PASS'
