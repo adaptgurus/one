@@ -508,6 +508,14 @@ export const getBackupProfile = (blueprint) =>
     note: 'Recovery behavior is qualification-controlled.',
   }
 
+export const getPbmBackupModeOptions = (blueprint) => {
+  if (blueprint?.id === 'mongodb-community') return ['Logical']
+  if (blueprint?.id === 'percona-mongodb')
+    return ['Logical', 'Physical', 'Incremental']
+
+  return []
+}
+
 const catalogItem = (input) => ({
   qualification: 'NOT_TESTED',
   productionSelectable: false,
@@ -985,6 +993,7 @@ const PRODUCT_DEFAULTS = {
   elasticKibana: false,
   mongoScopeMode: 'Create application credential scope',
   mongoDbName: 'appdb',
+  mongoPbmMode: 'Logical',
   ferretDbName: 'appdb',
   kvPersistence: 'AOF + RDB (recommended)',
   clickBootstrap: 'Create initial database',
@@ -3836,6 +3845,15 @@ const backupErrors = (draft, blueprint) => {
   }
 
   if (backup.mode === 'direct' && draft.backupEnabled) {
+    const pbmModes = getPbmBackupModeOptions(blueprint)
+    if (
+      pbmModes.length > 0 &&
+      !pbmModes.includes(String(draft.mongoPbmMode || ''))
+    ) {
+      errors.push(
+        'PBM backup mode is required and must be supported by the selected MongoDB distribution.'
+      )
+    }
     if (
       !Number.isInteger(Number(draft.retentionDays)) ||
       Number(draft.retentionDays) < 1
@@ -4302,10 +4320,12 @@ export const NATIVE_PRODUCT_OPTION_BINDINGS = Object.freeze({
   'mongodb-community': {
     mongoScopeMode: 'credential_scope_mode',
     mongoDbName: 'database_name',
+    mongoPbmMode: 'pbm_backup_mode',
   },
   'percona-mongodb': {
     mongoScopeMode: 'credential_scope_mode',
     mongoDbName: 'database_name',
+    mongoPbmMode: 'pbm_backup_mode',
   },
   ferretdb: { ferretDbName: 'database_name' },
   redis: { kvPersistence: 'persistence_policy' },
@@ -4423,10 +4443,12 @@ const isNativeProductOptionActive = (draft, blueprintId, draftKey) => {
     'mongodb-community': {
       mongoDbName:
         draft.mongoScopeMode === 'Create application credential scope',
+      mongoPbmMode: draft.backupEnabled === true,
     },
     'percona-mongodb': {
       mongoDbName:
         draft.mongoScopeMode === 'Create application credential scope',
+      mongoPbmMode: draft.backupEnabled === true,
     },
     clickhouse: {
       clickDbName: draft.clickBootstrap === 'Create initial database',
@@ -4792,7 +4814,8 @@ export const getProductSummary = (draft, blueprint) => {
       draft.mongoScopeMode +
       (draft.mongoScopeMode === 'Create application credential scope'
         ? ' · ' + draft.mongoDbName
-        : '')
+        : '') +
+      (draft.backupEnabled ? ' · PBM ' + draft.mongoPbmMode : '')
     )
   }
   if (id === 'ferretdb') {

@@ -76,6 +76,7 @@ import {
   getDependencySummary,
   getEndpointOptions,
   getNetworkProfile,
+  getPbmBackupModeOptions,
   getProductConfigErrors,
   getProductConfigFields,
   getProductSummary,
@@ -1475,6 +1476,7 @@ const ProductionServiceWizard = () => {
 
   const renderBackup = () => {
     const directBackup = backupProfile.mode === 'direct'
+    const pbmModes = getPbmBackupModeOptions(blueprint)
 
     return (
       <>
@@ -1511,6 +1513,25 @@ const ProductionServiceWizard = () => {
             />
             {draft.backupEnabled && (
               <Row>
+                {pbmModes.length > 0 && (
+                  <SelectField
+                    label="PBM backup mode"
+                    value={draft.mongoPbmMode}
+                    onChange={(value) => update('mongoPbmMode', value)}
+                    disabled={pbmModes.length === 1}
+                    helperText={
+                      blueprint?.id === 'mongodb-community'
+                        ? 'MongoDB Community is restricted to PBM logical backup; PITR replays continuous oplog slices from a valid base backup.'
+                        : 'Choose the exact tuple-qualified PBM backup mode. PITR remains separately validated.'
+                    }
+                  >
+                    {pbmModes.map((mode) => (
+                      <MenuItem key={mode} value={mode}>
+                        {mode}
+                      </MenuItem>
+                    ))}
+                  </SelectField>
+                )}
                 <TextField
                   label="Backup repository reference"
                   value={draft.backupRepositoryRef}
