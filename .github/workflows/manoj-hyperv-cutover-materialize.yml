@@ -19,7 +19,7 @@ concurrency:
 jobs:
   cutover:
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 90
+    timeout-minutes: 270
     steps:
       - name: Bind Manoj and require source Off for restart-safe resume
         shell: powershell
@@ -230,7 +230,7 @@ jobs:
           export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
           operation="manoj-hv-ls-migration-source-test-20260924"
           set +e
-          out=$(timeout --signal=TERM --kill-after=20s 3600s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --commit --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --cpu 0.5 --vcpu 2 --memory-mb 2560 --datastore 1 --network 0 2>&1)
+          out=$(timeout --signal=TERM --kill-after=30s 14400s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --commit --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --hyperv-delta-timeout 7200 --hyperv-transfer-timeout 7200 --cpu 0.5 --vcpu 2 --memory-mb 2560 --datastore 1 --network 0 2>&1)
           rc=$?
           set -e
           printf '%s\n' "$out" | sed -E 's/(password|secret|token|authorization|one_auth)[^ ]*/\1=<redacted>/Ig'
