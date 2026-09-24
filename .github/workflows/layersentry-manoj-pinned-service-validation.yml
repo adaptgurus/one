@@ -157,10 +157,21 @@ jobs:
           DISK=[IMAGE_ID="{image_id}"]
           SCHED_REQUIREMENTS="NAME = \\\"{TARGET_HOST}\\\""
           '''
-          va=one.one.vm.allocate(auth,vm_template,False)
+          # Allocate on HOLD so the stale nested-lab host share counters cannot
+          # race the scheduler. We already proved one physical pinned CPU is free.
+          va=one.one.vm.allocate(auth,vm_template,True)
           if not va[0]: raise SystemExit("service VM allocate failed: "+str(va[1])[:500])
           vm_id=int(va[1])
           print("SERVICE_VALIDATION_VM_ID="+str(vm_id))
+
+          host_id=int(h.findtext("ID") or -1)
+          if host_id < 0:
+              raise SystemExit("invalid target host id")
+          deploy=one.one.vm.deploy(auth,vm_id,host_id,False,-1)
+          if not deploy[0]:
+              raise SystemExit("manual pinned VM deploy failed: "+str(deploy[1])[:500])
+          print(f"SERVICE_MANUAL_DEPLOY=PASS VM_ID={vm_id} HOST_ID={host_id}")
+
           final_cpus=[]
           for _ in range(180):
               info=one.one.vm.info(auth,vm_id,False)
@@ -238,3 +249,5 @@ jobs:
           }
 
 # resume-service-validation-fix: 2026-09-24T15:11+05:30
+
+# manual-pinned-deploy-fix: 2026-09-24T15:11+05:30
