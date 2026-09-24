@@ -1968,7 +1968,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-hyperv-source-inventory:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 12
     steps:
@@ -2080,6 +2080,63 @@ jobs:
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
           & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$knownAppliance" -i $env:ONESWAP_TEMP_KEY "ci@$appliance" "echo $b64 | base64 -d | sudo bash"
           if($LASTEXITCODE -ne 0){throw 'Appliance Hyper-V source inventory failed'}
+
+      - name: Confirm source remains Running and checkpoint-free
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-hyperv-source-inventory-retry:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Prepare LocalSystem-only runner to appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmpKey=Join-Path $env:RUNNER_TEMP 'oneswap_qual_ed25519.system'
+          Copy-Item -Force $srcKey $tmpKey
+          & icacls.exe $tmpKey /inheritance:r | Out-Null
+          & icacls.exe $tmpKey /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmpKey /setowner '*S-1-5-18' | Out-Null
+          $derived=(& ssh-keygen.exe -y -f $tmpKey 2>&1 | Where-Object {$_ -match '^ssh-'} | Select-Object -First 1)
+          if($LASTEXITCODE -ne 0 -or -not $derived){throw 'temporary SSH key invalid'}
+          "ONESWAP_TEMP_KEY=$tmpKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Prove appliance to Hyper-V SSH and authoritative inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $appliance='10.250.10.32'
+          $knownAppliance='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/layersentry/oneswap/hyperv/known_hosts -i /etc/layersentry/oneswap/hyperv/manoj-qual.key opc@10.250.10.1 hostname
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/layersentry/oneswap/hyperv/known_hosts -i /etc/layersentry/oneswap/hyperv/manoj-qual.key opc@10.250.10.1 "powershell.exe -NoProfile -NonInteractive -Command \"(Get-VM -Name 'ls-migration-source-test').State\""
+          echo HYPERV_SOURCE_SSH=PASS
+          sudo /usr/bin/oneswap-hyperv ls-migration-source-test --inventory --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml
+          echo ONESWAP_HYPERV_INVENTORY=PASS
+          '@
+          $script=$script -replace "`r",''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$knownAppliance" -i $env:ONESWAP_TEMP_KEY "ci@$appliance" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Appliance Hyper-V inventory retry failed'}
 
       - name: Confirm source remains Running and checkpoint-free
         shell: powershell
