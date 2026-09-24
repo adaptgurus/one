@@ -1,0 +1,99 @@
+name: Manoj OneSwap Candidate Discovery
+
+on:
+  push:
+    branches:
+      - qual/hyperv-migration-manoj-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-candidate-discovery.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-candidate-discovery
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj and protect migration source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "wrong runner"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "wrong host"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "source not Running"}
+          Write-Host 'SOURCE_PROTECTED=PASS'
+
+      - name: Inventory OneSwap appliance candidates
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($name in @('ls-appliance-durable-qual','ls-appliance-qual','ls-appliance-dbe-qual')){
+            $vm=Get-VM -Name $name -ErrorAction SilentlyContinue
+            if(-not $vm){Write-Host "CANDIDATE name=$name present=false";continue}
+            Write-Host "CANDIDATE name=$name state=$($vm.State) uptime=$($vm.Uptime) cpu=$($vm.ProcessorCount) memory=$($vm.MemoryAssigned)"
+            foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)){
+              Write-Host "CANDIDATE_NIC name=$name switch=$($nic.SwitchName) mac=$($nic.MacAddress) status=$($nic.Status) ips=$($nic.IPAddresses -join ',')"
+            }
+            foreach($d in @(Get-VMHardDiskDrive -VMName $name -ErrorAction SilentlyContinue)){
+              if(-not $d.Path){continue}
+              $v=Get-VHD -Path $d.Path -ErrorAction SilentlyContinue
+              if($v){Write-Host "CANDIDATE_DISK name=$name path=$($d.Path) virtual=$($v.Size) file=$($v.FileSize) type=$($v.VhdType)"}
+            }
+            foreach($svc in @(Get-VMIntegrationService -VMName $name -ErrorAction SilentlyContinue)){
+              if($svc.Name -in @('Heartbeat','Key-Value Pair Exchange')){
+                Write-Host "CANDIDATE_INTEGRATION name=$name service=$($svc.Name) enabled=$($svc.Enabled) primary=$($svc.PrimaryStatusDescription) secondary=$($svc.SecondaryStatusDescription)"
+              }
+            }
+          }
+
+      - name: Map candidate MACs to host neighbors
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $neighbors=@(Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {$_.IPAddress -like '10.250.10.*'})
+          foreach($name in @('ls-appliance-durable-qual','ls-appliance-qual','ls-appliance-dbe-qual')){
+            $vm=Get-VM -Name $name -ErrorAction SilentlyContinue
+            if(-not $vm){continue}
+            foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)){
+              $mac=($nic.MacAddress -replace '[^0-9A-Fa-f]','').ToUpper()
+              foreach($n in $neighbors){
+                $nm=($n.LinkLayerAddress -replace '[^0-9A-Fa-f]','').ToUpper()
+                if($nm -eq $mac -and $nm -ne '000000000000'){
+                  Write-Host "CANDIDATE_NEIGHBOR name=$name mac=$mac ip=$($n.IPAddress) state=$($n.State)"
+                }
+              }
+            }
+          }
+
+      - name: Fast probe known live neighbors
+        shell: powershell
+        run: |
+          function Test-TcpFast([string]$ip,[int]$port){
+            $client=New-Object System.Net.Sockets.TcpClient
+            try{
+              $a=$client.BeginConnect($ip,$port,$null,$null)
+              if(-not $a.AsyncWaitHandle.WaitOne(1000,$false)){return $false}
+              $client.EndConnect($a);return $true
+            }catch{return $false}finally{$client.Close()}
+          }
+          $macs=@{}
+          foreach($name in @('ls-appliance-durable-qual','ls-appliance-qual','ls-appliance-dbe-qual')){
+            foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)){
+              $macs[(($nic.MacAddress -replace '[^0-9A-Fa-f]','').ToUpper())]=$name
+            }
+          }
+          foreach($n in @(Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {$_.IPAddress -like '10.250.10.*'})){
+            $nm=($n.LinkLayerAddress -replace '[^0-9A-Fa-f]','').ToUpper()
+            if($macs.ContainsKey($nm)){
+              foreach($p in @(22,9443,9444)){
+                Write-Host "CANDIDATE_TCP name=$($macs[$nm]) ip=$($n.IPAddress) port=$p open=$(Test-TcpFast $n.IPAddress $p)"
+              }
+            }
+          }
+          exit 0
