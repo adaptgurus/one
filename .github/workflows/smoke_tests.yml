@@ -954,7 +954,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-v6-stable-hostkey:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 15
     steps:
@@ -1062,6 +1062,136 @@ jobs:
           & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=6 -i $key "ci@$ip" 'id -un; hostname; ip -4 -brief addr; cloud-init status --long || true'
           if($LASTEXITCODE -ne 0){throw 'Pinned SSH identity still mismatches after host-key-preserving v6 seed'}
           Write-Host 'ONESWAP_V6_PINNED_SSH=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-v7-pinned-hostkey:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 18
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Build v7 seed with pre-pinned appliance host key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $hostName='Manoj-Test-Inst'
+          $base='C:\LayerSentryLab\qualification\oneswap-seed'
+          $seedBase=Join-Path $base 'cidata.vhdx'
+          $seedV7=Join-Path $base 'cidata-v7.vhdx'
+          $userV4=Join-Path $base 'user-data-v4'
+          $userV7=Join-Path $base 'user-data-v7'
+          $network=Join-Path $base 'network-config'
+          $metaV7=Join-Path $base 'meta-data-v7'
+          $hostKey=Join-Path $base 'oneswap_host_ed25519_v7'
+          $knownV7=Join-Path $base 'known_hosts_appliance_v7'
+          $ip='10.250.10.32'
+          foreach($p in @($seedBase,$userV4,$network)){if(-not(Test-Path $p)){throw "Missing seed input: $p"}}
+          if(-not(Test-Path $hostKey)){
+            & ssh-keygen.exe -q -t ed25519 -N '' -C 'oneswap-qual-v7' -f $hostKey
+            if($LASTEXITCODE -ne 0){throw 'failed to generate v7 appliance host key'}
+          }
+          $pubLine=(Get-Content -LiteralPath ($hostKey + '.pub') -Raw).Trim()
+          $pubParts=$pubLine -split '\s+'
+          if($pubParts.Count -lt 2 -or $pubParts[0] -ne 'ssh-ed25519'){throw 'invalid generated v7 public key'}
+          ($ip + ' ' + $pubParts[0] + ' ' + $pubParts[1]) | Set-Content -LiteralPath $knownV7 -Encoding ascii
+          $fp=& ssh-keygen.exe -lf ($hostKey + '.pub') -E sha256
+          Write-Host "V7_HOSTKEY_FINGERPRINT=$fp"
+          $privLines=Get-Content -LiteralPath $hostKey
+          $privBlock=($privLines | ForEach-Object {'    ' + $_}) -join "`r`n"
+          $ud=Get-Content -LiteralPath $userV4 -Raw
+          if($ud -notmatch '(?m)^#cloud-config\s*$'){throw 'user-data-v4 is not cloud-config'}
+          $inject="ssh_deletekeys: false`r`nssh_keys:`r`n  ed25519_private: |`r`n$privBlock`r`n  ed25519_public: $($pubParts[0]) $($pubParts[1])"
+          $ud=[regex]::Replace($ud,'(?m)^#cloud-config\s*$',"#cloud-config`r`n$inject",1)
+          Set-Content -LiteralPath $userV7 -Value $ud -Encoding ascii
+          @('instance-id: oneswap-qual-20260924-v7','local-hostname: oneswap-qual') | Set-Content -LiteralPath $metaV7 -Encoding ascii
+          Copy-Item -Force $seedBase $seedV7
+          $vhd=Mount-VHD -ComputerName $hostName -Path $seedV7 -Passthru
+          try {
+            $disk=$vhd | Get-Disk
+            $part=$disk | Get-Partition | Where-Object {$_.Type -ne 'Reserved'} | Select-Object -First 1
+            if(-not $part.DriveLetter){
+              $part | Add-PartitionAccessPath -AssignDriveLetter
+              $part=$disk | Get-Partition | Where-Object {$_.DriveLetter} | Select-Object -First 1
+            }
+            if(-not $part.DriveLetter){throw 'Seed partition has no drive letter'}
+            $root=($part.DriveLetter + ':\')
+            Copy-Item -Force $userV7 (Join-Path $root 'user-data')
+            Copy-Item -Force $metaV7 (Join-Path $root 'meta-data')
+            Copy-Item -Force $network (Join-Path $root 'network-config')
+          } finally {
+            Dismount-VHD -ComputerName $hostName -Path $seedV7
+          }
+          $hash=(Get-FileHash -Algorithm SHA256 $seedV7).Hash
+          Write-Host "CIDATA_V7_SHA256=$hash"
+          Write-Host 'CIDATA_V7_BUILD=PASS'
+
+      - name: Gracefully attach v7 and boot appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm='ls-appliance-qual'
+          $seedV7='C:\LayerSentryLab\qualification\oneswap-seed\cidata-v7.vhdx'
+          $state=(Get-VM -Name $vm -ErrorAction Stop).State
+          if($state -eq 'Running'){
+            Stop-VM -Name $vm -Confirm:$false
+            $deadline=(Get-Date).AddSeconds(120)
+            do{
+              Start-Sleep -Seconds 3
+              $state=(Get-VM -Name $vm).State
+              Write-Host "APPLIANCE_SHUTDOWN state=$state"
+            }while($state -ne 'Off' -and (Get-Date) -lt $deadline)
+            if($state -ne 'Off'){throw 'Appliance did not reach Off; refusing forced fallback'}
+          } elseif($state -ne 'Off'){
+            throw "Unexpected appliance state: $state"
+          }
+          Set-VMNetworkAdapter -VMName $vm -StaticMacAddress '00155D001C05'
+          Set-VMHardDiskDrive -VMName $vm -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 3 -Path $seedV7
+          $os=Get-VMHardDiskDrive -VMName $vm -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0 -ErrorAction Stop
+          Set-VMFirmware -VMName $vm -FirstBootDevice $os
+          Start-VM -Name $vm | Out-Null
+          Write-Host 'APPLIANCE_V7_BOOT_STARTED=PASS'
+
+      - name: Require pre-pinned v7 SSH identity and authoritative network
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $ready=$false
+          for($i=1;$i -le 36;$i++){
+            $client=New-Object Net.Sockets.TcpClient
+            $tcp=$false
+            try{
+              $iar=$client.BeginConnect($ip,22,$null,$null)
+              $ok=$iar.AsyncWaitHandle.WaitOne(1000,$false)
+              if($ok -and $client.Connected){$client.EndConnect($iar);$tcp=$true}
+            }catch{}finally{$client.Close()}
+            Write-Host "V7_WAIT attempt=$i ssh22=$tcp"
+            if($tcp){$ready=$true;break}
+            Start-Sleep -Seconds 5
+          }
+          if(-not $ready){throw 'v7 boot did not restore authoritative SSH endpoint'}
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=6 -i $key "ci@$ip" 'id -un; hostname; ip -4 -brief addr; cloud-init status --long || true'
+          if($LASTEXITCODE -ne 0){throw 'pre-pinned v7 SSH identity verification failed'}
+          Write-Host 'ONESWAP_V7_PINNED_SSH=PASS'
 
       - name: Verify source remained untouched
         shell: powershell
