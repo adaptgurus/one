@@ -1,0 +1,78 @@
+name: Manoj HyperV RCT Disk Eligibility
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-rct-disk-eligibility.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-rct-disk-eligibility
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Inspect VM version and RCT sidecars
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source must remain Running: $($vm.State)"}
+          Write-Host "VM_NAME=$($vm.Name)"
+          Write-Host "VM_VERSION=$($vm.Version)"
+          Write-Host "VM_GENERATION=$($vm.Generation)"
+          Write-Host "VM_CONFIG_LOCATION=$($vm.ConfigurationLocation)"
+          Write-Host "VM_CHECKPOINT_TYPE=$($vm.CheckpointType)"
+          Write-Host "VM_AUTOMATIC_CHECKPOINTS=$($vm.AutomaticCheckpointsEnabled)"
+
+          $drives=@(Get-VMHardDiskDrive -VM $vm | Sort-Object ControllerNumber,ControllerLocation)
+          Write-Host "ATTACHED_DISK_COUNT=$($drives.Count)"
+          $i=0
+          foreach($d in $drives){
+            $v=Get-VHD -Path $d.Path -ErrorAction Stop
+            $dir=Split-Path $d.Path
+            $stem=[IO.Path]::GetFileNameWithoutExtension($d.Path)
+            Write-Host "DISK[$i]_PATH=$($d.Path)"
+            Write-Host "DISK[$i]_CONTROLLER=$($d.ControllerType):$($d.ControllerNumber):$($d.ControllerLocation)"
+            Write-Host "DISK[$i]_ID=$($v.DiskIdentifier)"
+            Write-Host "DISK[$i]_FORMAT=$($v.VhdFormat)"
+            Write-Host "DISK[$i]_TYPE=$($v.VhdType)"
+            Write-Host "DISK[$i]_SIZE=$($v.Size)"
+            Write-Host "DISK[$i]_ATTACHED=$($v.Attached)"
+            $side=@(Get-ChildItem -LiteralPath $dir -Force -File -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_.Name -like "$stem*.rct" -or $_.Name -like "$stem*.mrt" -or
+                $_.Extension -in @('.rct','.mrt')
+              } | Sort-Object FullName)
+            Write-Host "DISK[$i]_RCT_SIDECAR_COUNT=$($side.Count)"
+            foreach($f in $side){
+              Write-Host "DISK[$i]_SIDECAR path=$($f.FullName) bytes=$($f.Length) modified=$($f.LastWriteTimeUtc.ToString('o'))"
+            }
+            $i++
+          }
+
+          $all=@(Get-ChildItem -LiteralPath (Split-Path $drives[0].Path) -Force -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Extension -in @('.rct','.mrt','.avhdx')} | Sort-Object Name)
+          Write-Host "TRACKING_FILES_TOTAL=$($all.Count)"
+          foreach($f in $all){Write-Host "TRACKING_FILE path=$($f.FullName) bytes=$($f.Length) modified=$($f.LastWriteTimeUtc.ToString('o'))"}
+          Write-Host 'RCT_DISK_ELIGIBILITY_INSPECT=PASS'
+
+      - name: Verify source invariant
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$n"
+          if($vm.State -ne 'Running'){throw 'Eligibility inspect changed source state'}
+          if($n -ne 0){throw 'Eligibility inspect found/created checkpoint'}
+          Write-Host 'SOURCE_INVARIANT=PASS'
