@@ -60,3 +60,81 @@ jobs:
             --body "This automated PR disables RuboCop rules that were introduced in the latest version and broke the CI." \
             --base master \
             --head ai/rubocop
+
+
+  manoj-hyperv-migration-gate:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME user=$env:USERNAME os=$env:RUNNER_OS"
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Get-Command Get-VM,Get-VHD,Get-VMHardDiskDrive,Get-VMNetworkAdapter,Get-VMSnapshot -ErrorAction Stop | Out-Null
+          if(-not (Test-Path 'C:\LayerSentryLab\qualification')){throw 'LayerSentry qualification workspace missing'}
+          Write-Host 'MANOJ_RUNNER_BOUND=PASS'
+
+      - name: Qualify disposable Hyper-V source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-migration-source-test'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "source must be Running for warm prepare; state=$($vm.State)"}
+          if($vm.Generation -notin @(1,2)){throw "unsupported VM generation $($vm.Generation)"}
+          $snaps=@(Get-VMSnapshot -VMName $name -ErrorAction SilentlyContinue)
+          if($snaps.Count -ne 0){throw "source has $($snaps.Count) checkpoints"}
+          $disks=@(Get-VMHardDiskDrive -VMName $name -ErrorAction Stop)
+          if($disks.Count -eq 0){throw 'source has no disks'}
+          foreach($d in $disks){
+            if(-not $d.Path){throw 'disk path missing'}
+            $v=Get-VHD -Path $d.Path -ErrorAction Stop
+            if($v.VhdFormat -ne 'VHDX'){throw "warm path requires VHDX: $($d.Path)"}
+            if($v.VhdType -eq 'Differencing' -or $v.ParentPath){throw "parent/differencing disk blocked: $($d.Path)"}
+            Write-Host "SOURCE_DISK path=$($d.Path) type=$($v.VhdType) virtual=$($v.Size) file=$($v.FileSize)"
+          }
+          foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction Stop)){
+            Write-Host "SOURCE_NIC switch=$($nic.SwitchName) mac=$($nic.MacAddress) ips=$($nic.IPAddresses -join ',')"
+          }
+          Write-Host "SOURCE_GATE=PASS name=$name state=$($vm.State) generation=$($vm.Generation) cpu=$($vm.ProcessorCount) disks=$($disks.Count)"
+
+      - name: Verify secure OneSwap transport
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $sshd=Get-Service sshd -ErrorAction SilentlyContinue
+          if(-not $sshd){throw 'OpenSSH Server service is absent'}
+          Write-Host "SSHD status=$($sshd.Status) startType=$($sshd.StartType)"
+          if($sshd.Status -ne 'Running'){throw 'sshd is not Running'}
+          $cfg='C:\ProgramData\ssh\sshd_config'
+          if(-not (Test-Path $cfg)){throw 'sshd_config missing'}
+          $effective=Get-Content -LiteralPath $cfg | Where-Object {$_ -match '^(?i)(PubkeyAuthentication|PasswordAuthentication|KbdInteractiveAuthentication|ChallengeResponseAuthentication)\s+'}
+          $effective | ForEach-Object { Write-Host "SSHD_CONFIG=$($_.Trim())" }
+          if($effective -match '(?i)^PasswordAuthentication\s+yes'){throw 'password SSH is enabled'}
+          if($effective -match '(?i)^(KbdInteractiveAuthentication|ChallengeResponseAuthentication)\s+yes'){throw 'interactive SSH auth is enabled'}
+          Write-Host 'HYPERV_SSH_GATE=PASS'
+
+      - name: Inventory OneSwap qualification appliances
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($name in @('ls-appliance-qual','ls-appliance-dbe-qual','ls-iso-builder')){
+            $vm=Get-VM -Name $name -ErrorAction SilentlyContinue
+            if(-not $vm){Write-Host "APPLIANCE name=$name present=false";continue}
+            Write-Host "APPLIANCE name=$name state=$($vm.State) gen=$($vm.Generation) cpu=$($vm.ProcessorCount)"
+            foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)){
+              $ips=@($nic.IPAddresses | Where-Object {$_ -match '^\d+\.\d+\.\d+\.\d+$'})
+              Write-Host "APPLIANCE_NIC name=$name switch=$($nic.SwitchName) mac=$($nic.MacAddress) ips=$($ips -join ',')"
+              foreach($ip in $ips){
+                foreach($port in @(22,9443,9444)){
+                  $ok=Test-NetConnection -ComputerName $ip -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue
+                  Write-Host "APPLIANCE_ROUTE name=$name ip=$ip port=$port tcp=$ok"
+                }
+              }
+            }
+          }
+          Write-Host 'MANOJ_HYPERV_MIGRATION_READONLY_GATE=PASS'
