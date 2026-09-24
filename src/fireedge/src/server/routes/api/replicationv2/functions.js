@@ -331,6 +331,282 @@ const protectionGroupCheckpoints = (
   )
 }
 
+
+const drSites = (
+  res = {},
+  next = defaultEmptyFunction,
+  _params = {},
+  userData = {},
+  oneConnection
+) =>
+  respond(
+    res,
+    next,
+    platformRequest(
+      { method: 'GET', path: '/v1/replication-product/sites' },
+      userData,
+      oneConnection
+    )
+  )
+
+const drEnvironmentNetworks = (
+  res = {},
+  next = defaultEmptyFunction,
+  _params = {},
+  userData = {},
+  oneConnection
+) =>
+  respond(
+    res,
+    next,
+    platformRequest(
+      { method: 'GET', path: '/v1/replication-product/environment-networks' },
+      userData,
+      oneConnection
+    )
+  )
+
+const drProvisionEnvironmentNetworks = (
+  res = {},
+  next = defaultEmptyFunction,
+  { plan } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!plan || typeof plan !== 'object') {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Environment network plan is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'POST',
+        path: '/v1/replication-product/environment-networks/provision',
+        data: plan,
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drPairSite = (
+  res = {},
+  next = defaultEmptyFunction,
+  { request } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!request || typeof request !== 'object') {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'DR site pairing request is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      { method: 'POST', path: '/v1/replication-product/site-pairs', data: request },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drManagementBackupPolicies = (
+  res = {},
+  next = defaultEmptyFunction,
+  { dc, dr } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!dc || !dr) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'DC and DR site IDs are required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'GET',
+        path:
+          '/v1/replication-product/management-backup-policies?dc=' +
+          encodeURIComponent(dc) +
+          '&dr=' +
+          encodeURIComponent(dr),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drRunManagementBackup = (
+  res = {},
+  next = defaultEmptyFunction,
+  { source, target } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!source || !target) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Management backup source and target are required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'POST',
+        path:
+          '/v1/replication-product/management-backups/run?source=' +
+          encodeURIComponent(source) +
+          '&target=' +
+          encodeURIComponent(target),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drManagementBackupStatus = (
+  res = {},
+  next = defaultEmptyFunction,
+  { source, target } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!source || !target) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Management backup source and target are required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'GET',
+        path:
+          '/v1/replication-product/management-backups/status?source=' +
+          encodeURIComponent(source) +
+          '&target=' +
+          encodeURIComponent(target),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drVMCheckpoints = (
+  res = {},
+  next = defaultEmptyFunction,
+  { siteId } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!siteId) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Site ID is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'GET',
+        path:
+          '/v1/replication-product/vm-checkpoints?site=' +
+          encodeURIComponent(siteId),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drPutRecoveryMapping = (
+  res = {},
+  next = defaultEmptyFunction,
+  { request } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!request || typeof request !== 'object') {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Recovery mapping request is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'POST',
+        path: '/v1/replication-product/recovery-mappings',
+        data: request,
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drGetRecoveryMapping = (
+  res = {},
+  next = defaultEmptyFunction,
+  { workloadId, siteId } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!workloadId || !siteId) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Workload ID and site ID are required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'GET',
+        path:
+          '/v1/replication-product/recovery-mappings/' +
+          encodeURIComponent(workloadId) +
+          '/' +
+          encodeURIComponent(siteId),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
 module.exports = {
   capabilities,
   sessions,
@@ -344,4 +620,14 @@ module.exports = {
   putProtectionGroup,
   captureProtectionGroup,
   protectionGroupCheckpoints,
+  drSites,
+  drEnvironmentNetworks,
+  drProvisionEnvironmentNetworks,
+  drPairSite,
+  drManagementBackupPolicies,
+  drRunManagementBackup,
+  drManagementBackupStatus,
+  drVMCheckpoints,
+  drPutRecoveryMapping,
+  drGetRecoveryMapping,
 }

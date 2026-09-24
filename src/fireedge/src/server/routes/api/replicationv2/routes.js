@@ -33,6 +33,16 @@ const Actions = {
   PUT_PROTECTION_GROUP: 'replicationv2.putProtectionGroup',
   CAPTURE_PROTECTION_GROUP: 'replicationv2.captureProtectionGroup',
   PROTECTION_GROUP_CHECKPOINTS: 'replicationv2.protectionGroupCheckpoints',
+  DR_SITES: 'replicationv2.drSites',
+  DR_ENVIRONMENT_NETWORKS: 'replicationv2.drEnvironmentNetworks',
+  DR_PROVISION_ENVIRONMENT_NETWORKS: 'replicationv2.drProvisionEnvironmentNetworks',
+  DR_PAIR_SITE: 'replicationv2.drPairSite',
+  DR_MANAGEMENT_BACKUP_POLICIES: 'replicationv2.drManagementBackupPolicies',
+  DR_RUN_MANAGEMENT_BACKUP: 'replicationv2.drRunManagementBackup',
+  DR_MANAGEMENT_BACKUP_STATUS: 'replicationv2.drManagementBackupStatus',
+  DR_VM_CHECKPOINTS: 'replicationv2.drVMCheckpoints',
+  DR_PUT_RECOVERY_MAPPING: 'replicationv2.drPutRecoveryMapping',
+  DR_GET_RECOVERY_MAPPING: 'replicationv2.drGetRecoveryMapping',
 }
 
 module.exports = {
@@ -113,6 +123,80 @@ module.exports = {
       httpMethod: POST,
       auth: true,
       params: { groupId: { from: postBody } },
+    },
+    [Actions.DR_SITES]: {
+      path: basepath + '/dr/sites',
+      httpMethod: GET,
+      auth: true,
+      params: {},
+    },
+    [Actions.DR_ENVIRONMENT_NETWORKS]: {
+      path: basepath + '/dr/environment-networks',
+      httpMethod: GET,
+      auth: true,
+      params: {},
+    },
+    [Actions.DR_PROVISION_ENVIRONMENT_NETWORKS]: {
+      path: basepath + '/dr/environment-networks/provision',
+      httpMethod: POST,
+      auth: true,
+      params: { plan: { from: postBody } },
+    },
+    [Actions.DR_PAIR_SITE]: {
+      path: basepath + '/dr/site-pairs',
+      httpMethod: POST,
+      auth: true,
+      params: { request: { from: postBody } },
+    },
+    [Actions.DR_MANAGEMENT_BACKUP_POLICIES]: {
+      path: basepath + '/dr/management-backup-policies',
+      httpMethod: POST,
+      auth: true,
+      params: {
+        dc: { from: postBody },
+        dr: { from: postBody },
+      },
+    },
+    [Actions.DR_RUN_MANAGEMENT_BACKUP]: {
+      path: basepath + '/dr/management-backups/run',
+      httpMethod: POST,
+      auth: true,
+      params: {
+        source: { from: postBody },
+        target: { from: postBody },
+      },
+    },
+    [Actions.DR_MANAGEMENT_BACKUP_STATUS]: {
+      path: basepath + '/dr/management-backups/status',
+      httpMethod: POST,
+      auth: true,
+      params: {
+        source: { from: postBody },
+        target: { from: postBody },
+      },
+    },
+    [Actions.DR_VM_CHECKPOINTS]: {
+      path: basepath + '/dr/vm-checkpoints',
+      httpMethod: POST,
+      auth: true,
+      params: {
+        siteId: { from: postBody },
+      },
+    },
+    [Actions.DR_PUT_RECOVERY_MAPPING]: {
+      path: basepath + '/dr/recovery-mappings',
+      httpMethod: POST,
+      auth: true,
+      params: { request: { from: postBody } },
+    },
+    [Actions.DR_GET_RECOVERY_MAPPING]: {
+      path: basepath + '/dr/recovery-mappings/get',
+      httpMethod: POST,
+      auth: true,
+      params: {
+        workloadId: { from: postBody },
+        siteId: { from: postBody },
+      },
     },
   },
 }

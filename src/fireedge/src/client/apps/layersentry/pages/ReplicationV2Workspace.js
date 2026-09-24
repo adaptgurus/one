@@ -35,6 +35,7 @@ import {
 } from 'client/apps/layersentry/components/Primitives'
 import { colors } from 'client/apps/layersentry/theme/tokens'
 import { replicationAPI } from 'client/apps/layersentry/replicationV2'
+import DRProductPanel from 'client/apps/layersentry/components/DRProductPanel'
 
 const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 
@@ -381,6 +382,12 @@ const ReplicationV2Workspace = () => {
           accent={colors.status.warning}
         />
       </Box>
+
+      <DRProductPanel
+        localSiteId={localSiteId}
+        targetSites={targetSites}
+        vms={vms}
+      />
 
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
