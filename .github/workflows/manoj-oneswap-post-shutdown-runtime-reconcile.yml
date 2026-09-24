@@ -82,11 +82,11 @@ jobs:
           & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           if($LASTEXITCODE -ne 0){throw 'Durable post-shutdown state gate failed'}
 
-      - name: Download exact CI-green PR22 core runtime
+      - name: Download exact CI-green PR23 core runtime
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $head='2bafb66de1f3e2ba98d6f311ae11837479b68bf0'
+          $head='512f7ed28fe1640718808fb0bb2300e70a9df44e'
           $cli=Join-Path $env:RUNNER_TEMP 'post-oneswap-hyperv'
           $helper=Join-Path $env:RUNNER_TEMP 'post-hyperv_helper.rb'
           $hot=Join-Path $env:RUNNER_TEMP 'post-hyperv_hot_helper.rb'
@@ -99,7 +99,7 @@ jobs:
           $cliSha=(Get-FileHash -Algorithm SHA256 $cli).Hash.ToLower()
           $helperSha=(Get-FileHash -Algorithm SHA256 $helper).Hash.ToLower()
           $hotSha=(Get-FileHash -Algorithm SHA256 $hot).Hash.ToLower()
-          Write-Host "PR22_RUNTIME_FILE name=oneswap-hyperv sha256=$cliSha"
+          Write-Host "PR23_RUNTIME_FILE name=oneswap-hyperv sha256=$cliSha"
           Write-Host "PR20_RUNTIME_FILE name=hyperv_helper.rb sha256=$helperSha"
           Write-Host "PR20_RUNTIME_FILE name=hyperv_hot_helper.rb sha256=$hotSha"
           "PR20_CLI_PATH=$cli" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -139,7 +139,7 @@ jobs:
           sudo ruby -c /usr/lib/one/ruby/cli/one_helper/hyperv_helper.rb
           sudo ruby -c /usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb
           rm -f /tmp/oneswap-hyperv.reconcile /tmp/hyperv_helper.reconcile.rb /tmp/hyperv_hot_helper.reconcile.rb
-          echo "POST_SHUTDOWN_RUNTIME_RECONCILE=PASS head=__HEAD__ keepalive=enabled"
+          echo "POST_SHUTDOWN_RUNTIME_RECONCILE=PASS head=__HEAD__ keepalive=enabled target_sizing=preserved"
           '@
           $script=$script.Replace('__CLI_SHA__',$env:PR20_CLI_SHA).Replace('__HELPER_SHA__',$env:PR20_HELPER_SHA).Replace('__HOT_SHA__',$env:PR20_HOT_SHA).Replace('__HEAD__',$env:PR20_HEAD)
           $script=[regex]::Replace($script,'\r','')
