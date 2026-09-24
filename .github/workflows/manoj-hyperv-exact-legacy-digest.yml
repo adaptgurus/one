@@ -103,7 +103,8 @@ jobs:
           cat >/tmp/ls-legacy-digest/reproduce.rb <<'RUBY'
           require 'yaml'
           require 'json'
-          one_location=ENV['ONE_LOCATION']
+          ONE_LOCATION=ENV['ONE_LOCATION'] unless defined?(ONE_LOCATION)
+          one_location=ONE_LOCATION
           if one_location
             ruby_lib=File.join(one_location,'lib','ruby')
             gems=File.join(one_location,'share','gems')
