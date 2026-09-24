@@ -22,7 +22,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner" }
           $script = @'
-          import base64, functools, hashlib, http.server, os, pathlib, threading, time, xml.etree.ElementTree as ET
+          import base64, functools, hashlib, http.server, os, pathlib, shlex, threading, time, xml.etree.ElementTree as ET
           from xmlrpc.client import ServerProxy
           from dissect.target import Target
 
@@ -327,7 +327,8 @@ jobs:
 
           exec_method=getattr(one.one.vm,"exec")
 
-          def run_guest(label, command):
+          def run_guest(label, shell_script):
+              command="/bin/sh -c "+shlex.quote(shell_script)
               last_error=""
               for attempt in range(120):
                   result=exec_method(auth,vm_id,command,"")
@@ -421,3 +422,5 @@ jobs:
 # release-prior-qualification-service-vm: 2026-09-24T15:11+05:30
 
 # tolerant-service-inspect-and-restore: 2026-09-24T15:11+05:30
+
+# qga-explicit-shell-wrapper: 2026-09-24T15:11+05:30
