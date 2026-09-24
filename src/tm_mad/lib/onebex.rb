@@ -288,5 +288,4 @@ module TransferManager
             raise message
         end
     end
-
 end
