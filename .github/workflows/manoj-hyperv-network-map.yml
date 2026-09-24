@@ -1,0 +1,40 @@
+name: Manoj HyperV Network Mapping Inventory
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-network-map.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-network-map
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and inspect source network intent
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $name='ls-migration-source-test'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source not Running: $($vm.State)"}
+          foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction Stop)){
+            $vlan=Get-VMNetworkAdapterVlan -VMNetworkAdapter $nic -ErrorAction Stop
+            Write-Host "NIC switch=$($nic.SwitchName) mac=$($nic.MacAddress) status=$($nic.Status) vlan_mode=$($vlan.OperationMode) access_vlan=$($vlan.AccessVlanId) native_vlan=$($vlan.NativeVlanId) allowed=$($vlan.AllowedVlanIdList)"
+          }
+          $p='C:\LayerSentryLab\qualification\ls-migration-source-test\network-config'
+          if(-not (Test-Path $p)){throw 'source network-config missing'}
+          Write-Host '===SOURCE_NETWORK_CONFIG==='
+          Get-Content -LiteralPath $p
+          Write-Host '===END_SOURCE_NETWORK_CONFIG==='
+          Write-Host 'NETWORK_MAPPING_INVENTORY=PASS'
