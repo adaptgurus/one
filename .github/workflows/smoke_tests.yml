@@ -2766,7 +2766,7 @@ jobs:
 
 
   manoj-target-authority-builder-preflight-v3:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
@@ -2818,6 +2818,110 @@ jobs:
           Write-Host 'TARGET_XMLRPC_REACHABILITY=PASS'
 
       - name: Confirm source remains Running and checkpoint-free
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-builder-recover-target-authority:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Bind exact Manoj runner and protect migration source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Start support builder only if currently Off
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-iso-builder' -ErrorAction Stop
+          Write-Host "BUILDER_INITIAL_STATE=$($vm.State) CPU=$($vm.ProcessorCount)"
+          if($vm.State -eq 'Off'){
+            Start-VM -VM $vm -ErrorAction Stop | Out-Null
+            "BUILDER_STARTED_BY_QUAL=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host 'BUILDER_START_REQUESTED=PASS'
+          } elseif($vm.State -notin @('Running','Starting')){
+            throw "Builder state is not safe to use: $($vm.State)"
+          } else {
+            "BUILDER_STARTED_BY_QUAL=0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+          $deadline=(Get-Date).AddSeconds(120)
+          $tcp=$false
+          do{
+            Start-Sleep -Seconds 3
+            $vm=Get-VM -Name 'ls-iso-builder' -ErrorAction Stop
+            $ips=@(Get-VMNetworkAdapter -VM $vm -ErrorAction SilentlyContinue |
+              ForEach-Object {$_.IPAddresses} |
+              Where-Object {$_ -match '^\d+\.\d+\.\d+\.\d+$'})
+            Write-Host "BUILDER_WAIT state=$($vm.State) ips=$($ips -join ',')"
+            foreach($candidate in $ips){
+              $client=New-Object Net.Sockets.TcpClient
+              try{
+                $iar=$client.BeginConnect($candidate,22,$null,$null)
+                $tcp=$iar.AsyncWaitHandle.WaitOne(1200,$false) -and $client.Connected
+                if($tcp){
+                  $client.EndConnect($iar)
+                  "BUILDER_IP=$candidate" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                  Write-Host "BUILDER_SSH_READY ip=$candidate"
+                  break
+                }
+              }catch{}finally{$client.Close()}
+            }
+            if($tcp){break}
+          }while((Get-Date) -lt $deadline)
+          if(-not $tcp){throw 'Builder did not expose reachable SSH within qualification timeout'}
+
+      - name: Validate builder FE1 authority metadata over pinned SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & ssh-keygen.exe -F $env:BUILDER_IP -f $known 2>$null | Out-Null
+          if($LASTEXITCODE -ne 0){throw "Builder IP $env:BUILDER_IP is not pinned in known_hosts_builder"}
+          $cmd='set -euo pipefail; p=/mnt/layersentry-work/ha-private/fe1/one_auth; test -f "$p"; stat -c "FE1_AUTH_PRESENT=1 mode=%a uid=%u gid=%g size=%s" "$p"; grep -RhoE "http://10\.250\.10\.[0-9]+:2633/RPC2" /mnt/layersentry-work 2>/dev/null | sort -u | head -20'
+          & ssh.exe -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "builder@$env:BUILDER_IP" $cmd
+          if($LASTEXITCODE -ne 0){throw 'Builder FE1 authority metadata validation failed'}
+          Write-Host 'BUILDER_FE1_AUTHORITY_METADATA=PASS'
+
+      - name: Probe target XMLRPC from OneSwap appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          any=0
+          for ep in http://10.250.10.11:2633/RPC2 http://10.250.10.12:2633/RPC2 http://10.250.10.13:2633/RPC2 http://10.10.10.20:2633/RPC2; do
+            host=$(printf '%s' "$ep" | sed -E 's#http://([^:/]+).*#\1#')
+            if timeout 3 bash -c "</dev/tcp/$host/2633" 2>/dev/null; then
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=true"
+              any=1
+            else
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=false"
+            fi
+          done
+          [ "$any" -eq 1 ] || exit 43
+          '@
+          $script=$script -replace [char]13,''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'No target XMLRPC endpoint reachable from OneSwap appliance'}
+          Write-Host 'TARGET_XMLRPC_REACHABILITY=PASS'
+
+      - name: Confirm migration source remains untouched
         shell: powershell
         run: |
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
