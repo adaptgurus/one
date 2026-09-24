@@ -53,7 +53,7 @@ jobs:
           target="00c7f4f66be6ddbf9e32e79b83444d3095856782bd627d5187e1580e96daf169"
           ruby -ryaml -rjson -rdigest -e '
             target=ARGV.shift
-            files=(Dir["/etc/layersentry/oneswap/manoj-qual.yaml*"] + Dir["/etc/layersentry/oneswap/*manoj*qual*"] + Dir["/var/tmp/**/*manoj-qual.yaml*", File::FNM_DOTMATCH]).uniq.select{|p| File.file?(p)}
+            files=(Dir.glob("/etc/layersentry/oneswap/manoj-qual.yaml*") + Dir.glob("/etc/layersentry/oneswap/*manoj*qual*") + Dir.glob("/var/tmp/**/*manoj-qual.yaml*", File::FNM_DOTMATCH)).uniq.select{|p| File.file?(p)}
             canon=lambda do |v|
               case v
               when Hash
