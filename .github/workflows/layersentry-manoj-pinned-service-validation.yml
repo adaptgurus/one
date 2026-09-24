@@ -155,10 +155,13 @@ jobs:
               if not hres[0]:
                   raise SystemExit("cannot refresh target host after qualification capacity release")
               href=ET.fromstring(hres[1])
-              free_raw=href.findtext("./HOST_SHARE/FREE_CPU")
-              free_now=int(free_raw) if free_raw not in (None,"") else 0
+              max_raw=href.findtext("./HOST_SHARE/MAX_CPU") or href.findtext("./HOST_SHARE/TOTAL_CPU") or "0"
+              used_raw=href.findtext("./HOST_SHARE/CPU_USAGE") or "0"
+              max_now=int(max_raw)
+              used_now=int(used_raw)
+              free_now=max(0,max_now-used_now)
               if free_now>=100:
-                  print(f"SERVICE_HOST_CAPACITY_REFRESH=PASS FREE_CPU={free_now}")
+                  print(f"SERVICE_HOST_CAPACITY_REFRESH=PASS MAX_CPU={max_now} CPU_USAGE={used_now} FREE_CPU_CALCULATED={free_now}")
                   break
               time.sleep(1)
           else:
@@ -349,3 +352,5 @@ jobs:
 # half-cpu-accounting-fix: 2026-09-24T15:11+05:30
 
 # qualification-vm12-undeploy-capacity-release: 2026-09-24T15:11+05:30
+
+# calculate-free-cpu-from-host-share: 2026-09-24T15:11+05:30
