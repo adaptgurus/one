@@ -1,0 +1,204 @@
+name: Manoj Qualified OneSwap Offline Diagnostic
+
+on:
+  push:
+    branches:
+      - qual/hyperv-migration-manoj-20260924
+    paths:
+      - '.github/workflows/manoj-qualified-oneswap-offline-diagnostic.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-qualified-oneswap-offline-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and preserve migration source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw 'wrong runner'}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'wrong host'}
+          if((Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop).State -ne 'Running'){throw 'migration source not Running'}
+          Write-Host 'SOURCE_PROTECTED=PASS'
+
+      - name: Stop only qualified OneSwap VM for offline inspection
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Off'){
+            Stop-VM -Name $name -Confirm:$false
+            $deadline=(Get-Date).AddSeconds(120)
+            do{
+              Start-Sleep -Seconds 2
+              $vm=Get-VM -Name $name -ErrorAction Stop
+              Write-Host "QUAL_STATE=$($vm.State)"
+              if($vm.State -eq 'Off'){break}
+            }while((Get-Date)-lt $deadline)
+            if($vm.State -ne 'Off'){throw 'qualified OneSwap VM did not stop cleanly'}
+          }
+          if((Get-VM -Name 'ls-migration-source-test').State -ne 'Running'){throw 'source changed'}
+          Write-Host 'QUAL_ONESWAP_OFF=PASS'
+
+      - name: Inspect qualified OneSwap filesystem and boot evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $py='C:\LayerSentryLab\tools\Python313\python.exe'
+          $image='C:\LayerSentryLab\qualification\qualified-35497219805\latest\layersentry-oneswap-7.4.1-qualified.vhdx'
+          if(-not(Test-Path $py)){throw 'qualification Python missing'}
+          if(-not(Test-Path $image)){throw 'qualified OneSwap VHDX missing'}
+          $script=@'
+          import pathlib, hashlib, json, re
+          from dissect.target import Target
+          image=r"C:\LayerSentryLab\qualification\qualified-35497219805\latest\layersentry-oneswap-7.4.1-qualified.vhdx"
+          t=Target.open(image)
+
+          def read(path, binary=False):
+              data=t.fs.path(path).open("rb").read()
+              return data if binary else data.decode(errors="replace")
+
+          def show(path, limit=24000):
+              try:
+                  data=read(path)
+              except Exception as exc:
+                  print(f"FILE_MISSING path={path} error={type(exc).__name__}")
+                  return
+              print(f"FILE_BEGIN path={path}")
+              print(data[-limit:])
+              print(f"FILE_END path={path}")
+
+          for p in (
+              "/etc/hostname",
+              "/etc/os-release",
+              "/etc/cloud/cloud.cfg",
+              "/etc/cloud/cloud.cfg.d/99-installer.cfg",
+              "/etc/cloud/cloud.cfg.d/90_dpkg.cfg",
+              "/etc/cloud/cloud.cfg.d/subiquity-disable-cloudinit-networking.cfg",
+              "/etc/netplan/50-cloud-init.yaml",
+              "/etc/netplan/00-installer-config.yaml",
+              "/etc/network/interfaces",
+              "/etc/ssh/sshd_config",
+              "/etc/default/ssh",
+              "/var/log/cloud-init.log",
+              "/var/log/cloud-init-output.log",
+              "/var/lib/cloud/instance/datasource",
+              "/var/lib/cloud/instance/boot-finished",
+              "/var/lib/cloud/instance/network-config.json",
+              "/var/lib/cloud/instance/user-data.txt",
+              "/var/lib/cloud/data/instance-id",
+          ):
+              show(p)
+
+          for p in ("/usr/bin/oneswap-hyperv","/usr/bin/oneswap","/etc/one/oneswap.yaml"):
+              try:
+                  b=read(p,binary=True)
+                  print(f"QUAL_FILE path={p} bytes={len(b)} sha256={hashlib.sha256(b).hexdigest()}")
+                  if p.endswith(".yaml"):
+                      txt=b.decode(errors="replace")
+                      safe=[]
+                      for line in txt.splitlines():
+                          st=line.strip()
+                          if any(x in st.lower() for x in ("pass:","password","secret","token")):
+                              continue
+                          if any(k in st for k in ("hyperv_connections","host:","user:","port:","identity_file:","known_hosts:","staging_dir:",
+                                                   "shutdown_timeout:","transfer_timeout:","prepare_timeout:","delta_timeout:","datastore:",
+                                                   "network:","work_dir:","format:","http_transfer:","http_host:","http_port:","v2v_path:",
+                                                   "v2v_in_place_path:","libguestfs_path:","uefi_path:","uefi_sec_path:")):
+                              safe.append(st)
+                      print("ONESWAP_SAFE_CONFIG="+json.dumps(safe))
+              except Exception as exc:
+                  print(f"QUAL_FILE_MISSING path={p} error={type(exc).__name__}")
+
+          try:
+              passwd=read("/etc/passwd")
+              for row in passwd.splitlines():
+                  p=row.split(":")
+                  if len(p)>=7 and p[0] in ("ci","oneswap","debian","root","layersentry-bootstrap"):
+                      print(f"USER_ENTRY user={p[0]} uid={p[2]} gid={p[3]} home={p[5]} shell={p[6]}")
+              for user,home in [("ci","/home/ci"),("debian","/home/debian"),("root","/root"),("layersentry-bootstrap","/home/layersentry-bootstrap")]:
+                  ap=f"{home}/.ssh/authorized_keys"
+                  try:
+                      lines=read(ap).splitlines()
+                  except Exception:
+                      continue
+                  print(f"AUTHORIZED_KEYS user={user} count={len([x for x in lines if x.strip() and not x.lstrip().startswith('#')])}")
+                  for line in lines:
+                      s=line.strip()
+                      if not s or s.startswith("#"): continue
+                      parts=s.split()
+                      idx=next((i for i,x in enumerate(parts) if x.startswith("ssh-")),None)
+                      if idx is None or idx+1>=len(parts): continue
+                      import base64
+                      blob=base64.b64decode(parts[idx+1])
+                      fp="SHA256:"+base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
+                      print(f"AUTHORIZED_KEY_FP user={user} fp={fp}")
+          except Exception as exc:
+              print("USER_SCAN_ERROR="+type(exc).__name__)
+          '@
+          $p=Join-Path $env:RUNNER_TEMP 'inspect-qualified-oneswap.py'
+          Set-Content -LiteralPath $p -Value $script -Encoding UTF8
+          & $py $p
+          if($LASTEXITCODE -ne 0){throw "offline qualified OneSwap inspection failed exit=$LASTEXITCODE"}
+
+      - name: Inspect attached seed VHDX metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $py='C:\LayerSentryLab\tools\Python313\python.exe'
+          $seed='C:\LayerSentryLab\qualification\oneswap-seed\cidata-v4.vhdx'
+          $script=@'
+          from dissect.target import Target
+          seed=r"C:\LayerSentryLab\qualification\oneswap-seed\cidata-v4.vhdx"
+          t=Target.open(seed)
+          for p in ("/network-config","/meta-data","/user-data"):
+              try:
+                  data=t.fs.path(p).open("rb").read().decode(errors="replace")
+              except Exception as exc:
+                  print(f"SEED_MISSING path={p} error={type(exc).__name__}")
+                  continue
+              print(f"SEED_BEGIN path={p}")
+              for line in data.splitlines():
+                  low=line.lower()
+                  if any(x in low for x in ("password:","passwd:","secret:","token:","private key")):
+                      print("[REDACTED_SECRET_LINE]")
+                      continue
+                  if "ssh-" in line and len(line)>100:
+                      parts=line.split()
+                      out=[]
+                      for x in parts:
+                          if len(x)>80 and all(c.isalnum() or c in "+/=" for c in x):
+                              out.append("[REDACTED_PUBLIC_KEY]")
+                          else:
+                              out.append(x)
+                      line=" ".join(out)
+                  print(line)
+              print(f"SEED_END path={p}")
+          '@
+          $p=Join-Path $env:RUNNER_TEMP 'inspect-seed.py'
+          Set-Content -LiteralPath $p -Value $script -Encoding UTF8
+          & $py $p
+          if($LASTEXITCODE -ne 0){throw 'seed inspection failed'}
+
+      - name: Restart qualified OneSwap VM without modifying disks
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if((Get-VM -Name 'ls-migration-source-test').State -ne 'Running'){throw 'source not Running'}
+          Start-VM -Name 'ls-appliance-qual'
+          $deadline=(Get-Date).AddSeconds(60)
+          do{
+            Start-Sleep -Seconds 2
+            $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+            if($vm.State -eq 'Running'){break}
+          }while((Get-Date)-lt $deadline)
+          Write-Host "QUAL_RESTART_STATE=$($vm.State)"
+          if($vm.State -ne 'Running'){throw 'qualified OneSwap VM restart failed'}
