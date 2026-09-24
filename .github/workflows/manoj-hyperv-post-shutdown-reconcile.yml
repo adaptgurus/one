@@ -154,10 +154,12 @@ jobs:
           if(-not $line){throw 'remote export directory missing from durable state'}
           $remote=$line.Substring('REMOTE_EXPORT_DIR='.Length).Trim()
           if([string]::IsNullOrWhiteSpace($remote)){throw 'remote export directory is empty'}
-          if($remote -notlike 'C:\\LayerSentryMigration\\*'){throw "Refusing unexpected remote export path: $remote"}
-          Write-Host "HYPERV_REMOTE_EXPORT_DIR=$remote"
-          if(-not (Test-Path -LiteralPath $remote)){throw "Hyper-V remote export directory missing: $remote"}
-          $files=@(Get-ChildItem -LiteralPath $remote -Recurse -File -ErrorAction Stop | Sort-Object FullName)
+          $remoteNorm=($remote -replace '\\\\{2,}','\\')
+          $expected='C:\\LayerSentryMigration\\layersentry-hot-manoj-hv-ls-migration-source-test-20260924'
+          if($remoteNorm -ne $expected){throw "Refusing unexpected remote export path: $remote"}
+          Write-Host "HYPERV_REMOTE_EXPORT_DIR=$remoteNorm"
+          if(-not (Test-Path -LiteralPath $remoteNorm)){throw "Hyper-V remote export directory missing: $remoteNorm"}
+          $files=@(Get-ChildItem -LiteralPath $remoteNorm -Recurse -File -ErrorAction Stop | Sort-Object FullName)
           Write-Host "HYPERV_REMOTE_FILE_COUNT=$($files.Count)"
           foreach($item in $files){
             Write-Host ("HYPERV_REMOTE_FILE path={0} bytes={1} modified={2}" -f $item.FullName,$item.Length,$item.LastWriteTimeUtc.ToString('o'))
