@@ -1,0 +1,82 @@
+name: LayerSentry Manoj QGA Diagnostic
+
+on:
+  push:
+    branches:
+      - dr-threepoint-ssh-20260924
+    paths:
+      - .github/workflows/layersentry-manoj-qga-diagnostic.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect latest qualification recovery VM QGA
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner" }
+          $script = @'
+          import pathlib, time, xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+
+          ENDPOINT="http://10.250.10.10:2633/RPC2"
+          AUTH_IMAGE=pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
+          target=Target.open(str(AUTH_IMAGE))
+          auth=target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          one=ServerProxy(ENDPOINT, allow_none=True)
+
+          pool=one.one.vmpool.info(auth,-2,-1,-1,-2,"")
+          if not pool[0]:
+              raise SystemExit("VM pool query failed")
+          root=ET.fromstring(pool[1])
+          candidates=[]
+          for vm in root.findall("VM"):
+              name=(vm.findtext("NAME") or "").strip()
+              state=int(vm.findtext("STATE") or -1)
+              lcm=int(vm.findtext("LCM_STATE") or -1)
+              if name.startswith("ls-dr-service-vm-") and state==3 and lcm==3:
+                  candidates.append((int(vm.findtext("ID")),name))
+          if not candidates:
+              raise SystemExit("no running service qualification VM")
+          vm_id,name=max(candidates)
+          print(f"QGA_DIAG_VM={vm_id} NAME={name}")
+
+          def dump(label):
+              info=one.one.vm.info(auth,vm_id,False)
+              if not info[0]:
+                  raise SystemExit(label+" VM info failed")
+              r=ET.fromstring(info[1])
+              print(label+"_STATE="+str(r.findtext("STATE"))+"/"+str(r.findtext("LCM_STATE")))
+              print(label+"_QEMU_GA_EXEC_XML="+ET.tostring(r.find("./TEMPLATE/QEMU_GA_EXEC"),encoding="unicode") if r.find("./TEMPLATE/QEMU_GA_EXEC") is not None else "NONE")
+              print(label+"_FEATURES_XML="+ET.tostring(r.find("./TEMPLATE/FEATURES"),encoding="unicode") if r.find("./TEMPLATE/FEATURES") is not None else "NONE")
+              print(label+"_VM_QEMU_PING="+str(r.findtext("./MONITORING/VM_QEMU_PING") or r.findtext("./TEMPLATE/VM_QEMU_PING") or ""))
+              print(label+"_USER_ERROR="+str(r.findtext("./USER_TEMPLATE/ERROR") or ""))
+              return r
+
+          dump("BEFORE")
+          result=one.one.vm.exec(auth,vm_id,"/bin/true","")
+          print("MINIMAL_EXEC_RPC="+repr(result))
+          if not result[0]:
+              raise SystemExit("minimal exec RPC rejected: "+str(result[1])[:400])
+          for i in range(60):
+              r=dump("POLL")
+              q=r.find("./TEMPLATE/QEMU_GA_EXEC")
+              status=(q.findtext("STATUS") or "").strip() if q is not None else ""
+              if status in ("DONE","ERROR","CANCELLED"):
+                  print("QGA_MINIMAL_TERMINAL="+status+" ATTEMPT="+str(i+1))
+                  break
+              time.sleep(1)
+          else:
+              raise SystemExit("minimal exec did not become terminal")
+          '@
+          $path = Join-Path $env:RUNNER_TEMP 'layersentry-qga-diagnostic.py'
+          Set-Content -Path $path -Value $script -Encoding UTF8
+          & 'C:\LayerSentryLab\tools\Python313\python.exe' $path
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
