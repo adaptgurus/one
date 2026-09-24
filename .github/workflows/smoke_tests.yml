@@ -2537,3 +2537,81 @@ jobs:
           if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+
+  manoj-target-authority-builder-preflight:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Prepare LocalSystem-only SSH keys
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $pairs=@(
+            @{src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'; out='ONESWAP_TEMP_KEY'},
+            @{src='C:\LayerSentryLab\qualification\iso-builder-key'; out='BUILDER_TEMP_KEY'}
+          )
+          foreach($p in $pairs){
+            if(-not(Test-Path $p.src)){throw "Missing SSH key: $($p.src)"}
+            $tmp=Join-Path $env:RUNNER_TEMP ([IO.Path]::GetFileName($p.src)+'.system')
+            Copy-Item -Force $p.src $tmp
+            & icacls.exe $tmp /inheritance:r | Out-Null
+            & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+            & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+            $pub=(& ssh-keygen.exe -y -f $tmp 2>$null | Select-Object -First 1)
+            if($LASTEXITCODE -ne 0 -or -not $pub){throw "Invalid SSH key: $($p.src)"}
+            "$($p.out)=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
+          Write-Host 'TEMP_KEYS=PASS'
+
+      - name: Verify builder-held FE1 authority metadata only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $cmd="set -euo pipefail; p=/mnt/layersentry-work/ha-private/fe1/one_auth; if [ -f \"$p\" ]; then stat -c 'FE1_AUTH_PRESENT=1 mode=%a uid=%u gid=%g size=%s' \"$p\"; else echo FE1_AUTH_PRESENT=0; exit 42; fi; grep -RhoE 'http://10\.250\.10\.[0-9]+:2633/RPC2' /mnt/layersentry-work 2>/dev/null | sort -u | head -20"
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:BUILDER_TEMP_KEY "builder@10.250.10.40" $cmd
+          if($LASTEXITCODE -ne 0){throw 'Builder FE1 authority metadata validation failed'}
+          Write-Host 'BUILDER_FE1_AUTHORITY_METADATA=PASS'
+
+      - name: Probe target XMLRPC from OneSwap appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          for ep in http://10.250.10.11:2633/RPC2 http://10.250.10.12:2633/RPC2 http://10.250.10.13:2633/RPC2 http://10.10.10.20:2633/RPC2; do
+            host=$(printf '%s' "$ep" | sed -E 's#http://([^:/]+).*#\1#')
+            port=2633
+            if timeout 3 bash -c "</dev/tcp/$host/$port" 2>/dev/null; then
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=true"
+            else
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=false"
+            fi
+          done
+          '@
+          $script=$script -replace "`r",''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Appliance target endpoint probe failed'}
+
+      - name: Confirm source remains Running and checkpoint-free
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
