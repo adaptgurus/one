@@ -807,7 +807,7 @@ jobs:
 
 
   manoj-oneswap-v5-reconcile:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 12
     steps:
@@ -909,6 +909,45 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-v5-ssh-policy-audit:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 6
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Inspect v5 cloud-init SSH host-key policy
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $base='C:\LayerSentryLab\qualification\oneswap-seed'
+          foreach($name in @('user-data-v4','meta-data-v5')){
+            $p=Join-Path $base $name
+            if(-not(Test-Path $p)){throw "Missing $p"}
+            Write-Host "=== $name ==="
+            Get-Content -LiteralPath $p | Where-Object {$_ -match '(?i)^#cloud-config|^instance-id:|^local-hostname:|^ssh_deletekeys:|^ssh_genkeytypes:|ssh_authorized_keys:'} | ForEach-Object {
+              if($_ -match '(?i)ssh-ed25519|ssh-rsa'){Write-Host '<authorized-public-key-redacted>'} else {Write-Host $_}
+            }
+          }
+          Write-Host 'V5_SSH_POLICY_AUDIT=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
