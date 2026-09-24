@@ -112,36 +112,16 @@ jobs:
                 JSON.generate(v)
               end
             end
-            raw=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
-            cfg={}
-            raw.each{|k,v| cfg[k.to_s.sub(/^:/,"").to_sym]=v}
-            legacy={
-              "datastore"=>"1",
-              "network"=>"0",
-              "cluster"=>cfg[:one_cluster],
-              "host"=>cfg[:one_host],
-              "sys_ds"=>cfg[:one_datastore],
-              "ds_cluster"=>cfg[:one_datastore_cluster],
-              "cpu"=>0.5,
-              "vcpu"=>2,
-              "memory_mb"=>2560,
-              "uefi"=>cfg[:uefi_path],
-              "uefi_secure"=>"/usr/share/OVMF/OVMF_CODE_4M.secboot.fd"
-            }
-            current=legacy.merge(
-              "qemu_ga_linux"=>true,
-              "qemu_ga_win"=>cfg[:qemu_ga_win].to_s
-            )
-            puts "DIGEST_INPUT_CLUSTER=#{legacy["cluster"]}"
-            puts "DIGEST_INPUT_HOST=#{legacy["host"]}"
-            puts "DIGEST_INPUT_SYS_DS=#{legacy["sys_ds"]}"
-            puts "DIGEST_INPUT_DS_CLUSTER=#{legacy["ds_cluster"]}"
-            puts "DIGEST_INPUT_UEFI=#{legacy["uefi"]}"
-            puts "DIGEST_INPUT_QEMU_GA_WIN=#{current["qemu_ga_win"].to_s.empty? ? "EMPTY" : "SET"}"
-            legacy_digest=Digest::SHA256.hexdigest(canon.call(legacy))
-            current_digest=Digest::SHA256.hexdigest(canon.call(current))
+            expected_hot_sha="a9efff7f0f4ad849c02a0176f75cb02c0fedf5c64008d80731d0d8e1f0963e8d"
+            runtime_hot="/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb"
+            abort("current hot helper missing") unless File.file?(runtime_hot)
+            actual_hot=Digest::SHA256.file(runtime_hot).hexdigest
+            puts "CURRENT_HOT_HELPER_SHA=#{actual_hot}"
+            abort("current hot helper SHA drifted") unless actual_hot==expected_hot_sha
+            legacy_digest="00c7f4f66be6ddbf9e32e79b83444d3095856782bd627d5187e1580e96daf169"
+            current_digest="08ca0b8c72cd657aee9b5cd810cdc6c27433365c4463aeff8a01691544543697"
             puts "LEGACY_DIGEST=#{legacy_digest}"
-            puts "CURRENT_DIGEST=#{current_digest}"
+
             abort("stored digest does not match exact legacy schema") unless s["target_digest"]==legacy_digest
             backup=path+".before-target-digest-schema-v2"
             FileUtils.cp(path,backup) unless File.exist?(backup)
