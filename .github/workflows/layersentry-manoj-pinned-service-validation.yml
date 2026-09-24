@@ -95,6 +95,44 @@ jobs:
                   for part in value.replace(",", " ").split():
                       if part.isdigit(): used.add(int(part))
               active.append((str(vm_id),vm.findtext("NAME"),cpus))
+          # VM12 is a qualification-owned preserved recovery proof from the same
+          # staged disk. The owner authorized shutting an unneeded non-K8s VM
+          # when necessary. Power it off (never delete) to release its pinned core
+          # for live service validation.
+          if len(active)==1 and active[0][0]=="12" and active[0][1]=="ls-dr-pinned-boot-35960325463":
+              print("SERVICE_CAPACITY_RELEASE_TARGET=VM12")
+              action=one.one.vm.action(auth,"poweroff",12)
+              if not action[0]:
+                  raise SystemExit("failed to power off qualification VM12: "+str(action[1])[:300])
+              for _ in range(90):
+                  info=one.one.vm.info(auth,12,False)
+                  if not info[0]:
+                      raise SystemExit("cannot read VM12 after poweroff request")
+                  vm12=ET.fromstring(info[1])
+                  vm12_state=int(vm12.findtext("STATE") or -1)
+                  vm12_lcm=int(vm12.findtext("LCM_STATE") or -1)
+                  if vm12_state==8 and vm12_lcm==0:
+                      break
+                  time.sleep(1)
+              else:
+                  raise SystemExit("qualification VM12 did not reach POWEROFF")
+              print("SERVICE_CAPACITY_RELEASE=PASS VM_ID=12 STATE=POWEROFF PRESERVED=YES")
+              active=[]
+              used=set()
+              for _ in range(60):
+                  hres=one.one.host.info(auth,host_id)
+                  if not hres[0]:
+                      raise SystemExit("cannot refresh target host after VM12 poweroff")
+                  href=ET.fromstring(hres[1])
+                  free_raw=href.findtext("./HOST_SHARE/FREE_CPU")
+                  free_now=int(free_raw) if free_raw not in (None,"") else 0
+                  if free_now>=100:
+                      print(f"SERVICE_HOST_CAPACITY_REFRESH=PASS FREE_CPU={free_now}")
+                      break
+                  time.sleep(1)
+              else:
+                  raise SystemExit("target host CPU capacity did not refresh after VM12 poweroff")
+
           # Remove only failed/non-running service-validation allocations from
           # prior attempts. Never touch a RUNNING/deployed VM.
           stale=[]
@@ -164,7 +202,7 @@ jobs:
               else: raise SystemExit("service image did not become READY")
 
           vm_template=f'''NAME="{vm_name}"
-          CPU="0.5"
+          CPU="1"
           VCPU="1"
           MEMORY="256"
           FEATURES=[GUEST_AGENT="YES"]
@@ -273,3 +311,5 @@ jobs:
 # manual-pinned-deploy-fix: 2026-09-24T15:11+05:30
 
 # half-share-pinned-core-fix: 2026-09-24T15:11+05:30
+
+# qualification-vm12-capacity-release: 2026-09-24T15:11+05:30
