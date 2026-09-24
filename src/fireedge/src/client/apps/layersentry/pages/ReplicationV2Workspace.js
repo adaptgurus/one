@@ -60,6 +60,16 @@ const vmDisks = (vm = {}) =>
         `Disk ${disk.DISK_ID}`,
     }))
 
+const vmNics = (vm = {}) =>
+  toArray(vm?.TEMPLATE?.NIC)
+    .filter((nic) => nic && nic.NIC_ID !== undefined)
+    .map((nic) => ({
+      id: Number(nic.NIC_ID),
+      sourceNetworkId: String(nic.NETWORK_ID || ''),
+      sourceNetworkName: nic.NETWORK || `Network ${nic.NETWORK_ID || nic.NIC_ID}`,
+      ip: nic.IP || '',
+    }))
+
 const backendLabel = {
   CEPH_RBD: 'Ceph RBD — fastest recovery',
   LVM_THIN: 'Generic block / SAN — LVM Thin',
@@ -130,6 +140,25 @@ const ReplicationV2Workspace = () => {
   const [groupConsistency, setGroupConsistency] = useState('CRASH_CONSISTENT')
   const [groupDependencies, setGroupDependencies] = useState('{}')
   const [groupCheckpoints, setGroupCheckpoints] = useState([])
+  const [environmentNetworks, setEnvironmentNetworks] = useState([])
+  const [drMode, setDrMode] = useState('NDR')
+  const [pairSiteId, setPairSiteId] = useState('')
+  const [pairSiteName, setPairSiteName] = useState('')
+  const [pairEndpoint, setPairEndpoint] = useState('')
+  const [pairUsername, setPairUsername] = useState('')
+  const [pairPassword, setPairPassword] = useState('')
+  const [pairBusy, setPairBusy] = useState(false)
+  const [managementPolicies, setManagementPolicies] = useState([])
+  const [checkpointCatalog, setCheckpointCatalog] = useState([])
+  const [targetClusterId, setTargetClusterId] = useState('0')
+  const [targetDatastoreId, setTargetDatastoreId] = useState('1')
+  const [targetNetworkId, setTargetNetworkId] = useState('')
+  const [addressMode, setAddressMode] = useState('DHCP')
+  const [staticIp, setStaticIp] = useState('')
+  const [staticPrefix, setStaticPrefix] = useState(24)
+  const [staticGateway, setStaticGateway] = useState('')
+  const [staticDns, setStaticDns] = useState('')
+  const [mappingBusy, setMappingBusy] = useState(false)
 
   const loadSessionDetails = async (sessionList) => {
     const entries = await Promise.all(
@@ -199,11 +228,28 @@ const ReplicationV2Workspace = () => {
     }
   }, [])
 
+  useEffect(() => {
+    let active = true
+    replicationAPI
+      .drEnvironmentNetworks()
+      .then((payload) => {
+        if (active) setEnvironmentNetworks(payload?.networks || [])
+      })
+      .catch(() => {
+        if (active) setEnvironmentNetworks([])
+      })
+    return () => {
+      active = false
+    }
+  }, [])
+
   const selectedVm = useMemo(
     () => vms.find(({ ID }) => String(ID) === String(vmId)),
     [vms, vmId]
   )
   const disks = useMemo(() => vmDisks(selectedVm), [selectedVm])
+  const nics = useMemo(() => vmNics(selectedVm), [selectedVm])
+  const primaryNic = nics[0] || null
   const targetBackendCatalogBound =
     Boolean(targetSite) &&
     Object.prototype.hasOwnProperty.call(targetBackends, targetSite)
@@ -328,6 +374,128 @@ const ReplicationV2Workspace = () => {
       setError(reason.message)
     } finally {
       setActionBusy('')
+    }
+  }
+
+  const pairRemoteSite = async () => {
+    setError('')
+    setNotice('')
+    setPairBusy(true)
+    try {
+      const result = await replicationAPI.drPairSite({
+        site_id: pairSiteId.trim(),
+        name: pairSiteName.trim(),
+        endpoint: pairEndpoint.trim(),
+        username: pairUsername.trim(),
+        password: pairPassword,
+        mode: drMode,
+      })
+      setPairPassword('')
+      if (result?.site?.id) {
+        setTargetSite(result.site.id)
+        setTargetSites((current) =>
+          current.includes(result.site.id)
+            ? current
+            : [...current, result.site.id]
+        )
+      }
+      const dc = localSiteId || 'dc'
+      const dr = result?.site?.id || pairSiteId.trim()
+      const policies = await replicationAPI
+        .drManagementBackupPolicies(dc, dr)
+        .catch(() => [])
+      setManagementPolicies(Array.isArray(policies) ? policies : [])
+      setNotice(
+        `Site ${result?.site?.name || dr} paired. Bootstrap password was discarded; ongoing communication uses ${result?.auth_method || 'scoped API identity'}.`
+      )
+    } catch (reason) {
+      setError(reason.message)
+    } finally {
+      setPairBusy(false)
+    }
+  }
+
+  const saveRecoveryMapping = async () => {
+    setError('')
+    setNotice('')
+    if (!selectedVm || !targetSite || !primaryNic || !targetNetworkId.trim()) {
+      setError(
+        'Choose a VM, recovery site and target recovery network before saving mapping.'
+      )
+      return
+    }
+    setMappingBusy(true)
+    try {
+      const group = protectionGroupId.trim() || `vm-${selectedVm.ID}`
+      const addressChoice =
+        addressMode === 'STATIC'
+          ? {
+              mode: 'STATIC',
+              target_ip: staticIp.trim(),
+              guest_network: {
+                prefix_length: Number(staticPrefix),
+                gateway: staticGateway.trim(),
+                dns: staticDns
+                  .split(/[ ,]+/)
+                  .map((value) => value.trim())
+                  .filter(Boolean),
+              },
+            }
+          : { mode: 'DHCP' }
+      await replicationAPI.drPutRecoveryMapping({
+        mapping: {
+          protection_group_id: group,
+          target_site_id: String(targetSite),
+          workloads: [
+            {
+              workload_id: String(selectedVm.ID),
+              target_cluster_id: targetClusterId.trim(),
+              target_datastore_id: targetDatastoreId.trim(),
+              nic_mappings: [
+                {
+                  source_nic_id: Number(primaryNic.id),
+                  source_network_id: primaryNic.sourceNetworkId,
+                  target_network_id: targetNetworkId.trim(),
+                  order: 0,
+                },
+              ],
+            },
+          ],
+        },
+        address_plans: [
+          {
+            workload_id: String(selectedVm.ID),
+            nics: [
+              {
+                source_nic_id: Number(primaryNic.id),
+                choice: addressChoice,
+              },
+            ],
+          },
+        ],
+      })
+      setNotice(
+        `Recovery network mapping saved for ${selectedVm.NAME || selectedVm.ID}: ${primaryNic.sourceNetworkName} → target VNet ${targetNetworkId.trim()} using ${addressMode}.`
+      )
+    } catch (reason) {
+      setError(reason.message)
+    } finally {
+      setMappingBusy(false)
+    }
+  }
+
+  const loadVMCheckpointCatalog = async () => {
+    setError('')
+    if (!selectedVm || !targetSite) {
+      setError('Choose a VM and recovery site before loading checkpoints.')
+      return
+    }
+    const group = protectionGroupId.trim() || `vm-${selectedVm.ID}`
+    try {
+      const catalog = await replicationAPI.drVMCheckpoints(group, targetSite)
+      setCheckpointCatalog(Array.isArray(catalog) ? catalog : [])
+    } catch (reason) {
+      setError(reason.message)
     }
   }
 
