@@ -659,7 +659,7 @@ jobs:
 
 
   manoj-oneswap-seed-build-inspect:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 5
     steps:
@@ -685,3 +685,122 @@ jobs:
               }
           }
           Write-Host 'ONESWAP_SEED_BUILDER_INSPECT=PASS'
+
+
+  manoj-oneswap-v5-repair:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Build fresh v5 NoCloud seed
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $hostName='Manoj-Test-Inst'
+          $base='C:\LayerSentryLab\qualification\oneswap-seed'
+          $src=Join-Path $base 'cidata.vhdx'
+          $dst=Join-Path $base 'cidata-v5.vhdx'
+          $user=Join-Path $base 'user-data-v4'
+          $network=Join-Path $base 'network-config'
+          $meta=Join-Path $base 'meta-data-v5'
+          foreach($p in @($src,$user,$network)){if(-not(Test-Path $p)){throw "Missing seed input: $p"}}
+          @(
+            'instance-id: oneswap-qual-20260924-v5',
+            'local-hostname: oneswap-qual'
+          ) | Set-Content -LiteralPath $meta -Encoding ascii
+          if((Get-VMHardDiskDrive -VMName 'ls-appliance-qual').Path -contains $dst){throw 'v5 is already attached; refusing blind replay'}
+          Copy-Item -Force $src $dst
+          $vhd=Mount-VHD -ComputerName $hostName -Path $dst -Passthru
+          try {
+            $disk=$vhd | Get-Disk
+            $part=$disk | Get-Partition | Where-Object {$_.Type -ne 'Reserved'} | Select-Object -First 1
+            if(-not $part.DriveLetter){
+              $part | Add-PartitionAccessPath -AssignDriveLetter
+              $part=$disk | Get-Partition | Where-Object {$_.DriveLetter} | Select-Object -First 1
+            }
+            if(-not $part.DriveLetter){throw 'Seed partition has no drive letter'}
+            $root="$($part.DriveLetter):\"
+            Copy-Item -Force $user (Join-Path $root 'user-data')
+            Copy-Item -Force $meta (Join-Path $root 'meta-data')
+            Copy-Item -Force $network (Join-Path $root 'network-config')
+            Write-Host "SEED_ROOT=$root"
+            Get-ChildItem $root | Select-Object Name,Length | Format-Table -AutoSize
+          } finally {
+            Dismount-VHD -ComputerName $hostName -Path $dst
+          }
+          $hash=(Get-FileHash -Algorithm SHA256 $dst).Hash
+          Write-Host "CIDATA_V5_SHA256=$hash"
+          Write-Host 'CIDATA_V5_BUILD=PASS'
+
+      - name: Gracefully replay appliance with v5
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm='ls-appliance-qual'
+          $v4='C:\LayerSentryLab\qualification\oneswap-seed\cidata-v4.vhdx'
+          $v5='C:\LayerSentryLab\qualification\oneswap-seed\cidata-v5.vhdx'
+          $seedDrive=Get-VMHardDiskDrive -VMName $vm -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 3 -ErrorAction Stop
+          if($seedDrive.Path -ne $v4){throw "Unexpected current seed: $($seedDrive.Path)"}
+          $os=Get-VMHardDiskDrive -VMName $vm -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0 -ErrorAction Stop
+          Write-Host "APPLIANCE_BEFORE state=$((Get-VM $vm).State) seed=$($seedDrive.Path)"
+          Stop-VM -Name $vm -Shutdown -Confirm:$false
+          $deadline=(Get-Date).AddSeconds(90)
+          do {
+            Start-Sleep -Seconds 3
+            $state=(Get-VM -Name $vm).State
+            Write-Host "APPLIANCE_SHUTDOWN state=$state"
+          } while($state -ne 'Off' -and (Get-Date) -lt $deadline)
+          if($state -ne 'Off'){throw 'Appliance did not shut down gracefully; refusing forced power-off'}
+          Set-VMNetworkAdapter -VMName $vm -StaticMacAddress '00155D001C05'
+          Set-VMHardDiskDrive -VMName $vm -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 3 -Path $v5
+          Set-VMFirmware -VMName $vm -FirstBootDevice $os
+          Start-VM -Name $vm | Out-Null
+          Write-Host 'APPLIANCE_V5_BOOT_STARTED=PASS'
+
+      - name: Require authoritative IP and pinned SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance.paramiko'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $ready=$false
+          for($i=1;$i -le 36;$i++){
+            $ips=(Get-VMNetworkAdapter -VMName 'ls-appliance-qual').IPAddresses -join ','
+            $client=New-Object Net.Sockets.TcpClient
+            $tcp=$false
+            try{
+              $iar=$client.BeginConnect($ip,22,$null,$null)
+              $ok=$iar.AsyncWaitHandle.WaitOne(1000,$false)
+              if($ok -and $client.Connected){$client.EndConnect($iar);$tcp=$true}
+            } catch {} finally {$client.Close()}
+            Write-Host "V5_WAIT attempt=$i ips=$ips ssh22=$tcp"
+            if($tcp){$ready=$true;break}
+            Start-Sleep -Seconds 5
+          }
+          if(-not $ready){throw 'v5 boot did not restore authoritative SSH endpoint'}
+          & ssh-keygen.exe -F $ip -f $known *> $null
+          if($LASTEXITCODE -ne 0){throw 'Authoritative IP is not in pinned appliance known_hosts'}
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=6 -i $key "ci@$ip" 'id -un; hostname; ip -4 -brief addr; cloud-init status --long || true'
+          if($LASTEXITCODE -ne 0){throw 'Pinned ci SSH failed after v5 boot'}
+          Write-Host 'ONESWAP_V5_NETWORK_RECOVERY=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
