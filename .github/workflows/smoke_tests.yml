@@ -1254,7 +1254,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-v7-userdata-audit:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 6
     steps:
@@ -1301,6 +1301,122 @@ jobs:
       - name: Verify source remained untouched
         shell: powershell
         run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-v8-client-key-fix:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 18
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Build v8 seed with correct ci authorized key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $hostName='Manoj-Test-Inst'
+          $base='C:\LayerSentryLab\qualification\oneswap-seed'
+          $seedBase=Join-Path $base 'cidata.vhdx'
+          $seedV8=Join-Path $base 'cidata-v8.vhdx'
+          $userV7=Join-Path $base 'user-data-v7'
+          $userV8=Join-Path $base 'user-data-v8'
+          $network=Join-Path $base 'network-config'
+          $metaV8=Join-Path $base 'meta-data-v8'
+          $clientPubPath='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519.pub'
+          foreach($p in @($seedBase,$userV7,$network,$clientPubPath)){if(-not(Test-Path $p)){throw "Missing seed input: $p"}}
+          $clientPub=(Get-Content -LiteralPath $clientPubPath -Raw).Trim()
+          if($clientPub -notmatch '^ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+'){throw 'Invalid client public key sidecar'}
+          $ud=Get-Content -LiteralPath $userV7 -Raw
+          if($ud -notmatch '(?m)^\s*ssh_authorized_keys\s*:\s*$'){throw 'ssh_authorized_keys field missing in v7'}
+          $parts=$clientPub -split '\s+'
+          $clientId=$parts[0] + ' ' + $parts[1]
+          if($ud -notmatch [regex]::Escape($clientId)){
+            $ud=[regex]::Replace($ud,'(?m)^(\s*)ssh_authorized_keys\s*:\s*$',{param($m) $m.Value + "`r`n" + $m.Groups[1].Value + '  - ' + $clientId},1)
+          }
+          Set-Content -LiteralPath $userV8 -Value $ud -Encoding ascii
+          @('instance-id: oneswap-qual-20260924-v8','local-hostname: oneswap-qual') | Set-Content -LiteralPath $metaV8 -Encoding ascii
+          Copy-Item -Force $seedBase $seedV8
+          $vhd=Mount-VHD -ComputerName $hostName -Path $seedV8 -Passthru
+          try {
+            $disk=$vhd | Get-Disk
+            $part=$disk | Get-Partition | Where-Object {$_.Type -ne 'Reserved'} | Select-Object -First 1
+            if(-not $part.DriveLetter){
+              $part | Add-PartitionAccessPath -AssignDriveLetter
+              $part=$disk | Get-Partition | Where-Object {$_.DriveLetter} | Select-Object -First 1
+            }
+            if(-not $part.DriveLetter){throw 'Seed partition has no drive letter'}
+            $root=($part.DriveLetter + ':\')
+            Copy-Item -Force $userV8 (Join-Path $root 'user-data')
+            Copy-Item -Force $metaV8 (Join-Path $root 'meta-data')
+            Copy-Item -Force $network (Join-Path $root 'network-config')
+          } finally {
+            Dismount-VHD -ComputerName $hostName -Path $seedV8
+          }
+          $hash=(Get-FileHash -Algorithm SHA256 $seedV8).Hash
+          Write-Host "CIDATA_V8_SHA256=$hash"
+          Write-Host 'CIDATA_V8_BUILD=PASS'
+
+      - name: Gracefully attach v8 and boot appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm='ls-appliance-qual'
+          $seedV8='C:\LayerSentryLab\qualification\oneswap-seed\cidata-v8.vhdx'
+          $state=(Get-VM -Name $vm -ErrorAction Stop).State
+          if($state -eq 'Running'){
+            Stop-VM -Name $vm -Confirm:$false
+            $deadline=(Get-Date).AddSeconds(120)
+            do{
+              Start-Sleep -Seconds 3
+              $state=(Get-VM -Name $vm).State
+              Write-Host "APPLIANCE_SHUTDOWN state=$state"
+            }while($state -ne 'Off' -and (Get-Date) -lt $deadline)
+            if($state -ne 'Off'){throw 'Appliance did not reach Off; refusing forced fallback'}
+          } elseif($state -ne 'Off'){
+            throw "Unexpected appliance state: $state"
+          }
+          Set-VMNetworkAdapter -VMName $vm -StaticMacAddress '00155D001C05'
+          Set-VMHardDiskDrive -VMName $vm -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 3 -Path $seedV8
+          $os=Get-VMHardDiskDrive -VMName $vm -ControllerType SCSI -ControllerNumber 0 -ControllerLocation 0 -ErrorAction Stop
+          Set-VMFirmware -VMName $vm -FirstBootDevice $os
+          Start-VM -Name $vm | Out-Null
+          Write-Host 'APPLIANCE_V8_BOOT_STARTED=PASS'
+
+      - name: Require pinned v7 host identity and corrected ci authorization
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $ip='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $ok=$false
+          for($i=1;$i -le 36;$i++){
+            $out=& ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=5 -i $key "ci@$ip" 'id -un; hostname; cloud-init status --long || true' 2>&1
+            $rc=$LASTEXITCODE
+            Write-Host "V8_AUTH attempt=$i rc=$rc"
+            $out | ForEach-Object {Write-Host $_}
+            if($rc -eq 0){$ok=$true;break}
+            Start-Sleep -Seconds 5
+          }
+          if(-not $ok){throw 'v8 ci authorization failed under pinned appliance identity'}
+          Write-Host 'ONESWAP_V8_PINNED_SSH_AUTH=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
