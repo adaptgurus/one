@@ -1470,7 +1470,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-client-key-acl-fix:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -1510,6 +1510,67 @@ jobs:
           & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "ci@$ip" 'id -un; hostname; cloud-init status --long || true'
           if($LASTEXITCODE -ne 0){throw 'Pinned SSH failed after narrow SYSTEM ACL fix'}
           Write-Host 'ONESWAP_PINNED_SSH_AFTER_ACL=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-v8-userdata-structure-audit:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 6
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Audit v8 ci block and key fingerprints
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $base='C:\LayerSentryLab\qualification\oneswap-seed'
+          $ud=Join-Path $base 'user-data-v8'
+          $clientPubPath='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519.pub'
+          foreach($p in @($ud,$clientPubPath)){if(-not(Test-Path $p)){throw "Missing $p"}}
+          $text=Get-Content -LiteralPath $ud -Raw
+          $lines=Get-Content -LiteralPath $ud
+          Write-Host 'CI_BLOCK_STRUCTURE_BEGIN'
+          for($i=0;$i -lt $lines.Count;$i++){
+            $line=$lines[$i]
+            if($line -match '(?i)ssh-(ed25519|rsa)\s+[A-Za-z0-9+/=]+'){
+              $indent=($line.Length-$line.TrimStart().Length)
+              Write-Host ((' ' * $indent) + '<ssh-public-key-redacted>')
+            } elseif($line -match '^\s*(- name:\s*ci\b|ssh_authorized_keys\s*:|users\s*:|lock_passwd\s*:|sudo\s*:|shell\s*:|groups\s*:|ssh_deletekeys\s*:|ssh_keys\s*:|ed25519_private\s*:|ed25519_public\s*:)' ){
+              Write-Host $line
+            }
+          }
+          Write-Host 'CI_BLOCK_STRUCTURE_END'
+          $client=(Get-Content -LiteralPath $clientPubPath -Raw).Trim()
+          $cp=$client -split '\s+'
+          $clientId=$cp[0]+' '+$cp[1]
+          $clientHash=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($clientId)))
+          Write-Host ('CLIENT_PUBLIC_ID_SHA256=' + $clientHash)
+          $matches=[regex]::Matches($text,'(?m)(ssh-(?:ed25519|rsa))\s+([A-Za-z0-9+/=]+)')
+          $n=0
+          foreach($m in $matches){
+            $n++
+            $id=$m.Groups[1].Value+' '+$m.Groups[2].Value
+            $h=[Convert]::ToHexString([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($id)))
+            Write-Host ('UD_PUBLIC_ID_' + $n + '_SHA256=' + $h)
+          }
+          Write-Host ('CLIENT_KEY_PRESENT=' + [bool]($text -match [regex]::Escape($clientId)))
+          Write-Host 'V8_USERDATA_STRUCTURE_AUDIT=PASS'
 
       - name: Verify source remained untouched
         shell: powershell
