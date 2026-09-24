@@ -123,6 +123,46 @@ jobs:
               active=[]
               used=set()
 
+          # Release any prior RUNNING service-validation VM from earlier
+          # attempts. These VMs are qualification-owned by name prefix. Preserve
+          # the VM object/disk: POWEROFF then UNDEPLOY only; never delete.
+          for prior_id,prior_name,prior_cpus in list(active):
+              if not prior_name.startswith("ls-dr-service-vm-"):
+                  continue
+              print(f"SERVICE_PRIOR_CAPACITY_RELEASE_TARGET=VM{prior_id} NAME={prior_name}")
+              action=one.one.vm.action(auth,"poweroff",int(prior_id))
+              if not action[0]:
+                  raise SystemExit("failed to power off prior qualification service VM "+prior_id+": "+str(action[1])[:300])
+              for _ in range(90):
+                  info=one.one.vm.info(auth,int(prior_id),False)
+                  if not info[0]: raise SystemExit("cannot read prior qualification service VM after poweroff")
+                  rr=ET.fromstring(info[1])
+                  if int(rr.findtext("STATE") or -1)==8 and int(rr.findtext("LCM_STATE") or -1)==0:
+                      break
+                  time.sleep(1)
+              else:
+                  raise SystemExit("prior qualification service VM did not reach POWEROFF")
+              rel=one.one.vm.action(auth,"undeploy",int(prior_id))
+              if not rel[0]:
+                  raise SystemExit("failed to undeploy prior qualification service VM "+prior_id+": "+str(rel[1])[:300])
+              for _ in range(120):
+                  info=one.one.vm.info(auth,int(prior_id),False)
+                  if not info[0]: raise SystemExit("cannot read prior qualification service VM after undeploy")
+                  rr=ET.fromstring(info[1])
+                  if int(rr.findtext("STATE") or -1)==9 and int(rr.findtext("LCM_STATE") or -1)==0:
+                      print(f"SERVICE_PRIOR_CAPACITY_RELEASE=PASS VM_ID={prior_id} STATE=UNDEPLOYED PRESERVED=YES")
+                      break
+                  time.sleep(1)
+              else:
+                  raise SystemExit("prior qualification service VM did not reach UNDEPLOYED")
+          if any(name.startswith("ls-dr-service-vm-") for _,name,_ in active):
+              active=[entry for entry in active if not entry[1].startswith("ls-dr-service-vm-")]
+              used=set()
+              for _,_,cpus in active:
+                  for value in cpus:
+                      for part in value.replace(",", " ").split():
+                          if part.isdigit(): used.add(int(part))
+
           # POWEROFF VMs still reserve host CPU in OpenNebula. VM12 is a
           # qualification-owned preserved proof, so release only its host
           # allocation with UNDEPLOY while preserving the VM object and disk.
@@ -356,3 +396,5 @@ jobs:
 # calculate-free-cpu-from-host-share: 2026-09-24T15:11+05:30
 
 # opennebula-7.4-vm-exec-stdin-param: 2026-09-24T15:11+05:30
+
+# release-prior-qualification-service-vm: 2026-09-24T15:11+05:30
