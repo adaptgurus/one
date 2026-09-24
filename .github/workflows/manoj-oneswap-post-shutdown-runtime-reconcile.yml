@@ -1,4 +1,5 @@
 name: Manoj OneSwap Post-Shutdown Runtime Reconcile
+# physicaldrive-reconcile-fixed
 
 on:
   push:
@@ -66,7 +67,8 @@ jobs:
           print("STATE_TARGET_DIGEST="+str(s.get("target_digest")))
           if s.get("phase")!="DELTA_CAPTURING": raise SystemExit("state is not DELTA_CAPTURING")
           if s.get("target_digest")!="08ca0b8c72cd657aee9b5cd810cdc6c27433365c4463aeff8a01691544543697": raise SystemExit("digest migration not present")
-          if not s.get("source_off_at"): raise SystemExit("source_off_at missing for DELTA_CAPTURING")\n          if s.get("delta_applied_at") or s.get("template_id"): raise SystemExit("unexpected later-phase evidence")
+          if not s.get("source_off_at"): raise SystemExit("source_off_at missing for DELTA_CAPTURING")
+          if s.get("delta_applied_at") or s.get("template_id"): raise SystemExit("unexpected later-phase evidence")
           if s.get("image_imports"): raise SystemExit("unexpected image imports")
           if len(s.get("disks",[]))!=2: raise SystemExit("prepared disk count mismatch")
           for i,d in enumerate(s.get("disks",[])):
