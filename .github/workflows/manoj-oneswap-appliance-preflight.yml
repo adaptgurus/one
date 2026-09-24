@@ -1,0 +1,150 @@
+name: Manoj OneSwap Appliance Preflight
+
+on:
+  push:
+    branches:
+      - qual/hyperv-migration-manoj-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-appliance-preflight.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-appliance-preflight
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact Manoj runner and source state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "wrong host $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "migration source not Running: $($src.State)"}
+          Write-Host "SOURCE_STILL_RUNNING=PASS state=$($src.State)"
+
+      - name: Recover non-secret appliance access metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($p in @(
+            'C:\LayerSentryLab\qualification\oneswap-seed\network-config',
+            'C:\LayerSentryLab\qualification\oneswap-seed\provision_hv_key.py',
+            'C:\LayerSentryLab\qualification\swap-oneswap-qualified.ps1'
+          )){
+            Write-Host "=== FILE $p ==="
+            if(Test-Path $p){Get-Content -LiteralPath $p}else{Write-Host 'MISSING'}
+          }
+          Write-Host '=== ACCESS FILE METADATA ==='
+          foreach($p in @(
+            'C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519',
+            'C:\LayerSentryLab\qualification\known_hosts_ac7e14e',
+            'C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519',
+            'C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance.paramiko'
+          )){
+            if(Test-Path $p){
+              $i=Get-Item -LiteralPath $p
+              Write-Host "ACCESS_FILE path=$p size=$($i.Length) mtime=$($i.LastWriteTimeUtc.ToString('o'))"
+            }else{
+              Write-Host "ACCESS_FILE path=$p missing=true"
+            }
+          }
+
+      - name: Boot qualified OneSwap appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $name -ErrorAction SilentlyContinue)
+          if($snaps.Count -ne 0){throw "appliance has $($snaps.Count) checkpoints"}
+          Write-Host "APPLIANCE_BEFORE state=$($vm.State) generation=$($vm.Generation) cpu=$($vm.ProcessorCount)"
+          foreach($d in @(Get-VMHardDiskDrive -VMName $name -ErrorAction Stop)){
+            $v=Get-VHD -Path $d.Path -ErrorAction Stop
+            Write-Host "APPLIANCE_DISK path=$($d.Path) type=$($v.VhdType) format=$($v.VhdFormat) virtual=$($v.Size) file=$($v.FileSize)"
+          }
+          if($vm.State -eq 'Saved'){
+            Start-VM -Name $name
+            Write-Host 'APPLIANCE_START_REQUESTED=YES_FROM_SAVED'
+          }elseif($vm.State -eq 'Off'){
+            Start-VM -Name $name
+            Write-Host 'APPLIANCE_START_REQUESTED=YES_FROM_OFF'
+          }elseif($vm.State -ne 'Running'){
+            throw "unexpected appliance state $($vm.State)"
+          }
+          $deadline=(Get-Date).AddSeconds(180)
+          do{
+            Start-Sleep -Seconds 2
+            $vm=Get-VM -Name $name -ErrorAction Stop
+            Write-Host "APPLIANCE_STATE=$($vm.State)"
+            if($vm.State -eq 'Running'){break}
+          }while((Get-Date)-lt $deadline)
+          if($vm.State -ne 'Running'){throw "appliance failed to reach Running: $($vm.State)"}
+          Write-Host 'APPLIANCE_RUNNING=PASS'
+
+      - name: Verify pinned SSH path to OneSwap appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.41'
+          $deadline=(Get-Date).AddSeconds(180)
+          do{
+            $ok=Test-NetConnection -ComputerName $ip -Port 22 -InformationLevel Quiet -WarningAction SilentlyContinue
+            Write-Host "APPLIANCE_TCP22 ip=$ip open=$ok"
+            if($ok){break}
+            Start-Sleep -Seconds 3
+          }while((Get-Date)-lt $deadline)
+          if(-not $ok){throw "appliance SSH did not become reachable at $ip"}
+
+          $ssh=(Get-Command ssh.exe -ErrorAction Stop).Source
+          $candidates=@(
+            [pscustomobject]@{User='layersentry-bootstrap';Key='C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519';Known='C:\LayerSentryLab\qualification\known_hosts_ac7e14e'},
+            [pscustomobject]@{User='layersentry-bootstrap';Key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519';Known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance.paramiko'}
+          )
+          $selected=$null
+          foreach($c in $candidates){
+            if(-not (Test-Path $c.Key) -or -not (Test-Path $c.Known)){continue}
+            Write-Host "SSH_CANDIDATE user=$($c.User) key=$($c.Key) known=$($c.Known)"
+            & $ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$($c.Known)" -i $c.Key "$($c.User)@$ip" "hostname; id -un; test -x /usr/bin/oneswap-hyperv && echo ONESWAP_HYPERV=present || echo ONESWAP_HYPERV=missing"
+            if($LASTEXITCODE -eq 0){$selected=$c;break}
+          }
+          if(-not $selected){throw 'no pinned-key SSH candidate authenticated to OneSwap appliance'}
+          "ONESWAP_SSH_USER=$($selected.User)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ONESWAP_SSH_KEY=$($selected.Key)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ONESWAP_SSH_KNOWN=$($selected.Known)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "ONESWAP_IP=$ip" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "APPLIANCE_PINNED_SSH=PASS user=$($selected.User) ip=$ip"
+
+      - name: Inspect OneSwap runtime read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe -ErrorAction Stop).Source
+          $remote=@'
+          set -e
+          echo "REMOTE_HOST=$(hostname)"
+          echo "REMOTE_USER=$(id -un)"
+          command -v oneswap-hyperv || true
+          command -v virt-v2v || true
+          command -v virt-v2v-in-place || true
+          if command -v systemctl >/dev/null 2>&1; then
+            for s in layersentry-oneswapd oneswapd; do
+              systemctl is-active "$s" 2>/dev/null && echo "SERVICE_${s}=active" || true
+            done
+          fi
+          for p in /etc/layersentry/oneswapd/config.json /etc/layersentry/oneswap/config.json /etc/one/oneswap.yaml; do
+            [ -e "$p" ] && echo "CONFIG_PRESENT=$p"
+          done
+          for d in /etc/layersentry/oneswapd/sources /var/cache/layersentry-oneswap /var/lib/layersentry-oneswap; do
+            [ -e "$d" ] && echo "PATH_PRESENT=$d"
+          done
+          echo "ONESWAP_RUNTIME_READONLY=PASS"
+          '@
+          & $ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:ONESWAP_SSH_KNOWN" -i $env:ONESWAP_SSH_KEY "$env:ONESWAP_SSH_USER@$env:ONESWAP_IP" $remote
+          if($LASTEXITCODE -ne 0){throw "OneSwap runtime inspection failed exit=$LASTEXITCODE"}
