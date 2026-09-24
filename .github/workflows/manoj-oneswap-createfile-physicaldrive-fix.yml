@@ -47,23 +47,23 @@ jobs:
             $rawPath=$slash+$slash+'.'+$slash+'PhysicalDrive'+$diskObj.Number
             if (-not ('LayerSentry.RawDiskNative' -as [type])) {
               Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
-namespace LayerSentry {
-    public static class RawDiskNative {
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern SafeFileHandle CreateFileW(
-            string lpFileName,
-            uint dwDesiredAccess,
-            uint dwShareMode,
-            IntPtr lpSecurityAttributes,
-            uint dwCreationDisposition,
-            uint dwFlagsAndAttributes,
-            IntPtr hTemplateFile);
-    }
-}
-"@
+          using System;
+          using System.Runtime.InteropServices;
+          using Microsoft.Win32.SafeHandles;
+          namespace LayerSentry {
+              public static class RawDiskNative {
+                  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+                  public static extern SafeFileHandle CreateFileW(
+                      string lpFileName,
+                      uint dwDesiredAccess,
+                      uint dwShareMode,
+                      IntPtr lpSecurityAttributes,
+                      uint dwCreationDisposition,
+                      uint dwFlagsAndAttributes,
+                      IntPtr hTemplateFile);
+              }
+          }
+          "@
             }
             $handle=[LayerSentry.RawDiskNative]::CreateFileW(
               $rawPath,[uint32]2147483648,[uint32]3,[IntPtr]::Zero,[uint32]3,[uint32]0,[IntPtr]::Zero)
