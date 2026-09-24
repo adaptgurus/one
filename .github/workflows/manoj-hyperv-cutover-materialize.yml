@@ -1,5 +1,5 @@
 name: Manoj HyperV Cutover and Materialize
-# rerun-pr23-target-sizing-keepalive-20260925
+# rerun-pr24-delta-capturing-physicaldrive-fix-20260925
 
 on:
   push:
@@ -89,9 +89,10 @@ jobs:
           print('ADMISSION_PHASE='+str(s.get('phase')))
           print('ADMISSION_VM_ID='+str(s.get('source_vm_id')))
           print('ADMISSION_REFERENCE='+str(s.get('reference_point_id')))
-          if s.get('phase')!='CUTOVER_STARTED': raise SystemExit('state is not CUTOVER_STARTED')
+          if s.get('phase')!='DELTA_CAPTURING': raise SystemExit('state is not DELTA_CAPTURING')
           if s.get('target_digest')!='08ca0b8c72cd657aee9b5cd810cdc6c27433365c4463aeff8a01691544543697': raise SystemExit('target digest is not current-runtime digest')
-          if s.get('source_off_at') or s.get('delta_applied_at') or s.get('template_id'): raise SystemExit('unexpected later-phase evidence')
+          if not s.get('source_off_at'): raise SystemExit('source_off_at missing for DELTA_CAPTURING resume')
+          if s.get('delta_applied_at') or s.get('template_id'): raise SystemExit('unexpected later-phase evidence')
           if s.get('image_imports'): raise SystemExit('unexpected image import evidence')
           if str(s.get('source_vm_id','')).lower()!='52baa8a1-675f-4225-8f37-66a60933b30c': raise SystemExit('source VM identity mismatch')
           d=s.get('disks',[])
