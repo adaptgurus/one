@@ -47,11 +47,18 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Continue'
+          function Test-TcpFast([string]$ip,[int]$port){
+            $c=New-Object System.Net.Sockets.TcpClient
+            try {
+              $a=$c.BeginConnect($ip,$port,$null,$null)
+              if(-not $a.AsyncWaitHandle.WaitOne(1000,$false)){return $false}
+              $c.EndConnect($a); return $true
+            } catch { return $false } finally { $c.Close() }
+          }
           foreach($ip in @('10.250.10.32','10.250.10.41')){
-            $ping=Test-Connection -ComputerName $ip -Count 1 -Quiet -ErrorAction SilentlyContinue
-            Write-Host "PING ip=$ip ok=$ping"
+            & ping.exe -n 1 -w 1000 $ip | ForEach-Object { Write-Host "PING_RAW $ip $_" }
             foreach($port in @(22,9443,9444)){
-              $ok=Test-NetConnection -ComputerName $ip -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue
+              $ok=Test-TcpFast $ip $port
               Write-Host "TCP ip=$ip port=$port open=$ok"
             }
           }
