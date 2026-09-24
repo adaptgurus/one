@@ -1,0 +1,52 @@
+name: Manoj OpenNebula Target Inventory
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-opennebula-target.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-opennebula-target
+  cancel-in-progress: true
+
+jobs:
+  target:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_BEFORE=PASS'
+
+      - name: Query OpenNebula through Manoj WSL SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Get-Command wsl.exe -ErrorAction Stop | Out-Null
+          $remote="hostname; whoami; echo ===DATASTORES===; onedatastore list; echo ===VNETS===; onevnet list; echo ===HOSTS===; onehost list; echo ===VMS===; onevm list"
+          & wsl.exe -d Ubuntu-22.04 -u opc -- ssh -o BatchMode=yes -o ConnectTimeout=8 rocky-01 $remote
+          if($LASTEXITCODE -ne 0){throw "OpenNebula target inventory failed rc=$LASTEXITCODE"}
+          Write-Host 'OPENNEBULA_TARGET_INVENTORY=PASS'
+
+      - name: Protect source after inventory
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          Write-Host "SOURCE_AFTER_STATE=$($src.State)"
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$n"
+          if($src.State -ne 'Running' -or $n -ne 0){throw 'Source invariant changed'}
+          Write-Host 'SOURCE_AFTER=PASS'
