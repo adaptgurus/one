@@ -90,6 +90,67 @@ jobs:
             }
           }
 
+      - name: Read-only OpenNebula target inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $py='C:\LayerSentryLab\tools\Python313\python.exe'
+          $authImage='C:\LayerSentryLab\Recovery\fe2-lvm\2.img'
+          if(-not (Test-Path $py)){throw "qualification Python missing: $py"}
+          if(-not (Test-Path $authImage)){throw "OpenNebula auth image missing: $authImage"}
+          $script=@'
+          import pathlib, xml.etree.ElementTree as ET
+          from xmlrpc.client import ServerProxy
+          from dissect.target import Target
+
+          endpoint="http://10.250.10.10:2633/RPC2"
+          image=pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
+          target=Target.open(str(image))
+          auth=target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
+          one=ServerProxy(endpoint, allow_none=True)
+
+          def call(label, method, *args):
+              try:
+                  result=method(auth,*args)
+              except Exception as exc:
+                  print(f"ONE_{label}_ERROR={type(exc).__name__}:{exc}")
+                  return None
+              if not result[0]:
+                  print(f"ONE_{label}_ERROR={str(result[1])[:300]}")
+                  return None
+              return result[1]
+
+          hp=call("HOSTS",one.one.hostpool.info,-2,-1,-1)
+          if hp:
+              root=ET.fromstring(hp)
+              for h in root.findall("HOST"):
+                  print("ONE_HOST id=%s name=%s state=%s" % (
+                    h.findtext("ID") or "", h.findtext("NAME") or "", h.findtext("STATE") or ""))
+
+          dp=call("DATASTORES",one.one.datastorepool.info,-2,-1,-1)
+          if dp:
+              root=ET.fromstring(dp)
+              for x in root.findall("DATASTORE"):
+                  print("ONE_DATASTORE id=%s name=%s type=%s tm=%s ds=%s" % (
+                    x.findtext("ID") or "", x.findtext("NAME") or "", x.findtext("TYPE") or "",
+                    x.findtext("./TM_MAD") or x.findtext("./TEMPLATE/TM_MAD") or "",
+                    x.findtext("./DS_MAD") or x.findtext("./TEMPLATE/DS_MAD") or ""))
+
+          vp=call("VNETS",one.one.vnpool.info,-2,-1,-1)
+          if vp:
+              root=ET.fromstring(vp)
+              for x in root.findall("VNET"):
+                  print("ONE_VNET id=%s name=%s bridge=%s" % (
+                    x.findtext("ID") or "", x.findtext("NAME") or "",
+                    x.findtext("./BRIDGE") or x.findtext("./TEMPLATE/BRIDGE") or ""))
+
+          print("OPENNEBULA_READONLY_INVENTORY=PASS")
+          '@
+          $p=Join-Path $env:RUNNER_TEMP 'migration-one-readonly.py'
+          Set-Content -LiteralPath $p -Value $script -Encoding UTF8
+          & $py $p
+          if($LASTEXITCODE -ne 0){throw "OpenNebula read-only inventory failed with exit $LASTEXITCODE"}
+
       - name: Inventory qualification authority metadata only
         shell: powershell
         run: |
