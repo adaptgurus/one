@@ -2317,3 +2317,116 @@ jobs:
           if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+
+  manoj-opennebula-target-authority-ssh:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Discover pinned frontend SSH authority without secrets
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $targets=@('10.10.10.20','10.10.10.21','10.10.10.22','10.10.10.23')
+          $knownCandidates=@(
+            'C:\Users\opc\.ssh\known_hosts',
+            'C:\ProgramData\ssh\ssh_known_hosts'
+          )
+          $knownCandidates += @(Get-ChildItem 'C:\LayerSentryLab\qualification' -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Name -match '^known_hosts'} | ForEach-Object {$_.FullName})
+          $knownCandidates=@($knownCandidates | Where-Object {Test-Path $_} | Select-Object -Unique)
+          foreach($known in $knownCandidates){
+            foreach($ip in $targets){
+              & ssh-keygen.exe -F $ip -f $known 2>$null | Out-Null
+              if($LASTEXITCODE -eq 0){Write-Host "PINNED_HOST ip=$ip known=$known"}
+            }
+          }
+
+          $inv=Get-ChildItem 'C:\LayerSentryLab\qualification' -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Name -match '(?i)one-deploy-inventory\.ya?ml$'} | Select-Object -First 5
+          foreach($file in $inv){
+            Get-Content -LiteralPath $file.FullName |
+              Where-Object {$_ -match '(?i)^\s*(ansible_user|ansible_port|ansible_ssh_private_key_file|one_vip):|ls-fe0[123].*ansible_host'} |
+              ForEach-Object {Write-Host ('TARGET_META=' + $_.Trim())}
+          }
+          Write-Host 'PINNED_AUTHORITY_DISCOVERY=PASS'
+
+      - name: Read authoritative OpenNebula host datastore and VNet inventory over pinned SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $targets=@('10.10.10.21','10.10.10.22','10.10.10.23','10.10.10.20')
+          $knownCandidates=@(
+            'C:\Users\opc\.ssh\known_hosts',
+            'C:\ProgramData\ssh\ssh_known_hosts'
+          )
+          $knownCandidates += @(Get-ChildItem 'C:\LayerSentryLab\qualification' -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Name -match '^known_hosts'} | ForEach-Object {$_.FullName})
+          $knownCandidates=@($knownCandidates | Where-Object {Test-Path $_} | Select-Object -Unique)
+
+          $keyCandidates=@(
+            'C:\Users\opc\.ssh\id_ed25519',
+            'C:\Users\opc\.ssh\id_rsa'
+          )
+          $keyCandidates += @(Get-ChildItem 'C:\LayerSentryLab\qualification' -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {
+              $_.Name -match '(?i)(^id_ed25519$|^id_rsa$|ssh.*key$|private.*key$|fe.*key$)' -and
+              $_.Name -notmatch '(?i)\.pub$|known_hosts'
+            } | ForEach-Object {$_.FullName})
+          $keyCandidates=@($keyCandidates | Where-Object {Test-Path $_} | Select-Object -Unique)
+
+          $users=@('oneadmin','opc')
+          $success=$false
+          foreach($ip in $targets){
+            if($success){break}
+            foreach($known in $knownCandidates){
+              & ssh-keygen.exe -F $ip -f $known 2>$null | Out-Null
+              if($LASTEXITCODE -ne 0){continue}
+              foreach($sourceKey in $keyCandidates){
+                if($success){break}
+                $tmpKey=Join-Path $env:RUNNER_TEMP ("target-" + [IO.Path]::GetFileName($sourceKey) + "-" + [guid]::NewGuid().ToString('N'))
+                try{
+                  Copy-Item -Force $sourceKey $tmpKey
+                  & icacls.exe $tmpKey /inheritance:r | Out-Null
+                  & icacls.exe $tmpKey /grant:r '*S-1-5-18:F' | Out-Null
+                  & icacls.exe $tmpKey /setowner '*S-1-5-18' | Out-Null
+                  $pub=(& ssh-keygen.exe -y -f $tmpKey 2>$null | Select-Object -First 1)
+                  if($LASTEXITCODE -ne 0 -or -not $pub){continue}
+                  foreach($u in $users){
+                    $cmd='hostname; id -un; command -v onehost >/dev/null 2>&1 || exit 41; echo ===HOSTS===; onehost list; echo ===DATASTORES===; onedatastore list; echo ===VNETS===; onevnet list'
+                    $out=& ssh.exe -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=6 -i $tmpKey "$u@$ip" $cmd 2>&1
+                    if($LASTEXITCODE -eq 0){
+                      Write-Host "TARGET_OPENNEBULA_SSH ip=$ip user=$u known=$known"
+                      $out | ForEach-Object {Write-Host ('TARGET_ONE=' + $_)}
+                      $success=$true
+                      break
+                    }
+                  }
+                } finally {
+                  Remove-Item -Force $tmpKey -ErrorAction SilentlyContinue
+                }
+              }
+            }
+          }
+          if(-not $success){throw 'No previously pinned key-only SSH authority reached an OpenNebula frontend'}
+          Write-Host 'TARGET_OPENNEBULA_AUTHORITY=PASS'
+
+      - name: Confirm source remains Running and checkpoint-free
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
