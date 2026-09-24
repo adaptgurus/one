@@ -217,6 +217,12 @@ jobs:
               [void]$candidates.Add($n.IPAddress)
             }
           }
+          if($candidates.Count -eq 0){
+            foreach($ip in @('10.250.10.40','10.250.10.41','10.250.10.42','10.250.10.43')){
+              [void]$candidates.Add($ip)
+            }
+            Write-Host 'DISCOVERY_FALLBACK=historical-qualified-candidates'
+          }
           Write-Host "EXACT_CANDIDATES=$($candidates -join ',')"
           foreach($ip in $candidates){
             foreach($port in @(22,9443,9444)){
@@ -241,7 +247,7 @@ jobs:
 
 
   cancel-stale-migration-discovery:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Cancel second stale Manoj discovery run
