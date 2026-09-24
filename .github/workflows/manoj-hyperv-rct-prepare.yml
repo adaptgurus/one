@@ -1,5 +1,5 @@
 name: Manoj HyperV RCT Prepare
-# rerun-after-pr20-backup-rct-sequence
+# rerun-after-pr20-namespace-fix
 
 on:
   push:
