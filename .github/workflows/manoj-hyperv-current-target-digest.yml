@@ -1,0 +1,131 @@
+name: Manoj HyperV Current Target Digest Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-current-target-digest.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-current-target-digest
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Bind Manoj and require source Off
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw 'Wrong runner'}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'Wrong host'}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected checkpoint'}
+          Write-Host 'CURRENT_DIGEST_SOURCE_GATE=PASS'
+
+      - name: Prepare restricted appliance key
+        shell: powershell
+        run: |
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-current-digest.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Compute exact current runtime digest read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          cat >/tmp/ls-current-target-digest.rb <<'RUBY'
+          ONE_LOCATION=ENV['ONE_LOCATION'] unless defined?(ONE_LOCATION)
+          if ONE_LOCATION
+            ruby_lib=File.join(ONE_LOCATION,'lib','ruby')
+            gems=File.join(ONE_LOCATION,'share','gems')
+          else
+            ruby_lib='/usr/lib/one/ruby'
+            gems='/usr/share/one/gems'
+          end
+          if File.directory?(gems)
+            begin
+              require 'rubygems'
+              Gem.use_paths(File.realpath(gems))
+            rescue StandardError
+            end
+          end
+          $LOAD_PATH << ruby_lib
+          $LOAD_PATH << File.join(ruby_lib,'cli')
+          require 'json'
+          require 'opennebula'
+          require 'yaml'
+          require 'one_helper/oneswap_helper'
+          require 'one_helper/hyperv_helper'
+          require 'one_helper/hyperv_hot_helper'
+          require 'one_helper/hyperv_hot_hardening'
+          require 'one_helper/hyperv_hot_edge_hardening'
+          require 'one_helper/hyperv_virtio_hardening'
+          require 'one_helper/hyperv_final_safety_hardening'
+          require 'one_helper/hyperv_network_hardening'
+
+          loaded=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml') || {}
+          normalized={}
+          loaded.each{|k,v| normalized[k.to_s.sub(/^:/,'').to_sym]=v}
+          cli={
+            config_file:'/etc/layersentry/oneswap/manoj-qual.yaml',
+            hot:true, commit:true,
+            operation_id:'manoj-hv-ls-migration-source-test-20260924',
+            hyperv_connection:'manoj-qual',
+            guest_os:'linux',
+            expected_guest_macs:'00:15:5d:00:1c:07',
+            uefi_sec_path:'/usr/share/OVMF/OVMF_CODE_4M.secboot.fd',
+            qemu_ga_linux:true,
+            cpu:0.5,
+            vcpu:2,
+            memory_mb:2560,
+            datastore:'1',
+            network:'0'
+          }
+          options=normalized.merge(cli)
+          options[:http_port] ||= 29869
+          helper=OneSwapHelper.new
+          coord=OneSwapHyperV::HotCoordinator.new(helper,options.merge(name:'ls-migration-source-test',format:'raw'))
+          digest=coord.send(:target_digest)
+          puts "EXACT_CURRENT_TARGET_DIGEST=#{digest}"
+          candidates=Dir['/var/lib/layersentry-oneswap/reflink-work/oneswap-hyperv-hot/manoj-hv-ls-migration-source-test-20260924*/state.json']
+          abort('durable state not unique') unless candidates.length==1
+          state=JSON.parse(File.read(candidates.first))
+          puts "STORED_TARGET_DIGEST=#{state['target_digest']}"
+          puts "STATE_PHASE=#{state['phase']}"
+          puts "CURRENT_HOT_HELPER="+$LOADED_FEATURES.grep(/one_helper\/hyperv_hot_helper\.rb$/).last.to_s
+          require 'digest'
+          hf=$LOADED_FEATURES.grep(/one_helper\/hyperv_hot_helper\.rb$/).last
+          puts "CURRENT_HOT_HELPER_SHA=#{Digest::SHA256.file(hf).hexdigest}"
+          puts 'CURRENT_TARGET_DIGEST_PROBE=PASS'
+          RUBY
+          timeout --signal=TERM --kill-after=5s 60s sudo ruby /tmp/ls-current-target-digest.rb
+          rm -f /tmp/ls-current-target-digest.rb
+          '@
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Current target digest probe failed'}
+
+      - name: Re-prove source Off
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          Write-Host "FINAL_SOURCE_STATE=$($vm.State)"
+          if($vm.State -ne 'Off'){throw 'Probe changed source state'}
+          Write-Host 'CURRENT_DIGEST_SOURCE_INVARIANT=PASS'
