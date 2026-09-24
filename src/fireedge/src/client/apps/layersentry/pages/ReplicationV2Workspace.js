@@ -424,6 +424,12 @@ const ReplicationV2Workspace = () => {
       )
       return
     }
+    if (nics.length !== 1) {
+      setError(
+        'This simple recovery mapper requires exactly one VM NIC. Multi-NIC VMs must use the ordered per-NIC mapping workflow so no NIC is omitted.'
+      )
+      return
+    }
     setMappingBusy(true)
     try {
       const group = protectionGroupId.trim() || `vm-${selectedVm.ID}`
@@ -549,6 +555,144 @@ const ReplicationV2Workspace = () => {
           accent={colors.status.warning}
         />
       </Box>
+
+      <Surface sx={{ mt: 2, p: 2.5 }}>
+        <SectionHeader
+          title="Pair DC and DR sites"
+          description="Use an administrator username/password once to verify the remote LayerSentry site. The password is bootstrap-only; ongoing site-to-site traffic uses the scoped API/mTLS identity returned by the control plane."
+        />
+        <Box
+          sx={{
+            display: 'grid',
+            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' },
+            gap: 1.5,
+          }}
+        >
+          <FormControl fullWidth>
+            <InputLabel>DR mode</InputLabel>
+            <Select
+              value={drMode}
+              label="DR mode"
+              onChange={(e) => setDrMode(e.target.value)}
+            >
+              <MenuItem value="NDR">
+                DR / NDR · asynchronous checkpoints · 5-minute RPO target
+              </MenuItem>
+              <MenuItem value="METRO_DR">
+                Metro DR · synchronous / storage-mirroring capable site
+              </MenuItem>
+            </Select>
+          </FormControl>
+          <TextField
+            label="Remote site ID"
+            value={pairSiteId}
+            onChange={(e) => setPairSiteId(e.target.value)}
+            placeholder="dr"
+          />
+          <TextField
+            label="Remote site name"
+            value={pairSiteName}
+            onChange={(e) => setPairSiteName(e.target.value)}
+            placeholder="DR Site"
+          />
+          <TextField
+            label="Remote LayerSentry HTTPS endpoint"
+            value={pairEndpoint}
+            onChange={(e) => setPairEndpoint(e.target.value)}
+            placeholder="https://dr.layersentry.example"
+          />
+          <TextField
+            label="Username"
+            value={pairUsername}
+            onChange={(e) => setPairUsername(e.target.value)}
+            autoComplete="username"
+          />
+          <TextField
+            label="Password"
+            type="password"
+            value={pairPassword}
+            onChange={(e) => setPairPassword(e.target.value)}
+            autoComplete="current-password"
+            helperText="Used only for pairing bootstrap and cleared after the request."
+          />
+        </Box>
+        <Alert severity="info" sx={{ mt: 1.5 }}>
+          Metro DR is enabled only when the remote site advertises a qualified
+          synchronous storage-mirroring capability. NDR uses verified
+          checkpoint replication. LayerSentry will reject a mode that the
+          selected site cannot support.
+        </Alert>
+        <Button
+          sx={{ mt: 1.5, textTransform: 'none' }}
+          variant="contained"
+          disabled={
+            pairBusy ||
+            !pairSiteId.trim() ||
+            !pairSiteName.trim() ||
+            !pairEndpoint.trim() ||
+            !pairUsername.trim() ||
+            !pairPassword
+          }
+          onClick={pairRemoteSite}
+        >
+          {pairBusy ? 'Pairing site…' : 'Pair and verify site'}
+        </Button>
+
+        <Box sx={{ mt: 2 }}>
+          <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+            Environment isolation profile
+          </Typography>
+          <Typography sx={{ mt: 0.25, fontSize: 11, color: colors.text.muted }}>
+            PROD, UAT, STAGE and DEV are separate security domains. Cross-environment
+            traffic is denied by default; the default application flow is WEB → APP → DB
+            inside the same environment only.
+          </Typography>
+          <Box
+            sx={{
+              mt: 1,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', xl: 'repeat(4, 1fr)' },
+              gap: 0.75,
+            }}
+          >
+            {environmentNetworks.map((network) => (
+              <Box
+                key={network.name}
+                sx={{
+                  p: 1,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: 1,
+                }}
+              >
+                <Typography sx={{ fontSize: 12, fontWeight: 700 }}>
+                  {network.name}
+                </Typography>
+                <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+                  {network.environment} · {network.tier}
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+
+        {!!managementPolicies.length && (
+          <Box sx={{ mt: 2 }}>
+            <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+              LayerSentry management protection
+            </Typography>
+            {managementPolicies.map((policy) => (
+              <Typography
+                key={`${policy.source_site_id}-${policy.target_site_id}`}
+                sx={{ mt: 0.5, fontSize: 11, color: colors.text.secondary }}
+              >
+                {policy.source_site_id} → {policy.target_site_id} · every{' '}
+                {durationToText(policy.interval)} · retain {policy.retention} ·
+                encrypted configuration, DR catalog, network mappings and recovery secrets
+              </Typography>
+            ))}
+          </Box>
+        )}
+      </Surface>
 
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
