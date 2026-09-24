@@ -2826,7 +2826,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-builder-recover-target-authority:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 12
     steps:
@@ -2928,3 +2928,57 @@ jobs:
           if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+
+  manoj-hyperv-memory-inventory:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Inventory host and VM memory read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $os=Get-CimInstance Win32_OperatingSystem
+          $cs=Get-CimInstance Win32_ComputerSystem
+          $total=[int64]$cs.TotalPhysicalMemory
+          $free=[int64]$os.FreePhysicalMemory*1KB
+          Write-Host "HOST_MEMORY total_bytes=$total free_bytes=$free free_mib=$([math]::Round($free/1MB,1))"
+          try{
+            $counter=(Get-Counter '\Memory\Available MBytes' -ErrorAction Stop).CounterSamples[0].CookedValue
+            Write-Host "HOST_AVAILABLE_MIB_COUNTER=$([math]::Round($counter,1))"
+          }catch{
+            Write-Host "HOST_AVAILABLE_MIB_COUNTER=unavailable"
+          }
+          foreach($vm in (Get-VM | Sort-Object Name)){
+            $mem=Get-VMMemory -VM $vm -ErrorAction SilentlyContinue
+            $assigned=[int64]$vm.MemoryAssigned
+            $demand=[int64]$vm.MemoryDemand
+            Write-Host ("VM_MEMORY name={0} state={1} cpu={2} assigned_mib={3} demand_mib={4} startup_mib={5} dynamic={6} min_mib={7} max_mib={8}" -f
+              $vm.Name,$vm.State,$vm.ProcessorCount,
+              [math]::Round($assigned/1MB,1),[math]::Round($demand/1MB,1),
+              [math]::Round($mem.Startup/1MB,1),$mem.DynamicMemoryEnabled,
+              [math]::Round($mem.Minimum/1MB,1),[math]::Round($mem.Maximum/1MB,1))
+          }
+          Write-Host 'HYPERV_MEMORY_INVENTORY=PASS'
+
+      - name: Confirm protected VMs remain untouched
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
+          $appliance=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($appliance.State -ne 'Running'){throw "Active OneSwap appliance changed state: $($appliance.State)"}
+          Write-Host 'PROTECTED_VM_INVARIANTS=PASS'
