@@ -331,6 +331,174 @@ const protectionGroupCheckpoints = (
   )
 }
 
+
+const drEnvironmentNetworks = (
+  res = {},
+  next = defaultEmptyFunction,
+  _params = {},
+  userData = {},
+  oneConnection
+) =>
+  respond(
+    res,
+    next,
+    platformRequest(
+      { method: 'GET', path: '/v1/dr/environment-networks' },
+      userData,
+      oneConnection
+    )
+  )
+
+const drPairSite = (
+  res = {},
+  next = defaultEmptyFunction,
+  { request } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!request || typeof request !== 'object') {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'DR site pairing request is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      { method: 'POST', path: '/v1/dr/site-pairs', data: request },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drManagementBackupPolicies = (
+  res = {},
+  next = defaultEmptyFunction,
+  { dc, dr } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!dc || !dr) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'DC and DR site IDs are required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'GET',
+        path:
+          '/v1/dr/management-backup-policies?dc=' +
+          encodeURIComponent(dc) +
+          '&dr=' +
+          encodeURIComponent(dr),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drVMCheckpoints = (
+  res = {},
+  next = defaultEmptyFunction,
+  { groupId, siteId } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!groupId || !siteId) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Protection group ID and site ID are required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'GET',
+        path:
+          '/v1/dr/protection-groups/' +
+          encodeURIComponent(groupId) +
+          '/vm-checkpoints?site=' +
+          encodeURIComponent(siteId),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drPutRecoveryMapping = (
+  res = {},
+  next = defaultEmptyFunction,
+  { request } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!request || typeof request !== 'object') {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Recovery mapping request is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'POST',
+        path: '/v1/dr/recovery-mappings',
+        data: request,
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drGetRecoveryMapping = (
+  res = {},
+  next = defaultEmptyFunction,
+  { groupId, siteId } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!groupId || !siteId) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Protection group ID and site ID are required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'GET',
+        path:
+          '/v1/dr/protection-groups/' +
+          encodeURIComponent(groupId) +
+          '/recovery-mappings/' +
+          encodeURIComponent(siteId),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
 module.exports = {
   capabilities,
   sessions,
@@ -344,4 +512,10 @@ module.exports = {
   putProtectionGroup,
   captureProtectionGroup,
   protectionGroupCheckpoints,
+  drEnvironmentNetworks,
+  drPairSite,
+  drManagementBackupPolicies,
+  drVMCheckpoints,
+  drPutRecoveryMapping,
+  drGetRecoveryMapping,
 }
