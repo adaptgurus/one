@@ -38,6 +38,9 @@ const drApi = oneApi.injectEndpoints({
     getDrCapabilities: builder.query({
       queryFn: () => request({ url: '/api/dr/capabilities' }),
     }),
+    getLocalSiteIdentity: builder.query({
+      queryFn: () => request({ url: '/api/dr/site-identity' }),
+    }),
     getRemoteSites: builder.query({
       queryFn: () => request({ url: '/api/dr/sites' }),
     }),
@@ -177,6 +180,7 @@ const drApi = oneApi.injectEndpoints({
 
 const {
   useGetDrCapabilitiesQuery,
+  useGetLocalSiteIdentityQuery,
   useGetRemoteSitesQuery,
   useCreateRemoteSiteMutation,
   useGetSitePairsQuery,
@@ -211,6 +215,7 @@ export default {
   useCreateSitePairMutation,
   useGetSitePairsQuery,
   useGetDrCapabilitiesQuery,
+  useGetLocalSiteIdentityQuery,
   useGetRemoteSitesQuery,
   useCreateRemoteSiteMutation,
   useGetProtectionDomainsQuery,
