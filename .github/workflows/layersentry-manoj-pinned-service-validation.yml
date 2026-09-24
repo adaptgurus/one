@@ -289,7 +289,7 @@ jobs:
           exec_method=getattr(one.one.vm,"exec")
           last_error=""
           for attempt in range(120):
-              result=exec_method(auth,vm_id,command)
+              result=exec_method(auth,vm_id,command,"")
               if result[0]:
                   print("QGA_EXEC_SUBMITTED=PASS attempt="+str(attempt+1))
                   break
@@ -354,3 +354,5 @@ jobs:
 # qualification-vm12-undeploy-capacity-release: 2026-09-24T15:11+05:30
 
 # calculate-free-cpu-from-host-share: 2026-09-24T15:11+05:30
+
+# opennebula-7.4-vm-exec-stdin-param: 2026-09-24T15:11+05:30
