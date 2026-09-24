@@ -61,8 +61,8 @@ jobs:
           fi
           file="${files[0]}"
           echo "REFLINK_PATCH_FILE=$file"
-          old=$(sudo grep -o -- '--sparse=always' "$file" | wc -l)
-          auto=$(sudo grep -o -- '--sparse=auto' "$file" | wc -l)
+          old=$( (sudo grep -o -- '--sparse=always' "$file" || true) | wc -l)
+          auto=$( (sudo grep -o -- '--sparse=auto' "$file" || true) | wc -l)
           echo "REFLINK_BEFORE sparse_always=$old sparse_auto=$auto"
           if [ "$old" -eq 0 ] && [ "$auto" -ge 2 ]; then
             echo "REFLINK_PATCH_ALREADY_APPLIED=PASS"
@@ -76,8 +76,8 @@ jobs:
             sudo sed -i 's/--sparse=always/--sparse=auto/g' "$file"
             echo "REFLINK_BACKUP=$backup"
           fi
-          old2=$(sudo grep -o -- '--sparse=always' "$file" | wc -l)
-          auto2=$(sudo grep -o -- '--sparse=auto' "$file" | wc -l)
+          old2=$( (sudo grep -o -- '--sparse=always' "$file" || true) | wc -l)
+          auto2=$( (sudo grep -o -- '--sparse=auto' "$file" || true) | wc -l)
           echo "REFLINK_AFTER sparse_always=$old2 sparse_auto=$auto2"
           test "$old2" -eq 0
           test "$auto2" -ge 2
