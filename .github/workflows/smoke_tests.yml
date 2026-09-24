@@ -2430,3 +2430,110 @@ jobs:
           if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-opennebula-authority:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Prepare LocalSystem-only appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmpKey=Join-Path $env:RUNNER_TEMP 'oneswap_qual_ed25519.system'
+          Copy-Item -Force $srcKey $tmpKey
+          & icacls.exe $tmpKey /inheritance:r | Out-Null
+          & icacls.exe $tmpKey /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmpKey /setowner '*S-1-5-18' | Out-Null
+          $pub=(& ssh-keygen.exe -y -f $tmpKey 2>$null | Select-Object -First 1)
+          if($LASTEXITCODE -ne 0 -or -not $pub){throw 'temporary appliance SSH key invalid'}
+          "ONESWAP_TEMP_KEY=$tmpKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Inspect appliance OpenNebula authority and read inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $appliance='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          echo APPLIANCE_HOST=$(hostname)
+          echo APPLIANCE_USER=$(id -un)
+          for cmd in onehost onedatastore onevnet oneimage onetemplate; do
+            command -v "$cmd" >/dev/null 2>&1 && echo "ONECLI_${cmd}=PRESENT" || echo "ONECLI_${cmd}=ABSENT"
+          done
+          for p in /var/lib/one/.one/one_auth /root/.one/one_auth /etc/one/one_auth /etc/layersentry/oneswapd/credentials/*.one_auth; do
+            for f in $p; do
+              [ -f "$f" ] || continue
+              stat -c 'AUTH_FILE=%n mode=%a uid=%u gid=%g size=%s' "$f"
+            done
+          done
+          python3 - <<'PY'
+          import glob,re
+          for p in glob.glob('/etc/layersentry/oneswapd/sources/*.json') + glob.glob('/etc/layersentry/oneswapd/source-configs/*') + glob.glob('/etc/layersentry/oneswap/*.yaml'):
+              try:
+                  data=open(p,'r',encoding='utf-8',errors='replace').read()
+              except Exception:
+                  continue
+              print('CFG_FILE='+p)
+              for pat,label in [
+                  (r'(?im)^\s*one_xmlrpc\s*[:=]\s*["\x27]?([^"\x27\s]+)','ONE_XMLRPC_HINT'),
+                  (r'(?im)^\s*:one_xmlrpc:\s*["\x27]?([^"\x27\s]+)','ONE_XMLRPC_HINT'),
+                  (r'(?im)^\s*one_auth\s*[:=]\s*["\x27]?([^"\x27\s]+)','ONE_AUTH_PATH_HINT'),
+                  (r'(?im)^\s*:datastore:\s*([^\s#]+)','DATASTORE_HINT'),
+                  (r'(?im)^\s*:network:\s*([^\s#]+)','NETWORK_HINT')]:
+                  m=re.search(pat,data)
+                  if m: print(label+'='+m.group(1))
+          PY
+
+          success=0
+          endpoints="${ONE_XMLRPC:-}"
+          [ -n "$endpoints" ] || endpoints="http://10.10.10.20:2633/RPC2 http://10.250.10.11:2633/RPC2"
+          for auth in /var/lib/one/.one/one_auth /root/.one/one_auth /etc/one/one_auth /etc/layersentry/oneswapd/credentials/*.one_auth; do
+            for af in $auth; do
+              [ -f "$af" ] || continue
+              for ep in $endpoints; do
+                echo "TRY_ONE_AUTH=$af ENDPOINT=$ep"
+                if ONE_AUTH="$af" ONE_XMLRPC="$ep" timeout 8 onehost list >/tmp/hosts.out 2>/tmp/hosts.err; then
+                  echo "TARGET_ONE_ENDPOINT=$ep"
+                  echo "TARGET_ONE_AUTH_PATH=$af"
+                  echo '===HOSTS==='
+                  cat /tmp/hosts.out
+                  echo '===DATASTORES==='
+                  ONE_AUTH="$af" ONE_XMLRPC="$ep" timeout 8 onedatastore list
+                  echo '===VNETS==='
+                  ONE_AUTH="$af" ONE_XMLRPC="$ep" timeout 8 onevnet list
+                  echo TARGET_ONECLI_AUTHORITY=PASS
+                  success=1
+                  break 2
+                fi
+              done
+            done
+          done
+          [ "$success" -eq 1 ] || { echo TARGET_ONECLI_AUTHORITY=NOT_FOUND; exit 42; }
+          '@
+          $script=$script -replace "`r",''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@$appliance" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'OneSwap appliance has no proven OpenNebula CLI authority'}
+          Write-Host 'ONESWAP_TARGET_AUTHORITY_DISCOVERY=PASS'
+
+      - name: Confirm source remains Running and checkpoint-free
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
