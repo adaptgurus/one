@@ -1794,7 +1794,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-runtime-profile-discovery-lf:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
@@ -1895,4 +1895,74 @@ jobs:
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
           if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-hyperv-source-host-gate:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host 'MANOJ_BOUND=PASS'
+
+      - name: Qualify exact disposable source read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-migration-source-test'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source is not Running: $($vm.State)"}
+          $snaps=@(Get-VMSnapshot -VMName $name -ErrorAction SilentlyContinue)
+          if($snaps.Count -ne 0){throw "Source has $($snaps.Count) checkpoints"}
+          Write-Host "SOURCE name=$name state=$($vm.State) generation=$($vm.Generation) cpu=$($vm.ProcessorCount) checkpointType=$($vm.CheckpointType)"
+          $disks=@(Get-VMHardDiskDrive -VMName $name -ErrorAction Stop)
+          if($disks.Count -eq 0){throw 'Source has no disks'}
+          foreach($d in $disks){
+            $v=Get-VHD -Path $d.Path -ErrorAction Stop
+            Write-Host "SOURCE_DISK path=$($d.Path) format=$($v.VhdFormat) type=$($v.VhdType) parent=$($v.ParentPath) virtual=$($v.Size) file=$($v.FileSize)"
+            if($v.VhdFormat -ne 'VHDX'){throw 'RCT warm path requires VHDX'}
+            if($v.VhdType -eq 'Differencing' -or $v.ParentPath){throw 'Differencing/parent disk blocked'}
+          }
+          foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction Stop)){
+            Write-Host "SOURCE_NIC switch=$($nic.SwitchName) mac=$($nic.MacAddress) dynamic=$($nic.DynamicMacAddressEnabled) ips=$($nic.IPAddresses -join ',') status=$($nic.Status)"
+          }
+          Get-VMIntegrationService -VMName $name | ForEach-Object {Write-Host "SOURCE_INTEGRATION name=$($_.Name) enabled=$($_.Enabled) primary=$($_.PrimaryStatusDescription) secondary=$($_.SecondaryStatusDescription)"}
+          Write-Host 'SOURCE_RCT_GATE=PASS'
+
+      - name: Audit Hyper-V host SSH and appliance-facing address
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host '=== HOST_IPV4_10_250_10 ==='
+          Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object {$_.IPAddress -like '10.250.10.*'} |
+            ForEach-Object {Write-Host "HOST_IPV4 interface=$($_.InterfaceAlias) ip=$($_.IPAddress) prefix=$($_.PrefixLength) state=$($_.AddressState)"}
+          Write-Host '=== VSWITCHES ==='
+          Get-VMSwitch | ForEach-Object {Write-Host "VSWITCH name=$($_.Name) type=$($_.SwitchType) allowMgmt=$($_.AllowManagementOS)"}
+          $sshd=Get-Service sshd -ErrorAction SilentlyContinue
+          if(-not $sshd){Write-Host 'SSHD_PRESENT=False'; exit 0}
+          Write-Host "SSHD_PRESENT=True status=$($sshd.Status) startType=$($sshd.StartType)"
+          $cfg='C:\ProgramData\ssh\sshd_config'
+          if(Test-Path $cfg){
+            Get-Content -LiteralPath $cfg | Where-Object {
+              $_ -match '^(?i)\s*(PubkeyAuthentication|PasswordAuthentication|KbdInteractiveAuthentication|ChallengeResponseAuthentication|AuthorizedKeysFile|Match|AllowUsers|AllowGroups)\b'
+            } | ForEach-Object {Write-Host ('SSHD_CONFIG=' + $_.Trim())}
+          }
+          $listen=Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue
+          Write-Host ('SSHD_LISTEN_22=' + [bool]$listen)
+          Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -match '(?i)OpenSSH|SSH'} |
+            ForEach-Object {Write-Host "SSHD_FIREWALL name=$($_.DisplayName) enabled=$($_.Enabled) action=$($_.Action) direction=$($_.Direction)"}
+          Write-Host 'HYPERV_HOST_SSH_AUDIT=PASS'
+
+      - name: Confirm source invariant after read-only gate
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
