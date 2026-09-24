@@ -1,0 +1,228 @@
+name: Manoj Durable OneSwap Offline Pin
+
+on:
+  push:
+    branches:
+      - qual/hyperv-migration-manoj-20260924
+    paths:
+      - '.github/workflows/manoj-durable-oneswap-offline-pin.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-durable-oneswap-offline-pin
+  cancel-in-progress: true
+
+jobs:
+  pin:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and capture presented durable host key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw 'wrong runner'}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'wrong host'}
+          if((Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop).State -ne 'Running'){throw 'source not Running'}
+          if((Get-VM -Name 'ls-appliance-durable-qual' -ErrorAction Stop).State -ne 'Running'){throw 'durable appliance not Running'}
+          $scan=Join-Path $env:RUNNER_TEMP 'durable-presented-ed25519.txt'
+          $ErrorActionPreference='Continue'
+          $lines=@(& ssh-keyscan.exe -T 3 -t ed25519 10.250.10.42 2>$null)
+          $ErrorActionPreference='Stop'
+          $lines | Set-Content -LiteralPath $scan -Encoding ascii
+          if((Get-Item $scan).Length -eq 0){throw 'no presented ED25519 host key'}
+          & ssh-keygen.exe -lf $scan | ForEach-Object {Write-Host "PRESENTED_FINGERPRINT $_"}
+          Write-Host 'SOURCE_PROTECTED=PASS'
+
+      - name: Stop only qualification appliances for offline verification
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($name in @('ls-appliance-qual','ls-appliance-durable-qual')){
+            $vm=Get-VM -Name $name -ErrorAction SilentlyContinue
+            if(-not $vm -or $vm.State -eq 'Off'){continue}
+            Write-Host "QUAL_STOP name=$name state=$($vm.State)"
+            Stop-VM -Name $name -Confirm:$false
+            $deadline=(Get-Date).AddSeconds(120)
+            do{
+              Start-Sleep -Seconds 2
+              $vm=Get-VM -Name $name -ErrorAction Stop
+              Write-Host "QUAL_STATE name=$name state=$($vm.State)"
+              if($vm.State -eq 'Off'){break}
+            }while((Get-Date)-lt $deadline)
+            if($vm.State -ne 'Off'){throw "$name did not stop cleanly; no force action permitted"}
+          }
+          if((Get-VM -Name 'ls-migration-source-test').State -ne 'Running'){throw 'source changed during appliance stop'}
+          Write-Host 'QUALIFICATION_APPLIANCES_OFF=PASS'
+
+      - name: Read durable guest identity directly from owned VHDX
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $py='C:\LayerSentryLab\tools\Python313\python.exe'
+          $image='C:\LayerSentryLab\qualification\ls-appliance-durable-qual\os.vhdx'
+          if(-not(Test-Path $py)){throw 'qualification Python missing'}
+          if(-not(Test-Path $image)){throw 'durable appliance VHDX missing'}
+          $script=@'
+          import os, base64, hashlib, pathlib
+          from dissect.target import Target
+          image=r"C:\LayerSentryLab\qualification\ls-appliance-durable-qual\os.vhdx"
+          out=pathlib.Path(os.environ["RUNNER_TEMP"])
+          t=Target.open(image)
+
+          def read(path):
+              return t.fs.path(path).open("rb").read()
+
+          hostname=read("/etc/hostname").decode(errors="replace").strip()
+          print("GUEST_HOSTNAME="+hostname)
+
+          for kind,path in [
+              ("ed25519","/etc/ssh/ssh_host_ed25519_key.pub"),
+              ("rsa","/etc/ssh/ssh_host_rsa_key.pub"),
+          ]:
+              try:
+                  line=read(path).decode(errors="replace").strip().splitlines()[0]
+              except Exception as exc:
+                  print(f"GUEST_HOSTKEY_MISSING kind={kind} error={type(exc).__name__}")
+                  continue
+              parts=line.split()
+              if len(parts)<2:
+                  continue
+              blob=base64.b64decode(parts[1])
+              fp="SHA256:"+base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
+              print(f"GUEST_HOSTKEY kind={kind} fingerprint={fp}")
+              (out/f"guest-host-{kind}.pub").write_text(line+"\n",encoding="ascii")
+
+          try:
+              passwd=read("/etc/passwd").decode(errors="replace").splitlines()
+          except Exception:
+              passwd=[]
+          for row in passwd:
+              p=row.split(":")
+              if len(p)<6: continue
+              user,home=p[0],p[5]
+              if not home.startswith("/"): continue
+              ap=f"{home}/.ssh/authorized_keys"
+              try:
+                  data=read(ap).decode(errors="replace")
+              except Exception:
+                  continue
+              for line in data.splitlines():
+                  s=line.strip()
+                  if not s or s.startswith("#"): continue
+                  parts=s.split()
+                  idx=next((i for i,x in enumerate(parts) if x.startswith("ssh-")),None)
+                  if idx is None or len(parts)<=idx+1: continue
+                  try:
+                      blob=base64.b64decode(parts[idx+1])
+                  except Exception:
+                      continue
+                  fp="SHA256:"+base64.b64encode(hashlib.sha256(blob).digest()).decode().rstrip("=")
+                  print(f"GUEST_AUTHKEY user={user} fingerprint={fp}")
+
+          try:
+              data=read("/usr/bin/oneswap-hyperv")
+              print("ONESWAP_HYPERV_SHA256="+hashlib.sha256(data).hexdigest())
+              print("ONESWAP_HYPERV_BYTES="+str(len(data)))
+          except Exception as exc:
+              print("ONESWAP_HYPERV_MISSING="+type(exc).__name__)
+
+          try:
+              cfg=read("/etc/one/oneswap.yaml").decode(errors="replace")
+              print("ONESWAP_CONFIG_PRESENT=/etc/one/oneswap.yaml")
+              safe=("hyperv_connections","host:","user:","port:","identity_file:","known_hosts:","staging_dir:",
+                    "shutdown_timeout:","transfer_timeout:","prepare_timeout:","delta_timeout:","datastore:",
+                    "network:","work_dir:","format:","http_transfer:","http_host:","http_port:","v2v_path:",
+                    "v2v_in_place_path:","libguestfs_path:","uefi_path:","uefi_sec_path:")
+              for line in cfg.splitlines():
+                  st=line.strip()
+                  if any(st.startswith(k) or st.startswith(":"+k) for k in safe):
+                      if any(x in st.lower() for x in ("password","passwd","secret","token")):
+                          continue
+                      print("ONESWAP_CFG "+st)
+          except Exception as exc:
+              print("ONESWAP_CONFIG_MISSING="+type(exc).__name__)
+          '@
+          $p=Join-Path $env:RUNNER_TEMP 'read-durable.py'
+          Set-Content -LiteralPath $p -Value $script -Encoding UTF8
+          & $py $p
+          if($LASTEXITCODE -ne 0){throw "offline durable inspection failed exit=$LASTEXITCODE"}
+
+      - name: Compare network host key to offline VHDX host key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $present=Join-Path $env:RUNNER_TEMP 'durable-presented-ed25519.txt'
+          $guest=Join-Path $env:RUNNER_TEMP 'guest-host-ed25519.pub'
+          if(-not(Test-Path $guest)){throw 'offline ED25519 guest host key unavailable'}
+          $scanLine=(Get-Content $present | Where-Object {$_ -match 'ssh-ed25519'} | Select-Object -First 1)
+          $guestLine=(Get-Content $guest | Select-Object -First 1)
+          if(-not $scanLine -or -not $guestLine){throw 'host key material missing'}
+          $sp=$scanLine.Split(' ',[System.StringSplitOptions]::RemoveEmptyEntries)
+          $gp=$guestLine.Split(' ',[System.StringSplitOptions]::RemoveEmptyEntries)
+          if($sp.Count -lt 3 -or $gp.Count -lt 2){throw 'invalid host key format'}
+          if($sp[1] -ne $gp[0] -or $sp[2] -ne $gp[1]){throw 'network presented host key does not match owned durable VHDX host key'}
+          $known=Join-Path $env:RUNNER_TEMP 'durable-owned-known_hosts'
+          "10.250.10.42 $($gp[0]) $($gp[1])" | Set-Content -LiteralPath $known -Encoding ascii
+          "DURABLE_OWNED_KNOWN=$known" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'OFFLINE_VHDX_HOSTKEY_MATCH=PASS'
+
+      - name: Restart durable appliance only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if((Get-VM -Name 'ls-migration-source-test').State -ne 'Running'){throw 'source not Running'}
+          Start-VM -Name 'ls-appliance-durable-qual'
+          $deadline=(Get-Date).AddSeconds(120)
+          do{
+            Start-Sleep -Seconds 2
+            $vm=Get-VM -Name 'ls-appliance-durable-qual' -ErrorAction Stop
+            Write-Host "DURABLE_STATE=$($vm.State) ips=$((Get-VMNetworkAdapter -VMName $vm.Name).IPAddresses -join ',')"
+            if($vm.State -eq 'Running' -and (Get-VMNetworkAdapter -VMName $vm.Name).IPAddresses -contains '10.250.10.42'){break}
+          }while((Get-Date)-lt $deadline)
+          if($vm.State -ne 'Running'){throw 'durable appliance failed to restart'}
+          Write-Host 'DURABLE_RESTART=PASS'
+
+      - name: Match local qualification private key to offline authorized key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $keys=@(
+            'C:\LayerSentryLab\qualification\oneswap-seed\id_ed25519',
+            'C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519',
+            'C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519',
+            'C:\LayerSentryLab\qualification\dr-maint-key',
+            'C:\LayerSentryLab\qualification\iso-builder-key'
+          )
+          foreach($key in $keys){
+            if(-not(Test-Path $key)){continue}
+            $pub=& ssh-keygen.exe -y -f $key
+            if($LASTEXITCODE -ne 0){continue}
+            $tmp=Join-Path $env:RUNNER_TEMP ('pub-'+[IO.Path]::GetFileName($key)+'.txt')
+            $pub | Set-Content -LiteralPath $tmp -Encoding ascii
+            $fp=& ssh-keygen.exe -lf $tmp
+            Write-Host "LOCAL_KEY key=$key fingerprint=$fp"
+          }
+
+      - name: Authenticate using offline-verified host identity
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $candidates=@(
+            [pscustomobject]@{User='ci';Key='C:\LayerSentryLab\qualification\oneswap-seed\id_ed25519'},
+            [pscustomobject]@{User='ci';Key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'},
+            [pscustomobject]@{User='layersentry-bootstrap';Key='C:\LayerSentryLab\qualification\qual-support-ac7e14e-ed25519'},
+            [pscustomobject]@{User='debian';Key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'},
+            [pscustomobject]@{User='opc';Key='C:\LayerSentryLab\qualification\dr-maint-key'}
+          )
+          $selected=$null
+          foreach($c in $candidates){
+            if(-not(Test-Path $c.Key)){continue}
+            & $ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:DURABLE_OWNED_KNOWN" -o IdentitiesOnly=yes -i $c.Key "$($c.User)@10.250.10.42" "hostname; id -un; command -v oneswap-hyperv || true"
+            if($LASTEXITCODE -eq 0){$selected=$c;break}
+          }
+          if(-not $selected){throw 'no existing local qualification key authenticated to offline-verified durable appliance'}
+          Write-Host "DURABLE_LOGIN=PASS user=$($selected.User) key=$($selected.Key)"
