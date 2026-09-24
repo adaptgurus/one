@@ -96,7 +96,7 @@ jobs:
             exit 31
           fi
           '@
-          $cmd=$cmd.Replace([char]13,'')
+          $cmd=[regex]::Replace($cmd,'\r','')
           wsl.exe -d Ubuntu-22.04 -u opc -- bash --noprofile --norc -lc $cmd
           if($LASTEXITCODE -ne 0){throw 'Manoj WSL target authority discovery failed'}
           Write-Host 'TARGET_AUTHORITY_DISCOVERY=PASS'
@@ -114,6 +114,7 @@ jobs:
           }
 
       - name: Confirm source remains protected
+        if: always()
         shell: powershell
         run: |
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
