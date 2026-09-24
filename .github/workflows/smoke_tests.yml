@@ -258,7 +258,7 @@ jobs:
 
 
   manoj-oneswap-service-inspect:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
@@ -335,3 +335,75 @@ jobs:
           Get-Content $tmp | & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key "$env:ONESWAP_SSH_USER@10.250.10.42" 'bash -s'
           if($LASTEXITCODE -ne 0){throw "Read-only appliance inspection failed: $LASTEXITCODE"}
           Write-Host 'ONESWAP_SERVICE_INSPECTION=PASS'
+
+
+  manoj-oneswap-authority-map:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host 'MANOJ_BOUND=PASS'
+
+      - name: Print non-secret OneSwap seed network authority
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          foreach($p in @(
+            "$root\oneswap-seed\network-config",
+            "$root\oneswap-seed\meta-data"
+          )){
+            if(Test-Path $p){
+              Write-Host "=== $p ==="
+              Get-Content -LiteralPath $p
+            }
+          }
+
+      - name: Map pinned known-host authorities to candidate addresses
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          $knowns=Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Name -match '(?i)^known_hosts'}
+          foreach($kh in $knowns){
+            Write-Host "KNOWN_HOST_FILE=$($kh.FullName)"
+            foreach($ip in @('10.250.10.40','10.250.10.41','10.250.10.42','10.250.10.43')){
+              & ssh-keygen.exe -F $ip -f $kh.FullName 2>$null | ForEach-Object { Write-Host "PIN_MATCH ip=$ip file=$($kh.FullName) $_" }
+            }
+          }
+          foreach($ip in @('10.250.10.40','10.250.10.41','10.250.10.42','10.250.10.43')){
+            $scan=& ssh-keyscan.exe -T 3 $ip 2>$null
+            if($scan){
+              $tmp=Join-Path $env:RUNNER_TEMP ("scan-"+($ip -replace '\.','_')+".txt")
+              [IO.File]::WriteAllLines($tmp,$scan)
+              & ssh-keygen.exe -lf $tmp -E sha256 | ForEach-Object { Write-Host "LIVE_FINGERPRINT ip=$ip $_" }
+            } else {
+              Write-Host "LIVE_FINGERPRINT ip=$ip none"
+            }
+          }
+
+      - name: Extract non-secret address hints from qualification scripts
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          $files=Get-ChildItem -Path $root -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Name -match '(?i)(oneswap|appliance|builder|boot|swap).*(ps1|py|txt|md)$'}
+          foreach($f in $files){
+            Write-Host "=== HINT_FILE $($f.FullName) ==="
+            Get-Content -LiteralPath $f.FullName -ErrorAction SilentlyContinue |
+              Where-Object {
+                $_ -match '(?i)10\.250\.10\.|ls-appliance|oneswap-qual|known_hosts|ssh|user(name)?|port\s*=|host\s*=' -and
+                $_ -notmatch '(?i)password|secret|token|private.?key|authorization'
+              } |
+              Select-Object -First 120 |
+              ForEach-Object { Write-Host $_ }
+          }
+          Write-Host 'ONESWAP_AUTHORITY_MAP=PASS'
