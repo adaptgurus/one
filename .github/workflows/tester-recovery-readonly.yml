@@ -161,3 +161,5 @@ jobs:
             Select-Object InterfaceAlias,IPAddress,PrefixLength |
             Sort-Object InterfaceAlias,IPAddress | Format-Table -AutoSize
           $global:LASTEXITCODE = 0
+
+# revalidation-trigger: 2026-09-24T14:35+05:30
