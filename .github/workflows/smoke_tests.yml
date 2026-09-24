@@ -624,7 +624,7 @@ jobs:
 
 
   manoj-oneswap-v4-intent:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 5
     steps:
@@ -656,3 +656,32 @@ jobs:
               }
           }
           Write-Host 'ONESWAP_V4_INTENT=PASS'
+
+
+  manoj-oneswap-seed-build-inspect:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+      - name: Inspect existing seed builder safely
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $seed='C:\LayerSentryLab\qualification\oneswap-seed'
+          foreach($name in @('build-seed-v4.ps1','update-seed-network.ps1','make_seed.py')){
+            $p=Join-Path $seed $name
+            if(-not(Test-Path $p)){continue}
+            Write-Host "=== $name ==="
+            Get-Content -LiteralPath $p |
+              ForEach-Object {
+                if($_ -match '(?i)password|secret|token|private.?key'){ Write-Host '<sensitive-line-redacted>' }
+                else { Write-Host $_ }
+              }
+          }
+          Write-Host 'ONESWAP_SEED_BUILDER_INSPECT=PASS'
