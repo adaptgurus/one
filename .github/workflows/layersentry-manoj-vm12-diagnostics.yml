@@ -28,30 +28,39 @@ jobs:
           t=Target.open(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
           auth=t.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
           one=ServerProxy("http://10.250.10.10:2633/RPC2", allow_none=True)
-          res=one.one.vm.info(auth,12,False)
-          if not res[0]: raise SystemExit("vm info failed: "+str(res[1]))
-          root=ET.fromstring(res[1])
-          print("VM12_STATE="+str(root.findtext("STATE")))
-          print("VM12_LCM_STATE="+str(root.findtext("LCM_STATE")))
-          print("VM12_DEPLOY_ID="+str(root.findtext("DEPLOY_ID") or ""))
-          histories=root.findall("./HISTORY_RECORDS/HISTORY")
-          print("VM12_HOST="+str(histories[-1].findtext("HOSTNAME") if histories else ""))
-          print("VM12_PIN_POLICY="+str(root.findtext("./TEMPLATE/TOPOLOGY/PIN_POLICY") or ""))
-          print("VM12_NUMA_CPUS="+repr([x.text for x in root.findall("./TEMPLATE/NUMA_NODE/CPUS") if x.text]))
-          nics=[]
-          for n in root.findall("./TEMPLATE/NIC"):
-              nics.append({
-                "nic_id": n.findtext("NIC_ID"),
-                "network": n.findtext("NETWORK"),
-                "network_id": n.findtext("NETWORK_ID"),
-                "ip": n.findtext("IP"),
-                "mac": n.findtext("MAC"),
-              })
-          print("VM12_NICS="+repr(nics))
-          print("VM12_GUEST_AGENT="+str(root.findtext("./TEMPLATE/FEATURES/GUEST_AGENT") or ""))
-          print("VM12_CONTEXT_NETWORK="+str(root.findtext("./TEMPLATE/CONTEXT/NETWORK") or ""))
+          for vm_id in (1,4,12):
+              res=one.one.vm.info(auth,vm_id,False)
+              if not res[0]:
+                  print(f"VM{vm_id}_INFO_ERROR="+str(res[1])[:300])
+                  continue
+              root=ET.fromstring(res[1])
+              prefix=f"VM{vm_id}"
+              print(prefix+"_NAME="+str(root.findtext("NAME") or ""))
+              print(prefix+"_STATE="+str(root.findtext("STATE")))
+              print(prefix+"_LCM_STATE="+str(root.findtext("LCM_STATE")))
+              print(prefix+"_DEPLOY_ID="+str(root.findtext("DEPLOY_ID") or ""))
+              print(prefix+"_STIME="+str(root.findtext("STIME") or ""))
+              print(prefix+"_ETIME="+str(root.findtext("ETIME") or ""))
+              histories=root.findall("./HISTORY_RECORDS/HISTORY")
+              print(prefix+"_HOST="+str(histories[-1].findtext("HOSTNAME") if histories else ""))
+              print(prefix+"_PIN_POLICY="+str(root.findtext("./TEMPLATE/TOPOLOGY/PIN_POLICY") or ""))
+              print(prefix+"_NUMA_CPUS="+repr([x.text for x in root.findall("./TEMPLATE/NUMA_NODE/CPUS") if x.text]))
+              print(prefix+"_CPU="+str(root.findtext("./TEMPLATE/CPU") or ""))
+              print(prefix+"_VCPU="+str(root.findtext("./TEMPLATE/VCPU") or ""))
+              print(prefix+"_GUEST_AGENT="+str(root.findtext("./TEMPLATE/FEATURES/GUEST_AGENT") or ""))
+              print(prefix+"_ERROR="+str(root.findtext("./USER_TEMPLATE/ERROR") or ""))
+          hp=one.one.hostpool.info(auth,-2,-1,-1)
+          if hp[0]:
+              pool=ET.fromstring(hp[1])
+              for h in pool.findall("HOST"):
+                  if (h.findtext("NAME") or "").strip()=="ls-kvm2":
+                      print("KVM2_FREE_CPU="+str(h.findtext("./HOST_SHARE/FREE_CPU") or ""))
+                      print("KVM2_USED_CPU="+str(h.findtext("./HOST_SHARE/CPU_USAGE") or ""))
+                      print("KVM2_RUNNING_VMS="+str(h.findtext("./HOST_SHARE/RUNNING_VMS") or ""))
           '@
           $p=Join-Path $env:RUNNER_TEMP 'vm12diag.py'
           Set-Content -Path $p -Value $script -Encoding UTF8
           & 'C:\LayerSentryLab\tools\Python313\python.exe' $p
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+# vm1-vm4-capacity-audit: 2026-09-24T15:11+05:30
