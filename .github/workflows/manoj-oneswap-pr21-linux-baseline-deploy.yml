@@ -1,0 +1,111 @@
+name: Manoj OneSwap PR21 Linux Baseline Deploy
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-pr21-linux-baseline-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-pr21-linux-baseline-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind Manoj and require clean source baseline
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source must stay Running: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has user-visible checkpoints'}
+          $ns='root\virtualization\v2'
+          $refs=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'")
+          $cs=Get-CimInstance -Namespace $ns -ClassName Msvm_ComputerSystem -Filter "Name='$($vm.VMId.Guid)'"
+          $recovery=@($cs | Get-CimAssociatedInstance -Association Msvm_SnapshotOfVirtualSystem -ResultClassName Msvm_VirtualSystemSettingData | Where-Object {$_.VirtualSystemType -eq 'Microsoft:Hyper-V:Snapshot:Recovery'})
+          Write-Host "PR21_BASELINE_REFERENCE_COUNT=$($refs.Count)"
+          Write-Host "PR21_BASELINE_RECOVERY_COUNT=$($recovery.Count)"
+          if($refs.Count -ne 0){throw 'Existing Hyper-V reference point blocks PR21 redeploy'}
+          if($recovery.Count -ne 0){throw 'Existing Hyper-V recovery checkpoint blocks PR21 redeploy'}
+          Write-Host 'PR21_CLEAN_BASELINE=PASS'
+
+      - name: Prepare restricted appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-pr21.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Download exact CI-green PR21 helper
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $sha='b0c5df1d849e7c32f427714fee9a111339c000b3'
+          $url="https://raw.githubusercontent.com/adaptgurus/one-swap/$sha/hyperv_hot_helper.rb"
+          $file=Join-Path $env:RUNNER_TEMP 'hyperv_hot_helper.pr21.rb'
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 30 -o $file $url
+          if($LASTEXITCODE -ne 0){throw "PR21 helper download failed rc=$LASTEXITCODE"}
+          $hash=(Get-FileHash -Algorithm SHA256 $file).Hash.ToLower()
+          "PR21_HELPER=$file" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PR21_SHA256=$hash" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "PR21_LOCAL_SHA256=$hash"
+
+      - name: Install exact PR21 helper
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $remote='/tmp/hyperv_hot_helper.pr21.rb'
+          & scp.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY $env:PR21_HELPER "ci@10.250.10.32:$remote"
+          if($LASTEXITCODE -ne 0){throw "scp PR21 helper failed rc=$LASTEXITCODE"}
+          $cmd=@'
+          set -euo pipefail
+          src=/tmp/hyperv_hot_helper.pr21.rb
+          dst=/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb
+          expected="__EXPECTED__"
+          actual=$(sha256sum "$src" | awk '{print $1}')
+          [ "$actual" = "$expected" ]
+          sudo ruby -c "$src"
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          sudo cp -a "$dst" "$dst.before-pr21-$stamp"
+          sudo install -o root -g root -m 0644 "$src" "$dst"
+          installed=$(sudo sha256sum "$dst" | awk '{print $1}')
+          [ "$installed" = "$expected" ]
+          sudo ruby -c "$dst"
+          sudo grep -q "allowed_levels = guest_os == 'linux' ? \[1, 2\] : \[1\]" "$dst"
+          sudo grep -q "BaselineConsistency" "$dst"
+          rm -f "$src"
+          echo "ONESWAP_PR21_DEPLOY=PASS sha256=$installed"
+          '@
+          $cmd=$cmd.Replace('__EXPECTED__',$env:PR21_SHA256)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($cmd,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw "PR21 install failed rc=$LASTEXITCODE"}
+
+      - name: Verify source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$n"
+          if($vm.State -ne 'Running'){throw 'PR21 deploy changed source state'}
+          if($n -ne 0){throw 'PR21 deploy created checkpoint'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
