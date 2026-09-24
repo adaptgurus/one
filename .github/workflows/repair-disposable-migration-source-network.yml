@@ -69,7 +69,7 @@ jobs:
           $seed=Join-Path $root 'cidata-source.vhdx'
           if(-not(Test-Path $seed)){throw 'rebuilt seed VHDX missing'}
           if($vm.State -ne 'Off'){
-            Stop-VM -Name $name -Shutdown -ErrorAction Stop
+            Stop-VM -Name $name -ErrorAction Stop
             $deadline=(Get-Date).AddSeconds(90)
             do{Start-Sleep -Seconds 2;$vm=Get-VM -Name $name}while($vm.State -ne 'Off' -and (Get-Date)-lt $deadline)
             if($vm.State -ne 'Off'){throw 'disposable source did not shut down gracefully'}
