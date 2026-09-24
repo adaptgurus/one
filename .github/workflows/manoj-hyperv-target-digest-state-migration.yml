@@ -112,12 +112,32 @@ jobs:
                 JSON.generate(v)
               end
             end
+            raw=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            cfg={}
+            raw.each{|k,v| cfg[k.to_s.sub(/^:/,"").to_sym]=v}
             legacy={
-              "datastore"=>"1","network"=>"0","cluster"=>nil,"host"=>nil,"sys_ds"=>nil,"ds_cluster"=>nil,
-              "cpu"=>0.5,"vcpu"=>2,"memory_mb"=>2560,
-              "uefi"=>nil,"uefi_secure"=>"/usr/share/OVMF/OVMF_CODE_4M.secboot.fd"
+              "datastore"=>"1",
+              "network"=>"0",
+              "cluster"=>cfg[:one_cluster],
+              "host"=>cfg[:one_host],
+              "sys_ds"=>cfg[:one_datastore],
+              "ds_cluster"=>cfg[:one_datastore_cluster],
+              "cpu"=>0.5,
+              "vcpu"=>2,
+              "memory_mb"=>2560,
+              "uefi"=>cfg[:uefi_path],
+              "uefi_secure"=>"/usr/share/OVMF/OVMF_CODE_4M.secboot.fd"
             }
-            current=legacy.merge("qemu_ga_linux"=>true,"qemu_ga_win"=>"")
+            current=legacy.merge(
+              "qemu_ga_linux"=>true,
+              "qemu_ga_win"=>cfg[:qemu_ga_win].to_s
+            )
+            puts "DIGEST_INPUT_CLUSTER=#{legacy["cluster"]}"
+            puts "DIGEST_INPUT_HOST=#{legacy["host"]}"
+            puts "DIGEST_INPUT_SYS_DS=#{legacy["sys_ds"]}"
+            puts "DIGEST_INPUT_DS_CLUSTER=#{legacy["ds_cluster"]}"
+            puts "DIGEST_INPUT_UEFI=#{legacy["uefi"]}"
+            puts "DIGEST_INPUT_QEMU_GA_WIN=#{current["qemu_ga_win"].to_s.empty? ? "EMPTY" : "SET"}"
             legacy_digest=Digest::SHA256.hexdigest(canon.call(legacy))
             current_digest=Digest::SHA256.hexdigest(canon.call(current))
             puts "LEGACY_DIGEST=#{legacy_digest}"
