@@ -150,6 +150,93 @@ const createSite = action(({ site }, userData) =>
     userData,
   })
 )
+
+const sitePairs = action((_, userData) =>
+  proxy({ path: '/v1/dr/site-pairs', userData })
+)
+const createSitePair = action(({ pair }, userData) =>
+  proxy({
+    method: 'POST',
+    path: '/v1/dr/site-pairs',
+    data: pair,
+    userData,
+  })
+)
+const environmentNetworks = action(({ siteId }, userData) =>
+  proxy({
+    path: `/v1/dr/environment-networks/${encodeURIComponent(siteId)}`,
+    userData,
+  })
+)
+const allocateEnvironmentNetworks = action(({ siteId, allocation }, userData) =>
+  proxy({
+    method: 'POST',
+    path: `/v1/dr/environment-networks/${encodeURIComponent(siteId)}/allocate`,
+    data: allocation,
+    userData,
+  })
+)
+const provisionEnvironmentNetworks = action(({ siteId }, userData) =>
+  proxy({
+    method: 'POST',
+    path: `/v1/dr/environment-networks/${encodeURIComponent(siteId)}/provision`,
+    userData,
+  })
+)
+const siteVms = action(({ siteId }, userData) =>
+  proxy({
+    path: `/v1/dr/sites/${encodeURIComponent(siteId)}/vms`,
+    userData,
+  })
+)
+const vmCheckpoints = action(({ siteId, workloadId }, userData) =>
+  proxy({
+    path: `/v1/dr/sites/${encodeURIComponent(siteId)}/vms/${encodeURIComponent(
+      workloadId
+    )}/checkpoints`,
+    userData,
+  })
+)
+const recoveryMapping = action(({ groupId, siteId }, userData) =>
+  proxy({
+    path: `/v1/dr/protection-groups/${encodeURIComponent(
+      groupId
+    )}/recovery-mappings/${encodeURIComponent(siteId)}`,
+    userData,
+  })
+)
+const putRecoveryMapping = action(({ groupId, siteId, mapping }, userData) =>
+  proxy({
+    method: 'PUT',
+    path: `/v1/dr/protection-groups/${encodeURIComponent(
+      groupId
+    )}/recovery-mappings/${encodeURIComponent(siteId)}`,
+    data: mapping,
+    userData,
+  })
+)
+const enableNdr = action(({ groupId, config }, userData) =>
+  proxy({
+    method: 'POST',
+    path: `/v1/dr/protection-groups/${encodeURIComponent(groupId)}/enable-ndr`,
+    data: config,
+    userData,
+  })
+)
+const managementBackups = action(({ pairId }, userData) =>
+  proxy({
+    path: `/v1/dr/site-pairs/${encodeURIComponent(pairId)}/management-backups`,
+    userData,
+  })
+)
+const managementBackupNow = action(({ pairId }, userData) =>
+  proxy({
+    method: 'POST',
+    path: `/v1/dr/site-pairs/${encodeURIComponent(pairId)}/management-backup`,
+    userData,
+  })
+)
+
 const domains = action((_, userData) =>
   proxy({ path: '/v1/dr/protection-groups', userData })
 )
@@ -179,6 +266,18 @@ module.exports = {
   capabilities,
   sites,
   createSite,
+  sitePairs,
+  createSitePair,
+  environmentNetworks,
+  allocateEnvironmentNetworks,
+  provisionEnvironmentNetworks,
+  siteVms,
+  vmCheckpoints,
+  recoveryMapping,
+  putRecoveryMapping,
+  enableNdr,
+  managementBackups,
+  managementBackupNow,
   domains,
   createDomain,
   recoveryPoints,
