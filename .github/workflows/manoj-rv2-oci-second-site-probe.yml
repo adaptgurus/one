@@ -1,0 +1,68 @@
+name: Manoj Replication v2 OCI Second Site Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-rv2-oci-second-site-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-rv2-oci-second-site-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Probe directly connected OCI subnet
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host 'MANOJ_RUNNER_BIND=PASS'
+
+          function Test-Port([string]$ip,[int]$port,[int]$timeout=300){
+            $client=New-Object Net.Sockets.TcpClient
+            try {
+              $iar=$client.BeginConnect($ip,$port,$null,$null)
+              if(-not $iar.AsyncWaitHandle.WaitOne($timeout,$false)){return $false}
+              $client.EndConnect($iar)
+              return $true
+            } catch {
+              return $false
+            } finally {
+              $client.Close()
+            }
+          }
+
+          $found=@()
+          foreach($i in 1..62){
+            $ip="172.28.0.$i"
+            $one=Test-Port $ip 2633
+            $api=Test-Port $ip 19444
+            $rx=Test-Port $ip 19445
+            $ssh=Test-Port $ip 22
+            if($one -or $api -or $rx){
+              $found += [pscustomobject]@{IP=$ip;ONE2633=$one;API19444=$api;RX19445=$rx;SSH22=$ssh}
+            }
+          }
+          Write-Host '=== OCI SECOND-SITE CANDIDATES ==='
+          $found | Format-Table -AutoSize
+          Write-Host "OCI_SECOND_SITE_CANDIDATE_COUNT=$($found.Count)"
+          if($found.Count -eq 0){
+            Write-Host 'OCI_SECOND_SITE_DISCOVERY=NONE'
+          } else {
+            Write-Host 'OCI_SECOND_SITE_DISCOVERY=FOUND'
+          }
+
+          Write-Host '=== KNOWN LOCAL OPENNEBULA ENDPOINTS ==='
+          foreach($ip in @('10.250.10.10','10.250.10.11','10.250.10.13')){
+            Write-Host "LOCAL ip=$ip one2633=$(Test-Port $ip 2633) api19444=$(Test-Port $ip 19444) ssh22=$(Test-Port $ip 22)"
+          }
+          Write-Host 'RV2_SECOND_SITE_PROBE=PASS'
