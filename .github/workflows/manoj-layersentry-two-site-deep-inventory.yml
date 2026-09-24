@@ -1,0 +1,84 @@
+name: Manoj LayerSentry Two-Site Deep Inventory
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-layersentry-two-site-deep-inventory.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Deep read-only site inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+          Write-Host '=== RUNNING HYPER-V VMS ==='
+          $rows=@()
+          Get-VM | Sort-Object Name | ForEach-Object {
+            $vm=$_
+            $nics=@(Get-VMNetworkAdapter -VMName $vm.Name -ErrorAction SilentlyContinue)
+            $ips=@($nics | ForEach-Object {$_.IPAddresses} | Where-Object {$_} | Sort-Object -Unique)
+            $switches=@($nics | ForEach-Object {$_.SwitchName} | Where-Object {$_} | Sort-Object -Unique)
+            [pscustomobject]@{
+              Name=$vm.Name;State=$vm.State;CPU=$vm.ProcessorCount
+              MemoryGB=[math]::Round($vm.MemoryAssigned/1GB,1)
+              Switches=($switches -join ',');IPs=($ips -join ',')
+            }
+            if($vm.State -eq 'Running'){
+              foreach($ip in $ips){
+                if($ip -match '^10\.' -or $ip -match '^192\.168\.' -or $ip -match '^172\.(1[6-9]|2[0-9]|3[01])\.'){
+                  $rows += [pscustomobject]@{VM=$vm.Name;IP=$ip;Switch=($switches -join ',')}
+                }
+              }
+            }
+          } | Format-Table -AutoSize
+
+          Write-Host '=== PRIVATE IP SERVICE PROBES ==='
+          foreach($row in ($rows | Sort-Object VM,IP -Unique)){
+            $ssh=Test-NetConnection -ComputerName $row.IP -Port 22 -InformationLevel Quiet -WarningAction SilentlyContinue
+            $one=Test-NetConnection -ComputerName $row.IP -Port 2633 -InformationLevel Quiet -WarningAction SilentlyContinue
+            $platform=Test-NetConnection -ComputerName $row.IP -Port 19444 -InformationLevel Quiet -WarningAction SilentlyContinue
+            Write-Host "PROBE vm=$($row.VM) ip=$($row.IP) ssh22=$ssh one2633=$one platform19444=$platform switch=$($row.Switch)"
+            if($ssh){
+              foreach($user in @('opc','oneadmin')){
+                $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+                $out=& ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "$user@$($row.IP)" "printf 'HOST='; hostname; printf ' OPENNEBULA='; systemctl is-active opennebula 2>/dev/null || true; printf ' ONEHOST='; command -v onehost 2>/dev/null || true" 2>$null
+                $rc=$LASTEXITCODE
+                $ErrorActionPreference=$old
+                if($rc -eq 0){Write-Host "SSH_OK user=$user vm=$($row.VM) ip=$($row.IP) output=$($out -join ' ')"}
+              }
+            }
+          }
+
+          Write-Host '=== SAVED TWO-SITE INVENTORY ==='
+          $inv='C:\LayerSentryLab\qualification\replication-v2-sites.json'
+          if(Test-Path $inv){
+            $raw=Get-Content -LiteralPath $inv -Raw | ConvertFrom-Json
+            foreach($s in @($raw.sites)){
+              Write-Host "SITE_INVENTORY role=$($s.role) vm=$($s.vm) ip=$($s.ip) ssh_user=$($s.ssh_user)"
+            }
+          } else {
+            Write-Host 'replication-v2-sites.json=ABSENT'
+          }
+
+          Write-Host '=== SSH CONFIG TARGETS ==='
+          $sshConfig=Join-Path $env:USERPROFILE '.ssh\config'
+          if(Test-Path $sshConfig){
+            Get-Content -LiteralPath $sshConfig | Where-Object {
+              $_ -match '^\s*(Host|HostName|User)\s+'
+            } | ForEach-Object {Write-Host $_}
+          } else {
+            Write-Host 'ssh_config=ABSENT'
+          }
+
+          Write-Host 'TWO_SITE_DEEP_INVENTORY=PASS'
