@@ -76,27 +76,7 @@ jobs:
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
           $script=@'
           set -euo pipefail
-          profile_json=$(sudo python3 - <<'PY'
-import glob,json,os
-for p in glob.glob('/etc/layersentry/oneswapd/sources/*.json'):
-    try:
-        d=json.load(open(p))
-    except Exception:
-        continue
-    if d.get('platform')=='hyperv' and (d.get('hyperv_connection')=='manoj-qual' or d.get('source_connection_id')=='manoj-qual'):
-        print(json.dumps({
-            'file':p,
-            'tenant_id':d.get('tenant_id'),
-            'source_connection_id':d.get('source_connection_id'),
-            'hyperv_connection':d.get('hyperv_connection'),
-            'one_xmlrpc':d.get('one_xmlrpc'),
-            'one_auth':d.get('one_auth'),
-            'oneswap_config':d.get('oneswap_config'),
-        }))
-        raise SystemExit(0)
-raise SystemExit(4)
-PY
-          )
+          profile_json=$(sudo python3 -c 'import glob,json,sys; matches=[]; [(matches.append((p,json.load(open(p))))) for p in glob.glob("/etc/layersentry/oneswapd/sources/*.json")]; p,d=next((p,d) for p,d in matches if d.get("platform")=="hyperv" and (d.get("hyperv_connection")=="manoj-qual" or d.get("source_connection_id")=="manoj-qual")); print(json.dumps({"file":p,"tenant_id":d.get("tenant_id"),"source_connection_id":d.get("source_connection_id"),"hyperv_connection":d.get("hyperv_connection"),"one_xmlrpc":d.get("one_xmlrpc"),"one_auth":d.get("one_auth"),"oneswap_config":d.get("oneswap_config")}))')
           echo "SOURCE_PROFILE_SAFE=$profile_json"
           export ONE_AUTH=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["one_auth"])' "$profile_json")
           export ONE_XMLRPC=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["one_xmlrpc"])' "$profile_json")
