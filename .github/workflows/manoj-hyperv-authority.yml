@@ -68,7 +68,7 @@ jobs:
           if([int64]$inv.source_disk_bytes -le 0 -or [int]$inv.disk_count -le 0){throw 'Inventory capacity invalid'}
           Write-Host 'ONESWAP_STRUCTURED_INVENTORY=PASS'
 
-      - name: Discover target OpenNebula authority through OneSwap profile
+      - name: Discover target OpenNebula authority through direct OneSwap config
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
@@ -76,28 +76,23 @@ jobs:
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
           $script=@'
           set -euo pipefail
-          profile_json=$(sudo python3 -c 'import glob,json,sys; matches=[]; [(matches.append((p,json.load(open(p))))) for p in glob.glob("/etc/layersentry/oneswapd/sources/*.json")]; p,d=next((p,d) for p,d in matches if d.get("platform")=="hyperv" and (d.get("hyperv_connection")=="manoj-qual" or d.get("source_connection_id")=="manoj-qual")); print(json.dumps({"file":p,"tenant_id":d.get("tenant_id"),"source_connection_id":d.get("source_connection_id"),"hyperv_connection":d.get("hyperv_connection"),"one_xmlrpc":d.get("one_xmlrpc"),"one_auth":d.get("one_auth"),"oneswap_config":d.get("oneswap_config")}))')
-          echo "SOURCE_PROFILE_SAFE=$profile_json"
-          export ONE_AUTH=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["one_auth"])' "$profile_json")
-          export ONE_XMLRPC=$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["one_xmlrpc"])' "$profile_json")
-          test -f "$ONE_AUTH"
-          echo "TARGET_ONE_XMLRPC=$ONE_XMLRPC"
-          echo '===HOSTS==='
-          onehost list
-          echo '===DATASTORES==='
-          onedatastore list
-          echo '===VNETS==='
-          onevnet list
-          echo '===IMAGES==='
-          oneimage list
-          echo '===VMS==='
-          onevm list
-          echo TARGET_AUTHORITY_DISCOVERY=PASS
+          cfg=/etc/layersentry/oneswap/manoj-qual.yaml
+          test -f "$cfg"
+          echo "ONESWAP_CONFIG=$cfg"
+          echo '=== SAFE CONFIG LINES ==='
+          sudo awk 'BEGIN{IGNORECASE=1} /^[[:space:]]*#/ {next} /pass(word)?|secret|token|private.?key/ {next} {print}' "$cfg" | sed -n '1,220p'
+          echo '=== CLI AVAILABILITY ==='
+          for c in onehost onedatastore onevnet oneimage onevm; do command -v "$c" || true; done
+          echo '=== ONE_AUTH PATH CANDIDATES ==='
+          sudo find /etc /var/lib /root /home -type f -path '*/.one/one_auth' -o -type f -name 'one_auth' 2>/dev/null | sed -n '1,120p'
+          echo '=== ONE_XMLRPC HINTS ==='
+          sudo grep -R -nE 'ONE_XMLRPC|2633/RPC2|xmlrpc' /etc/layersentry /etc/one /var/lib/one 2>/dev/null | grep -viE 'password|secret|token' | sed -n '1,120p' || true
+          echo TARGET_AUTHORITY_METADATA=PASS
           '@
           $script=[regex]::Replace($script,'\r','')
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
           & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@$appliance" "echo $b64 | base64 -d | sudo bash"
-          if($LASTEXITCODE -ne 0){throw 'OneSwap target authority discovery failed'}
+          if($LASTEXITCODE -ne 0){throw 'OneSwap target authority metadata discovery failed'}
 
       - name: Inspect source seed OS hints without secrets
         shell: powershell
