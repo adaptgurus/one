@@ -1447,7 +1447,7 @@ export const getDependencyErrors = (draft, blueprint) =>
     ) {
       return [
         dependency.label +
-          ': enter the required existing dependency reference or choose a LayerSentry-managed/provisioned option.',
+          ': enter the required existing qualified dependency reference.',
       ]
     }
 
