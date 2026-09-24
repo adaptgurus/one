@@ -122,7 +122,8 @@ test('guest access defaults never emit a plain-text password', () => {
   assert.equal(context.USERNAME, 'clouduser')
   assert.equal(context.NETWORK, 'YES')
   assert.equal(context.SET_HOSTNAME, '$NAME')
-  assert.equal(context.GROW_FS, '/')
+  assert.equal(context.GROW_FS, undefined)
+  assert.equal(context.GROW_ROOTFS, 'NO')
   assert.equal(context.KEEP_ME, 'yes')
   assert.equal(context.PASSWORD, undefined)
   assert.equal(context.CRYPTED_PASSWORD, undefined)
@@ -132,6 +133,22 @@ test('guest access defaults never emit a plain-text password', () => {
   )
   assert.match(context.SSH_PUBLIC_KEY, /\$USER\[SSH_PUBLIC_KEY\]/)
   assert.match(context.SSH_PUBLIC_KEY, /ssh-ed25519 AAAATEST/)
+})
+
+test('guest context preserves an explicit provider filesystem growth policy', () => {
+  const rootGrow = api.buildLayerSentryGuestContext(
+    { GROW_ROOTFS: 'YES' },
+    { useAccountKey: false }
+  )
+  assert.equal(rootGrow.GROW_ROOTFS, 'YES')
+  assert.equal(rootGrow.GROW_FS, undefined)
+
+  const selectedFilesystems = api.buildLayerSentryGuestContext(
+    { GROW_FS: '/ /data' },
+    { useAccountKey: false }
+  )
+  assert.equal(selectedFilesystems.GROW_FS, '/ /data')
+  assert.equal(selectedFilesystems.GROW_ROOTFS, undefined)
 })
 
 test('blank password removes inherited password and defaults username to root', () => {
