@@ -69,8 +69,33 @@ jobs:
             $v=Get-VHD -Path $d.Path -ErrorAction Stop
             Write-Host "APPLIANCE_DISK path=$($d.Path) type=$($v.VhdType) format=$($v.VhdFormat) virtual=$($v.Size) file=$($v.FileSize)"
           }
+          $os=Get-CimInstance Win32_OperatingSystem
+          $freeBefore=[int64]$os.FreePhysicalMemory*1KB
+          $total=[int64]$os.TotalVisibleMemorySize*1KB
+          Write-Host "HOST_MEMORY total=$total free_before=$freeBefore"
+          Get-VM | Where-Object State -eq 'Running' | Sort-Object Name | ForEach-Object {
+            Write-Host "RUNNING_VM name=$($_.Name) assigned=$($_.MemoryAssigned) demand=$($_.MemoryDemand) cpu=$($_.ProcessorCount)"
+          }
           $mem=Get-VMMemory -VMName $name -ErrorAction Stop
           Write-Host "APPLIANCE_MEMORY startup=$($mem.Startup) dynamic=$($mem.DynamicMemoryEnabled) minimum=$($mem.Minimum) maximum=$($mem.Maximum)"
+          if($freeBefore -lt 3GB){
+            $builder=Get-VM -Name 'ls-iso-builder' -ErrorAction SilentlyContinue
+            if($builder -and $builder.State -eq 'Running'){
+              Write-Host "MEMORY_RECLAIM requesting graceful shutdown of disposable ls-iso-builder assigned=$($builder.MemoryAssigned)"
+              Stop-VM -Name 'ls-iso-builder' -Shutdown
+              $deadlineBuilder=(Get-Date).AddSeconds(90)
+              do{
+                Start-Sleep -Seconds 2
+                $builder=Get-VM -Name 'ls-iso-builder' -ErrorAction Stop
+                Write-Host "ISO_BUILDER_STATE=$($builder.State)"
+                if($builder.State -eq 'Off'){break}
+              }while((Get-Date)-lt $deadlineBuilder)
+              if($builder.State -ne 'Off'){throw "ls-iso-builder did not gracefully shut down; refusing forced power-off"}
+            }
+          }
+          $os=Get-CimInstance Win32_OperatingSystem
+          $freeAfter=[int64]$os.FreePhysicalMemory*1KB
+          Write-Host "HOST_MEMORY free_after_reclaim=$freeAfter"
           if($vm.State -eq 'Saved'){
             Remove-VMSavedState -VMName $name -Confirm:$false
             Write-Host 'APPLIANCE_SAVED_STATE_DISCARDED=YES'
