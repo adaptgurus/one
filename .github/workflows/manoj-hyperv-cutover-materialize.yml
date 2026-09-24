@@ -1,4 +1,5 @@
 name: Manoj HyperV Cutover and Materialize
+# rerun-pr22-keepalive-20260925
 
 on:
   push:
@@ -46,7 +47,7 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
           "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
-          $before=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $tmp "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          $before=& ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $tmp "ci@10.250.10.32" "lsblk -dnro NAME | sort"
           if($LASTEXITCODE -ne 0){throw 'appliance block baseline failed'}
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($before -join [Environment]::NewLine)))
           "ONESWAP_BLOCKS_BEFORE_B64=$b64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -108,7 +109,7 @@ jobs:
           '@
           $script=[regex]::Replace($script,'\r','')
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
-          $out=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          $out=& ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           $rc=$LASTEXITCODE
           $out | ForEach-Object { Write-Host $_ }
           if($rc -ne 0){throw 'PREPARED admission failed'}
@@ -146,7 +147,7 @@ jobs:
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
           $beforeText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:ONESWAP_BLOCKS_BEFORE_B64))
           $before=@($beforeText -split [Environment]::NewLine | Where-Object {$_})
-          $after=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          $after=& ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
           if($LASTEXITCODE -ne 0){throw 'appliance block inventory failed'}
           $new=@($after | Where-Object {$before -notcontains $_})
           if($new.Count -ne 1){throw "Expected one authority disk; found $($new.Count)"}
@@ -195,7 +196,7 @@ jobs:
           '@
           $script=$script.Replace('__DEV__',$dev)
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
-          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           if($LASTEXITCODE -ne 0){throw 'Target capacity gate failed; refusing source shutdown'}
 
       - name: Run OneSwap final RCT commit and import
@@ -205,7 +206,7 @@ jobs:
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
           $beforeText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:ONESWAP_BLOCKS_BEFORE_B64))
           $before=@($beforeText -split [Environment]::NewLine | Where-Object {$_})
-          $after=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          $after=& ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
           if($LASTEXITCODE -ne 0){throw 'appliance block inventory failed'}
           $new=@($after | Where-Object {$before -notcontains $_})
           if($new.Count -ne 1){throw "Expected one authority disk; found $($new.Count)"}
@@ -256,7 +257,7 @@ jobs:
           '@
           $script=$script.Replace('__DEV__',$dev)
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
-          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           if($LASTEXITCODE -ne 0){throw "OneSwap commit did not prove IMPORTED; preserve source/target state for reconciliation"}
 
       - name: Verify source is Off after commit
@@ -275,7 +276,7 @@ jobs:
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
           $beforeText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:ONESWAP_BLOCKS_BEFORE_B64))
           $before=@($beforeText -split [Environment]::NewLine | Where-Object {$_})
-          $after=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          $after=& ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
           if($LASTEXITCODE -ne 0){throw 'appliance block inventory failed'}
           $new=@($after | Where-Object {$before -notcontains $_})
           if($new.Count -ne 1){throw "Expected one authority disk; found $($new.Count)"}
@@ -341,7 +342,7 @@ jobs:
           '@
           $script=$script.Replace('__DEV__',$dev)
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
-          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           if($LASTEXITCODE -ne 0){throw 'Target materialization/Running validation failed; keep source Off and preserve evidence'}
 
       - name: Verify source off and finalize OneSwap success
@@ -353,7 +354,7 @@ jobs:
           $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
           $beforeText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:ONESWAP_BLOCKS_BEFORE_B64))
           $before=@($beforeText -split [Environment]::NewLine | Where-Object {$_})
-          $after=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          $after=& ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
           $new=@($after | Where-Object {$before -notcontains $_})
           if($new.Count -ne 1){throw "Expected one authority disk; found $($new.Count)"}
           $dev='/dev/'+$new[0]
@@ -394,7 +395,7 @@ jobs:
           '@
           $script=$script.Replace('__DEV__',$dev)
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
-          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           if($LASTEXITCODE -ne 0){throw 'Final source-off/finalize-success validation failed'}
 
       - name: Detach and delete FE2 authority child
