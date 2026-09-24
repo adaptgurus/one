@@ -291,7 +291,7 @@ const captureProtectionGroup = (
         method: 'POST',
         path:
           '/v1/replication/protection-groups/' +
-          encodeURIComponent(groupId) +
+          encodeURIComponent(workloadId) +
           '/capture',
       },
       userData,
@@ -332,6 +332,23 @@ const protectionGroupCheckpoints = (
 }
 
 
+const drSites = (
+  res = {},
+  next = defaultEmptyFunction,
+  _params = {},
+  userData = {},
+  oneConnection
+) =>
+  respond(
+    res,
+    next,
+    platformRequest(
+      { method: 'GET', path: '/v1/replication-product/sites' },
+      userData,
+      oneConnection
+    )
+  )
+
 const drEnvironmentNetworks = (
   res = {},
   next = defaultEmptyFunction,
@@ -348,6 +365,35 @@ const drEnvironmentNetworks = (
       oneConnection
     )
   )
+
+const drProvisionEnvironmentNetworks = (
+  res = {},
+  next = defaultEmptyFunction,
+  { plan } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!plan || typeof plan !== 'object') {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Environment network plan is required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'POST',
+        path: '/v1/replication-product/environment-networks/provision',
+        data: plan,
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
 
 const drPairSite = (
   res = {},
@@ -406,16 +452,80 @@ const drManagementBackupPolicies = (
   )
 }
 
-const drVMCheckpoints = (
+const drRunManagementBackup = (
   res = {},
   next = defaultEmptyFunction,
-  { groupId, siteId } = {},
+  { source, target } = {},
   userData = {},
   oneConnection
 ) => {
-  if (!groupId || !siteId) {
+  if (!source || !target) {
     res.locals.httpCode = httpResponse(badRequest, {
-      error: 'Workload ID and site ID are required.',
+      error: 'Management backup source and target are required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'POST',
+        path:
+          '/v1/replication-product/management-backups/run?source=' +
+          encodeURIComponent(source) +
+          '&target=' +
+          encodeURIComponent(target),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drManagementBackupStatus = (
+  res = {},
+  next = defaultEmptyFunction,
+  { source, target } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!source || !target) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Management backup source and target are required.',
+    })
+    next()
+    return
+  }
+  respond(
+    res,
+    next,
+    platformRequest(
+      {
+        method: 'GET',
+        path:
+          '/v1/replication-product/management-backups/status?source=' +
+          encodeURIComponent(source) +
+          '&target=' +
+          encodeURIComponent(target),
+      },
+      userData,
+      oneConnection
+    )
+  )
+}
+
+const drVMCheckpoints = (
+  res = {},
+  next = defaultEmptyFunction,
+  { siteId } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!siteId) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Site ID is required.',
     })
     next()
     return
@@ -468,13 +578,13 @@ const drPutRecoveryMapping = (
 const drGetRecoveryMapping = (
   res = {},
   next = defaultEmptyFunction,
-  { groupId, siteId } = {},
+  { workloadId, siteId } = {},
   userData = {},
   oneConnection
 ) => {
-  if (!groupId || !siteId) {
+  if (!workloadId || !siteId) {
     res.locals.httpCode = httpResponse(badRequest, {
-      error: 'Protection group ID and site ID are required.',
+      error: 'Workload ID and site ID are required.',
     })
     next()
     return
@@ -510,9 +620,13 @@ module.exports = {
   putProtectionGroup,
   captureProtectionGroup,
   protectionGroupCheckpoints,
+  drSites,
   drEnvironmentNetworks,
+  drProvisionEnvironmentNetworks,
   drPairSite,
   drManagementBackupPolicies,
+  drRunManagementBackup,
+  drManagementBackupStatus,
   drVMCheckpoints,
   drPutRecoveryMapping,
   drGetRecoveryMapping,
