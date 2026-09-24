@@ -52,7 +52,8 @@ jobs:
           $sha='b27531a1630e74267b80aa1efac8480791f94c64'
           $url="https://raw.githubusercontent.com/adaptgurus/one-swap/$sha/hyperv_hot_helper.rb"
           $file=Join-Path $env:RUNNER_TEMP 'hyperv_hot_helper.pr19.rb'
-          Invoke-WebRequest -UseBasicParsing -Uri $url -OutFile $file
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 30 -o $file $url
+          if($LASTEXITCODE -ne 0){throw "PR19 helper curl failed rc=$LASTEXITCODE"}
           if(-not (Test-Path $file)){throw 'PR19 helper download failed'}
           $hash=(Get-FileHash -Algorithm SHA256 $file).Hash.ToLower()
           Write-Host "PR19_LOCAL_SHA256=$hash"
