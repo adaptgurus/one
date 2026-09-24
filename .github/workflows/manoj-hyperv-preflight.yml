@@ -52,11 +52,11 @@ jobs:
           $meta=Join-Path $root 'meta-data'
           $net=Join-Path $root 'network-config'
           if(-not (Test-Path $meta) -or -not (Test-Path $net)){throw 'cloud-init seed authority missing'}
-          $host=(Select-String -Path $meta -Pattern '^local-hostname:\s*(.+)$').Matches.Groups[1].Value.Trim()
+          $seedHost=(Select-String -Path $meta -Pattern '^local-hostname:\s*(.+)$').Matches.Groups[1].Value.Trim()
           $ipline=(Select-String -Path $net -Pattern 'addresses:\s*\[([0-9.]+/[0-9]+)\]').Matches.Groups[1].Value
-          if($host -ne 'ls-migration-source-test'){throw "Unexpected seed hostname: $host"}
+          if($seedHost -ne 'ls-migration-source-test'){throw "Unexpected seed hostname: $seedHost"}
           if($ipline -ne '10.250.10.31/24'){throw "Unexpected seed IP: $ipline"}
-          Write-Host "GUEST_OS_AUTHORITY=linux-cloud-init hostname=$host address=$ipline"
+          Write-Host "GUEST_OS_AUTHORITY=linux-cloud-init hostname=$seedHost address=$ipline"
 
       - name: Execute OneSwap hot preflight only
         shell: powershell
