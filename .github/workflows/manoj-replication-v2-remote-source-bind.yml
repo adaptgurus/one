@@ -1,0 +1,112 @@
+name: Manoj Replication v2 Remote Source Bind
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-replication-v2-remote-source-bind.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-replication-v2-remote-source-bind
+  cancel-in-progress: true
+
+jobs:
+  bind:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact Manoj runner and inspect remote site source access
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host 'MANOJ_RUNNER_BIND=PASS'
+
+          function Is-PrivateIPv4([string]$IP) {
+            return $IP -match '^10\.' -or
+              $IP -match '^192\.168\.' -or
+              $IP -match '^172\.(1[6-9]|2[0-9]|3[01])\.'
+          }
+          $sshOptions=@('-o','BatchMode=yes','-o','ConnectTimeout=8','-o','StrictHostKeyChecking=accept-new')
+          $rows=@()
+          Get-VM | Where-Object State -eq 'Running' | ForEach-Object {
+            $vm=$_
+            Get-VMNetworkAdapter -VMName $vm.Name -ErrorAction SilentlyContinue | ForEach-Object {
+              $adapter=$_
+              $adapter.IPAddresses | Where-Object { $_ -and (Is-PrivateIPv4 $_) } | ForEach-Object {
+                $rows += [pscustomobject]@{VM=$vm.Name;IP=$_}
+              }
+            }
+          }
+
+          $sites=@()
+          foreach($row in ($rows | Sort-Object VM,IP -Unique)){
+            if(-not (Test-NetConnection -ComputerName $row.IP -Port 22 -InformationLevel Quiet -WarningAction SilentlyContinue)){continue}
+            $target="opc@$($row.IP)"
+            $probe=& ssh @sshOptions $target "sudo -n bash -lc 'systemctl is-active opennebula >/dev/null && command -v onehost >/dev/null && onehost list >/dev/null && printf SITE_OK'" 2>$null
+            if($LASTEXITCODE -eq 0 -and ($probe -join '') -match 'SITE_OK'){
+              $sites += $row
+            }
+          }
+          $sites=@($sites | Sort-Object VM,IP -Unique)
+          Write-Host "VERIFIED_SITE_COUNT=$($sites.Count)"
+          $sites | Format-Table -AutoSize
+          if($sites.Count -ne 2){throw "Expected exactly two OpenNebula sites; found $($sites.Count)."}
+
+          $found=@()
+          foreach($site in $sites){
+            $target="opc@$($site.IP)"
+            $script=@'
+set -euo pipefail
+echo "SITE_HOST=$(hostname)"
+for root in /home/opc /opt /srv /var/lib /root; do
+  [ -d "$root" ] || continue
+  find "$root" -maxdepth 5 -type d -name .git -print 2>/dev/null || true
+done | while read -r g; do
+  repo=$(dirname "$g")
+  remote=$(git -C "$repo" remote get-url origin 2>/dev/null || true)
+  case "$remote" in
+    *adaptgurus/layersentry-platform*)
+      head=$(git -C "$repo" rev-parse HEAD 2>/dev/null || true)
+      branch=$(git -C "$repo" branch --show-current 2>/dev/null || true)
+      dirty=$(git -C "$repo" status --porcelain 2>/dev/null | wc -l)
+      has_wanted=NO
+      if git -C "$repo" cat-file -e d47641e9eeb6656ad61b2739a6c5195409558ec3^{commit} 2>/dev/null; then has_wanted=YES; fi
+      echo "PRIVATE_REPO path=$repo head=$head branch=$branch dirty=$dirty has_exact=$has_wanted"
+      ;;
+  esac
+done
+if command -v gh >/dev/null 2>&1; then
+  if gh repo view adaptgurus/layersentry-platform --json nameWithOwner >/dev/null 2>&1; then
+    echo "REMOTE_GH_AUTH=YES"
+  else
+    echo "REMOTE_GH_AUTH=NO"
+  fi
+else
+  echo "REMOTE_GH_AUTH=NO_GH"
+fi
+if GIT_TERMINAL_PROMPT=0 git ls-remote git@github.com:adaptgurus/layersentry-platform.git refs/heads/feat/replication-v2-site-pair-env-dr-20260924 >/dev/null 2>&1; then
+  echo "REMOTE_SSH_AUTH=YES"
+else
+  echo "REMOTE_SSH_AUTH=NO"
+fi
+'@
+            $encoded=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+            $out=& ssh @sshOptions $target "echo '$encoded' | base64 -d | bash" 2>&1
+            if($LASTEXITCODE -ne 0){throw "Remote source inspection failed on $($site.IP): $($out -join ' ')"}
+            Write-Host "=== SITE $($site.VM) $($site.IP) ==="
+            $out | ForEach-Object { Write-Host $_ }
+            if(($out -join [Environment]::NewLine) -match 'has_exact=YES|REMOTE_GH_AUTH=YES|REMOTE_SSH_AUTH=YES'){
+              $found += $site
+            }
+          }
+          Write-Host "AUTHORIZED_REMOTE_SITE_COUNT=$($found.Count)"
+          if($found.Count -lt 1){
+            throw 'Neither OpenNebula site has the exact source object or a noninteractive authorized path to the private layersentry-platform repo.'
+          }
+          Write-Host 'REMOTE_PRIVATE_SOURCE_BIND=PASS'
