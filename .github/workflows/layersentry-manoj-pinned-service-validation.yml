@@ -122,19 +122,47 @@ jobs:
               print("SERVICE_CAPACITY_RELEASE=PASS VM_ID=12 STATE=POWEROFF PRESERVED=YES")
               active=[]
               used=set()
-              for _ in range(60):
-                  hres=one.one.host.info(auth,host_id)
-                  if not hres[0]:
-                      raise SystemExit("cannot refresh target host after VM12 poweroff")
-                  href=ET.fromstring(hres[1])
-                  free_raw=href.findtext("./HOST_SHARE/FREE_CPU")
-                  free_now=int(free_raw) if free_raw not in (None,"") else 0
-                  if free_now>=100:
-                      print(f"SERVICE_HOST_CAPACITY_REFRESH=PASS FREE_CPU={free_now}")
-                      break
-                  time.sleep(1)
-              else:
-                  raise SystemExit("target host CPU capacity did not refresh after VM12 poweroff")
+
+          # POWEROFF VMs still reserve host CPU in OpenNebula. VM12 is a
+          # qualification-owned preserved proof, so release only its host
+          # allocation with UNDEPLOY while preserving the VM object and disk.
+          vm12_info=one.one.vm.info(auth,12,False)
+          if vm12_info[0]:
+              vm12=ET.fromstring(vm12_info[1])
+              vm12_name=(vm12.findtext("NAME") or "").strip()
+              vm12_state=int(vm12.findtext("STATE") or -1)
+              vm12_deploy=(vm12.findtext("DEPLOY_ID") or "").strip()
+              if vm12_name=="ls-dr-pinned-boot-35960325463" and vm12_state==8 and vm12_deploy:
+                  rel=one.one.vm.action(auth,"undeploy",12)
+                  if not rel[0]:
+                      raise SystemExit("failed to undeploy qualification VM12: "+str(rel[1])[:300])
+                  for _ in range(120):
+                      info=one.one.vm.info(auth,12,False)
+                      if not info[0]:
+                          raise SystemExit("cannot read VM12 after undeploy request")
+                      current=ET.fromstring(info[1])
+                      state_now=int(current.findtext("STATE") or -1)
+                      lcm_now=int(current.findtext("LCM_STATE") or -1)
+                      if state_now==9 and lcm_now==0:
+                          print("SERVICE_CAPACITY_RELEASE_UNDEPLOY=PASS VM_ID=12 STATE=UNDEPLOYED PRESERVED=YES")
+                          break
+                      time.sleep(1)
+                  else:
+                      raise SystemExit("qualification VM12 did not reach UNDEPLOYED")
+
+          for _ in range(90):
+              hres=one.one.host.info(auth,host_id)
+              if not hres[0]:
+                  raise SystemExit("cannot refresh target host after qualification capacity release")
+              href=ET.fromstring(hres[1])
+              free_raw=href.findtext("./HOST_SHARE/FREE_CPU")
+              free_now=int(free_raw) if free_raw not in (None,"") else 0
+              if free_now>=100:
+                  print(f"SERVICE_HOST_CAPACITY_REFRESH=PASS FREE_CPU={free_now}")
+                  break
+              time.sleep(1)
+          else:
+              raise SystemExit("target host CPU capacity did not refresh after qualification capacity release")
 
           # Remove only failed/non-running service-validation allocations from
           # prior attempts. Never touch a RUNNING/deployed VM.
@@ -319,3 +347,5 @@ jobs:
 # resume-service-validation-live-run: 2026-09-24T15:11+05:30
 
 # half-cpu-accounting-fix: 2026-09-24T15:11+05:30
+
+# qualification-vm12-undeploy-capacity-release: 2026-09-24T15:11+05:30
