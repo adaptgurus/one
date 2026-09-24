@@ -61,10 +61,14 @@ jobs:
           h=hs[0]
           state=int(h.findtext("STATE") or -1)
           max_cpu=int(h.findtext("./HOST_SHARE/MAX_CPU") or h.findtext("./HOST_SHARE/TOTAL_CPU") or 0)
+          running_counter=int(h.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
           pin=(h.findtext("./TEMPLATE/PIN_POLICY") or "").strip().upper()
           thread=(h.findtext("./TEMPLATE/VMS_THREAD") or "1").strip()
           if state!=2 or pin!="PINNED" or thread!="1" or max_cpu<200:
               raise SystemExit(f"unsafe target host state={state} pin={pin} thread={thread} max_cpu={max_cpu}")
+          total_cores=max_cpu//100
+          if running_counter >= total_cores:
+              raise SystemExit(f"no scheduler CPU headroom on {TARGET_HOST}: running_counter={running_counter} total_cores={total_cores}")
 
           vmp=one.one.vmpool.info(auth,-2,-1,-1,-2,"")
           if not vmp[0]: raise SystemExit("VM pool query failed")
