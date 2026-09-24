@@ -1,0 +1,85 @@
+name: Manoj HyperV OneSwap Preflight
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-preflight.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-preflight
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and source invariant
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source must be Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          Write-Host 'SOURCE_BEFORE=PASS'
+
+      - name: Prepare restricted appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmpKey=Join-Path $env:RUNNER_TEMP 'oneswap-preflight.key'
+          Copy-Item -Force $srcKey $tmpKey
+          & icacls.exe $tmpKey /inheritance:r | Out-Null
+          & icacls.exe $tmpKey /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmpKey /setowner '*S-1-5-18' | Out-Null
+          $derived=(& ssh-keygen.exe -y -f $tmpKey 2>&1 | Where-Object {$_ -match '^ssh-'} | Select-Object -First 1)
+          if($LASTEXITCODE -ne 0 -or -not $derived){throw 'temporary SSH key invalid'}
+          "ONESWAP_TEMP_KEY=$tmpKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Prove Linux guest seed authority
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification\ls-migration-source-test'
+          $meta=Join-Path $root 'meta-data'
+          $net=Join-Path $root 'network-config'
+          if(-not (Test-Path $meta) -or -not (Test-Path $net)){throw 'cloud-init seed authority missing'}
+          $host=(Select-String -Path $meta -Pattern '^local-hostname:\s*(.+)$').Matches.Groups[1].Value.Trim()
+          $ipline=(Select-String -Path $net -Pattern 'addresses:\s*\[([0-9.]+/[0-9]+)\]').Matches.Groups[1].Value
+          if($host -ne 'ls-migration-source-test'){throw "Unexpected seed hostname: $host"}
+          if($ipline -ne '10.250.10.31/24'){throw "Unexpected seed IP: $ipline"}
+          Write-Host "GUEST_OS_AUTHORITY=linux-cloud-init hostname=$host address=$ipline"
+
+      - name: Execute OneSwap hot preflight only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $appliance='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $op='manoj-hv-ls-migration-source-test-20260924'
+          $cmd="sudo /usr/bin/oneswap-hyperv ls-migration-source-test --hot --preflight --operation-id $op --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --qemu-ga 2>&1"
+          $out=& ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@$appliance" $cmd
+          $rc=$LASTEXITCODE
+          $out | ForEach-Object {Write-Host ('PREFLIGHT_OUT=' + $_)}
+          if($rc -ne 0){throw "OneSwap hot preflight failed rc=$rc"}
+          Write-Host "ONESWAP_HOT_PREFLIGHT=PASS operation_id=$op"
+
+      - name: Verify no RCT state and source unchanged
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          Write-Host "SOURCE_AFTER_STATE=$($src.State)"
+          $snaps=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue)
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$($snaps.Count)"
+          if($src.State -ne 'Running'){throw "Preflight changed source state: $($src.State)"}
+          if($snaps.Count -ne 0){throw 'Preflight created a Hyper-V checkpoint'}
+          Write-Host 'SOURCE_AFTER=PASS'
