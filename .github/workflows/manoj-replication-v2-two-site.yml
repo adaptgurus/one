@@ -28,87 +28,130 @@ jobs:
           if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
           Write-Host 'MANOJ_RUNNER_BIND=PASS'
 
-      - name: Locate exact LayerSentry platform checkout
+      - name: Resolve exact private Replication v2 source without exposing credentials
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          $env:GIT_TERMINAL_PROMPT='0'
+          $env:GCM_INTERACTIVE='Never'
+          $wanted='f8daf9230189b31f301498700d191ac25fea679d'
+          $branch='feat/replication-v2-site-pair-env-dr-20260924'
           $roots=@(
             'C:\LayerSentryLab\qualification',
             'C:\LayerSentryLab',
             (Join-Path $env:USERPROFILE 'actions-runner\_work'),
             (Join-Path $env:USERPROFILE 'actions-runner-one\_work')
           ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+
+          function Test-GitObject([string]$repo,[string]$object) {
+            $psi=New-Object System.Diagnostics.ProcessStartInfo
+            $psi.FileName='git.exe'
+            $psi.Arguments="-C `"$repo`" cat-file -e $object"
+            $psi.UseShellExecute=$false
+            $psi.CreateNoWindow=$true
+            $psi.RedirectStandardOutput=$true
+            $psi.RedirectStandardError=$true
+            $p=[System.Diagnostics.Process]::Start($psi)
+            $p.WaitForExit()
+            return $p.ExitCode -eq 0
+          }
+
           $repos=@()
           foreach($root in $roots){
             Get-ChildItem -LiteralPath $root -Directory -Recurse -Depth 5 -ErrorAction SilentlyContinue |
               ForEach-Object {
                 if(Test-Path (Join-Path $_.FullName '.git')){
-                  try {
-                    $remote=(git -C $_.FullName remote get-url origin 2>$null)
-                    if($LASTEXITCODE -eq 0 -and $remote -match 'adaptgurus/layersentry-platform'){
-                      $dirty=@(git -C $_.FullName status --porcelain 2>$null)
-                      $repos += [pscustomobject]@{
-                        Path=$_.FullName
-                        Remote=$remote
-                        Head=(git -C $_.FullName rev-parse HEAD 2>$null)
-                        Branch=(git -C $_.FullName branch --show-current 2>$null)
-                        Dirty=$dirty.Count
-                      }
-                    }
-                  } catch {}
+                  $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+                  $remote=(& git -C $_.FullName remote get-url origin 2>$null)
+                  $rc=$LASTEXITCODE
+                  $ErrorActionPreference=$old
+                  if($rc -eq 0 -and ($remote -join '') -match 'adaptgurus/layersentry-platform'){
+                    $repos += $_.FullName
+                  }
                 }
               }
           }
-          if($repos.Count -lt 1){throw 'No adaptgurus/layersentry-platform checkout found on Manoj runner.'}
-          $repos | Sort-Object Dirty,Path | Format-Table -AutoSize
-          $best=$repos | Sort-Object Dirty,Path | Select-Object -First 1
-          if($best.Dirty -ne 0){throw "Best layersentry-platform checkout is dirty: $($best.Path)"}
-          "LAYERENTRY_PLATFORM=$($best.Path)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "LAYERENTRY_PLATFORM=$($best.Path)"
-          Write-Host 'PLATFORM_WORKSPACE_BIND=PASS'
+          $repos=@($repos | Sort-Object -Unique)
+          if($repos.Count -lt 1){throw 'No local adaptgurus/layersentry-platform checkout found on Manoj runner.'}
 
-      - name: Checkout exact PR 103 head locally
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $env:GIT_TERMINAL_PROMPT='0'
-          $repo=$env:LAYERENTRY_PLATFORM
-          $wanted='d47641e9eeb6656ad61b2739a6c5195409558ec3'
-          $branch='feat/replication-v2-site-pair-env-dr-20260924'
-
-          git -C $repo cat-file -e "$wanted^{commit}" 2>$null
-          if($LASTEXITCODE -ne 0){
-            Write-Host "Exact object not local; fetching branch $branch noninteractively."
-            $refspec='+refs/heads/' + $branch + ':refs/remotes/origin/' + $branch
-            git -C $repo fetch --no-tags --prune origin $refspec
-            if($LASTEXITCODE -ne 0){throw 'Unable to fetch PR103 branch noninteractively.'}
-          } else {
-            Write-Host 'EXACT_OBJECT_ALREADY_LOCAL=PASS'
-          }
-
-          $resolved=(git -C $repo rev-parse $wanted 2>$null).Trim()
-          if($LASTEXITCODE -ne 0 -or $resolved -ne $wanted){
-            throw "Exact PR103 commit unavailable after fetch: $resolved"
-          }
-
-          $remoteRef='refs/remotes/origin/' + $branch
-          $remoteHead=(git -C $repo rev-parse $remoteRef 2>$null)
-          if($LASTEXITCODE -eq 0){
-            $remoteHead=$remoteHead.Trim()
-            if($remoteHead -ne $wanted){
-              throw "Remote PR103 branch moved: expected=$wanted actual=$remoteHead"
+          $sourceRepo=$null
+          foreach($repo in $repos){
+            if(Test-GitObject $repo "$wanted^{commit}"){
+              $sourceRepo=$repo
+              Write-Host "EXACT_OBJECT_CACHE=PASS repo=$repo"
+              break
             }
           }
 
+          if(-not $sourceRepo){
+            $target='C:\LayerSentryLab\qualification\replication-v2-private-source'
+            if(Test-Path $target){Remove-Item $target -Recurse -Force}
+            $gh=Get-Command gh -ErrorAction SilentlyContinue
+            if($gh){
+              $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+              & gh repo view adaptgurus/layersentry-platform --json nameWithOwner *> $null
+              $ghRC=$LASTEXITCODE
+              $ErrorActionPreference=$old
+              if($ghRC -eq 0){
+                Write-Host 'PRIVATE_REPO_AUTH=GH'
+                & gh repo clone adaptgurus/layersentry-platform $target -- --no-checkout
+                if($LASTEXITCODE -eq 0){$sourceRepo=$target}
+              }
+            }
+          }
+
+          if(-not $sourceRepo){
+            $target='C:\LayerSentryLab\qualification\replication-v2-private-source'
+            if(Test-Path $target){Remove-Item $target -Recurse -Force}
+            $env:GIT_SSH_COMMAND='ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8'
+            $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+            & git ls-remote git@github.com:adaptgurus/layersentry-platform.git ('refs/heads/' + $branch) *> $null
+            $sshRC=$LASTEXITCODE
+            $ErrorActionPreference=$old
+            if($sshRC -eq 0){
+              Write-Host 'PRIVATE_REPO_AUTH=SSH'
+              & git clone --no-checkout git@github.com:adaptgurus/layersentry-platform.git $target
+              if($LASTEXITCODE -eq 0){$sourceRepo=$target}
+            }
+          }
+
+          if(-not $sourceRepo){
+            $target='C:\LayerSentryLab\qualification\replication-v2-private-source'
+            if(Test-Path $target){Remove-Item $target -Recurse -Force}
+            $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+            & git ls-remote https://github.com/adaptgurus/layersentry-platform.git ('refs/heads/' + $branch) *> $null
+            $httpsRC=$LASTEXITCODE
+            $ErrorActionPreference=$old
+            if($httpsRC -eq 0){
+              Write-Host 'PRIVATE_REPO_AUTH=GCM'
+              & git clone --no-checkout https://github.com/adaptgurus/layersentry-platform.git $target
+              if($LASTEXITCODE -eq 0){$sourceRepo=$target}
+            }
+          }
+
+          if(-not $sourceRepo){throw 'No noninteractive authorized path can read private layersentry-platform from Manoj runner.'}
+
+          if(-not (Test-GitObject $sourceRepo "$wanted^{commit}")){
+            $refspec='+refs/heads/' + $branch + ':refs/remotes/origin/' + $branch
+            $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+            & git -C $sourceRepo fetch --no-tags origin $refspec *> $null
+            $fetchRC=$LASTEXITCODE
+            $ErrorActionPreference=$old
+            if($fetchRC -ne 0){throw 'Authorized source exists but exact PR103 branch fetch failed.'}
+          }
+          if(-not (Test-GitObject $sourceRepo "$wanted^{commit}")){throw 'Exact PR103 head remains unavailable after authorized fetch.'}
+
           $wt='C:\LayerSentryLab\qualification\replication-v2-pr103-live'
           if(Test-Path $wt){
-            git -C $repo worktree remove --force $wt 2>$null
+            $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+            & git -C $sourceRepo worktree remove --force $wt *> $null
+            $ErrorActionPreference=$old
             if(Test-Path $wt){Remove-Item $wt -Recurse -Force}
           }
-          git -C $repo worktree prune
-          git -C $repo worktree add --detach $wt $wanted
+          & git -C $sourceRepo worktree prune
+          & git -C $sourceRepo worktree add --detach $wt $wanted
           if($LASTEXITCODE -ne 0){throw 'Unable to create exact-head worktree.'}
-          $head=(git -C $wt rev-parse HEAD).Trim()
+          $head=(& git -C $wt rev-parse HEAD).Trim()
           if($head -ne $wanted){throw "Wrong exact head: $head"}
           "RV2_WORKTREE=$wt" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           Write-Host "EXACT_HEAD=$head"
