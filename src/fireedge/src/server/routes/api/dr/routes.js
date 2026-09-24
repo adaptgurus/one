@@ -23,6 +23,7 @@ const { GET, POST, PUT } = httpMethod
 const { resource, postBody } = fromData
 
 const CAPABILITIES = 'dr.capabilities'
+const SITE_IDENTITY = 'dr.site.identity'
 const SITES = 'dr.sites'
 const SITE_CREATE = 'dr.site.create'
 const SITE_PAIRS = 'dr.site.pairs'
@@ -44,6 +45,7 @@ const CHECKPOINT = 'dr.checkpoint'
 
 const Actions = {
   CAPABILITIES,
+  SITE_IDENTITY,
   SITES,
   SITE_CREATE,
   SITE_PAIRS,
@@ -69,6 +71,11 @@ module.exports = {
   Commands: {
     [CAPABILITIES]: {
       path: `${basepath}/capabilities`,
+      httpMethod: GET,
+      auth: true,
+    },
+    [SITE_IDENTITY]: {
+      path: `${basepath}/site-identity`,
       httpMethod: GET,
       auth: true,
     },
