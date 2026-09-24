@@ -16,7 +16,6 @@ concurrency:
 
 jobs:
   cutover:
-    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
     steps:
@@ -168,8 +167,8 @@ jobs:
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
           root=ET.parse('/tmp/ls-host-capacity.xml').getroot()
-          need_cpu=200
-          need_mem=4194304
+          need_cpu=50
+          need_mem=2621440
           eligible=[]
           for h in root.findall('HOST'):
               hid=h.findtext('ID') or ''
@@ -186,7 +185,7 @@ jobs:
               if state == 2 and free_cpu >= need_cpu and free_mem >= need_mem:
                   eligible.append((hid,name,state,free_cpu,free_mem))
           if not eligible:
-              raise SystemExit('TARGET_CAPACITY_BLOCKED: no MONITORED host has 2 vCPU/4GiB allocated headroom')
+              raise SystemExit('TARGET_CAPACITY_BLOCKED: no MONITORED host fits CPU=0.5/VCPU=2/MEMORY=2560MB lab target')
           print('TARGET_CAPACITY_CANDIDATES='+','.join(x[1] for x in eligible))
           print('TARGET_CAPACITY_GATE=PASS')
           PY
@@ -225,7 +224,7 @@ jobs:
           export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
           operation="manoj-hv-ls-migration-source-test-20260924"
           set +e
-          out=$(timeout --signal=TERM --kill-after=20s 3600s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --commit --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0 2>&1)
+          out=$(timeout --signal=TERM --kill-after=20s 3600s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --commit --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --cpu 0.5 --vcpu 2 --memory-mb 2560 --datastore 1 --network 0 2>&1)
           rc=$?
           set -e
           printf '%s\n' "$out" | sed -E 's/(password|secret|token|authorization|one_auth)[^ ]*/\1=<redacted>/Ig'
@@ -363,7 +362,7 @@ jobs:
           export ONE_AUTH="$tmp"
           export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
           operation="manoj-hv-ls-migration-source-test-20260924"
-          sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --verify-source-off --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0
+          sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --verify-source-off --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --cpu 0.5 --vcpu 2 --memory-mb 2560 --datastore 1 --network 0
           sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --finalize-success --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0
           state=$(ruby -rdigest -ryaml -e '
             op=ARGV[0]
