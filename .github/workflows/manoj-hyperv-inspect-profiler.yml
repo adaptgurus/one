@@ -1,0 +1,96 @@
+name: Manoj HyperV Inspect Profiler
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-inspect-profiler.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-inspect-profiler
+  cancel-in-progress: true
+
+jobs:
+  profile:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Bind exact Manoj source host
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          Write-Host "SOURCE_STATE=$($vm.State)"
+          if($vm.State -ne 'Running'){throw "Source must remain Running"}
+          Write-Host 'BIND=PASS'
+
+      - name: Profile OneSwap read-only Hyper-V inspection calls
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $vmName='ls-migration-source-test'
+          $tests=@(
+            @{n='Get-CimInstance Win32_OperatingSystem'; s={ Get-CimInstance Win32_OperatingSystem | Select-Object Version,BuildNumber }},
+            @{n='Get-CimClass ReferencePointService'; s={ Get-CimClass -Namespace root/virtualization/v2 -ClassName Msvm_VirtualSystemReferencePointService -ErrorAction SilentlyContinue | Select-Object CimClassName }},
+            @{n='Get-CimClass ImageManagementService'; s={ Get-CimClass -Namespace root/virtualization/v2 -ClassName Msvm_ImageManagementService -ErrorAction SilentlyContinue | Select-Object CimClassName }},
+            @{n='Get-VMGpuPartitionAdapter'; s={ Get-VMGpuPartitionAdapter -VMName 'ls-migration-source-test' -ErrorAction SilentlyContinue | Select-Object Name,InstancePath }},
+            @{n='Get-VMFibreChannelHba'; s={ Get-VMFibreChannelHba -VMName 'ls-migration-source-test' -ErrorAction SilentlyContinue | Select-Object SanName }},
+            @{n='Get-VMProcessor'; s={ Get-VMProcessor -VMName 'ls-migration-source-test' -ErrorAction Stop | Select-Object ExposeVirtualizationExtensions }},
+            @{n='Get-VMSnapshot'; s={ Get-VMSnapshot -VMName 'ls-migration-source-test' -ErrorAction SilentlyContinue | Select-Object Name,Id }},
+            @{n='Get-VMAssignableDevice'; s={ Get-VMAssignableDevice -VMName 'ls-migration-source-test' -ErrorAction SilentlyContinue | Select-Object InstancePath,LocationPath }},
+            @{n='Get-VMSecurity'; s={ Get-VMSecurity -VMName 'ls-migration-source-test' -ErrorAction SilentlyContinue | Select-Object TpmEnabled,Shielded }},
+            @{n='Get-VMFirmware'; s={ Get-VMFirmware -VMName 'ls-migration-source-test' -ErrorAction Stop | Select-Object SecureBoot,SecureBootTemplate }},
+            @{n='Get-VMHardDiskDrive+Get-VHD'; s={
+                Get-VMHardDiskDrive -VMName 'ls-migration-source-test' -ErrorAction Stop | ForEach-Object {
+                  $v=Get-VHD -Path $_.Path -ErrorAction Stop
+                  [pscustomobject]@{Path=$_.Path;VhdFormat=$v.VhdFormat;VhdType=$v.VhdType;ParentPath=$v.ParentPath;Size=$v.Size}
+                }
+            }},
+            @{n='Get-VMNetworkAdapter+VLAN'; s={
+                Get-VMNetworkAdapter -VMName 'ls-migration-source-test' -ErrorAction Stop | ForEach-Object {
+                  $v=Get-VMNetworkAdapterVlan -VMNetworkAdapter $_ -ErrorAction SilentlyContinue
+                  [pscustomobject]@{Name=$_.Name;SwitchName=$_.SwitchName;MacAddress=$_.MacAddress;VlanMode=$v.OperationMode}
+                }
+            }}
+          )
+          foreach($t in $tests){
+            $sw=[Diagnostics.Stopwatch]::StartNew()
+            $job=Start-Job -ScriptBlock {
+              param($name,$scriptText)
+              Import-Module Hyper-V -ErrorAction SilentlyContinue
+              & ([scriptblock]::Create($scriptText))
+            } -ArgumentList $t.n,$t.s.ToString()
+            $done=Wait-Job $job -Timeout 30
+            if(-not $done){
+              Stop-Job $job -ErrorAction SilentlyContinue
+              Remove-Job $job -Force -ErrorAction SilentlyContinue
+              $sw.Stop()
+              Write-Host "INSPECT_CALL=$($t.n) RESULT=TIMEOUT elapsed_ms=$($sw.ElapsedMilliseconds)"
+              continue
+            }
+            $out=Receive-Job $job -ErrorAction SilentlyContinue
+            $state=$job.State
+            Remove-Job $job -Force -ErrorAction SilentlyContinue
+            $sw.Stop()
+            Write-Host "INSPECT_CALL=$($t.n) RESULT=$state elapsed_ms=$($sw.ElapsedMilliseconds)"
+            $out | Format-Table -AutoSize
+          }
+          Write-Host 'HYPERV_INSPECT_PROFILE=COMPLETE'
+
+      - name: Verify source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue)
+          Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$($snaps.Count)"
+          if($vm.State -ne 'Running'){throw 'Profiler changed source state'}
+          if($snaps.Count -ne 0){throw 'Profiler found/created checkpoint'}
+          Write-Host 'SOURCE_INVARIANT=PASS'
