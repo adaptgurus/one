@@ -1,0 +1,130 @@
+name: Manoj Replication v2 Two-Site Qualification
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-replication-v2-two-site.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-replication-v2-two-site
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 60
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME user=$env:USERNAME"
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host 'MANOJ_RUNNER_BIND=PASS'
+
+      - name: Locate exact LayerSentry platform checkout
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $roots=@(
+            'C:\LayerSentryLab\qualification',
+            'C:\LayerSentryLab',
+            (Join-Path $env:USERPROFILE 'actions-runner\_work'),
+            (Join-Path $env:USERPROFILE 'actions-runner-one\_work')
+          ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -Unique
+          $repos=@()
+          foreach($root in $roots){
+            Get-ChildItem -LiteralPath $root -Directory -Recurse -Depth 5 -ErrorAction SilentlyContinue |
+              ForEach-Object {
+                if(Test-Path (Join-Path $_.FullName '.git')){
+                  try {
+                    $remote=(git -C $_.FullName remote get-url origin 2>$null)
+                    if($LASTEXITCODE -eq 0 -and $remote -match 'adaptgurus/layersentry-platform'){
+                      $dirty=@(git -C $_.FullName status --porcelain 2>$null)
+                      $repos += [pscustomobject]@{
+                        Path=$_.FullName
+                        Remote=$remote
+                        Head=(git -C $_.FullName rev-parse HEAD 2>$null)
+                        Branch=(git -C $_.FullName branch --show-current 2>$null)
+                        Dirty=$dirty.Count
+                      }
+                    }
+                  } catch {}
+                }
+              }
+          }
+          if($repos.Count -lt 1){throw 'No adaptgurus/layersentry-platform checkout found on Manoj runner.'}
+          $repos | Sort-Object Dirty,Path | Format-Table -AutoSize
+          $best=$repos | Sort-Object Dirty,Path | Select-Object -First 1
+          if($best.Dirty -ne 0){throw "Best layersentry-platform checkout is dirty: $($best.Path)"}
+          "LAYERENTRY_PLATFORM=$($best.Path)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "LAYERENTRY_PLATFORM=$($best.Path)"
+          Write-Host 'PLATFORM_WORKSPACE_BIND=PASS'
+
+      - name: Checkout exact PR 103 head locally
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $repo=$env:LAYERENTRY_PLATFORM
+          git -C $repo fetch origin d47641e9eeb6656ad61b2739a6c5195409558ec3
+          if($LASTEXITCODE -ne 0){throw 'Unable to fetch exact PR103 head.'}
+          $wt='C:\LayerSentryLab\qualification\replication-v2-pr103-live'
+          if(Test-Path $wt){
+            try { git -C $repo worktree remove --force $wt 2>$null } catch {}
+            if(Test-Path $wt){Remove-Item $wt -Recurse -Force}
+          }
+          git -C $repo worktree add --detach $wt d47641e9eeb6656ad61b2739a6c5195409558ec3
+          if($LASTEXITCODE -ne 0){throw 'Unable to create exact-head worktree.'}
+          $head=(git -C $wt rev-parse HEAD).Trim()
+          if($head -ne 'd47641e9eeb6656ad61b2739a6c5195409558ec3'){throw "Wrong exact head: $head"}
+          "RV2_WORKTREE=$wt" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "EXACT_HEAD=$head"
+          Write-Host 'EXACT_HEAD_BIND=PASS'
+
+      - name: Validate exact source and qualification script
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Push-Location $env:RV2_WORKTREE
+          try {
+            $go=Get-Command go -ErrorAction Stop
+            go test -count=1 ./...
+            if($LASTEXITCODE -ne 0){throw 'go test ./... failed'}
+            go vet ./pkg/replicationv2 ./internal/replicationv2 ./internal/adapters/opennebula ./internal/adapters/replication/opennebulaproduct ./cmd/layersentry-replication-v2
+            if($LASTEXITCODE -ne 0){throw 'go vet failed'}
+            $tokens=$null;$errors=$null
+            [System.Management.Automation.Language.Parser]::ParseFile(
+              (Resolve-Path 'scripts/replication-v2-manoj-two-site.ps1'),
+              [ref]$tokens,[ref]$errors
+            ) | Out-Null
+            if($errors.Count -gt 0){$errors | ForEach-Object {Write-Error $_.Message};throw 'Qualification script parse failed'}
+            Write-Host 'EXACT_SOURCE_VALIDATION=PASS'
+          } finally { Pop-Location }
+
+      - name: Execute two-site pairing and DR qualification
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Push-Location $env:RV2_WORKTREE
+          try {
+            & .\scripts\replication-v2-manoj-two-site.ps1 -QualificationRoot 'C:\LayerSentryLab\qualification'
+            if($LASTEXITCODE -ne 0){throw "Two-site qualification failed rc=$LASTEXITCODE"}
+          } finally { Pop-Location }
+
+      - name: Show sanitized evidence
+        if: always()
+        shell: powershell
+        run: |
+          $path='C:\LayerSentryLab\qualification\replication-v2-two-site-live-evidence.json'
+          if(Test-Path $path){
+            Write-Host '=== SANITIZED LIVE EVIDENCE ==='
+            Get-Content -LiteralPath $path -Raw
+          } else {
+            Write-Host 'No final evidence file was produced.'
+          }
