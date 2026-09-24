@@ -20,6 +20,7 @@ BACKUP_DS = 100
 SOURCE_IMAGE_ID = 1
 SOURCE_NETWORK_ID = 0
 SOURCE_HOST = None
+SOURCE_HOST_ISOLATION = None
 SOURCE_HOST_CANDIDATES = [x.strip() for x in os.environ.get("LAYERSENTRY_TEST_HOSTS", "rocky-02,rocky-03").split(",") if x.strip()]
 RUN_ID = os.environ.get("GITHUB_RUN_ID", str(os.getpid()))
 SOURCE_NAME = "ls-dr-threepoint-src-" + RUN_ID
@@ -69,22 +70,65 @@ def find_vm_by_name(name):
         raise RuntimeError(f"multiple VMs named {name}: {matches}")
     return matches[0] if matches else None
 
+def host_cpu_isolation(host):
+    # Inspect the real libvirt affinity map so a new CORE-pinned qualification
+    # VM can use a completely unused physical core without overlapping any
+    # existing K8s or other VM vCPU/emulator thread.
+    topo_raw = ssh(
+        f"ssh {shlex.quote(host)} "
+        + shlex.quote("lscpu -p=CPU,CORE | grep -v '^#'")
+    )
+    cpu_to_core = {}
+    core_to_cpus = {}
+    for line in topo_raw.splitlines():
+        parts = [x.strip() for x in line.split(",")]
+        if len(parts) != 2 or not all(x.isdigit() for x in parts):
+            continue
+        cpu, core = map(int, parts)
+        cpu_to_core[cpu] = core
+        core_to_cpus.setdefault(core, set()).add(cpu)
+    if not core_to_cpus:
+        raise RuntimeError(f"cannot resolve CPU topology for {host}")
+
+    pin_raw = ssh(
+        f"ssh {shlex.quote(host)} "
+        + shlex.quote(
+            "set -e; V=virsh; "
+            "if sudo -n virsh list >/dev/null 2>&1; then V='sudo -n virsh'; fi; "
+            "for d in $($V list --name); do "
+            "[ -n \"$d\" ] || continue; "
+            "echo DOMAIN=$d; "
+            "$V vcpupin \"$d\" | awk 'NR>2 && $1 ~ /^[0-9]+$/ {print \"VCPU=\" $3}'; "
+            "$V emulatorpin \"$d\" | awk 'NR>2 && $1 == \"*\" {print \"EMU=\" $2}'; "
+            "done"
+        )
+    )
+    used_cpus = set()
+    for line in pin_raw.splitlines():
+        if not (line.startswith("VCPU=") or line.startswith("EMU=")):
+            continue
+        value = line.split("=", 1)[1].strip()
+        for token in value.replace(",", " ").split():
+            if token.isdigit():
+                used_cpus.add(int(token))
+            elif "-" in token:
+                a, b = token.split("-", 1)
+                if a.isdigit() and b.isdigit():
+                    used_cpus.update(range(int(a), int(b) + 1))
+    used_cores = {cpu_to_core[cpu] for cpu in used_cpus if cpu in cpu_to_core}
+    free_cores = sorted(set(core_to_cpus) - used_cores)
+    return {
+        "cpu_to_core": cpu_to_core,
+        "core_to_cpus": core_to_cpus,
+        "used_cpus": used_cpus,
+        "used_cores": used_cores,
+        "free_cores": free_cores,
+    }
+
 def select_safe_source_host():
-    global SOURCE_HOST
+    global SOURCE_HOST, SOURCE_HOST_ISOLATION
     if not SOURCE_HOST_CANDIDATES:
         raise RuntimeError("no qualification compute-host candidates configured")
-
-    pool = ET.fromstring(ssh("onevm list --xml"))
-    running_by_host = {}
-    for vm in pool.findall("VM"):
-        state = int(vm.findtext("STATE") or -1)
-        lcm = int(vm.findtext("LCM_STATE") or -1)
-        if state != 3 or lcm != 3:
-            continue
-        histories = vm.findall("./HISTORY_RECORDS/HISTORY")
-        host = histories[-1].findtext("HOSTNAME") if histories else ""
-        if host:
-            running_by_host[host] = running_by_host.get(host, 0) + 1
 
     rejected = []
     for host in SOURCE_HOST_CANDIDATES:
@@ -92,21 +136,27 @@ def select_safe_source_host():
         policies = [(node.text or "").strip().upper() for node in host_xml.findall(".//PIN_POLICY")]
         pin_policy = next((value for value in policies if value), "")
         vms_thread = next(((node.text or "").strip() for node in host_xml.findall(".//VMS_THREAD") if (node.text or "").strip()), "1")
-        existing = running_by_host.get(host, 0)
         if pin_policy != "PINNED":
             rejected.append(f"{host}:PIN_POLICY={pin_policy or 'UNSET'}")
             continue
         if vms_thread != "1":
             rejected.append(f"{host}:VMS_THREAD={vms_thread}")
             continue
-        if existing != 0:
-            rejected.append(f"{host}:RUNNING_VMS={existing}")
+        isolation = host_cpu_isolation(host)
+        if not isolation["free_cores"]:
+            rejected.append(f"{host}:NO_FREE_PHYSICAL_CORE")
             continue
         SOURCE_HOST = host
-        print(f"CPU_ISOLATION_HOST=PASS HOST={host} PIN_POLICY={pin_policy} VMS_THREAD={vms_thread} PREEXISTING_RUNNING_VMS=0")
+        SOURCE_HOST_ISOLATION = isolation
+        print(
+            f"CPU_ISOLATION_HOST=PASS HOST={host} PIN_POLICY={pin_policy} "
+            f"VMS_THREAD={vms_thread} USED_CORES={sorted(isolation['used_cores'])} "
+            f"FREE_CORES={isolation['free_cores']}"
+        )
         return
 
-    raise RuntimeError("no safe empty PINNED compute host for qualification: " + ";".join(rejected))
+    raise RuntimeError("no safe PINNED compute host with a free physical core: " + ";".join(rejected))
+
 
 def create_source_vm():
     global VM_ID, SOURCE_IP
@@ -177,6 +227,42 @@ SCHED_REQUIREMENTS="NAME = \\"{SOURCE_HOST}\\""
     if not SOURCE_IP:
         raise RuntimeError("source VM did not reach RUNNING with an allocated IP")
     print(f"SOURCE_VM_RUNNING=PASS VM_ID={VM_ID} IP={SOURCE_IP} HOST={SOURCE_HOST}")
+
+    # Prove the qualification VM was assigned to a physical core that was
+    # completely unused before allocation. If not, stop before backup stress.
+    pin_text = ssh(
+        f"ssh {shlex.quote(SOURCE_HOST)} "
+        + shlex.quote(
+            f"V=virsh; if sudo -n virsh list >/dev/null 2>&1; then V='sudo -n virsh'; fi; "
+            f"$V vcpupin one-{VM_ID}; $V emulatorpin one-{VM_ID}"
+        )
+    )
+    assigned = set()
+    for line in pin_text.splitlines():
+        parts = line.split()
+        if not parts:
+            continue
+        value = parts[-1]
+        for token in value.replace(",", " ").split():
+            if token.isdigit():
+                assigned.add(int(token))
+            elif "-" in token:
+                a, b = token.split("-", 1)
+                if a.isdigit() and b.isdigit():
+                    assigned.update(range(int(a), int(b) + 1))
+    cpu_to_core = SOURCE_HOST_ISOLATION["cpu_to_core"]
+    assigned_cores = {cpu_to_core[c] for c in assigned if c in cpu_to_core}
+    if not assigned_cores:
+        raise RuntimeError("qualification VM has no authoritative pinned CPU assignment")
+    if assigned_cores & SOURCE_HOST_ISOLATION["used_cores"]:
+        raise RuntimeError(
+            f"qualification VM CPU overlap: assigned_cores={sorted(assigned_cores)} "
+            f"preexisting_used_cores={sorted(SOURCE_HOST_ISOLATION['used_cores'])}"
+        )
+    print(
+        f"SOURCE_VM_CPU_ISOLATION=PASS VM_ID={VM_ID} "
+        f"ASSIGNED_CPUS={sorted(assigned)} ASSIGNED_CORES={sorted(assigned_cores)}"
+    )
 
     end = time.time() + 240
     while time.time() < end:
