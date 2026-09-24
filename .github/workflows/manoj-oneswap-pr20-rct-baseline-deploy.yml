@@ -60,7 +60,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $sha='37443faa1b5bd2e74451dba365ba3a57bd379406'
+          $sha='068ced6a0b944087a6544c239718fda4c7588a81'
           $url="https://raw.githubusercontent.com/adaptgurus/one-swap/$sha/hyperv_hot_helper.rb"
           $file=Join-Path $env:RUNNER_TEMP 'hyperv_hot_helper.pr20.rb'
           & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 30 -o $file $url
