@@ -49,6 +49,101 @@ const drApi = oneApi.injectEndpoints({
           data: { site },
         }),
     }),
+    getSitePairs: builder.query({
+      queryFn: () => request({ url: '/api/dr/site-pairs' }),
+    }),
+    createSitePair: builder.mutation({
+      queryFn: (pair) =>
+        request({
+          url: '/api/dr/site-pairs',
+          method: 'POST',
+          data: { pair },
+        }),
+    }),
+    getEnvironmentNetworks: builder.query({
+      queryFn: (siteId) =>
+        request({
+          url: `/api/dr/environment-networks/${encodeURIComponent(siteId)}`,
+        }),
+    }),
+    allocateEnvironmentNetworks: builder.mutation({
+      queryFn: ({ siteId, allocation }) =>
+        request({
+          url: `/api/dr/environment-networks/${encodeURIComponent(
+            siteId
+          )}/allocate`,
+          method: 'POST',
+          data: { allocation },
+        }),
+    }),
+    provisionEnvironmentNetworks: builder.mutation({
+      queryFn: (siteId) =>
+        request({
+          url: `/api/dr/environment-networks/${encodeURIComponent(
+            siteId
+          )}/provision`,
+          method: 'POST',
+        }),
+    }),
+    getSiteVms: builder.query({
+      queryFn: (siteId) =>
+        request({
+          url: `/api/dr/sites/${encodeURIComponent(siteId)}/vms`,
+        }),
+    }),
+    getVmCheckpoints: builder.query({
+      queryFn: ({ siteId, workloadId }) =>
+        request({
+          url: `/api/dr/sites/${encodeURIComponent(
+            siteId
+          )}/vms/${encodeURIComponent(workloadId)}/checkpoints`,
+        }),
+    }),
+    getRecoveryMapping: builder.query({
+      queryFn: ({ groupId, siteId }) =>
+        request({
+          url: `/api/dr/protection-domains/${encodeURIComponent(
+            groupId
+          )}/recovery-mappings/${encodeURIComponent(siteId)}`,
+        }),
+    }),
+    putRecoveryMapping: builder.mutation({
+      queryFn: ({ groupId, siteId, mapping }) =>
+        request({
+          url: `/api/dr/protection-domains/${encodeURIComponent(
+            groupId
+          )}/recovery-mappings/${encodeURIComponent(siteId)}`,
+          method: 'PUT',
+          data: { mapping },
+        }),
+    }),
+    enableNdr: builder.mutation({
+      queryFn: ({ groupId, config }) =>
+        request({
+          url: `/api/dr/protection-domains/${encodeURIComponent(
+            groupId
+          )}/enable-ndr`,
+          method: 'POST',
+          data: { config },
+        }),
+    }),
+    getManagementBackups: builder.query({
+      queryFn: (pairId) =>
+        request({
+          url: `/api/dr/site-pairs/${encodeURIComponent(
+            pairId
+          )}/management-backups`,
+        }),
+    }),
+    runManagementBackup: builder.mutation({
+      queryFn: (pairId) =>
+        request({
+          url: `/api/dr/site-pairs/${encodeURIComponent(
+            pairId
+          )}/management-backup`,
+          method: 'POST',
+        }),
+    }),
     getProtectionDomains: builder.query({
       queryFn: () => request({ url: '/api/dr/protection-domains' }),
     }),
@@ -84,6 +179,30 @@ const {
   useGetDrCapabilitiesQuery,
   useGetRemoteSitesQuery,
   useCreateRemoteSiteMutation,
+  useGetSitePairsQuery,
+  useCreateSitePairMutation,
+  useGetEnvironmentNetworksQuery,
+  useAllocateEnvironmentNetworksMutation,
+  useProvisionEnvironmentNetworksMutation,
+  useGetSiteVmsQuery,
+  useGetVmCheckpointsQuery,
+  useGetRecoveryMappingQuery,
+  usePutRecoveryMappingMutation,
+  useEnableNdrMutation,
+  useGetManagementBackupsQuery,
+  useRunManagementBackupMutation,
+  useGetSitePairsQuery,
+  useCreateSitePairMutation,
+  useGetEnvironmentNetworksQuery,
+  useAllocateEnvironmentNetworksMutation,
+  useProvisionEnvironmentNetworksMutation,
+  useGetSiteVmsQuery,
+  useGetVmCheckpointsQuery,
+  useGetRecoveryMappingQuery,
+  usePutRecoveryMappingMutation,
+  useEnableNdrMutation,
+  useGetManagementBackupsQuery,
+  useRunManagementBackupMutation,
   useGetProtectionDomainsQuery,
   useCreateProtectionDomainMutation,
   useGetProtectionDomainRecoveryPointsQuery,
@@ -91,6 +210,18 @@ const {
 } = drApi
 
 export default {
+  useRunManagementBackupMutation,
+  useGetManagementBackupsQuery,
+  useEnableNdrMutation,
+  usePutRecoveryMappingMutation,
+  useGetRecoveryMappingQuery,
+  useGetVmCheckpointsQuery,
+  useGetSiteVmsQuery,
+  useProvisionEnvironmentNetworksMutation,
+  useAllocateEnvironmentNetworksMutation,
+  useGetEnvironmentNetworksQuery,
+  useCreateSitePairMutation,
+  useGetSitePairsQuery,
   useGetDrCapabilitiesQuery,
   useGetRemoteSitesQuery,
   useCreateRemoteSiteMutation,
