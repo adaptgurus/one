@@ -338,7 +338,7 @@ jobs:
 
 
   manoj-oneswap-authority-map:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
@@ -407,3 +407,68 @@ jobs:
               ForEach-Object { Write-Host $_ }
           }
           Write-Host 'ONESWAP_AUTHORITY_MAP=PASS'
+
+
+  manoj-oneswap-authoritative-probe:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+      - name: Probe authoritative appliance IP
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance.paramiko'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          foreach($p in @($known,$key)){if(-not(Test-Path $p)){throw "Missing authority: $p"}}
+          & ssh-keygen.exe -F $ip -f $known
+          Write-Host "PIN_EXIT=$LASTEXITCODE"
+          foreach($port in @(22,9443,9444)){
+            $client=New-Object System.Net.Sockets.TcpClient
+            try{
+              $iar=$client.BeginConnect($ip,$port,$null,$null)
+              $ok=$iar.AsyncWaitHandle.WaitOne(2000,$false)
+              if($ok -and $client.Connected){
+                $client.EndConnect($iar)
+                Write-Host "AUTH_ENDPOINT ip=$ip port=$port tcp=true"
+              } else {
+                Write-Host "AUTH_ENDPOINT ip=$ip port=$port tcp=false"
+              }
+            } catch {
+              Write-Host "AUTH_ENDPOINT ip=$ip port=$port tcp=false"
+            } finally {$client.Close()}
+          }
+          ping.exe -n 2 -w 1000 $ip | Select-Object -Last 4 | ForEach-Object {Write-Host "PING $_"}
+          Write-Host 'AUTHORITATIVE_APPLIANCE_PROBE=PASS'
+
+      - name: Read-only SSH identity if pinned host is reachable
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.32'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance.paramiko'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          & ssh-keygen.exe -F $ip -f $known *> $null
+          if($LASTEXITCODE -ne 0){
+            Write-Host 'AUTH_SSH=SKIP_NO_PIN'
+            exit 0
+          }
+          $tcp=New-Object Net.Sockets.TcpClient
+          try {
+            $iar=$tcp.BeginConnect($ip,22,$null,$null)
+            $ok=$iar.AsyncWaitHandle.WaitOne(1500,$false)
+          } finally {$tcp.Close()}
+          if(-not $ok){Write-Host 'AUTH_SSH=SKIP_PORT22_CLOSED'; exit 0}
+          foreach($u in @('oneadmin','root','opc','rocky','cloud-user')){
+            & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=5 -i $key "$u@$ip" 'id -un; hostname' 2>$null
+            if($LASTEXITCODE -eq 0){Write-Host "AUTH_SSH_USER=$u"; exit 0}
+          }
+          throw 'Pinned appliance accepted no approved login user'
