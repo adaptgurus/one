@@ -14,7 +14,7 @@ permissions:
 jobs:
   validate:
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - name: Boot pinned guest-agent recovery VM and validate services
         shell: powershell
@@ -22,44 +22,103 @@ jobs:
           $ErrorActionPreference = 'Stop'
           if ($env:RUNNER_NAME -ne 'MANOJ-TEST-INST') { throw "Wrong runner" }
           $script = @'
-          import base64, json, os, pathlib, time, xml.etree.ElementTree as ET
+          import base64, functools, hashlib, http.server, os, pathlib, threading, time, xml.etree.ElementTree as ET
           from xmlrpc.client import ServerProxy
           from dissect.target import Target
 
           ENDPOINT="http://10.250.10.10:2633/RPC2"
           AUTH_IMAGE=pathlib.Path(r"C:\LayerSentryLab\Recovery\fe2-lvm\2.img")
-          SOURCE_IMAGE_ID=3
+          RECOVERY_DIR=pathlib.Path(r"C:\LayerSentryLab\dr-recovery\tester-vm220-20260923")
+          DISK=RECOVERY_DIR/"vm220-dr-recovered.qcow2"
           TARGET_HOST="ls-kvm2"
+          DATASTORE_ID=1
+          HOST_HTTP_IP="10.250.10.1"
+          HTTP_PORT=18086
+
+          if not DISK.is_file():
+              raise SystemExit("recovery disk missing")
+          offline=Target.open(str(DISK))
+          os_release=offline.fs.path("/etc/os-release").open("rb").read()
+          sshd_cfg=b""
+          try:
+              sshd_cfg=offline.fs.path("/etc/ssh/sshd_config").open("rb").read()
+          except Exception:
+              pass
+          expected_os_sha=hashlib.sha256(os_release).hexdigest()
+          expected_sshd_sha=hashlib.sha256(sshd_cfg).hexdigest() if sshd_cfg else ""
+          print("EXPECTED_OS_RELEASE_SHA256="+expected_os_sha)
+          if expected_sshd_sha: print("EXPECTED_SSHD_CONFIG_SHA256="+expected_sshd_sha)
 
           target=Target.open(str(AUTH_IMAGE))
           auth=target.fs.path("/var/lib/one/.one/one_auth").open("rb").read().decode().strip()
           one=ServerProxy(ENDPOINT, allow_none=True)
 
-          hostpool=one.one.hostpool.info(auth,-2,-1,-1)
-          if not hostpool[0]: raise SystemExit("host pool query failed")
-          hp=ET.fromstring(hostpool[1])
+          hp_res=one.one.hostpool.info(auth,-2,-1,-1)
+          if not hp_res[0]: raise SystemExit("host pool query failed")
+          hp=ET.fromstring(hp_res[1])
           hs=[h for h in hp.findall("HOST") if (h.findtext("NAME") or "").strip()==TARGET_HOST]
           if len(hs)!=1: raise SystemExit("target host not unique")
           h=hs[0]
           state=int(h.findtext("STATE") or -1)
           max_cpu=int(h.findtext("./HOST_SHARE/MAX_CPU") or h.findtext("./HOST_SHARE/TOTAL_CPU") or 0)
-          free_cpu_raw=h.findtext("./HOST_SHARE/FREE_CPU")
-          free_cpu=int(free_cpu_raw) if free_cpu_raw not in (None,"") else max_cpu
           pin=(h.findtext("./TEMPLATE/PIN_POLICY") or "").strip().upper()
           thread=(h.findtext("./TEMPLATE/VMS_THREAD") or "1").strip()
-          if state!=2 or pin!="PINNED" or thread!="1" or free_cpu<100:
-              raise SystemExit(f"unsafe target host state={state} pin={pin} thread={thread} free_cpu={free_cpu}")
-          print(f"SERVICE_HOST_PREFLIGHT=PASS state={state} max_cpu={max_cpu} free_cpu={free_cpu} pin={pin}")
+          if state!=2 or pin!="PINNED" or thread!="1" or max_cpu<200:
+              raise SystemExit(f"unsafe target host state={state} pin={pin} thread={thread} max_cpu={max_cpu}")
 
-          image=one.one.image.info(auth,SOURCE_IMAGE_ID,False)
-          if not image[0]: raise SystemExit("recovery image unavailable")
-          ir=ET.fromstring(image[1])
-          if int(ir.findtext("STATE") or -1)!=1:
-              raise SystemExit("recovery image not READY")
+          vmp=one.one.vmpool.info(auth,-2,-1,-1,-2,"")
+          if not vmp[0]: raise SystemExit("VM pool query failed")
+          vp=ET.fromstring(vmp[1])
+          used=set()
+          active=[]
+          for vm in vp.findall("VM"):
+              histories=vm.findall("./HISTORY_RECORDS/HISTORY")
+              host=histories[-1].findtext("HOSTNAME") if histories else ""
+              if host!=TARGET_HOST: continue
+              vm_state=int(vm.findtext("STATE") or -1)
+              deploy=(vm.findtext("DEPLOY_ID") or "").strip()
+              if vm_state==3 and deploy:
+                  cpus=[x.text for x in vm.findall("./TEMPLATE/NUMA_NODE/CPUS") if x.text]
+                  for value in cpus:
+                      for part in value.replace(",", " ").split():
+                          if part.isdigit(): used.add(int(part))
+                  active.append((vm.findtext("ID"),vm.findtext("NAME"),cpus))
+          total_cores=max_cpu//100
+          print("PINNED_ACTIVE_VMS="+repr(active))
+          print("PINNED_USED_CPUS="+repr(sorted(used)))
+          if len(used)>=total_cores:
+              raise SystemExit(f"no isolated CPU remains used={sorted(used)} total_cores={total_cores}")
+          print(f"SERVICE_HOST_PREFLIGHT=PASS total_cores={total_cores} used={sorted(used)}")
+
+          class QuietHandler(http.server.SimpleHTTPRequestHandler):
+              def log_message(self, fmt, *args): pass
+          handler=functools.partial(QuietHandler,directory=str(RECOVERY_DIR))
+          server=http.server.ThreadingHTTPServer(("0.0.0.0",HTTP_PORT),handler)
+          threading.Thread(target=server.serve_forever,daemon=True).start()
 
           run_id=os.environ.get("GITHUB_RUN_ID","manual")
-          name="ls-dr-service-validate-"+run_id
-          vm_template=f'''NAME="{name}"
+          image_name="ls-dr-service-image-"+run_id
+          vm_name="ls-dr-service-vm-"+run_id
+          image_template=f'''NAME="{image_name}"
+          PATH="http://{HOST_HTTP_IP}:{HTTP_PORT}/{DISK.name}"
+          TYPE="OS"
+          PERSISTENT="NO"
+          DESCRIPTION="LayerSentry pinned service recovery validation"
+          '''
+          alloc=one.one.image.allocate(auth,image_template,DATASTORE_ID)
+          if not alloc[0]: raise SystemExit("service image allocate failed: "+str(alloc[1])[:500])
+          image_id=int(alloc[1])
+          print("SERVICE_IMAGE_ID="+str(image_id))
+          for _ in range(180):
+              info=one.one.image.info(auth,image_id,False)
+              if not info[0]: raise SystemExit("service image info failed")
+              ir=ET.fromstring(info[1]); st=int(ir.findtext("STATE") or -1)
+              if st==1: break
+              if st in (5,7): raise SystemExit("service image failed: "+str(ir.findtext("./TEMPLATE/ERROR") or ""))
+              time.sleep(2)
+          else: raise SystemExit("service image did not become READY")
+
+          vm_template=f'''NAME="{vm_name}"
           CPU="1"
           VCPU="1"
           MEMORY="256"
@@ -70,87 +129,85 @@ jobs:
             SOCKETS="1",
             THREADS="1"
           ]
-          DISK=[IMAGE_ID="{SOURCE_IMAGE_ID}"]
+          DISK=[IMAGE_ID="{image_id}"]
           SCHED_REQUIREMENTS="NAME = \"{TARGET_HOST}\""
           '''
-          alloc=one.one.vm.allocate(auth,vm_template,False)
-          if not alloc[0]:
-              raise SystemExit("service validation VM allocation failed: "+str(alloc[1])[:500])
-          vm_id=int(alloc[1])
+          va=one.one.vm.allocate(auth,vm_template,False)
+          if not va[0]: raise SystemExit("service VM allocate failed: "+str(va[1])[:500])
+          vm_id=int(va[1])
           print("SERVICE_VALIDATION_VM_ID="+str(vm_id))
-
-          root=None
+          final_cpus=[]
           for _ in range(180):
               info=one.one.vm.info(auth,vm_id,False)
-              if not info[0]: raise SystemExit("VM info failed")
+              if not info[0]: raise SystemExit("service VM info failed")
               root=ET.fromstring(info[1])
-              state=int(root.findtext("STATE") or -1)
-              lcm=int(root.findtext("LCM_STATE") or -1)
+              state=int(root.findtext("STATE") or -1); lcm=int(root.findtext("LCM_STATE") or -1)
               histories=root.findall("./HISTORY_RECORDS/HISTORY")
               host=histories[-1].findtext("HOSTNAME") if histories else ""
               pin=(root.findtext("./TEMPLATE/TOPOLOGY/PIN_POLICY") or "").strip().upper()
-              cpus=[x.text for x in root.findall("./TEMPLATE/NUMA_NODE/CPUS") if x.text]
+              final_cpus=[x.text for x in root.findall("./TEMPLATE/NUMA_NODE/CPUS") if x.text]
               if state==3 and lcm==3 and host==TARGET_HOST:
                   if pin!="CORE": raise SystemExit("service VM not CORE pinned")
-                  print(f"SERVICE_VM_RUNNING=PASS vm={vm_id} host={host} pin={pin} cpus={cpus}")
+                  assigned=set()
+                  for value in final_cpus:
+                      for part in value.replace(","," ").split():
+                          if part.isdigit(): assigned.add(int(part))
+                  if assigned & used:
+                      raise SystemExit(f"CPU overlap with existing recovery VM: assigned={assigned} used={used}")
+                  print(f"SERVICE_VM_RUNNING=PASS vm={vm_id} image={image_id} host={host} pin={pin} cpus={final_cpus}")
                   break
               if state==6: raise SystemExit("service VM reached DONE")
               time.sleep(2)
-          else:
-              raise SystemExit("service VM did not become RUNNING")
+          else: raise SystemExit("service VM did not become RUNNING")
 
-          command="set -e; echo OS_BEGIN; cat /etc/os-release; echo OS_END; echo SERVICES_BEGIN; rc-service sshd status; rc-service qemu-guest-agent status; rc-status -a; echo SERVICES_END; if [ -f /etc/layersentry-dr-point ]; then echo MARKER=$(cat /etc/layersentry-dr-point); else echo MARKER=ABSENT; fi"
+          command="set -e; echo OS_SHA=$(sha256sum /etc/os-release | awk '{print $1}'); if [ -f /etc/ssh/sshd_config ]; then echo SSHD_SHA=$(sha256sum /etc/ssh/sshd_config | awk '{print $1}'); fi; echo SERVICES_BEGIN; rc-service sshd status; rc-service qemu-guest-agent status; rc-status -a; echo SERVICES_END"
           exec_method=getattr(one.one.vm,"exec")
-          submitted=False
           last_error=""
-          for attempt in range(90):
+          for attempt in range(120):
               result=exec_method(auth,vm_id,command)
               if result[0]:
-                  submitted=True
                   print("QGA_EXEC_SUBMITTED=PASS attempt="+str(attempt+1))
                   break
               last_error=str(result[1])
               time.sleep(2)
-          if not submitted:
-              raise SystemExit("qemu-ga exec never became available: "+last_error[:500])
+          else:
+              raise SystemExit("qemu-ga exec unavailable: "+last_error[:500])
 
           qga=None
-          for _ in range(90):
+          for _ in range(120):
               info=one.one.vm.info(auth,vm_id,False)
-              if not info[0]: raise SystemExit("VM info during qga exec failed")
+              if not info[0]: raise SystemExit("service VM info during exec failed")
               root=ET.fromstring(info[1])
               qga=root.find("./TEMPLATE/QEMU_GA_EXEC")
               status=(qga.findtext("STATUS") or "").strip() if qga is not None else ""
-              if status in ("DONE","ERROR","CANCELLED"):
-                  break
+              if status in ("DONE","ERROR","CANCELLED"): break
               time.sleep(2)
-          if qga is None:
-              raise SystemExit("QEMU_GA_EXEC result missing")
+          if qga is None: raise SystemExit("QEMU_GA_EXEC missing")
           status=(qga.findtext("STATUS") or "").strip()
           rc=(qga.findtext("RETURN_CODE") or "").strip()
-          stdout64=(qga.findtext("STDOUT") or "").strip()
-          stderr64=(qga.findtext("STDERR") or "").strip()
-          stdout=base64.b64decode(stdout64).decode("utf-8","replace") if stdout64 else ""
-          stderr=base64.b64decode(stderr64).decode("utf-8","replace") if stderr64 else ""
-          print("QGA_STATUS="+status)
-          print("QGA_RETURN_CODE="+rc)
-          print("QGA_STDOUT_BEGIN")
-          print(stdout)
-          print("QGA_STDOUT_END")
-          if stderr:
-              print("QGA_STDERR="+stderr)
-          if status!="DONE" or rc!="0":
-              raise SystemExit("guest service command failed")
-          if "Alpine Linux" not in stdout:
-              raise SystemExit("OS identity validation failed")
-          if "status: started" not in stdout and "started" not in stdout:
-              raise SystemExit("service-state evidence missing")
-          if "sshd" not in stdout or "qemu-guest-agent" not in stdout:
-              raise SystemExit("required recovery services not evidenced")
+          out64=(qga.findtext("STDOUT") or "").strip()
+          err64=(qga.findtext("STDERR") or "").strip()
+          stdout=base64.b64decode(out64).decode("utf-8","replace") if out64 else ""
+          stderr=base64.b64decode(err64).decode("utf-8","replace") if err64 else ""
+          print("QGA_STATUS="+status); print("QGA_RETURN_CODE="+rc)
+          print("QGA_STDOUT_BEGIN"); print(stdout); print("QGA_STDOUT_END")
+          if stderr: print("QGA_STDERR="+stderr)
+          if status!="DONE" or rc!="0": raise SystemExit("guest service command failed")
+          if "OS_SHA="+expected_os_sha not in stdout: raise SystemExit("os-release continuity hash mismatch")
+          if expected_sshd_sha and "SSHD_SHA="+expected_sshd_sha not in stdout: raise SystemExit("sshd config continuity hash mismatch")
+          if "sshd" not in stdout or "qemu-guest-agent" not in stdout: raise SystemExit("required services absent")
+          if "status: started" not in stdout and "started" not in stdout: raise SystemExit("required services not started")
           print("MANOJ_RECOVERY_SERVICE_VALIDATION=PASS")
-          print("MANOJ_RECOVERY_SERVICE_VM_PRESERVED=YES VM_ID="+str(vm_id))
+          print(f"MANOJ_RECOVERY_SERVICE_PRESERVED=YES VM_ID={vm_id} IMAGE_ID={image_id}")
+          server.shutdown()
           '@
           $p=Join-Path $env:RUNNER_TEMP 'pinned-service-validation.py'
           Set-Content -Path $p -Value $script -Encoding UTF8
-          & 'C:\LayerSentryLab\tools\Python313\python.exe' $p
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $rule="LayerSentry-Service-DR-$env:GITHUB_RUN_ID"
+          try {
+            New-NetFirewallRule -DisplayName $rule -Direction Inbound -Action Allow -Protocol TCP -LocalPort 18086 -RemoteAddress 10.250.10.0/24 -Profile Any | Out-Null
+            & 'C:\LayerSentryLab\tools\Python313\python.exe' $p
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue
+          }
