@@ -1,0 +1,59 @@
+name: Manoj DR Network Capability Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-dr-network-capability-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-dr-network-capability-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Probe DR gateway capabilities read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host 'MANOJ_RUNNER_BIND=PASS'
+          Write-Host '=== ADDRESSES ==='
+          Get-NetIPAddress -AddressFamily IPv4 |
+            Where-Object {$_.IPAddress -notlike '127.*'} |
+            Select-Object InterfaceAlias,IPAddress,PrefixLength |
+            Sort-Object InterfaceAlias,IPAddress |
+            Format-Table -AutoSize
+          Write-Host '=== ROUTES ==='
+          Get-NetRoute -AddressFamily IPv4 |
+            Where-Object {$_.DestinationPrefix -eq '0.0.0.0/0' -or $_.DestinationPrefix -like '10.*' -or $_.DestinationPrefix -like '172.*' -or $_.DestinationPrefix -like '192.168.*'} |
+            Select-Object DestinationPrefix,NextHop,InterfaceAlias,RouteMetric |
+            Sort-Object DestinationPrefix,RouteMetric |
+            Format-Table -AutoSize
+          Write-Host '=== TOOLS ==='
+          foreach($x in @('wireguard','wg','tailscale','zerotier-cli','cloudflared','oci','ssh','socat','nc')){
+            $cmd=Get-Command $x -ErrorAction SilentlyContinue
+            Write-Host "$x=$([bool]$cmd)"
+          }
+          Write-Host '=== OCI METADATA ==='
+          try {
+            $headers=@{Authorization='Bearer Oracle'}
+            $instance=Invoke-RestMethod -Headers $headers -Uri 'http://169.254.169.254/opc/v2/instance/' -TimeoutSec 2
+            Write-Host 'OCI_METADATA=YES'
+            Write-Host "OCI_REGION=$($instance.region)"
+            Write-Host "OCI_AD=$($instance.availabilityDomain)"
+            $comp=[string]$instance.compartmentId
+            if($comp.Length -gt 24){$comp=$comp.Substring(0,24)}
+            Write-Host "OCI_COMPARTMENT=$comp"
+          } catch {
+            Write-Host 'OCI_METADATA=NO'
+          }
+          Write-Host 'DR_NETWORK_CAPABILITY_PROBE=PASS'
