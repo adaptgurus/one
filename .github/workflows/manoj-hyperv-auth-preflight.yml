@@ -1,5 +1,5 @@
 name: Manoj HyperV Authenticated OneSwap Preflight
-# rerun-after-pr18-stdin-transport
+# rerun-after-pr18-stdin-bootstrap
 
 on:
   push:
