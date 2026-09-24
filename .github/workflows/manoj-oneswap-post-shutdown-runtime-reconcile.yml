@@ -1,0 +1,160 @@
+name: Manoj OneSwap Post-Shutdown Runtime Reconcile
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-post-shutdown-runtime-reconcile.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-post-shutdown-runtime-reconcile
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and require exact resumable state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw 'Wrong runner'}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'Wrong host'}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected checkpoint'}
+          $refs=@(Get-WmiObject -Namespace root/virtualization/v2 -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($vm.VMId.Guid)'" -ErrorAction Stop)
+          if($refs.Count -ne 1){throw "Expected one RCT reference; found $($refs.Count)"}
+          $ref=$refs[0]
+          if([int]$ref.ReferencePointType -ne 2 -or [bool]$ref.HasAssociatedData){throw 'RCT reference invariant failed'}
+          if(@($ref.ResilientChangeTrackingIdentifiers | Where-Object {-not [string]::IsNullOrWhiteSpace([string]$_)}).Count -ne 2){throw 'RCT IDs incomplete'}
+          Write-Host 'POST_SHUTDOWN_RUNTIME_SOURCE_GATE=PASS'
+
+      - name: Prepare restricted appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-post-shutdown-runtime.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Prove durable CUTOVER_STARTED state and migrated digest
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          state=$(find /var/lib/layersentry-oneswap/reflink-work/oneswap-hyperv-hot -maxdepth 2 -type f -name state.json -path '*manoj-hv-ls-migration-source-test-20260924*' -print)
+          [ "$(printf '%s\n' "$state" | sed '/^$/d' | wc -l)" -eq 1 ]
+          python3 - "$state" <<'PY'
+          import json,os,sys
+          p=sys.argv[1]; s=json.load(open(p))
+          print("STATE_PATH="+p)
+          print("STATE_PHASE="+str(s.get("phase")))
+          print("STATE_TARGET_DIGEST="+str(s.get("target_digest")))
+          if s.get("phase")!="CUTOVER_STARTED": raise SystemExit("state is not CUTOVER_STARTED")
+          if s.get("target_digest")!="08ca0b8c72cd657aee9b5cd810cdc6c27433365c4463aeff8a01691544543697": raise SystemExit("digest migration not present")
+          if s.get("source_off_at") or s.get("delta_applied_at") or s.get("template_id"): raise SystemExit("unexpected later-phase evidence")
+          if s.get("image_imports"): raise SystemExit("unexpected image imports")
+          if len(s.get("disks",[]))!=2: raise SystemExit("prepared disk count mismatch")
+          for i,d in enumerate(s.get("disks",[])):
+              q=d.get("prepared_raw_path","")
+              if not os.path.isfile(q): raise SystemExit(f"prepared disk {i} missing")
+              if os.path.getsize(q)!=int(d.get("virtual_size",-1)): raise SystemExit(f"prepared disk {i} size mismatch")
+              if not str(d.get("rct_id","")).strip(): raise SystemExit(f"RCT id {i} missing")
+          print("POST_SHUTDOWN_RUNTIME_STATE_GATE=PASS")
+          PY
+          '@
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Durable post-shutdown state gate failed'}
+
+      - name: Download exact CI-green PR20 core runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $head='ea0557467099960ff5febd13d3da7587fb0d3ca1'
+          $cli=Join-Path $env:RUNNER_TEMP 'post-oneswap-hyperv'
+          $helper=Join-Path $env:RUNNER_TEMP 'post-hyperv_helper.rb'
+          $hot=Join-Path $env:RUNNER_TEMP 'post-hyperv_hot_helper.rb'
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $cli "https://raw.githubusercontent.com/adaptgurus/one-swap/$head/oneswap-hyperv"
+          if($LASTEXITCODE -ne 0){throw 'CLI download failed'}
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $helper "https://raw.githubusercontent.com/adaptgurus/one-swap/$head/hyperv_helper.rb"
+          if($LASTEXITCODE -ne 0){throw 'helper download failed'}
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $hot "https://raw.githubusercontent.com/adaptgurus/one-swap/$head/hyperv_hot_helper.rb"
+          if($LASTEXITCODE -ne 0){throw 'hot helper download failed'}
+          $cliSha=(Get-FileHash -Algorithm SHA256 $cli).Hash.ToLower()
+          $helperSha=(Get-FileHash -Algorithm SHA256 $helper).Hash.ToLower()
+          $hotSha=(Get-FileHash -Algorithm SHA256 $hot).Hash.ToLower()
+          Write-Host "PR20_RUNTIME_FILE name=oneswap-hyperv sha256=$cliSha"
+          Write-Host "PR20_RUNTIME_FILE name=hyperv_helper.rb sha256=$helperSha"
+          Write-Host "PR20_RUNTIME_FILE name=hyperv_hot_helper.rb sha256=$hotSha"
+          "PR20_CLI_PATH=$cli" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PR20_HELPER_PATH=$helper" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PR20_HOT_PATH=$hot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PR20_CLI_SHA=$cliSha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PR20_HELPER_SHA=$helperSha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PR20_HOT_SHA=$hotSha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "PR20_HEAD=$head" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install exact core runtime atomically
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $common=@('-o','LogLevel=ERROR','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-o','ConnectTimeout=8','-i',$env:ONESWAP_TEMP_KEY)
+          & scp.exe @common $env:PR20_CLI_PATH "ci@10.250.10.32:/tmp/oneswap-hyperv.reconcile"
+          if($LASTEXITCODE -ne 0){throw 'scp CLI failed'}
+          & scp.exe @common $env:PR20_HELPER_PATH "ci@10.250.10.32:/tmp/hyperv_helper.reconcile.rb"
+          if($LASTEXITCODE -ne 0){throw 'scp helper failed'}
+          & scp.exe @common $env:PR20_HOT_PATH "ci@10.250.10.32:/tmp/hyperv_hot_helper.reconcile.rb"
+          if($LASTEXITCODE -ne 0){throw 'scp hot helper failed'}
+          $script=@'
+          set -euo pipefail
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          install_one(){
+            src="$1"; dst="$2"; mode="$3"; expected="$4"
+            [ "$(sha256sum "$src" | awk '{print $1}')" = "$expected" ]
+            sudo cp -a "$dst" "$dst.before-postshutdown-$stamp"
+            sudo install -o root -g root -m "$mode" "$src" "$dst"
+            [ "$(sudo sha256sum "$dst" | awk '{print $1}')" = "$expected" ]
+          }
+          install_one /tmp/oneswap-hyperv.reconcile /usr/bin/oneswap-hyperv 0755 "__CLI_SHA__"
+          install_one /tmp/hyperv_helper.reconcile.rb /usr/lib/one/ruby/cli/one_helper/hyperv_helper.rb 0644 "__HELPER_SHA__"
+          install_one /tmp/hyperv_hot_helper.reconcile.rb /usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb 0644 "__HOT_SHA__"
+          sudo ruby -c /usr/bin/oneswap-hyperv
+          sudo ruby -c /usr/lib/one/ruby/cli/one_helper/hyperv_helper.rb
+          sudo ruby -c /usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb
+          rm -f /tmp/oneswap-hyperv.reconcile /tmp/hyperv_helper.reconcile.rb /tmp/hyperv_hot_helper.reconcile.rb
+          echo "POST_SHUTDOWN_RUNTIME_RECONCILE=PASS head=__HEAD__"
+          '@
+          $script=$script.Replace('__CLI_SHA__',$env:PR20_CLI_SHA).Replace('__HELPER_SHA__',$env:PR20_HELPER_SHA).Replace('__HOT_SHA__',$env:PR20_HOT_SHA).Replace('__HEAD__',$env:PR20_HEAD)
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe @common "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Post-shutdown runtime reconcile failed'}
+
+      - name: Re-prove source Off
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($vm.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw 'Runtime reconcile changed source state'}
+          if($n -ne 0){throw 'Unexpected checkpoint'}
+          Write-Host 'POST_SHUTDOWN_RUNTIME_SOURCE_INVARIANT=PASS'
