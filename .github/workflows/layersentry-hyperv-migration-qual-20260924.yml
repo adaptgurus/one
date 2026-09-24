@@ -177,6 +177,6 @@ jobs:
           if(-not $repoLine){throw 'builder has no LayerSentry source checkout'}
           $remoteRepo=$repoLine.Substring('BUILDER_REPO='.Length)
           $sha=$env:EXPECTED_SHA
-          $check="set -e; repo='$remoteRepo'; sha='$sha'; if ! git -C \"$remoteRepo\" cat-file -e \"$sha^{commit}\" 2>/dev/null; then git -C \"$remoteRepo\" fetch --depth=1 origin \"$sha\"; fi; git -C \"$remoteRepo\" cat-file -e \"$sha^{commit}\"; echo EXACT_SOURCE=$sha"
+          $check="set -e; repo='$remoteRepo'; sha='$sha'; if ! git -C '$remoteRepo' cat-file -e '$sha^{commit}' 2>/dev/null; then git -C '$remoteRepo' fetch --depth=1 origin '$sha'; fi; git -C '$remoteRepo' cat-file -e '$sha^{commit}'; echo EXACT_SOURCE=$sha"
           & ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $check
           if($LASTEXITCODE -ne 0){throw "exact source unavailable on builder: $LASTEXITCODE"}
