@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
   inventory:
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 20
     steps:
