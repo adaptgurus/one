@@ -1,0 +1,291 @@
+name: Manoj HyperV Cutover and Materialize
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-cutover-materialize.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-cutover-materialize
+  cancel-in-progress: true
+
+jobs:
+  cutover:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 90
+    steps:
+      - name: Bind Manoj and require source running
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Cutover admission requires source Running; state=$($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has user-visible checkpoints'}
+          if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
+          if((Get-VM -Name 'ls-fe2' -ErrorAction Stop).State -ne 'Off'){throw 'FE2 authority VM must remain Off'}
+          Write-Host 'CUTOVER_SOURCE_ADMISSION=PASS'
+
+      - name: Prepare restricted appliance key and block baseline
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-cutover.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $before=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $tmp "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          if($LASTEXITCODE -ne 0){throw 'appliance block baseline failed'}
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($before -join [Environment]::NewLine)))
+          "ONESWAP_BLOCKS_BEFORE_B64=$b64" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Attach FE2 read-only authority child
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $fe2=(Get-VMHardDiskDrive -VMName 'ls-fe2' -ErrorAction Stop | Where-Object {$_.Path} | Sort-Object ControllerNumber,ControllerLocation | Select-Object -First 1).Path
+          if(-not $fe2){throw 'FE2 disk missing'}
+          $audit=Join-Path 'C:\LayerSentryLab\qualification' ("fe2-cutover-$env:GITHUB_RUN_ID.vhdx")
+          New-VHD -Path $audit -ParentPath $fe2 -Differencing -ErrorAction Stop | Out-Null
+          Add-VMHardDiskDrive -VMName 'ls-appliance-qual' -ControllerType SCSI -Path $audit -ErrorAction Stop
+          "FE2_AUDIT_VHD=$audit" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Start-Sleep -Seconds 3
+
+      - name: Require durable PREPARED state before source shutdown
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $operation='manoj-hv-ls-migration-source-test-20260924'
+          $cmd="sudo python3 - <<'PY'
+import json,os
+p='/var/tmp/oneswap-hyperv-hot/manoj-hv-ls-migration-source-test-20260924/state.json'
+if not os.path.isfile(p): raise SystemExit('prepared state missing')
+s=json.load(open(p))
+print('ADMISSION_PHASE='+str(s.get('phase')))
+print('ADMISSION_VM_ID='+str(s.get('source_vm_id')))
+print('ADMISSION_REFERENCE='+str(s.get('reference_point_id')))
+if s.get('phase')!='PREPARED': raise SystemExit('state is not PREPARED')
+if s.get('source_vm_id')!='52baa8a1-675f-4225-8f37-66a60933b30c': raise SystemExit('source VM identity mismatch')
+d=s.get('disks',[])
+if len(d)!=2: raise SystemExit('expected two prepared disks')
+for i,x in enumerate(d):
+ q=x.get('prepared_raw_path','')
+ if not q or not os.path.isfile(q): raise SystemExit(f'prepared disk {i} missing')
+ if os.path.getsize(q)!=int(x.get('virtual_size',-1)): raise SystemExit(f'prepared disk {i} size mismatch')
+ print(f'ADMISSION_DISK_{i}_SIZE={os.path.getsize(q)}')
+print('CUTOVER_PREPARED_ADMISSION=PASS')
+PY"
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" $cmd
+          if($LASTEXITCODE -ne 0){throw 'PREPARED admission failed'}
+
+      - name: Run OneSwap final RCT commit and import
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $beforeText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:ONESWAP_BLOCKS_BEFORE_B64))
+          $before=@($beforeText -split [Environment]::NewLine | Where-Object {$_})
+          $after=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          if($LASTEXITCODE -ne 0){throw 'appliance block inventory failed'}
+          $new=@($after | Where-Object {$before -notcontains $_})
+          if($new.Count -ne 1){throw "Expected one authority disk; found $($new.Count)"}
+          $dev='/dev/'+$new[0]
+          $script=@'
+          set -euo pipefail
+          dev="__DEV__"
+          auth=""
+          for p in /var/lib/one/.one/one_auth /etc/one/one_auth; do
+            exists=$(sudo guestfish --ro -a "$dev" -i exists "$p" 2>/dev/null || echo false)
+            if [ "$exists" = "true" ]; then auth=$(sudo guestfish --ro -a "$dev" -i cat "$p"); break; fi
+          done
+          [ -n "$auth" ]
+          tmp=$(mktemp)
+          trap 'rm -f "$tmp"' EXIT
+          printf '%s\n' "$auth" > "$tmp"
+          chmod 600 "$tmp"
+          export ONE_AUTH="$tmp"
+          export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
+          operation="manoj-hv-ls-migration-source-test-20260924"
+          set +e
+          out=$(timeout --signal=TERM --kill-after=20s 3600s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --commit --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0 2>&1)
+          rc=$?
+          set -e
+          printf '%s\n' "$out" | sed -E 's/(password|secret|token|authorization|one_auth)[^ ]*/\1=<redacted>/Ig'
+          if [ "$rc" -ne 0 ]; then
+            echo "ONESWAP_RCT_COMMIT=UNKNOWN_OR_FAIL rc=$rc"
+            exit "$rc"
+          fi
+          echo "ONESWAP_RCT_COMMIT=PASS"
+          state="/var/tmp/oneswap-hyperv-hot/$operation/state.json"
+          python3 - "$state" <<'PY'
+          import json,sys
+          s=json.load(open(sys.argv[1]))
+          print("COMMIT_PHASE="+str(s.get("phase")))
+          print("COMMIT_TEMPLATE_ID="+str(s.get("template_id")))
+          if s.get("phase")!="IMPORTED": raise SystemExit("commit state is not IMPORTED")
+          if not isinstance(s.get("template_id"),int) or s["template_id"]<0: raise SystemExit("template id missing")
+          PY
+          '@
+          $script=$script.Replace('__DEV__',$dev)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw "OneSwap commit did not prove IMPORTED; preserve source/target state for reconciliation"}
+
+      - name: Verify source is Off after commit
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          Write-Host "SOURCE_AFTER_COMMIT_STATE=$($src.State)"
+          if($src.State -ne 'Off'){throw "Commit did not leave source Off: $($src.State)"}
+          Write-Host 'SOURCE_OFF_AFTER_COMMIT=PASS'
+
+      - name: Materialize imported template and wait for target running
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $beforeText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:ONESWAP_BLOCKS_BEFORE_B64))
+          $before=@($beforeText -split [Environment]::NewLine | Where-Object {$_})
+          $after=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          if($LASTEXITCODE -ne 0){throw 'appliance block inventory failed'}
+          $new=@($after | Where-Object {$before -notcontains $_})
+          if($new.Count -ne 1){throw "Expected one authority disk; found $($new.Count)"}
+          $dev='/dev/'+$new[0]
+          $script=@'
+          set -euo pipefail
+          dev="__DEV__"
+          auth=""
+          for p in /var/lib/one/.one/one_auth /etc/one/one_auth; do
+            exists=$(sudo guestfish --ro -a "$dev" -i exists "$p" 2>/dev/null || echo false)
+            if [ "$exists" = "true" ]; then auth=$(sudo guestfish --ro -a "$dev" -i cat "$p"); break; fi
+          done
+          [ -n "$auth" ]
+          tmp=$(mktemp)
+          trap 'rm -f "$tmp"' EXIT
+          printf '%s\n' "$auth" > "$tmp"
+          chmod 600 "$tmp"
+          export ONE_AUTH="$tmp"
+          export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
+          state="/var/tmp/oneswap-hyperv-hot/manoj-hv-ls-migration-source-test-20260924/state.json"
+          template_id=$(python3 - "$state" <<'PY'
+          import json,sys
+          print(json.load(open(sys.argv[1]))["template_id"])
+          PY
+          )
+          target_name="ls-migration-source-test-migrated"
+          if onevm list --xml | python3 -c "import sys,xml.etree.ElementTree as ET; r=ET.parse(sys.stdin).getroot(); raise SystemExit(0 if any((v.findtext('NAME') or '')=='$target_name' for v in r.findall('VM')) else 1)"; then
+            echo "target VM name already exists; refusing duplicate materialization"
+            exit 41
+          fi
+          out=$(onetemplate instantiate "$template_id" --name "$target_name")
+          printf '%s\n' "$out"
+          vm_id=$(printf '%s\n' "$out" | sed -nE 's/.*VM ID: *([0-9]+).*/\1/p' | tail -1)
+          if [ -z "$vm_id" ]; then
+            vm_id=$(onevm list --xml | python3 -c "import sys,xml.etree.ElementTree as ET; r=ET.parse(sys.stdin).getroot(); xs=[v.findtext('ID') for v in r.findall('VM') if (v.findtext('NAME') or '')=='$target_name']; print(xs[0] if len(xs)==1 else '')")
+          fi
+          [ -n "$vm_id" ]
+          echo "TARGET_VM_ID=$vm_id"
+          deadline=$((SECONDS+600))
+          while [ $SECONDS -lt $deadline ]; do
+            xml=$(onevm show "$vm_id" --xml)
+            state=$(printf '%s' "$xml" | python3 -c "import sys,xml.etree.ElementTree as ET; r=ET.fromstring(sys.stdin.read()); print((r.findtext('STATE') or '')+','+(r.findtext('LCM_STATE') or ''))")
+            echo "TARGET_VM_STATE=$state"
+            if [ "$state" = "3,3" ]; then
+              echo "TARGET_VM_RUNNING=PASS id=$vm_id"
+              break
+            fi
+            if printf '%s' "$state" | grep -Eq '(^|,)(6|7|11|12|13|14|15|16|17|18|19|20|21|22|23|24|25|26|27|28|29|30|31|32|33|34|35|36|37|38|39|40|41|42|43|44|45|46|47|48|49|50|51|52|53|54|55|56|57|58|59|60|61|62|63|64|65|66|67|68|69|70|71|72|73|74|75|76|77|78|79|80|81|82|83|84|85|86|87|88|89|90)(,|$)'; then
+              onevm show "$vm_id"
+              exit 42
+            fi
+            sleep 5
+          done
+          xml=$(onevm show "$vm_id" --xml)
+          state=$(printf '%s' "$xml" | python3 -c "import sys,xml.etree.ElementTree as ET; r=ET.fromstring(sys.stdin.read()); print((r.findtext('STATE') or '')+','+(r.findtext('LCM_STATE') or ''))")
+          [ "$state" = "3,3" ] || { onevm show "$vm_id"; exit 43; }
+          onevm show "$vm_id"
+          '@
+          $script=$script.Replace('__DEV__',$dev)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Target materialization/Running validation failed; keep source Off and preserve evidence'}
+
+      - name: Verify source off and finalize OneSwap success
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Off'){throw "No-dual-running failed: source state=$($src.State)"}
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $beforeText=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:ONESWAP_BLOCKS_BEFORE_B64))
+          $before=@($beforeText -split [Environment]::NewLine | Where-Object {$_})
+          $after=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "lsblk -dnro NAME | sort"
+          $new=@($after | Where-Object {$before -notcontains $_})
+          if($new.Count -ne 1){throw "Expected one authority disk; found $($new.Count)"}
+          $dev='/dev/'+$new[0]
+          $script=@'
+          set -euo pipefail
+          dev="__DEV__"
+          auth=""
+          for p in /var/lib/one/.one/one_auth /etc/one/one_auth; do
+            exists=$(sudo guestfish --ro -a "$dev" -i exists "$p" 2>/dev/null || echo false)
+            if [ "$exists" = "true" ]; then auth=$(sudo guestfish --ro -a "$dev" -i cat "$p"); break; fi
+          done
+          [ -n "$auth" ]
+          tmp=$(mktemp)
+          trap 'rm -f "$tmp"' EXIT
+          printf '%s\n' "$auth" > "$tmp"
+          chmod 600 "$tmp"
+          export ONE_AUTH="$tmp"
+          export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
+          operation="manoj-hv-ls-migration-source-test-20260924"
+          sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --verify-source-off --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0
+          sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --finalize-success --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0
+          python3 - "/var/tmp/oneswap-hyperv-hot/$operation/state.json" <<'PY'
+          import json,sys
+          s=json.load(open(sys.argv[1]))
+          print("FINAL_PHASE="+str(s.get("phase")))
+          if s.get("phase")!="DONE": raise SystemExit("final state is not DONE")
+          PY
+          echo 'ONESWAP_FINALIZE_SUCCESS=PASS'
+          '@
+          $script=$script.Replace('__DEV__',$dev)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Final source-off/finalize-success validation failed'}
+
+      - name: Detach and delete FE2 authority child
+        if: always()
+        shell: powershell
+        run: |
+          $audit=$env:FE2_AUDIT_VHD
+          if($audit){
+            Get-VMHardDiskDrive -VMName 'ls-appliance-qual' -ErrorAction SilentlyContinue | Where-Object {$_.Path -eq $audit} | Remove-VMHardDiskDrive -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 1
+            if(Test-Path $audit){Remove-Item -Force $audit -ErrorAction Stop}
+          }
+          Write-Host 'FE2_CUTOVER_AUTH_CHILD_CLEANUP=PASS'
+
+      - name: Final source state evidence
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue)
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$($snaps.Count)"
+          if($snaps.Count -ne 0){throw 'Unexpected user-visible source checkpoint remains'}
