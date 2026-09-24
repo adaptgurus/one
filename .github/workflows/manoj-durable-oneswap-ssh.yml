@@ -36,7 +36,12 @@ jobs:
           $ip='10.250.10.42'
           $root='C:\LayerSentryLab\qualification'
           $scan=Join-Path $env:RUNNER_TEMP 'durable-keyscan.txt'
-          & ssh-keyscan.exe -T 3 -t ed25519,rsa $ip 2>$null | Set-Content -LiteralPath $scan -Encoding ascii
+          $ErrorActionPreference='Continue'
+          $scanned=@(& ssh-keyscan.exe -T 3 -t ed25519,rsa $ip 2>$null)
+          $scanExit=$LASTEXITCODE
+          $ErrorActionPreference='Stop'
+          $scanned | Set-Content -LiteralPath $scan -Encoding ascii
+          Write-Host "SSH_KEYSCAN_EXIT=$scanExit lines=$($scanned.Count)"
           if(-not(Test-Path $scan) -or (Get-Item $scan).Length -eq 0){throw 'ssh-keyscan returned no host key'}
           Write-Host 'PRESENTED_HOST_KEYS:'
           & ssh-keygen.exe -lf $scan | ForEach-Object {Write-Host $_}
