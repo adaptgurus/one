@@ -138,3 +138,81 @@ jobs:
             }
           }
           Write-Host 'MANOJ_HYPERV_MIGRATION_READONLY_GATE=PASS'
+
+
+  manoj-hyperv-runtime-discovery:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host "MANOJ_BOUND=PASS"
+
+      - name: Discover OneSwap appliance address from qualification authority
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          $seed=Join-Path $root 'oneswap-seed'
+          foreach($f in @('network-config','meta-data')){
+            $p=Join-Path $seed $f
+            if(Test-Path $p){
+              Write-Host "=== $p ==="
+              Get-Content -LiteralPath $p |
+                Where-Object {$_ -match '(?i)address|gateway|dhcp|nameserver|instance-id|local-hostname'} |
+                ForEach-Object {Write-Host $_}
+            }
+          }
+          Write-Host '=== candidate config files ==='
+          Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Name -match '(?i)(oneswap|known_hosts|client.*crt|client.*key|server.*crt|source.*json|config.*json|one_auth)'} |
+            Select-Object FullName,Length,LastWriteTime |
+            Format-Table -Wrap -AutoSize
+
+      - name: Resolve appliance MAC to IPv4 from host neighbor tables
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          foreach($name in @('ls-appliance-qual','ls-appliance-dbe-qual')){
+            $vm=Get-VM -Name $name -ErrorAction SilentlyContinue
+            if(-not $vm){continue}
+            foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)){
+              $mac=($nic.MacAddress -replace '[-:]','').ToUpper()
+              Write-Host "VM=$name MAC=$mac SWITCH=$($nic.SwitchName)"
+              Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+                Where-Object {(($_.LinkLayerAddress -replace '[-:]','').ToUpper()) -eq $mac} |
+                Select-Object IPAddress,LinkLayerAddress,State,InterfaceAlias |
+                Format-Table -AutoSize
+            }
+          }
+
+      - name: Probe candidate OneSwap service addresses
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $candidates = New-Object System.Collections.Generic.HashSet[string]
+          $seed='C:\LayerSentryLab\qualification\oneswap-seed\network-config'
+          if(Test-Path $seed){
+            foreach($line in Get-Content -LiteralPath $seed){
+              foreach($m in [regex]::Matches($line,'(?<!\d)(?:\d{1,3}\.){3}\d{1,3}(?!\d)')){
+                [void]$candidates.Add($m.Value)
+              }
+            }
+          }
+          foreach($n in Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue){
+            if($n.State -ne 'Unreachable' -and $n.IPAddress -match '^10\.'){
+              [void]$candidates.Add($n.IPAddress)
+            }
+          }
+          foreach($ip in $candidates){
+            foreach($port in @(22,9443,9444)){
+              $ok=Test-NetConnection -ComputerName $ip -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue
+              if($ok){Write-Host "ONESWAP_CANDIDATE ip=$ip port=$port tcp=true"}
+            }
+          }
+          Write-Host 'RUNTIME_DISCOVERY=PASS'
