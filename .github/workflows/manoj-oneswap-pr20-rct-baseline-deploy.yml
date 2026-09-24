@@ -1,4 +1,5 @@
 name: Manoj OneSwap PR20 RCT Baseline Deploy
+# redeploy-after-cim-namespace-fix
 
 on:
   push:
@@ -58,7 +59,7 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $sha='0a177f811669f130f9872fa33c821d41c763b38b'
+          $sha='1c2e23cb1377b0d94daf238ed8ce0ae7ee07cbaa'
           $url="https://raw.githubusercontent.com/adaptgurus/one-swap/$sha/hyperv_hot_helper.rb"
           $file=Join-Path $env:RUNNER_TEMP 'hyperv_hot_helper.pr20.rb'
           & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 30 -o $file $url
