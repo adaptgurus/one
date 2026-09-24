@@ -72,7 +72,8 @@ jobs:
           echo 'NO_DURABLE_PREPARED_STATE=PASS'
           '@
           $cmd=[regex]::Replace($cmd,'\r','')
-          $out=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $tmp "ci@10.250.10.32" $cmd
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cmd))
+          $out=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $tmp "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
           $rc=$LASTEXITCODE
           $out | ForEach-Object {Write-Host $_}
           if($rc -ne 0){throw "Durable-state/staging guard failed rc=$rc"}
