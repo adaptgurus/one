@@ -1,0 +1,51 @@
+name: Manoj DC Reachability Recheck
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-dc-reachability-recheck.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-dc-reachability-recheck
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Probe known DC lab endpoints read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          Write-Host 'MANOJ_RUNNER_BIND=PASS'
+          $targets=@('10.10.10.21','10.10.10.22','10.10.10.23')
+          $rows=@()
+          foreach($ip in $targets){
+            foreach($port in @(22,2633,2474)){
+              $ok=Test-NetConnection -ComputerName $ip -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue
+              $rows += [pscustomobject]@{IP=$ip;Port=$port;Reachable=[bool]$ok}
+            }
+          }
+          $rows | Format-Table -AutoSize
+          Write-Host '=== ROUTES ==='
+          Get-NetRoute -AddressFamily IPv4 |
+            Where-Object {$_.DestinationPrefix -like '10.10.10.*' -or $_.DestinationPrefix -eq '10.0.0.0/8' -or $_.DestinationPrefix -eq '0.0.0.0/0'} |
+            Sort-Object DestinationPrefix,RouteMetric |
+            Select-Object DestinationPrefix,NextHop,InterfaceAlias,RouteMetric |
+            Format-Table -AutoSize
+          $ssh21=@($rows | Where-Object {$_.IP -eq '10.10.10.21' -and $_.Port -eq 22 -and $_.Reachable}).Count
+          $one21=@($rows | Where-Object {$_.IP -eq '10.10.10.21' -and $_.Port -eq 2633 -and $_.Reachable}).Count
+          if($ssh21 -eq 1 -or $one21 -eq 1){
+            Write-Host 'DC_FROM_MANOJ_REACHABILITY=PASS'
+          } else {
+            Write-Host 'DC_FROM_MANOJ_REACHABILITY=BLOCKED'
+            throw 'Known tester/DC frontend remains unreachable from Manoj runner.'
+          }
