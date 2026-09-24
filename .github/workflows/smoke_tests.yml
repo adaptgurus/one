@@ -1898,7 +1898,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-hyperv-source-host-gate:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -1960,6 +1960,128 @@ jobs:
           Write-Host 'HYPERV_HOST_SSH_AUDIT=PASS'
 
       - name: Confirm source invariant after read-only gate
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-hyperv-source-inventory:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          $admins=@(Get-LocalGroupMember -Group 'Administrators' -ErrorAction Stop | ForEach-Object {$_.Name})
+          $hvadmins=@(Get-LocalGroupMember -Group 'Hyper-V Administrators' -ErrorAction SilentlyContinue | ForEach-Object {$_.Name})
+          Write-Host ('OPC_IN_ADMINISTRATORS=' + [bool]($admins -match '\\opc$'))
+          Write-Host ('OPC_IN_HYPERV_ADMINISTRATORS=' + [bool]($hvadmins -match '\\opc$'))
+          if(-not($admins -match '\\opc$') -and -not($hvadmins -match '\\opc$')){throw 'opc is not authorized for Hyper-V administration'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Prepare runner to appliance trusted SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmpKey=Join-Path $env:RUNNER_TEMP 'oneswap_qual_ed25519.system'
+          Copy-Item -Force $srcKey $tmpKey
+          & icacls.exe $tmpKey /inheritance:r | Out-Null
+          & icacls.exe $tmpKey /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmpKey /setowner '*S-1-5-18' | Out-Null
+          $derived=(& ssh-keygen.exe -y -f $tmpKey 2>&1 | Where-Object {$_ -match '^ssh-'} | Select-Object -First 1)
+          if($LASTEXITCODE -ne 0 -or -not $derived){throw 'temporary appliance SSH key invalid'}
+          "ONESWAP_TEMP_KEY=$tmpKey" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'RUNNER_TO_APPLIANCE_SSH_READY=PASS'
+
+      - name: Establish appliance to Hyper-V pinned key trust
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $appliance='10.250.10.32'
+          $knownAppliance='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $hostPubPath='C:\ProgramData\ssh\ssh_host_ed25519_key.pub'
+          if(-not(Test-Path $hostPubPath)){throw 'Windows SSH ED25519 host public key missing'}
+          $hostPub=(Get-Content -LiteralPath $hostPubPath -Raw).Trim()
+          $hp=$hostPub -split '\s+'
+          if($hp.Count -lt 2 -or $hp[0] -ne 'ssh-ed25519'){throw 'Invalid Windows SSH host public key'}
+          $hostKnown='10.250.10.1 '+$hp[0]+' '+$hp[1]
+          $remoteScript=@'
+          set -euo pipefail
+          sudo install -d -m 700 -o root -g root /etc/layersentry/oneswap/hyperv
+          key=/etc/layersentry/oneswap/hyperv/manoj-qual.key
+          if [ ! -s "$key" ]; then
+            sudo ssh-keygen -q -t ed25519 -N '' -C layersentry-oneswap-manoj -f "$key"
+          fi
+          sudo chmod 600 "$key"
+          sudo chown root:root "$key"
+          sudo ssh-keygen -y -f "$key" | head -1
+          '@
+          $remoteScript=$remoteScript -replace "`r",''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteScript))
+          $out=& ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$knownAppliance" -i $env:ONESWAP_TEMP_KEY "ci@$appliance" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Failed to create appliance Hyper-V client key'}
+          $appliancePub=($out | Where-Object {$_ -match '^ssh-ed25519\s+'} | Select-Object -Last 1).Trim()
+          if(-not $appliancePub){throw 'Appliance Hyper-V client public key missing'}
+          $opcSsh='C:\Users\opc\.ssh'
+          $auth=Join-Path $opcSsh 'authorized_keys'
+          New-Item -ItemType Directory -Force -Path $opcSsh | Out-Null
+          if(-not(Test-Path $auth)){New-Item -ItemType File -Path $auth | Out-Null}
+          $existing=Get-Content -LiteralPath $auth -ErrorAction SilentlyContinue
+          if($existing -notcontains $appliancePub){Add-Content -LiteralPath $auth -Value $appliancePub -Encoding ascii}
+          & icacls.exe $opcSsh /inheritance:r /grant:r 'MANOJ-TEST-INST\opc:(OI)(CI)F' 'SYSTEM:(OI)(CI)F' | Out-Null
+          & icacls.exe $auth /inheritance:r /grant:r 'MANOJ-TEST-INST\opc:F' 'SYSTEM:F' | Out-Null
+          $remoteCfg=@"
+          :hyperv_connections:
+            manoj-qual:
+              host: '10.250.10.1'
+              user: 'opc'
+              port: 22
+              identity_file: '/etc/layersentry/oneswap/hyperv/manoj-qual.key'
+              known_hosts: '/etc/layersentry/oneswap/hyperv/known_hosts'
+              staging_dir: 'C:\\LayerSentryMigration'
+              shutdown_timeout: 300
+              transfer_timeout: 7200
+              prepare_timeout: 7200
+              delta_timeout: 7200
+          "@
+          $cfg64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(($remoteCfg -replace "`r",'')))
+          $known64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($hostKnown+"`n"))
+          $install="echo $known64 | base64 -d | sudo tee /etc/layersentry/oneswap/hyperv/known_hosts >/dev/null; sudo chmod 600 /etc/layersentry/oneswap/hyperv/known_hosts; echo $cfg64 | base64 -d | sudo tee /etc/layersentry/oneswap/manoj-qual.yaml >/dev/null; sudo chmod 600 /etc/layersentry/oneswap/manoj-qual.yaml"
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$knownAppliance" -i $env:ONESWAP_TEMP_KEY "ci@$appliance" $install
+          if($LASTEXITCODE -ne 0){throw 'Failed to install pinned Hyper-V connection config'}
+          New-Item -ItemType Directory -Force -Path 'C:\LayerSentryMigration' | Out-Null
+          & icacls.exe 'C:\LayerSentryMigration' /grant 'MANOJ-TEST-INST\opc:(OI)(CI)M' | Out-Null
+          Write-Host 'APPLIANCE_TO_HYPERV_TRUST_PROVISIONED=PASS'
+
+      - name: Prove appliance to Hyper-V SSH and run source inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $appliance='10.250.10.32'
+          $knownAppliance='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/layersentry/oneswap/hyperv/known_hosts -i /etc/layersentry/oneswap/hyperv/manoj-qual.key opc@10.250.10.1 "powershell.exe -NoProfile -NonInteractive -Command \"Write-Output HYPERV_REMOTE_HOST=$env:COMPUTERNAME; (Get-VM -Name 'ls-migration-source-test').State\""
+          echo HYPERV_SOURCE_SSH=PASS
+          sudo /usr/bin/oneswap-hyperv ls-migration-source-test --inventory --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml
+          echo ONESWAP_HYPERV_INVENTORY=PASS
+          '@
+          $script=$script -replace "`r",''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$knownAppliance" -i $env:ONESWAP_TEMP_KEY "ci@$appliance" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Appliance Hyper-V source inventory failed'}
+
+      - name: Confirm source remains Running and checkpoint-free
         shell: powershell
         run: |
           $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
