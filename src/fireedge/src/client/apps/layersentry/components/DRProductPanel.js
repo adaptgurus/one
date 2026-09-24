@@ -53,10 +53,7 @@ const canonicalNetworkOrder = [
   'dev_web', 'dev_app', 'dev_db',
 ]
 
-const defaultTargetMapping = () =>
-  Object.fromEntries(
-    canonicalNetworkOrder.map((name) => [name, { targetNetworkId: '', addressMode: 'DHCP' }])
-  )
+const defaultTargetMapping = () => ({})
 
 const DRProductPanel = ({ localSiteId = '', targetSites = [], vms = [] }) => {
   const [error, setError] = useState('')
@@ -88,10 +85,6 @@ const DRProductPanel = ({ localSiteId = '', targetSites = [], vms = [] }) => {
   const [targetClusterId, setTargetClusterId] = useState('0')
   const [targetDatastoreId, setTargetDatastoreId] = useState('1')
   const [networkMapping, setNetworkMapping] = useState(defaultTargetMapping())
-  const [staticIp, setStaticIp] = useState('')
-  const [staticPrefix, setStaticPrefix] = useState(24)
-  const [staticGateway, setStaticGateway] = useState('')
-  const [staticDns, setStaticDns] = useState('')
 
   const selectedVm = useMemo(
     () => vms.find(({ ID }) => String(ID) === String(vmId)),
@@ -269,29 +262,27 @@ const DRProductPanel = ({ localSiteId = '', targetSites = [], vms = [] }) => {
       setError('Choose a VM, recovery site and VM with at least one NIC.')
       return
     }
-    const canonicalBySourceName = Object.fromEntries(
-      selectedNics.map((nic) => {
-        const key = String(nic.sourceNetworkName || '').toLowerCase()
-        return [nic.id, canonicalNetworkOrder.includes(key) ? key : '']
-      })
-    )
     const nics = selectedNics.map((nic, index) => {
-      const sourceCanonical = canonicalBySourceName[nic.id]
-      const config = networkMapping[sourceCanonical] || {}
+      const sourceCanonical = String(nic.sourceNetworkName || '').toLowerCase()
+      const config = networkMapping[String(nic.id)] || {}
       const targetNetworkId = config.targetNetworkId || ''
       const mode = config.addressMode || 'DHCP'
       const useStatic = mode === 'STATIC'
       return {
         source_nic_id: nic.id,
-        source_network_id: nic.sourceNetworkId || sourceCanonical || String(nic.id),
+        source_network_id:
+          nic.sourceNetworkId ||
+          (canonicalNetworkOrder.includes(sourceCanonical)
+            ? sourceCanonical
+            : String(nic.id)),
         target_network_id: targetNetworkId,
         address_mode: mode,
-        target_ip: useStatic ? staticIp.trim() : undefined,
+        target_ip: useStatic ? String(config.targetIp || '').trim() : undefined,
         guest_network: useStatic
           ? {
-              prefix_length: Number(staticPrefix),
-              gateway: staticGateway.trim(),
-              dns: staticDns
+              prefix_length: Number(config.prefixLength ?? 24),
+              gateway: String(config.gateway || '').trim(),
+              dns: String(config.dns || '')
                 .split(/[ ,]+/)
                 .map((item) => item.trim())
                 .filter(Boolean),
@@ -486,8 +477,23 @@ const DRProductPanel = ({ localSiteId = '', targetSites = [], vms = [] }) => {
           <Box sx={{ mt: 1.5, display: 'grid', gap: 1 }}>
             {selectedNics.map((nic) => {
               const sourceKey = String(nic.sourceNetworkName || '').toLowerCase()
-              const canonical = canonicalNetworkOrder.includes(sourceKey) ? sourceKey : ''
-              const config = networkMapping[canonical] || { targetNetworkId: '', addressMode: 'DHCP' }
+              const canonical = canonicalNetworkOrder.includes(sourceKey)
+                ? sourceKey
+                : ''
+              const stateKey = String(nic.id)
+              const config = networkMapping[stateKey] || {
+                targetNetworkId: '',
+                addressMode: 'DHCP',
+                targetIp: '',
+                prefixLength: 24,
+                gateway: '',
+                dns: '',
+              }
+              const updateConfig = (patch) =>
+                setNetworkMapping((current) => ({
+                  ...current,
+                  [stateKey]: { ...config, ...patch },
+                }))
               return (
                 <Box key={nic.id} sx={{ p: 1, border: `1px solid ${colors.border}`, borderRadius: 1 }}>
                   <Typography sx={{ fontSize: 11, fontWeight: 700 }}>
@@ -496,43 +502,33 @@ const DRProductPanel = ({ localSiteId = '', targetSites = [], vms = [] }) => {
                   <Box sx={{ mt: 0.75, display: 'grid', gridTemplateColumns: { xs: '1fr', lg: '2fr 1fr' }, gap: 1 }}>
                     <TextField
                       label="Target DR VNet ID"
-                      value={config.targetNetworkId || ''}
-                      onChange={(e) =>
-                        setNetworkMapping((current) => ({
-                          ...current,
-                          [canonical]: { ...config, targetNetworkId: e.target.value },
-                        }))
-                      }
+                      value={config.targetNetworkId}
+                      onChange={(e) => updateConfig({ targetNetworkId: e.target.value })}
                       helperText={canonical ? `Source profile: ${canonical}` : 'Map this source network explicitly'}
                     />
                     <FormControl fullWidth>
                       <InputLabel>Address mode</InputLabel>
                       <Select
-                        value={config.addressMode || 'DHCP'}
+                        value={config.addressMode}
                         label="Address mode"
-                        onChange={(e) =>
-                          setNetworkMapping((current) => ({
-                            ...current,
-                            [canonical]: { ...config, addressMode: e.target.value },
-                          }))
-                        }
+                        onChange={(e) => updateConfig({ addressMode: e.target.value })}
                       >
                         <MenuItem value="DHCP">DHCP</MenuItem>
                         <MenuItem value="STATIC">Static DR IP</MenuItem>
                       </Select>
                     </FormControl>
                   </Box>
+                  {config.addressMode === 'STATIC' && (
+                    <Box sx={{ mt: 1, display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' }, gap: 1 }}>
+                      <TextField label="Static DR IP" value={config.targetIp} onChange={(e) => updateConfig({ targetIp: e.target.value })} />
+                      <TextField label="Prefix length" type="number" value={config.prefixLength} onChange={(e) => updateConfig({ prefixLength: Number(e.target.value) })} />
+                      <TextField label="Gateway" value={config.gateway} onChange={(e) => updateConfig({ gateway: e.target.value })} />
+                      <TextField label="DNS" value={config.dns} onChange={(e) => updateConfig({ dns: e.target.value })} />
+                    </Box>
+                  )}
                 </Box>
               )
             })}
-            {Object.values(networkMapping).some(({ addressMode }) => addressMode === 'STATIC') && (
-              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' }, gap: 1 }}>
-                <TextField label="Static DR IP" value={staticIp} onChange={(e) => setStaticIp(e.target.value)} />
-                <TextField label="Prefix length" type="number" value={staticPrefix} onChange={(e) => setStaticPrefix(Number(e.target.value))} />
-                <TextField label="Gateway" value={staticGateway} onChange={(e) => setStaticGateway(e.target.value)} />
-                <TextField label="DNS" value={staticDns} onChange={(e) => setStaticDns(e.target.value)} />
-              </Box>
-            )}
             <Button variant="contained" sx={{ textTransform: 'none' }} disabled={mappingBusy} onClick={saveRecoveryMapping}>
               {mappingBusy ? 'Saving…' : 'Save recovery network mapping'}
             </Button>
