@@ -1,0 +1,52 @@
+name: Manoj Target Host Network Inventory
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-target-host-network.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-target-host-network
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and inspect target host network read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Source has checkpoints'}
+          $cmd=@'
+          set -euo pipefail
+          echo '===ROCKY01==='
+          ssh -o BatchMode=yes -o ConnectTimeout=8 rocky-01 '
+            hostname
+            ip -br addr
+            ip -br link
+            ip route
+            echo ===BRIDGE===
+            bridge link || true
+            bridge vlan show || true
+            echo ===HOSTS===
+            onehost list
+          '
+          echo '===ROCKY02==='
+          ssh -o BatchMode=yes -o ConnectTimeout=8 rocky-01 "ssh -o BatchMode=yes -o ConnectTimeout=8 rocky-02 'hostname; ip -br addr; ip -br link; ip route; bridge link || true; bridge vlan show || true'"
+          echo '===ROCKY03==='
+          ssh -o BatchMode=yes -o ConnectTimeout=8 rocky-01 "ssh -o BatchMode=yes -o ConnectTimeout=8 rocky-03 'hostname; ip -br addr; ip -br link; ip route; bridge link || true; bridge vlan show || true'"
+          '@
+          & wsl.exe -d Ubuntu-22.04 -u opc -- bash --noprofile --norc -lc $cmd
+          if($LASTEXITCODE -ne 0){throw "Target host network inventory failed rc=$LASTEXITCODE"}
+          Write-Host 'TARGET_HOST_NETWORK_INVENTORY=PASS'
