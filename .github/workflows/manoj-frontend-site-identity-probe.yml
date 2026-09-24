@@ -1,0 +1,116 @@
+name: Manoj Frontend IP and Site Identity Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-frontend-site-identity-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Resolve FE addresses and site identity read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+          function Test-PortFast([string]$Address,[int]$Port,[int]$Timeout=150) {
+            $client=New-Object System.Net.Sockets.TcpClient
+            try {
+              $iar=$client.BeginConnect($Address,$Port,$null,$null)
+              if(-not $iar.AsyncWaitHandle.WaitOne($Timeout,$false)){return $false}
+              $client.EndConnect($iar)
+              return $true
+            } catch { return $false } finally { $client.Close() }
+          }
+
+          $feNames=@('ls-fe1','ls-fe2','ls-fe3')
+          Write-Host '=== FRONTEND ADAPTER FACTS ==='
+          $macMap=@{}
+          foreach($name in $feNames){
+            $vm=Get-VM -Name $name -ErrorAction SilentlyContinue
+            if(-not $vm){continue}
+            foreach($nic in @(Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)){
+              $mac=([string]$nic.MacAddress).ToUpperInvariant()
+              if($mac.Length -eq 12){$mac=($mac -replace '(.{2})(?!$)','$1-')}
+              $macMap[$name]=$mac
+              Write-Host "FE name=$name state=$($vm.State) mac=$mac switch=$($nic.SwitchName) reported_ips=$($nic.IPAddresses -join ',')"
+            }
+          }
+
+          Write-Host '=== PRIME LAB SUBNET ARP ==='
+          foreach($i in 1..254){
+            $ip="10.250.10.$i"
+            & ping.exe -n 1 -w 40 $ip *> $null
+          }
+          $neighbors=@(Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue | Where-Object {$_.IPAddress -like '10.250.10.*'})
+          $neighbors | Select-Object IPAddress,LinkLayerAddress,State,InterfaceAlias | Sort-Object IPAddress | Format-Table -AutoSize
+
+          $candidates=@()
+          foreach($name in $feNames){
+            $wanted=([string]$macMap[$name]).Replace('-',':').ToUpperInvariant()
+            if(-not $wanted){continue}
+            foreach($n in $neighbors){
+              $seen=([string]$n.LinkLayerAddress).Replace('-',':').ToUpperInvariant()
+              if($seen -eq $wanted){
+                $candidates += [pscustomobject]@{VM=$name;IP=[string]$n.IPAddress;MAC=$wanted}
+              }
+            }
+          }
+
+          Write-Host '=== MAC RESOLVED FE IPS ==='
+          $candidates=@($candidates | Sort-Object VM,IP -Unique)
+          $candidates | Format-Table -AutoSize
+
+          Write-Host '=== OPENNEBULA SERVICE SCAN ==='
+          $service=@()
+          foreach($i in 1..254){
+            $ip="10.250.10.$i"
+            if(Test-PortFast $ip 2633 120){
+              $ssh=Test-PortFast $ip 22 120
+              Write-Host "SERVICE ip=$ip ssh22=$ssh one2633=True"
+              $service += $ip
+            }
+          }
+
+          Write-Host '=== SSH IDENTITY / OPENNEBULA READBACK ==='
+          foreach($ip in @($service | Sort-Object -Unique)){
+            foreach($user in @('opc','oneadmin')){
+              $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+              $cmd="printf 'MACHINE='; cat /etc/machine-id; printf ' HOST='; hostname; printf ' ONE='; systemctl is-active opennebula 2>/dev/null || true; printf ' HOSTHASH='; sudo -u oneadmin onehost list --xml 2>/dev/null | sha256sum | cut -d' ' -f1; printf ' ZONEHASH='; sudo -u oneadmin onezone show 0 --xml 2>/dev/null | sha256sum | cut -d' ' -f1"
+              $out=& ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "$user@$ip" $cmd 2>$null
+              $rc=$LASTEXITCODE
+              $ErrorActionPreference=$old
+              if($rc -eq 0){
+                Write-Host "IDENTITY ip=$ip user=$user $($out -join ' ')"
+                break
+              }
+            }
+          }
+
+          Write-Host '=== SAVED SITE INVENTORY ==='
+          $inv='C:\LayerSentryLab\qualification\replication-v2-sites.json'
+          if(Test-Path $inv){
+            $raw=Get-Content -LiteralPath $inv -Raw | ConvertFrom-Json
+            foreach($s in @($raw.sites)){
+              Write-Host "SITE_INVENTORY role=$($s.role) vm=$($s.vm) ip=$($s.ip) ssh_user=$($s.ssh_user)"
+            }
+          } else { Write-Host 'replication-v2-sites.json=ABSENT' }
+
+          Write-Host '=== SSH CONFIG TARGETS ==='
+          $sshConfig=Join-Path $env:USERPROFILE '.ssh\config'
+          if(Test-Path $sshConfig){
+            Get-Content -LiteralPath $sshConfig | Where-Object {$_ -match '^\s*(Host|HostName|User)\s+'} | ForEach-Object {Write-Host $_}
+          } else { Write-Host 'ssh_config=ABSENT' }
+
+          Write-Host "MAC_RESOLVED_COUNT=$($candidates.Count)"
+          Write-Host "ONE_XMLRPC_ENDPOINT_COUNT=$(@($service | Sort-Object -Unique).Count)"
+          Write-Host 'FRONTEND_SITE_IDENTITY_PROBE=PASS'
