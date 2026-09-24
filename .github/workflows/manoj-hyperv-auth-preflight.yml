@@ -97,8 +97,9 @@ jobs:
           export ONE_XMLRPC="http://10.250.10.11:2633/RPC2"
           operation="manoj-hv-ls-migration-source-test-20260924"
           echo "TARGET_NETWORK_POLICY=explicit-test-map source=10.250.10.31/24 target_vnet=0 target_name=dev_web_network preserve_source_l2=false"
+          echo "EXPECTED_GUEST_MACS=00:15:5d:00:1c:07"
           set +e
-          out=$(sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --preflight --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --qemu-ga --datastore 1 --network 0 2>&1)
+          out=$(sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --preflight --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --qemu-ga --datastore 1 --network 0 2>&1)
           rc=$?
           set -e
           printf '%s\n' "$out" | sed -E 's/(password|secret|token|authorization|one_auth)[^ ]*/\1=<redacted>/Ig'
