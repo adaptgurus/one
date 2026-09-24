@@ -415,7 +415,7 @@ const drVMCheckpoints = (
 ) => {
   if (!groupId || !siteId) {
     res.locals.httpCode = httpResponse(badRequest, {
-      error: 'Protection group ID and site ID are required.',
+      error: 'Workload ID and site ID are required.',
     })
     next()
     return
@@ -486,9 +486,9 @@ const drGetRecoveryMapping = (
       {
         method: 'GET',
         path:
-          '/v1/replication-product/' +
+          '/v1/replication-product/recovery-mappings/' +
           encodeURIComponent(groupId) +
-          '/recovery-mappings/' +
+          '/' +
           encodeURIComponent(siteId),
       },
       userData,
