@@ -1,6 +1,7 @@
 name: Manoj HyperV RCT Prepare Latest
 # latest-after-pr20-cim-path-and-rct-map-fixes
 # rerun-after-crash-baseline-fix
+# corrected-state-path-and-live-reference-gate
 
 on:
   push:
@@ -19,7 +20,7 @@ concurrency:
 jobs:
   prepare:
     runs-on: [self-hosted, Windows, X64]
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - name: Bind Manoj and protect source before prepare
         shell: powershell
@@ -103,7 +104,7 @@ jobs:
           echo "RCT_PREPARE_TARGET datastore=1 network=0"
           echo "RCT_PREPARE_SOURCE=ls-migration-source-test"
           set +e
-          out=$(timeout --signal=TERM --kill-after=20s 3600s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --prepare --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0 2>&1)
+          out=$(timeout --signal=TERM --kill-after=20s 7200s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --prepare --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0 2>&1)
           rc=$?
           set -e
           printf '%s\n' "$out" | sed -E 's/(password|secret|token|authorization|one_auth)[^ ]*/\1=<redacted>/Ig'
@@ -112,7 +113,15 @@ jobs:
             exit "$rc"
           fi
           echo "ONESWAP_RCT_PREPARE=PASS operation_id=$operation"
-          state="/var/tmp/oneswap-hyperv-hot/$operation/state.json"
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]
+            c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_")
+            suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$operation")
+          echo "PREPARED_STATE_PATH=$state"
           if [ ! -f "$state" ]; then echo "prepared state missing"; exit 44; fi
           python3 - "$state" <<'PY'
           import json,sys,os
@@ -121,18 +130,57 @@ jobs:
           print("PREPARED_PHASE="+str(s.get("phase")))
           print("PREPARED_SOURCE_VM_ID="+str(s.get("source_vm_id")))
           print("PREPARED_REFERENCE_POINT_ID="+str(s.get("reference_point_id")))
-          print("PREPARED_DISK_COUNT="+str(len(s.get("disks",[]))))
-          for i,d in enumerate(s.get("disks",[])):
-              path=d.get("prepared_raw_path","")
-              print(f"PREPARED_DISK_{i}_PATH={path}")
-              print(f"PREPARED_DISK_{i}_SIZE={os.path.getsize(path) if path and os.path.isfile(path) else -1}")
+          print("PREPARED_CONSISTENCY="+str(s.get("reference_consistency_level")))
+          disks=s.get("disks",[])
+          print("PREPARED_DISK_COUNT="+str(len(disks)))
           if s.get("phase")!="PREPARED": raise SystemExit("state is not PREPARED")
+          if str(s.get("source_vm_id","")).lower()!="52baa8a1-675f-4225-8f37-66a60933b30c": raise SystemExit("source id mismatch")
+          if int(s.get("reference_consistency_level",-1)) not in (1,2): raise SystemExit("reference consistency unsupported")
+          if len(disks)!=2: raise SystemExit("prepared disk count mismatch")
+          for i,d in enumerate(disks):
+              path=d.get("prepared_raw_path","")
+              expected=int(d.get("virtual_size",-1))
+              actual=os.path.getsize(path) if path and os.path.isfile(path) else -1
+              print(f"PREPARED_DISK_{i}_PATH={path}")
+              print(f"PREPARED_DISK_{i}_SIZE={actual}")
+              print(f"PREPARED_RCT_{i}={d.get('rct_id')}")
+              if actual!=expected: raise SystemExit(f"prepared disk {i} size mismatch")
+              if not str(d.get("rct_id","")).strip(): raise SystemExit(f"prepared disk {i} RCT id missing")
+          print("DURABLE_PREPARED_STATE=PASS")
           PY
           '@
           $script=$script.Replace('__DEV__',$dev)
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
-          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
-          if($LASTEXITCODE -ne 0){throw "Authenticated OneSwap RCT prepare failed rc=$LASTEXITCODE"}
+          $out=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          $rc=$LASTEXITCODE
+          $out | ForEach-Object {Write-Host $_}
+          if($rc -ne 0){throw "Authenticated OneSwap RCT prepare failed rc=$rc"}
+          $refLine=@($out | Where-Object {$_ -like 'PREPARED_REFERENCE_POINT_ID=*'} | Select-Object -Last 1)
+          if(-not $refLine){throw 'Durable state did not return reference id'}
+          $expectedRef=$refLine.Substring('PREPARED_REFERENCE_POINT_ID='.Length)
+          if([string]::IsNullOrWhiteSpace($expectedRef)){throw 'Durable reference id is empty'}
+
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Source changed state during prepare: $($src.State)"}
+          $ns='root\virtualization\v2'
+          $refs=@(Get-WmiObject -Namespace $ns -Class Msvm_VirtualSystemReferencePoint -Filter "VirtualSystemIdentifier='$($src.VMId.Guid)'" -ErrorAction Stop)
+          $match=@($refs | Where-Object {$_.InstanceID -eq $expectedRef})
+          Write-Host "PREPARED_LIVE_REFERENCE_COUNT=$($refs.Count)"
+          if($match.Count -ne 1){throw "Durable reference missing/ambiguous on Hyper-V: $expectedRef"}
+          $ref=$match[0]
+          $vd=@($ref.VirtualDiskIdentifiers)
+          $ri=@($ref.ResilientChangeTrackingIdentifiers)
+          $usable=@($ri | Where-Object {-not [string]::IsNullOrWhiteSpace([string]$_)})
+          Write-Host "PREPARED_LIVE_REFERENCE=$($ref.InstanceID)"
+          Write-Host "PREPARED_LIVE_REFERENCE_TYPE=$($ref.ReferencePointType)"
+          Write-Host "PREPARED_LIVE_CONSISTENCY=$($ref.ConsistencyLevel)"
+          Write-Host "PREPARED_LIVE_VD_COUNT=$($vd.Count)"
+          Write-Host "PREPARED_LIVE_RCT_COUNT=$($ri.Count)"
+          if([int]$ref.ReferencePointType -ne 2){throw 'Prepared reference is not RCT type 2'}
+          if([int]$ref.ConsistencyLevel -notin @(1,2)){throw 'Prepared reference consistency unsupported'}
+          if([bool]$ref.HasAssociatedData){throw 'Prepared RCT reference unexpectedly has associated log data'}
+          if($vd.Count -ne 2 -or $ri.Count -ne 2 -or $usable.Count -ne 2){throw 'Prepared RCT reference does not cover both source disks'}
+          Write-Host 'PREPARED_LIVE_REFERENCE=PASS'
 
       - name: Detach and delete FE2 authority child
         if: always()
