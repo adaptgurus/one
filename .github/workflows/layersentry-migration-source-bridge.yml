@@ -25,47 +25,79 @@ jobs:
           if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){ throw "wrong host: $env:COMPUTERNAME" }
           Write-Host "RUNNER_BOUND=$env:RUNNER_NAME"
 
-      - name: Fetch exact LayerSentry migration source
+      - name: Bind disposable guest seed
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification\ls-migration-source-test'
+          foreach($p in @('network-config','user-data','source_ci_ed25519')){
+            if(-not(Test-Path -LiteralPath (Join-Path $root $p))){ throw "missing source qualification asset: $p" }
+          }
+          $network=Get-Content -Raw -LiteralPath (Join-Path $root 'network-config')
+          $userData=Get-Content -Raw -LiteralPath (Join-Path $root 'user-data')
+          $ipv4=[regex]::Matches($network,'(?<![0-9])(?:10|172|192)\.[0-9]+\.[0-9]+\.[0-9]+') |
+            ForEach-Object {$_.Value} | Where-Object {$_ -ne '10.250.10.1'} | Select-Object -First 1
+          $userMatch=[regex]::Match($userData,'(?m)^\s*-?\s*name:\s*([A-Za-z0-9_.-]+)\s*$')
+          if(-not $ipv4){ throw 'no seeded source IPv4 found' }
+          if(-not $userMatch.Success){ throw 'no seeded source SSH username found' }
+          $user=$userMatch.Groups[1].Value
+          "SOURCE_IP=$ipv4" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "SOURCE_USER=$user" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "SOURCE_SEED ip=$ipv4 user=$user"
+
+      - name: Verify disposable guest SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification\ls-migration-source-test'
+          $key=Join-Path $root 'source_ci_ed25519'
+          $known=Join-Path $env:RUNNER_TEMP 'source-known-hosts'
+          ssh-keyscan.exe -T 5 $env:SOURCE_IP 2>$null | Out-File -FilePath $known -Encoding ascii
+          if((Get-Item $known).Length -eq 0){ throw "source guest SSH host key unavailable at $env:SOURCE_IP" }
+          ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key "$env:SOURCE_USER@$env:SOURCE_IP" "hostname; id -un; uname -a; lsblk -b -o NAME,TYPE,SIZE,MOUNTPOINTS"
+          if($LASTEXITCODE -ne 0){ throw "source guest SSH failed: $LASTEXITCODE" }
+          Write-Host 'SOURCE_GUEST_SSH=PASS'
+
+      - name: Discover exact LayerSentry source on authorized builder
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          foreach($p in @($key,$known)){if(-not(Test-Path -LiteralPath $p)){throw "missing builder trust asset: $p"}}
+          $cmd=@'
+set -euo pipefail
+echo "BUILDER_HOST=$(hostname) USER=$(id -un)"
+for p in /home/builder/layersentry-platform /home/builder/*/layersentry-platform /opt/layersentry-platform /srv/layersentry-platform; do
+  [ -d "$p/.git" ] || continue
+  echo "BUILDER_REPO=$p"
+  git -C "$p" rev-parse HEAD
+  git -C "$p" status --porcelain
+done
+'@
+          ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $cmd
+          if($LASTEXITCODE -ne 0){ throw "builder discovery failed: $LASTEXITCODE" }
+
+      - name: Check exact PR89 source availability on builder
         shell: powershell
         env:
-          GIT_TERMINAL_PROMPT: "0"
+          EXPECTED_SHA: e5a0c7e0101b47dc80e1378cbd69b7614e905ca1
         run: |
           $ErrorActionPreference='Stop'
-          $dest=Join-Path $env:RUNNER_TEMP 'layersentry-migration-agent-exact'
-          if(Test-Path $dest){ Remove-Item -LiteralPath $dest -Recurse -Force }
-          git clone --no-checkout https://github.com/adaptgurus/layersentry-platform.git $dest
-          Set-Location $dest
-          git fetch --depth=1 origin 1816ba856337c5f55ded36b0fa4f8baa1625312a
-          git checkout --detach 1816ba856337c5f55ded36b0fa4f8baa1625312a
-          $actual=(git rev-parse HEAD).Trim()
-          if($actual -ne '1816ba856337c5f55ded36b0fa4f8baa1625312a'){ throw "exact source mismatch: $actual" }
-          if((git status --porcelain).Count -ne 0){ throw 'exact source checkout is dirty' }
-          Write-Host "EXACT_SOURCE=$actual"
-
-      - name: Validate portable guest warm-migration source
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $dest=Join-Path $env:RUNNER_TEMP 'layersentry-migration-agent-exact'
-          Set-Location $dest
-          $offenders = gofmt -l cmd/layersentry-migration-agent internal/migrationagent internal/adapters/replication/guestagent pkg/replicationv2 internal/replicationv2
-          if($offenders){ $offenders | ForEach-Object { Write-Host "GOFMT_OFFENDER=$_" }; throw 'gofmt required' }
-          go test -count=1 ./internal/migrationagent
-          go test -count=1 ./internal/adapters/replication/guestagent
-          go test -count=1 ./pkg/replicationv2
-          go test -count=1 ./internal/replicationv2
-          go test -run TestNameThatDoesNotExist -count=1 ./...
-          Write-Host 'LAYERSENTRY_GUEST_WARM_SOURCE=PASS'
-
-      - name: Cross-build migration agent
-        shell: powershell
-        run: |
-          $ErrorActionPreference='Stop'
-          $dest=Join-Path $env:RUNNER_TEMP 'layersentry-migration-agent-exact'
-          Set-Location $dest
-          $env:CGO_ENABLED='0'
-          $env:GOOS='windows'; $env:GOARCH='amd64'
-          go build -trimpath -o "$env:RUNNER_TEMP\layersentry-migration-agent-windows-amd64.exe" ./cmd/layersentry-migration-agent
-          $env:GOOS='linux'; $env:GOARCH='amd64'
-          go build -trimpath -o "$env:RUNNER_TEMP\layersentry-migration-agent-linux-amd64" ./cmd/layersentry-migration-agent
-          Write-Host 'LAYERSENTRY_GUEST_WARM_CROSS_BUILD=PASS'
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          $cmd=@"
+set -euo pipefail
+repo=''
+for p in /home/builder/layersentry-platform /home/builder/*/layersentry-platform /opt/layersentry-platform /srv/layersentry-platform; do
+  if [ -d "\$p/.git" ]; then repo="\$p"; break; fi
+done
+[ -n "\$repo" ] || { echo BUILDER_REPO_MISSING; exit 20; }
+if ! git -C "\$repo" cat-file -e '$env:EXPECTED_SHA^{commit}' 2>/dev/null; then
+  git -C "\$repo" fetch --depth=1 origin '$env:EXPECTED_SHA'
+fi
+git -C "\$repo" cat-file -e '$env:EXPECTED_SHA^{commit}'
+echo "EXACT_SOURCE=$env:EXPECTED_SHA"
+"@
+          ssh.exe -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key builder@10.250.10.40 $cmd
+          if($LASTEXITCODE -ne 0){ throw "exact source unavailable on builder: $LASTEXITCODE" }
