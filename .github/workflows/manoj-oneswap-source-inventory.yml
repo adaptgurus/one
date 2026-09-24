@@ -1,0 +1,102 @@
+name: Manoj OneSwap HyperV Source Inventory
+
+on:
+  push:
+    branches:
+      - qual/hyperv-migration-manoj-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-source-inventory.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-source-inventory
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact Manoj source and appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "wrong host $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $app=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          Write-Host "SOURCE_STATE=$($src.State) APPLIANCE_STATE=$($app.State)"
+          if($src.State -ne 'Running'){throw "source is not Running"}
+          if($app.State -ne 'Running'){throw "OneSwap appliance is not Running"}
+
+      - name: Verify pinned appliance SSH
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ip='10.250.10.32'
+          $key='C:\LayerSentryLab\qualification\oneswap-seed\id_ed25519'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance.paramiko'
+          foreach($p in @($key,$known)){if(-not(Test-Path $p)){throw "missing pinned SSH file: $p"}}
+          $ssh=(Get-Command ssh.exe -ErrorAction Stop).Source
+          & $ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -i $key "ci@$ip" "hostname; id -un"
+          if($LASTEXITCODE -ne 0){throw "pinned appliance SSH failed"}
+          "ONESWAP_IP=$ip" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ONESWAP_KEY=$key" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          "ONESWAP_KNOWN=$known" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'PINNED_APPLIANCE_SSH=PASS'
+
+      - name: Sanitize OneSwap config and resolve Hyper-V profile
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $remote=@'
+          set -e
+          cfg=/etc/one/oneswap.yaml
+          test -f "$cfg"
+          python3 - <<'PY'
+          import yaml
+          p="/etc/one/oneswap.yaml"
+          with open(p,encoding="utf-8") as f:
+              raw=yaml.safe_load(f) or {}
+          norm={str(k).lstrip(":"):v for k,v in raw.items()}
+          conns=norm.get("hyperv_connections") or {}
+          print("ONESWAP_CONFIG="+p)
+          print("HYPERV_CONNECTION_NAMES="+",".join(sorted(str(k) for k in conns)))
+          for name,v in sorted(conns.items()):
+              v=v or {}
+              safe={k:v.get(k) for k in ("host","user","port","staging_dir","shutdown_timeout","transfer_timeout","prepare_timeout","delta_timeout") if k in v}
+              print("HYPERV_CONNECTION %s %s"%(name,safe))
+          for k in ("datastore","network","work_dir","format","http_transfer","http_host","http_port","v2v_path","v2v_in_place_path","libguestfs_path","uefi_path","uefi_sec_path"):
+              if k in norm: print("ONESWAP_DEFAULT %s=%s"%(k,norm[k]))
+          if len(conns)==1:
+              print("SELECTED_HYPERV_CONNECTION="+next(iter(conns)))
+          elif "hv-lab" in conns:
+              print("SELECTED_HYPERV_CONNECTION=hv-lab")
+          PY
+          test -x /usr/bin/oneswap-hyperv
+          sha256sum /usr/bin/oneswap-hyperv
+          /usr/bin/oneswap-hyperv --help | sed -n '1,45p'
+          '@
+          $out=& $ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:ONESWAP_KNOWN" -i $env:ONESWAP_KEY "ci@$env:ONESWAP_IP" $remote
+          if($LASTEXITCODE -ne 0){$out | Write-Host; throw "config inspection failed"}
+          $out | Write-Host
+          $line=@($out | Where-Object {$_ -like 'SELECTED_HYPERV_CONNECTION=*'})
+          if($line.Count -ne 1){throw "unable to resolve one Hyper-V connection profile"}
+          $profile=($line[0] -split '=',2)[1].Trim()
+          if($profile -notmatch '^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$'){throw "unsafe profile id $profile"}
+          "HYPERV_PROFILE=$profile" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "HYPERV_PROFILE_RESOLVED=$profile"
+
+      - name: Run authoritative OneSwap Hyper-V inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $ssh=(Get-Command ssh.exe).Source
+          $profile=$env:HYPERV_PROFILE
+          $remote="sudo -u oneswap /usr/bin/oneswap-hyperv ls-migration-source-test --inventory --hyperv-connection '$profile' --config-file /etc/one/oneswap.yaml"
+          & $ssh -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$env:ONESWAP_KNOWN" -i $env:ONESWAP_KEY "ci@$env:ONESWAP_IP" $remote
+          if($LASTEXITCODE -ne 0){throw "OneSwap Hyper-V inventory failed exit=$LASTEXITCODE"}
+          Write-Host 'ONESWAP_HYPERV_INVENTORY=PASS'
