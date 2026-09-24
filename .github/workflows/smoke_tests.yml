@@ -518,7 +518,7 @@ jobs:
 
 
   manoj-oneswap-boot-seed-audit:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -566,3 +566,58 @@ jobs:
               ForEach-Object {Write-Host $_}
           }
           Write-Host 'ONESWAP_BOOT_SCRIPT_HINTS=PASS'
+
+
+  manoj-oneswap-seed-lineage:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind exact Manoj runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+      - name: Inventory OneSwap seed lineage safely
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification'
+          $seed=Join-Path $root 'oneswap-seed'
+          Write-Host '=== SEED FILES ==='
+          Get-ChildItem -Path $seed -File -ErrorAction Stop |
+            Sort-Object Name |
+            Select-Object Name,Length,LastWriteTime |
+            Format-Table -AutoSize
+          Write-Host '=== V3/V4 HASHES ==='
+          foreach($p in @("$seed\cidata-v3.vhdx","$seed\cidata-v4.vhdx")){
+            if(Test-Path $p){
+              Get-FileHash -Algorithm SHA256 $p | Select-Object Path,Hash | Format-List
+            }
+          }
+          Write-Host '=== USER-DATA STRUCTURE ==='
+          $ud=Join-Path $seed 'user-data'
+          if(Test-Path $ud){
+            Get-Content -LiteralPath $ud |
+              Where-Object {
+                $_ -match '^(#cloud-config|users:|\s*- name:|ssh_authorized_keys:|write_files:|runcmd:|bootcmd:|packages:|\s*- systemctl|\s*- nmcli|\s*- ip |\s*- python|\s*- bash|.*oneswap.*|.*sshd.*)' -and
+                $_ -notmatch '(?i)private.?key|password|secret|token'
+              } |
+              ForEach-Object {Write-Host $_}
+          }
+          Write-Host '=== CIDATA-V4 REFERENCES ==='
+          Get-ChildItem -Path $root -Recurse -File -ErrorAction SilentlyContinue |
+            Where-Object {$_.Extension -in @('.ps1','.py','.sh','.txt','.md')} |
+            ForEach-Object {
+              $p=$_.FullName
+              Select-String -Path $p -Pattern 'cidata-v4|cloud-localds|oneswap-seed' -SimpleMatch -ErrorAction SilentlyContinue |
+                ForEach-Object {
+                  $line=$_.Line
+                  if($line -notmatch '(?i)password|secret|token|private.?key'){
+                    Write-Host "REF file=$p line=$line"
+                  }
+                }
+            }
+          Write-Host 'ONESWAP_SEED_LINEAGE=PASS'
