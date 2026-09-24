@@ -95,6 +95,26 @@ jobs:
                   for part in value.replace(",", " ").split():
                       if part.isdigit(): used.add(int(part))
               active.append((str(vm_id),vm.findtext("NAME"),cpus))
+          # Remove only failed/non-running service-validation allocations from
+          # prior attempts. Never touch a RUNNING/deployed VM.
+          stale=[]
+          for summary in vp.findall("VM"):
+              name=(summary.findtext("NAME") or "").strip()
+              if not name.startswith("ls-dr-service-vm-"):
+                  continue
+              vm_state=int(summary.findtext("STATE") or -1)
+              lcm_state=int(summary.findtext("LCM_STATE") or -1)
+              deploy=(summary.findtext("DEPLOY_ID") or "").strip()
+              if vm_state==3 and lcm_state==3 and deploy:
+                  continue
+              stale.append((int(summary.findtext("ID")),name,vm_state,lcm_state,deploy))
+          for stale_id,stale_name,stale_state,stale_lcm,stale_deploy in stale:
+              action=one.one.vm.action(auth,"terminate-hard",stale_id)
+              if action[0]:
+                  print(f"SERVICE_STALE_VM_CLEANUP=PASS VM_ID={stale_id} NAME={stale_name} STATE={stale_state} LCM={stale_lcm}")
+              else:
+                  print(f"SERVICE_STALE_VM_CLEANUP=WARNING VM_ID={stale_id} ERROR={str(action[1])[:200]}")
+
           total_cores=max_cpu//100
           print("PINNED_ACTIVE_VMS="+repr(active))
           print("PINNED_USED_CPUS="+repr(sorted(used)))
@@ -144,7 +164,7 @@ jobs:
               else: raise SystemExit("service image did not become READY")
 
           vm_template=f'''NAME="{vm_name}"
-          CPU="1"
+          CPU="0.5"
           VCPU="1"
           MEMORY="256"
           FEATURES=[GUEST_AGENT="YES"]
@@ -251,3 +271,5 @@ jobs:
 # resume-service-validation-fix: 2026-09-24T15:11+05:30
 
 # manual-pinned-deploy-fix: 2026-09-24T15:11+05:30
+
+# half-share-pinned-core-fix: 2026-09-24T15:11+05:30
