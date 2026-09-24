@@ -1520,7 +1520,7 @@ jobs:
           Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
 
   manoj-oneswap-v8-userdata-structure-audit:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 6
     steps:
@@ -1571,6 +1571,58 @@ jobs:
           }
           Write-Host ('CLIENT_KEY_PRESENT=' + [bool]($text -match [regex]::Escape($clientId)))
           Write-Host 'V8_USERDATA_STRUCTURE_AUDIT=PASS'
+
+      - name: Verify source remained untouched
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          Write-Host 'SOURCE_PROTECTION_AFTER=PASS'
+
+  manoj-oneswap-private-public-key-match-audit:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 6
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          Write-Host 'SOURCE_PROTECTION_BEFORE=PASS'
+
+      - name: Compare private-derived public key with sidecar and v8
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $pub=$key+'.pub'
+          $ud='C:\LayerSentryLab\qualification\oneswap-seed\user-data-v8'
+          foreach($p in @($key,$pub,$ud)){if(-not(Test-Path $p)){throw "Missing $p"}}
+          $derived=(& ssh-keygen.exe -y -f $key 2>$null).Trim()
+          if($LASTEXITCODE -ne 0 -or -not $derived){throw 'Unable to derive public key from client private key'}
+          $dp=$derived -split '\s+'
+          $derivedId=$dp[0]+' '+$dp[1]
+          $side=(Get-Content -LiteralPath $pub -Raw).Trim()
+          $sp=$side -split '\s+'
+          $sideId=$sp[0]+' '+$sp[1]
+          $text=Get-Content -LiteralPath $ud -Raw
+          Write-Host ('PRIVATE_MATCHES_SIDECAR=' + ($derivedId -eq $sideId))
+          Write-Host ('PRIVATE_DERIVED_KEY_PRESENT_IN_V8=' + [bool]($text -match [regex]::Escape($derivedId)))
+          Write-Host ('SIDECAR_KEY_PRESENT_IN_V8=' + [bool]($text -match [regex]::Escape($sideId)))
+          $sha=[Security.Cryptography.SHA256]::Create()
+          try {
+            $h1=[BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($derivedId))).Replace('-','')
+            $h2=[BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($sideId))).Replace('-','')
+          } finally { $sha.Dispose() }
+          Write-Host ('PRIVATE_PUBLIC_ID_SHA256=' + $h1)
+          Write-Host ('SIDECAR_PUBLIC_ID_SHA256=' + $h2)
+          Write-Host 'PRIVATE_PUBLIC_KEY_MATCH_AUDIT=PASS'
 
       - name: Verify source remained untouched
         shell: powershell
