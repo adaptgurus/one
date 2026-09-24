@@ -1,0 +1,49 @@
+name: Manoj Replication v2 Base Object Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-replication-v2-base-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Find exact Replication v2 foundation base
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $wanted='ebe08fccc21653caaefcedb483e689c41672c357'
+          $roots=@('C:\LayerSentryLab',(Join-Path $env:USERPROFILE 'actions-runner\_work')) | Where-Object {Test-Path $_}
+          $hits=@()
+          foreach($root in $roots){
+            Get-ChildItem -LiteralPath $root -Directory -Recurse -Depth 6 -ErrorAction SilentlyContinue | ForEach-Object {
+              if(Test-Path (Join-Path $_.FullName '.git')){
+                $old=$ErrorActionPreference;$ErrorActionPreference='SilentlyContinue'
+                $remote=(& git -C $_.FullName remote get-url origin 2>$null)
+                $rc=$LASTEXITCODE
+                if($rc -eq 0 -and ($remote -join '') -match 'adaptgurus/layersentry-platform'){
+                  & git -C $_.FullName cat-file -e "$wanted^{commit}" 2>$null
+                  $has=$LASTEXITCODE -eq 0
+                  if($has){
+                    $hits += [pscustomobject]@{Path=$_.FullName;Head=((& git -C $_.FullName rev-parse HEAD 2>$null)-join '')}
+                  }
+                }
+                $ErrorActionPreference=$old
+              }
+            }
+          }
+          $hits=@($hits | Sort-Object Path -Unique)
+          $hits | Format-Table -AutoSize
+          Write-Host "FOUND_FOUNDATION_BASE_COUNT=$($hits.Count)"
+          if($hits.Count -lt 1){throw 'Exact Replication v2 foundation base object is not cached on Manoj.'}
+          Write-Host "FOUNDATION_BASE_REPO=$($hits[0].Path)"
+          Write-Host 'REPLICATION_V2_FOUNDATION_BASE_CACHE=PASS'
