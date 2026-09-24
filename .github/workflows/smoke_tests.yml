@@ -1104,7 +1104,8 @@ jobs:
           $ip='10.250.10.32'
           foreach($p in @($seedBase,$userV4,$network)){if(-not(Test-Path $p)){throw "Missing seed input: $p"}}
           if(-not(Test-Path $hostKey)){
-            & ssh-keygen.exe -q -t ed25519 -N '' -C 'oneswap-qual-v7' -f $hostKey
+            $cmd='ssh-keygen.exe -q -t ed25519 -N "" -C oneswap-qual-v7 -f "' + $hostKey + '"'
+            & cmd.exe /d /s /c $cmd
             if($LASTEXITCODE -ne 0){throw 'failed to generate v7 appliance host key'}
           }
           $pubLine=(Get-Content -LiteralPath ($hostKey + '.pub') -Raw).Trim()
