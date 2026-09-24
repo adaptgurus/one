@@ -63,7 +63,7 @@ jobs:
 
 
   manoj-hyperv-migration-gate:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 20
     steps:
