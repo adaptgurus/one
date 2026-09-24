@@ -1,0 +1,97 @@
+name: Manoj OneSwap Guest Network Diagnostic
+
+on:
+  push:
+    branches:
+      - qual/hyperv-migration-manoj-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-network-diagnostic.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-network-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind exact Manoj runner and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "wrong runner $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "wrong host $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "migration source not Running: $($src.State)"}
+          Write-Host "SOURCE_PROTECTED=PASS state=$($src.State)"
+
+      - name: Hyper-V appliance runtime evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-qual'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          Write-Host "APPLIANCE_VM name=$name state=$($vm.State) uptime=$($vm.Uptime) cpu=$($vm.ProcessorCount) assigned=$($vm.MemoryAssigned) demand=$($vm.MemoryDemand)"
+          Write-Host '=== INTEGRATION SERVICES ==='
+          Get-VMIntegrationService -VMName $name | Select-Object Name,Enabled,PrimaryStatusDescription,SecondaryStatusDescription | Format-Table -AutoSize
+          Write-Host '=== NETWORK ADAPTER ==='
+          Get-VMNetworkAdapter -VMName $name | Select-Object Name,SwitchName,MacAddress,Status,IPAddresses | Format-List
+          Write-Host '=== FIRMWARE ==='
+          Get-VMFirmware -VMName $name | Select-Object SecureBoot,SecureBootTemplate,PreferredNetworkBootProtocol | Format-List
+
+      - name: Host-side reachability and neighbor evidence
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          foreach($ip in @('10.250.10.32','10.250.10.41')){
+            $ping=Test-Connection -ComputerName $ip -Count 1 -Quiet -ErrorAction SilentlyContinue
+            Write-Host "PING ip=$ip ok=$ping"
+            foreach($port in @(22,9443,9444)){
+              $ok=Test-NetConnection -ComputerName $ip -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue
+              Write-Host "TCP ip=$ip port=$port open=$ok"
+            }
+          }
+          Write-Host '=== NEIGHBORS ==='
+          Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.IPAddress -like '10.250.10.*' } |
+            Select-Object IPAddress,LinkLayerAddress,State,InterfaceAlias |
+            Sort-Object IPAddress | Format-Table -AutoSize
+          Write-Host '=== HOST ROUTE ==='
+          Get-NetRoute -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object { $_.DestinationPrefix -like '10.250.10*' -or $_.NextHop -like '10.250.10*' } |
+            Select-Object DestinationPrefix,NextHop,InterfaceAlias,RouteMetric | Format-Table -AutoSize
+
+      - name: Inspect current seed inputs without secrets
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root='C:\LayerSentryLab\qualification\oneswap-seed'
+          foreach($f in @('network-config','meta-data','user-data')){
+            $p=Join-Path $root $f
+            Write-Host "=== SEED $f ==="
+            if(-not(Test-Path $p)){Write-Host 'MISSING';continue}
+            if($f -ne 'user-data'){
+              Get-Content -LiteralPath $p
+              continue
+            }
+            foreach($line in Get-Content -LiteralPath $p){
+              if($line -match '(?i)(BEGIN .*PRIVATE KEY|password:|passwd:|token:|secret:)'){
+                Write-Host '[REDACTED_SECRET_LINE]'
+                continue
+              }
+              if($line -match 'ssh-(rsa|ed25519)\s+[A-Za-z0-9+/=]+'){
+                $safe=$line -replace '(ssh-(?:rsa|ed25519))\s+[A-Za-z0-9+/=]+','$1 [REDACTED_PUBLIC_KEY]'
+                Write-Host $safe
+                continue
+              }
+              if($line -match '(?i)^(#cloud-config|users:|\s*- name:|\s*sudo:|\s*groups:|\s*shell:|ssh_|packages:|\s*- openssh|\s*- cloud|runcmd:|bootcmd:|write_files:|\s*- path:|\s*- systemctl|\s*- netplan|\s*- .*oneswap|\s*- .*ssh|\s*- .*sudo|\s*- .*apt|\s*- .*chmod|\s*- .*chown)'){
+                Write-Host $line
+              }
+            }
+          }
+          Write-Host '=== SEED VHDX ==='
+          Get-Item (Join-Path $root 'cidata-v4.vhdx') -ErrorAction SilentlyContinue | Select-Object FullName,Length,LastWriteTimeUtc | Format-List
