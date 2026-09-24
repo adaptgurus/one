@@ -59,6 +59,9 @@ jobs:
           hs=[h for h in hp.findall("HOST") if (h.findtext("NAME") or "").strip()==TARGET_HOST]
           if len(hs)!=1: raise SystemExit("target host not unique")
           h=hs[0]
+          host_id=int(h.findtext("ID") or -1)
+          if host_id < 0:
+              raise SystemExit("invalid target host id")
           state=int(h.findtext("STATE") or -1)
           max_cpu=int(h.findtext("./HOST_SHARE/MAX_CPU") or h.findtext("./HOST_SHARE/TOTAL_CPU") or 0)
           running_counter=int(h.findtext("./HOST_SHARE/RUNNING_VMS") or 0)
@@ -222,9 +225,6 @@ jobs:
           vm_id=int(va[1])
           print("SERVICE_VALIDATION_VM_ID="+str(vm_id))
 
-          host_id=int(h.findtext("ID") or -1)
-          if host_id < 0:
-              raise SystemExit("invalid target host id")
           deploy=one.one.vm.deploy(auth,vm_id,host_id,False,-1)
           if not deploy[0]:
               raise SystemExit("manual pinned VM deploy failed: "+str(deploy[1])[:500])
@@ -313,3 +313,5 @@ jobs:
 # half-share-pinned-core-fix: 2026-09-24T15:11+05:30
 
 # qualification-vm12-capacity-release: 2026-09-24T15:11+05:30
+
+# host-id-order-fix: 2026-09-24T15:11+05:30
