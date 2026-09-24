@@ -1,5 +1,5 @@
 name: Manoj HyperV Authenticated OneSwap Preflight
-# rerun-after-pr18-stdin-bootstrap
+# rerun-with-bounded-hot-preflight
 
 on:
   push:
@@ -100,7 +100,7 @@ jobs:
           echo "EXPECTED_GUEST_MACS=00:15:5d:00:1c:07"
           echo "QUALIFIED_SECURE_UEFI=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd source_template=MicrosoftUEFICertificateAuthority"
           set +e
-          out=$(sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --preflight --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0 2>&1)
+          out=$(timeout --signal=TERM --kill-after=10s 300s sudo -E /usr/bin/oneswap-hyperv ls-migration-source-test --hot --preflight --operation-id "$operation" --hyperv-connection manoj-qual --config-file /etc/layersentry/oneswap/manoj-qual.yaml --guest-os linux --expected-guest-macs 00:15:5d:00:1c:07 --uefi-sec-path /usr/share/OVMF/OVMF_CODE_4M.secboot.fd --qemu-ga --datastore 1 --network 0 2>&1)
           rc=$?
           set -e
           printf '%s\n' "$out" | sed -E 's/(password|secret|token|authorization|one_auth)[^ ]*/\1=<redacted>/Ig'
