@@ -1,0 +1,64 @@
+name: Manoj HyperV Linux Consistency Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-linux-consistency-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-linux-consistency-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect Linux guest checkpoint and integration-service capability
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $name='ls-migration-source-test'
+          $vm=Get-VM -Name $name -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source must stay Running: $($vm.State)"}
+          $snaps=@(Get-VMSnapshot -VMName $name -ErrorAction SilentlyContinue)
+          if($snaps.Count -ne 0){throw "Source has $($snaps.Count) user checkpoints"}
+
+          Write-Host "SOURCE_STATE=$($vm.State)"
+          Write-Host "CHECKPOINT_TYPE=$($vm.CheckpointType)"
+          Write-Host "AUTOMATIC_CHECKPOINTS=$($vm.AutomaticCheckpointsEnabled)"
+          Write-Host "GENERATION=$($vm.Generation)"
+          Write-Host "VERSION=$($vm.Version)"
+
+          $services=@(Get-VMIntegrationService -VMName $name -ErrorAction Stop)
+          foreach($s in $services){
+            Write-Host ("INTEGRATION name={0} enabled={1} primary={2} secondary={3} status={4}" -f $s.Name,$s.Enabled,$s.PrimaryStatusDescription,$s.SecondaryStatusDescription,$s.StatusDescription)
+          }
+
+          $nics=@(Get-VMNetworkAdapter -VMName $name -ErrorAction Stop)
+          foreach($nic in $nics){
+            Write-Host "NIC name=$($nic.Name) mac=$($nic.MacAddress) ips=$($nic.IPAddresses -join ',')"
+          }
+
+          $fw=Get-VMFirmware -VMName $name -ErrorAction Stop
+          Write-Host "SECURE_BOOT=$($fw.SecureBoot) TEMPLATE=$($fw.SecureBootTemplate)"
+          Write-Host 'LINUX_CONSISTENCY_PROBE=PASS'
+
+      - name: Verify source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_AFTER_STATE=$($vm.State)"
+          Write-Host "SOURCE_AFTER_CHECKPOINTS=$n"
+          if($vm.State -ne 'Running'){throw 'Probe changed source state'}
+          if($n -ne 0){throw 'Probe created/found user checkpoint'}
+          Write-Host 'SOURCE_INVARIANT=PASS'
