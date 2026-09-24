@@ -1,0 +1,47 @@
+name: Manoj OneSwap Secure UEFI Inventory
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-secure-uefi.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-secure-uefi
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and inspect source Secure Boot
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Running'){throw "Source not Running: $($vm.State)"}
+          $fw=Get-VMFirmware -VMName $vm.Name -ErrorAction Stop
+          Write-Host "SOURCE_SECURE_BOOT=$($fw.SecureBoot) TEMPLATE=$($fw.SecureBootTemplate) TEMPLATE_ID=$($fw.SecureBootTemplateId)"
+          Write-Host "SOURCE_FIRMWARE_INVENTORY=PASS"
+
+      - name: Inspect OneSwap secure firmware files
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $srcKey='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-uefi.key'
+          Copy-Item -Force $srcKey $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $cmd="sudo find /usr/share /usr/lib -type f \( -iname '*OVMF*secboot*.fd' -o -iname '*OVMF*secure*.fd' -o -iname '*OVMF_CODE*.fd' \) -print 2>/dev/null | sort; echo ===DEFAULTS===; sudo test -r /usr/share/OVMF/OVMF_CODE_4M.secboot.fd && echo READABLE=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd || true; sudo test -r /usr/share/OVMF/OVMF_CODE.secboot.fd && echo READABLE=/usr/share/OVMF/OVMF_CODE.secboot.fd || true; echo SECURE_UEFI_INVENTORY=PASS"
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $tmp "ci@10.250.10.32" $cmd
+          if($LASTEXITCODE -ne 0){throw "Secure UEFI inventory failed rc=$LASTEXITCODE"}
