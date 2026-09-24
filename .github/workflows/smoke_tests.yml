@@ -2931,7 +2931,7 @@ jobs:
 
 
   manoj-hyperv-memory-inventory:
-    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    if: false
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -2982,3 +2982,134 @@ jobs:
           $appliance=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
           if($appliance.State -ne 'Running'){throw "Active OneSwap appliance changed state: $($appliance.State)"}
           Write-Host 'PROTECTED_VM_INVARIANTS=PASS'
+
+
+  manoj-builder-memory-recovery:
+    if: github.ref == 'refs/heads/qual/manoj-hyperv-migration-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind exact Manoj runner and protect active migration path
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source is not Running: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source has checkpoints'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance is not Running: $($active.State)"}
+          Write-Host 'PROTECTED_PATH_BEFORE=PASS'
+
+      - name: Save only obsolete migration source2 to release RAM
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-hv-migration-source2' -ErrorAction Stop
+          Write-Host "RECLAIM_VM name=$($vm.Name) initial_state=$($vm.State) assigned_mib=$([math]::Round($vm.MemoryAssigned/1MB,1))"
+          if($vm.State -eq 'Running'){
+            Save-VM -VM $vm -ErrorAction Stop
+            "SOURCE2_SAVED_BY_QUAL=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } elseif($vm.State -eq 'Saved'){
+            "SOURCE2_SAVED_BY_QUAL=0" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } else {
+            throw "Refusing to mutate source2 from unexpected state $($vm.State)"
+          }
+          $vm=Get-VM -Name 'ls-hv-migration-source2' -ErrorAction Stop
+          if($vm.State -ne 'Saved'){throw "source2 did not reach Saved state: $($vm.State)"}
+          Write-Host "RECLAIM_VM_RESULT name=$($vm.Name) state=$($vm.State) assigned_mib=$([math]::Round($vm.MemoryAssigned/1MB,1))"
+          $os=Get-CimInstance Win32_OperatingSystem
+          Write-Host "HOST_FREE_AFTER_SAVE_MIB=$([math]::Round(([int64]$os.FreePhysicalMemory*1KB)/1MB,1))"
+          Write-Host 'SUPPORT_RAM_RECLAIM=PASS'
+
+      - name: Start support builder and wait for pinned SSH candidate
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-iso-builder' -ErrorAction Stop
+          Write-Host "BUILDER_INITIAL_STATE=$($vm.State) startup_mib=$([math]::Round((Get-VMMemory -VM $vm).Startup/1MB,1))"
+          if($vm.State -eq 'Off'){
+            Start-VM -VM $vm -ErrorAction Stop | Out-Null
+            "BUILDER_STARTED_BY_QUAL=1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          } elseif($vm.State -notin @('Running','Starting')){
+            throw "Builder state is not safe to use: $($vm.State)"
+          }
+          $deadline=(Get-Date).AddSeconds(150)
+          $ready=$false
+          do{
+            Start-Sleep -Seconds 3
+            $vm=Get-VM -Name 'ls-iso-builder' -ErrorAction Stop
+            $ips=@(Get-VMNetworkAdapter -VM $vm -ErrorAction SilentlyContinue |
+              ForEach-Object {$_.IPAddresses} |
+              Where-Object {$_ -match '^\d+\.\d+\.\d+\.\d+$'})
+            if($ips -notcontains '10.250.10.40'){
+              $ips=@($ips + '10.250.10.40' | Select-Object -Unique)
+            }
+            Write-Host "BUILDER_WAIT state=$($vm.State) candidates=$($ips -join ',')"
+            foreach($ip in $ips){
+              $client=New-Object Net.Sockets.TcpClient
+              try{
+                $iar=$client.BeginConnect($ip,22,$null,$null)
+                $ok=$iar.AsyncWaitHandle.WaitOne(1200,$false) -and $client.Connected
+                if($ok){
+                  $client.EndConnect($iar)
+                  "BUILDER_IP=$ip" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                  Write-Host "BUILDER_SSH_READY ip=$ip"
+                  $ready=$true
+                  break
+                }
+              }catch{}finally{$client.Close()}
+            }
+            if($ready){break}
+          }while((Get-Date) -lt $deadline)
+          if(-not $ready){throw 'Builder did not expose SSH within qualification timeout'}
+
+      - name: Validate builder FE1 target authority metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\iso-builder-key'
+          $known='C:\LayerSentryLab\qualification\known_hosts_builder'
+          & ssh-keygen.exe -F $env:BUILDER_IP -f $known 2>$null | Out-Null
+          if($LASTEXITCODE -ne 0){throw "Builder IP $env:BUILDER_IP is not pinned"}
+          $cmd='set -euo pipefail; p=/mnt/layersentry-work/ha-private/fe1/one_auth; test -f "$p"; stat -c "FE1_AUTH_PRESENT=1 mode=%a uid=%u gid=%g size=%s" "$p"; grep -RhoE "http://10\.250\.10\.[0-9]+:2633/RPC2" /mnt/layersentry-work 2>/dev/null | sort -u | head -20'
+          & ssh.exe -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "builder@$env:BUILDER_IP" $cmd
+          if($LASTEXITCODE -ne 0){throw 'Builder FE1 target authority validation failed'}
+          Write-Host 'BUILDER_FE1_AUTHORITY=PASS'
+
+      - name: Probe target XMLRPC reachability from OneSwap appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $key='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          any=0
+          for ep in http://10.250.10.11:2633/RPC2 http://10.250.10.12:2633/RPC2 http://10.250.10.13:2633/RPC2 http://10.10.10.20:2633/RPC2; do
+            host=$(printf '%s' "$ep" | sed -E 's#http://([^:/]+).*#\1#')
+            if timeout 3 bash -c "</dev/tcp/$host/2633" 2>/dev/null; then
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=true"
+              any=1
+            else
+              echo "TARGET_XMLRPC_TCP endpoint=$ep open=false"
+            fi
+          done
+          [ "$any" -eq 1 ] || exit 43
+          '@
+          $script=$script -replace [char]13,''
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o BatchMode=yes -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $key "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'No target XMLRPC endpoint reachable from OneSwap appliance'}
+          Write-Host 'TARGET_XMLRPC_REACHABILITY=PASS'
+
+      - name: Confirm protected migration path remains intact
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Running'){throw "Protected source changed state: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Protected source checkpoint invariant changed'}
+          $active=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($active.State -ne 'Running'){throw "Active OneSwap appliance changed state: $($active.State)"}
+          Write-Host 'PROTECTED_PATH_AFTER=PASS'
