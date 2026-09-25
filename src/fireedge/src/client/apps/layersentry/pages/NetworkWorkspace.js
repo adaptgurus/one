@@ -170,14 +170,24 @@ const NetworkWorkspace = ({ endpoints }) => {
       description="Browse workload networks while mutation-heavy firewall, blueprint and router surfaces remain separately qualified."
       actions={
         canCreate ? (
-          <Button
-            variant="contained"
-            startIcon={<Plus width={17} height={17} />}
-            onClick={() => history.push('/network/create')}
-            sx={{ textTransform: 'none' }}
-          >
-            Create network
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              startIcon={<Plus width={17} height={17} />}
+              onClick={() => history.push('/network/create')}
+              sx={{ textTransform: 'none' }}
+            >
+              Create one network
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<Plus width={17} height={17} />}
+              onClick={() => history.push('/network/segments/create')}
+              sx={{ textTransform: 'none' }}
+            >
+              Create workload segments
+            </Button>
+          </Box>
         ) : null
       }
     >
@@ -219,6 +229,20 @@ const NetworkWorkspace = ({ endpoints }) => {
                   />
                 ))}
               </Box>
+              {canCreate && (
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() =>
+                    history.push('/network/segments/create', {
+                      environment: prefix,
+                    })
+                  }
+                  sx={{ mt: 1, px: 0, textTransform: 'none' }}
+                >
+                  Create {name} Web/App/DB segments
+                </Button>
+              )}
             </Box>
           ))}
         </Box>
