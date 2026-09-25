@@ -1,0 +1,99 @@
+name: Manoj HyperV RCT Delta Query Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-rct-delta-query-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-rct-delta-query-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Probe RCT GetVirtualDiskChanges read-only
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected user-visible checkpoint'}
+
+          $drives=@(Get-VMHardDiskDrive -VM $vm -ErrorAction Stop | Sort-Object ControllerNumber,ControllerLocation)
+          if($drives.Count -ne 2){throw "Expected 2 disks, found $($drives.Count)"}
+
+          $rctIds=@(
+            'rctX:e0cf6beb:4aad:4f4d:a8c0:8e5ef750b639:00000006',
+            'rctX:be4c4f36:2e23:4921:8d22:3df2999feddf:00000000'
+          )
+
+          function Invoke-RctQuery {
+            param(
+              [string]$Path,
+              [string]$Rct,
+              [Int64]$Offset,
+              [Int64]$Length,
+              [int]$TimeoutSec=45
+            )
+            $job=Start-Job -ScriptBlock {
+              param($p,$r,$o,$l)
+              $ErrorActionPreference='Stop'
+              $sw=[Diagnostics.Stopwatch]::StartNew()
+              $svc=Get-WmiObject -Namespace root/virtualization/v2 -Class Msvm_ImageManagementService
+              $res=$svc.GetVirtualDiskChanges($p,$r,'',[Int64]$o,[Int64]$l)
+              $sw.Stop()
+              [pscustomobject]@{
+                ReturnValue=[int]$res.ReturnValue
+                ProcessedByteLength=[Int64]$res.ProcessedByteLength
+                RangeCount=@($res.ChangedByteOffsets).Count
+                ElapsedMs=[Int64]$sw.ElapsedMilliseconds
+                Offset=[Int64]$o
+                Length=[Int64]$l
+              }
+            } -ArgumentList $Path,$Rct,$Offset,$Length
+            try {
+              if(-not (Wait-Job -Job $job -Timeout $TimeoutSec)){
+                Stop-Job -Job $job -ErrorAction SilentlyContinue
+                throw "RCT_QUERY_TIMEOUT path=$Path offset=$Offset length=$Length timeout=$TimeoutSec"
+              }
+              $out=Receive-Job -Job $job -ErrorAction Stop
+              if(-not $out){throw "RCT query returned no result path=$Path offset=$Offset"}
+              Write-Host ("RCT_QUERY path={0} offset={1} length={2} rc={3} processed={4} ranges={5} elapsed_ms={6}" -f $Path,$Offset,$Length,$out.ReturnValue,$out.ProcessedByteLength,$out.RangeCount,$out.ElapsedMs)
+              if([int]$out.ReturnValue -ne 0){throw "RCT_QUERY_RC path=$Path offset=$Offset rc=$($out.ReturnValue)"}
+              if([Int64]$out.ProcessedByteLength -le 0){throw "RCT_QUERY_ZERO_PROCESSED path=$Path offset=$Offset"}
+              return [Int64]$out.ProcessedByteLength
+            } finally {
+              Remove-Job -Job $job -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+          $chunk=[Int64](512MB)
+          for($di=0;$di -lt $drives.Count;$di++){
+            $path=$drives[$di].Path
+            $vhd=Get-VHD -Path $path -ErrorAction Stop
+            $size=[Int64]$vhd.Size
+            Write-Host "RCT_DISK index=$di path=$path virtual_size=$size rct=$($rctIds[$di])"
+
+            $samples=New-Object System.Collections.Generic.List[Int64]
+            $samples.Add(0)
+            if($size -gt $chunk){$samples.Add([Int64][Math]::Max(0,[Math]::Floor($size/2)-($chunk/2)))}
+            if($size -gt $chunk){$samples.Add([Int64][Math]::Max(0,$size-$chunk))}
+            $uniq=@($samples | Sort-Object -Unique)
+            foreach($offset in $uniq){
+              $length=[Int64][Math]::Min($chunk,$size-$offset)
+              if($offset -eq 0 -and $length -eq $size -and $size -gt 1){$length=$size-1}
+              Invoke-RctQuery -Path $path -Rct $rctIds[$di] -Offset $offset -Length $length -TimeoutSec 45 | Out-Null
+            }
+          }
+          Write-Host 'RCT_DELTA_QUERY_PROBE=PASS'
