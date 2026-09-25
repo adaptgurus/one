@@ -30,7 +30,8 @@ const Actions = {
   PROVISION: 'kubeoneportal.provision',
   PROVISION_STATUS: 'kubeoneportal.provision.status',
   CONTROL_PLANE_RECONCILIATION: 'kubeoneportal.controlplane.reconciliation',
-  CONTROL_PLANE_RECONCILIATION_STATUS: 'kubeoneportal.controlplane.reconciliation.status',
+  CONTROL_PLANE_RECONCILIATION_STATUS:
+    'kubeoneportal.controlplane.reconciliation.status',
   WORKER_RECONCILIATION: 'kubeoneportal.worker.reconciliation',
   RECONCILE_WORKERS: 'kubeoneportal.workers.reconcile',
   APPLICATIONS: 'kubeoneportal.applications',
