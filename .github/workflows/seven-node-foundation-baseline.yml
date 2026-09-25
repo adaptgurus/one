@@ -36,6 +36,18 @@ jobs:
           Get-Command plink.exe -ErrorAction SilentlyContinue | Select-Object Name,Source
           Get-Command showmount.exe -ErrorAction SilentlyContinue | Select-Object Name,Source
 
+      - name: Check private Smart Installer source access
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          git config --global --get credential.helper
+          $env:GIT_TERMINAL_PROMPT='0'
+          git ls-remote --heads https://github.com/adaptgurus/layersentry-platform.git feat/smart-installer-existing-host-bootstrap-20260926
+          $rc=$LASTEXITCODE
+          Write-Host "LAYERSENTRY_PLATFORM_LS_REMOTE_RC=$rc"
+          if($rc -eq 0){ Write-Host 'LAYERSENTRY_PLATFORM_SOURCE_ACCESS=PASS' } else { Write-Host 'LAYERSENTRY_PLATFORM_SOURCE_ACCESS=NO' }
+          exit 0
+
       - name: Network and SSH baseline
         shell: powershell
         run: |
