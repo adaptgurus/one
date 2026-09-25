@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 3B Controller Bootstrap
+name: LayerSentry Physical POC Stage 3C Controller Trust
 
 on:
   pull_request:
@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  bootstrap:
-    name: controller-bootstrap-${{ matrix.slot }}
+  trust:
+    name: controller-trust-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -24,7 +24,7 @@ jobs:
     runs-on: [self-hosted, Linux]
     timeout-minutes: 8
     steps:
-      - name: Prepare host identities and deployment controller key
+      - name: Authorize deployment controller key
         shell: bash
         run: |
           set -euo pipefail
@@ -33,29 +33,19 @@ jobs:
             demolayersentry1|demolayersentry2) ;;
             *) echo "GUARD_SKIP_NON_PHYSICAL_RUNNER"; exit 0 ;;
           esac
-
           LOG=/var/log/layersentry-poc/activity.log
           exec > >(tee -a "$LOG") 2>&1
-          echo "=== STAGE3B_CONTROLLER_BOOTSTRAP_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE3C_CONTROLLER_TRUST_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
 
-          grep -q '^192\.168\.1\.121[[:space:]]' /etc/hosts || echo '192.168.1.121 demolayersentry1 layersentry-fe1' >> /etc/hosts
-          grep -q '^192\.168\.1\.122[[:space:]]' /etc/hosts || echo '192.168.1.122 demolayersentry2 layersentry-kvm2' >> /etc/hosts
-
-          getent hosts demolayersentry1
-          getent hosts demolayersentry2
-          ping -c 2 -W 2 192.168.1.121
-          ping -c 2 -W 2 192.168.1.122
+          install -d -m 0700 /root/.ssh
+          touch /root/.ssh/authorized_keys
+          chmod 0600 /root/.ssh/authorized_keys
+          PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOSbO6o9GBtG2axbE4BKe05BbRcyxPHTsnX5uvOS/qIJ layersentry-poc-controller@demolayersentry1'
+          grep -qxF "$PUBKEY" /root/.ssh/authorized_keys || printf '%s\n' "$PUBKEY" >> /root/.ssh/authorized_keys
 
           if [ "$RUNNER_NAME" = "demolayersentry1" ]; then
-            install -d -m 0700 /root/.ssh
-            if [ ! -s /root/.ssh/layersentry_poc_ed25519 ]; then
-              ssh-keygen -q -t ed25519 -N '' -C 'layersentry-poc-controller@demolayersentry1' -f /root/.ssh/layersentry_poc_ed25519
-            fi
-            chmod 0600 /root/.ssh/layersentry_poc_ed25519
-            chmod 0644 /root/.ssh/layersentry_poc_ed25519.pub
-            echo "LAYERSENTRY_CONTROLLER_PUBLIC_KEY_BEGIN"
-            cat /root/.ssh/layersentry_poc_ed25519.pub
-            echo "LAYERSENTRY_CONTROLLER_PUBLIC_KEY_END"
+            ssh -i /root/.ssh/layersentry_poc_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 root@192.168.1.121 'hostname; id -u'
+            ssh -i /root/.ssh/layersentry_poc_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 root@192.168.1.122 'hostname; id -u; ip -br addr show br0'
           fi
 
-          echo "=== STAGE3B_CONTROLLER_BOOTSTRAP_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE3C_CONTROLLER_TRUST_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
