@@ -196,6 +196,7 @@ export function InstantiateVmTemplate() {
           delete requestTemplate.access
           delete requestTemplate.resources
           delete requestTemplate.services
+          delete requestTemplate.review
 
           return instantiate(requestTemplate).unwrap()
         })

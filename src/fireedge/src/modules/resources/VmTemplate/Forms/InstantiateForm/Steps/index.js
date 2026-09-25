@@ -31,6 +31,7 @@ import UserInputs from '@modules/resources/VmTemplate/Forms/InstantiateForm/Step
 import AccessConfiguration from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/AccessConfiguration'
 import CloudResources from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources'
 import CloudOptionalServices from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudOptionalServices'
+import CloudReview from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudReview'
 
 const Steps = createSteps(
   ({ dataTemplateExtended = {}, view, ...rest }) => {
@@ -70,6 +71,7 @@ const Steps = createSteps(
         (() => CloudResources({ vmTemplate: dataTemplateExtended })),
       selfService &&
         (() => CloudOptionalServices({ vmTemplate: dataTemplateExtended })),
+      selfService && (() => CloudReview({ vmTemplate: dataTemplateExtended })),
       !selfService &&
         userInputs?.length > 0 &&
         (() => UserInputs(userInputs, userInputsLayout)),

@@ -480,6 +480,7 @@ test('cloud instantiate flow is customer-only and strips helper data', () => {
   assert.match(steps, /selfService.*AccessConfiguration/s)
   assert.match(steps, /selfService.*CloudResources/s)
   assert.match(steps, /selfService.*CloudOptionalServices/s)
+  assert.match(steps, /selfService.*CloudReview/s)
   assert.match(steps, /!selfService.*ExtraConfiguration/s)
   assert.match(basic, /'name', 'instances'/)
   assert.match(basic, /required\('Enter a VM name'\)/)
@@ -487,6 +488,34 @@ test('cloud instantiate flow is customer-only and strips helper data', () => {
   assert.match(instantiate, /useLazyGetVNetworkQuery/)
   assert.match(instantiate, /delete requestTemplate\.resources/)
   assert.match(instantiate, /delete requestTemplate\.services/)
+  assert.match(instantiate, /delete requestTemplate\.review/)
+})
+
+test('VM create review summarizes choices without rendering secrets', () => {
+  const review = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudReview/index.js'
+    ),
+    'utf8'
+  )
+
+  for (const label of [
+    'VM name',
+    'Image / blueprint',
+    'vCPU',
+    'Memory',
+    'Additional disk',
+    'Network',
+    'IP assignment',
+    'Protection',
+    'GPU',
+  ]) {
+    assert.match(review, new RegExp(`label="${label}"`))
+  }
+  assert.match(review, /Non-default advanced settings/)
+  assert.match(review, /Secrets and private key material are never/)
+  assert.doesNotMatch(review, /access\.password|confirmPassword|sshPublicKey/)
 })
 
 
