@@ -20,13 +20,18 @@ import {
   Box,
   Button,
   Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   LinearProgress,
   Tab,
   Tabs,
+  TextField,
   Typography,
 } from '@mui/material'
 import { useState } from 'react'
-import { ControlPlaneAPI } from '@FeaturesModule'
+import { AuthAPI, ControlPlaneAPI } from '@FeaturesModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
   PageFrame,
@@ -45,6 +50,38 @@ const OperationsWorkspace = ({ endpoints }) => {
     : []
   const [approveOperation, approval] =
     ControlPlaneAPI.useApproveControlPlaneOperationMutation()
+  const [stepUp, stepUpState] = AuthAPI.useStepUpMutation()
+  const [approvalTarget, setApprovalTarget] = useState()
+  const [totp, setTotp] = useState('')
+
+  const closeApproval = () => {
+    if (approval.isLoading || stepUpState.isLoading) return
+    setApprovalTarget(undefined)
+    setTotp('')
+    approval.reset()
+    stepUpState.reset()
+  }
+
+  const openApproval = (operation) => {
+    approval.reset()
+    stepUpState.reset()
+    setTotp('')
+    setApprovalTarget(operation)
+  }
+
+  const confirmApproval = async () => {
+    if (!approvalTarget || !/^\d{6,8}$/.test(totp)) return
+    try {
+      await stepUp({ tfatoken: totp }).unwrap()
+      await approveOperation({
+        id: approvalTarget.id,
+        planHash: approvalTarget.plan_hash,
+      }).unwrap()
+      closeApproval()
+    } catch {
+      // Mutation state renders a bounded error without provider details.
+    }
+  }
 
   return (
     <PageFrame
@@ -74,7 +111,7 @@ const OperationsWorkspace = ({ endpoints }) => {
                 state is fabricated.
               </Alert>
             )}
-            {approval.isError && (
+            {(approval.isError || stepUpState.isError) && (
               <Alert severity="error" sx={{ mb: 1 }}>
                 Approval was not accepted. Sign in with a freshly verified
                 second factor and retry; policy and ownership checks still
@@ -142,12 +179,7 @@ const OperationsWorkspace = ({ endpoints }) => {
                         size="small"
                         variant="contained"
                         disabled={approval.isLoading}
-                        onClick={() =>
-                          approveOperation({
-                            id: operation.id,
-                            planHash: operation.plan_hash,
-                          })
-                        }
+                        onClick={() => openApproval(operation)}
                       >
                         Approve with MFA
                       </Button>
@@ -181,6 +213,46 @@ const OperationsWorkspace = ({ endpoints }) => {
           </Box>
         )}
       </Surface>
+      <Dialog open={Boolean(approvalTarget)} onClose={closeApproval}>
+        <DialogTitle>Approve durable operation</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Enter the current code from your enrolled authenticator. Approval
+            remains bound to operation {approvalTarget?.id || '—'} and its exact
+            plan hash.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            label="Authenticator code"
+            value={totp}
+            onChange={(event) =>
+              setTotp(event.target.value.replace(/\D/g, '').slice(0, 8))
+            }
+            inputProps={{ inputMode: 'numeric', autoComplete: 'one-time-code' }}
+            error={stepUpState.isError}
+            helperText={
+              stepUpState.isError
+                ? 'The second factor could not be verified.'
+                : 'Codes are verified server-side and are never stored.'
+            }
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeApproval}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={
+              !/^\d{6,8}$/.test(totp) ||
+              stepUpState.isLoading ||
+              approval.isLoading
+            }
+            onClick={confirmApproval}
+          >
+            Verify and approve
+          </Button>
+        </DialogActions>
+      </Dialog>
     </PageFrame>
   )
 }

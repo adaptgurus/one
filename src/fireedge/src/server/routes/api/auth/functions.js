@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and       *
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
-const { jwtDecode } = require('server/utils/jwt')
+const { createJWT, jwtDecode } = require('server/utils/jwt')
 const { XMLParser } = require('fast-xml-parser')
 const { httpResponse } = require('server/utils/server')
 const {
@@ -26,6 +26,8 @@ const {
   verifyUserExists,
   resolveTFAResponse,
   check2FA,
+  fetchUserInfo,
+  verify2FAForStepUp,
   setZones,
 } = require('server/routes/api/auth/utils')
 
@@ -42,6 +44,38 @@ const {
   defaultJwtCookieName,
   defaultSessionExpiration,
 } = defaults
+
+const STEP_UP_FAILURE_WINDOW_MS = 5 * 60 * 1000
+const STEP_UP_BLOCK_MS = 15 * 60 * 1000
+const STEP_UP_MAX_FAILURES = 5
+const STEP_UP_MAX_TRACKED_USERS = 10000
+const stepUpFailures = new Map()
+
+const stepUpIsBlocked = (id, now = Date.now()) => {
+  const state = stepUpFailures.get(String(id))
+
+  return Boolean(state?.blockedUntil > now)
+}
+
+const recordStepUpFailure = (id, now = Date.now()) => {
+  const key = String(id)
+  const previous = stepUpFailures.get(key)
+  const active =
+    previous && now - previous.windowStarted < STEP_UP_FAILURE_WINDOW_MS
+  const failures = active ? previous.failures + 1 : 1
+  const state = {
+    failures,
+    windowStarted: active ? previous.windowStarted : now,
+    blockedUntil: failures >= STEP_UP_MAX_FAILURES ? now + STEP_UP_BLOCK_MS : 0,
+  }
+  if (
+    !stepUpFailures.has(key) &&
+    stepUpFailures.size >= STEP_UP_MAX_TRACKED_USERS
+  ) {
+    stepUpFailures.delete(stepUpFailures.keys().next().value)
+  }
+  stepUpFailures.set(key, state)
+}
 
 const login = async ({ protocol, next, params, connect }) => {
   const verifiedUser = await verifyUserExists({
@@ -97,6 +131,76 @@ const logout = async (res, next, _params, _userData, _connect, req) => {
   }
   res.locals.httpCode = httpResponse(ok, 'Logout successful')
   next()
+}
+
+/**
+ * Upgrade the current signed session only after verifying its enrolled TOTP.
+ * Browser input supplies the one-time code, never the resulting assurance.
+ *
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.tfatoken
+ * @param userData
+ * @param oneConnection
+ */
+const stepUp = async (
+  res,
+  next,
+  { tfatoken } = {},
+  userData = {},
+  oneConnection
+) => {
+  try {
+    const { id, user, password } = userData
+    if (!id || !user || !password || typeof oneConnection !== 'function') {
+      throw httpResponse(unauthorized)
+    }
+    if (stepUpIsBlocked(id)) throw httpResponse(unauthorized)
+
+    const code = String(tfatoken || '').trim()
+    if (!/^\d{6,8}$/.test(code)) {
+      recordStepUpFailure(id)
+      throw httpResponse(unauthorized)
+    }
+    const currentUser = await fetchUserInfo({
+      connect: oneConnection(user, password),
+    })
+    if (!verify2FAForStepUp(currentUser, code)) {
+      recordStepUpFailure(id)
+      throw httpResponse(unauthorized)
+    }
+    stepUpFailures.delete(String(id))
+
+    const stepUpAt = new Date().toISOString()
+    const token = createJWT({
+      id,
+      user,
+      token: password,
+      assuranceLevel: 2,
+      stepUpAt,
+    })
+    if (!token) throw httpResponse(internalServerError)
+
+    res.cookie(defaultJwtCookieName, JSON.stringify({ token }), {
+      path: '/',
+      httpOnly: true,
+      sameSite: 'lax',
+      maxAge: defaultSessionExpiration * 60 * 1000,
+    })
+    res.locals.httpCode = httpResponse(ok, {
+      status: 'verified',
+      stepUpAt,
+    })
+  } catch (error) {
+    res.locals.httpCode = Object.values(httpCodes).find(
+      ({ id }) => id === error?.id
+    )
+      ? error
+      : httpResponse(internalServerError)
+  } finally {
+    next()
+  }
 }
 
 /**
@@ -252,4 +356,5 @@ module.exports = {
   selectTypeAuth,
   samlAuth,
   logout,
+  stepUp,
 }

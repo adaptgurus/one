@@ -152,6 +152,24 @@ const check2FA = async (
 }
 
 /**
+ * Verify an already-enrolled second factor for an in-session privilege step-up.
+ * This path never enrolls a new secret and therefore cannot turn an ordinary
+ * authenticated session into AAL2 when MFA is absent.
+ *
+ * @param {object} userData - Current OpenNebula user response
+ * @param {string} tfatoken - Time-based one-time password
+ * @returns {boolean} Whether the enrolled factor was verified
+ */
+const verify2FAForStepUp = (userData = {}, tfatoken = '') => {
+  const template = userData?.USER?.TEMPLATE ?? {}
+  const secret =
+    template?.SUNSTONE?.[default2FAOpennebulaVar] ||
+    template?.FIREEDGE?.[default2FAOpennebulaVar]
+
+  return Boolean(secret && tfatoken && validate2FA(secret, tfatoken))
+}
+
+/**
  * @param {object} root0 - Params
  * @param {object} root0.USER - User info
  * @param {string} root0.USER.ID - User ID
@@ -647,6 +665,7 @@ module.exports = {
   getServerAdmin,
   verifyUserExists,
   check2FA,
+  verify2FAForStepUp,
   resolveTFAResponse,
   setZones,
   setup2FASecret,

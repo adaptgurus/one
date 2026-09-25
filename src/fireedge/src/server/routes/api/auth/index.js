@@ -19,8 +19,9 @@ const {
   selectTypeAuth,
   samlAuth,
   logout,
+  stepUp,
 } = require('server/routes/api/auth/functions')
-const { AUTHENTICATION, LOGOUT, SAML_AUTHENTICATION } = Actions
+const { AUTHENTICATION, LOGOUT, SAML_AUTHENTICATION, STEP_UP } = Actions
 
 module.exports = [
   {
@@ -30,6 +31,10 @@ module.exports = [
   {
     ...Commands[LOGOUT],
     action: logout,
+  },
+  {
+    ...Commands[STEP_UP],
+    action: stepUp,
   },
   {
     ...Commands[SAML_AUTHENTICATION],

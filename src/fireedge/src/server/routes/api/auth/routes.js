@@ -26,11 +26,13 @@ const basepath = '/auth'
 const AUTHENTICATION = 'authentication'
 const LOGOUT = 'logout'
 const SAML_AUTHENTICATION = 'authentication.saml'
+const STEP_UP = 'authentication.step-up'
 
 const Actions = {
   AUTHENTICATION,
   SAML_AUTHENTICATION,
   LOGOUT,
+  STEP_UP,
 }
 
 module.exports = {
@@ -62,6 +64,12 @@ module.exports = {
       path: `${basepath}/logout`,
       httpMethod: POST,
       auth: true,
+    },
+    [STEP_UP]: {
+      path: `${basepath}/step-up`,
+      httpMethod: POST,
+      auth: true,
+      params: { tfatoken: { from: postBody } },
     },
     [SAML_AUTHENTICATION]: {
       path: `${basepath}/acs`,

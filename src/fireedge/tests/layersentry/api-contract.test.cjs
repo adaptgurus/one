@@ -213,6 +213,11 @@ test('durable-operation gateway stays typed, tenant-authenticated and fail close
   const client = read('src/modules/features/OneApi/controlPlane.js')
   const jwt = read('src/server/utils/jwt.js')
   const auth = read('src/server/routes/api/auth/utils.js')
+  const authRoutes = read('src/server/routes/api/auth/routes.js')
+  const authFunctions = read('src/server/routes/api/auth/functions.js')
+  const operationsUi = read(
+    'src/client/apps/layersentry/pages/OperationsWorkspace.js'
+  )
 
   expectCommand(routes, 'Actions.LIST', 'GET', [['limit', 'query']])
   expectCommand(routes, 'Actions.SUBMIT', 'POST', [
@@ -249,6 +254,17 @@ test('durable-operation gateway stays typed, tenant-authenticated and fail close
   assert.match(auth, /stepUpAt: new Date\(\)\.toISOString\(\)/)
   assert.match(jwt, /aal: assuranceLevel === 2 \? 2 : 1/)
   assert.match(jwt, /assuranceLevel = aal === 2 && sat \? 2 : 1/)
+  expectCommand(authRoutes, 'STEP_UP', 'POST', [['tfatoken', 'postBody']])
+  assert.match(authFunctions, /verify2FAForStepUp\(currentUser, code\)/)
+  assert.match(authFunctions, /assuranceLevel: 2/)
+  assert.match(authFunctions, /httpOnly: true/)
+  assert.match(authFunctions, /sameSite: 'lax'/)
+  assert.match(authFunctions, /STEP_UP_MAX_FAILURES = 5/)
+  assert.match(authFunctions, /STEP_UP_BLOCK_MS = 15 \* 60 \* 1000/)
+  assert.match(authFunctions, /STEP_UP_MAX_TRACKED_USERS = 10000/)
+  assert.match(operationsUi, /await stepUp\(\{ tfatoken: totp \}\)\.unwrap\(\)/)
+  assert.match(operationsUi, /await approveOperation\(/)
+  assert.match(operationsUi, /Codes are verified server-side and are never stored/)
 
   expectClientAction(client, 'getControlPlaneOperations', 'LIST')
   expectClientAction(client, 'submitControlPlaneOperation', 'SUBMIT')

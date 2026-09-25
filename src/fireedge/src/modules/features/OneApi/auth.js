@@ -118,6 +118,16 @@ const authApi = oneApi.injectEndpoints({
         }
       },
     }),
+    stepUp: builder.mutation({
+      query: ({ tfatoken }) => {
+        const name = Actions.STEP_UP
+
+        return {
+          params: { tfatoken },
+          command: { name, ...Commands[name] },
+        }
+      },
+    }),
     changeAuthGroup: builder.mutation({
       /**
        * @param {object} params - Request parameters
@@ -259,6 +269,7 @@ const authQueries = (({
   // Mutations
   useLoginMutation,
   useLogoutMutation,
+  useStepUpMutation,
   useChangeAuthGroupMutation,
   useAddLabelMutation,
   useRemoveLabelMutation,
@@ -269,6 +280,7 @@ const authQueries = (({
   // Mutations
   useLoginMutation,
   useLogoutMutation,
+  useStepUpMutation,
   useChangeAuthGroupMutation,
   useAddLabelMutation,
   useRemoveLabelMutation,
