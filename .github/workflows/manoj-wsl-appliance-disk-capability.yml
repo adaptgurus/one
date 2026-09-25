@@ -1,0 +1,65 @@
+name: Manoj WSL Appliance Disk Capability
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-wsl-appliance-disk-capability.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST' -or $env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'Wrong runner'}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
+          Write-Host 'WSL_DISK_SOURCE_GATE=PASS'
+
+      - name: Inspect WSL and VHD tooling
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          Write-Host '===WSL_STATUS==='
+          & wsl.exe --status
+          Write-Host "WSL_STATUS_RC=$LASTEXITCODE"
+          Write-Host '===WSL_LIST==='
+          & wsl.exe -l -v
+          Write-Host "WSL_LIST_RC=$LASTEXITCODE"
+          Write-Host '===WSL_HELP_MOUNT==='
+          $help=& wsl.exe --help
+          $mountLines=@($help | Where-Object {$_ -match 'mount|vhd'})
+          $mountLines | ForEach-Object {Write-Host $_}
+          $hasVhd=($help -join ' ') -match '--vhd'
+          Write-Host "WSL_SUPPORTS_VHD=$hasVhd"
+          Write-Host '===PRIMARY_VHD==='
+          $disk=(Get-VMHardDiskDrive -VMName 'ls-appliance-qual' | Where-Object {$_.ControllerLocation -eq 0} | Select-Object -First 1)
+          if(-not $disk){throw 'Primary appliance disk missing'}
+          Write-Host "PRIMARY_VHD_PATH=$($disk.Path)"
+          $vhd=Get-VHD -Path $disk.Path -ErrorAction Stop
+          Write-Host "PRIMARY_VHD_TYPE=$($vhd.VhdType)"
+          Write-Host "PRIMARY_VHD_FORMAT=$($vhd.VhdFormat)"
+          Write-Host "PRIMARY_VHD_SIZE=$($vhd.Size)"
+          Write-Host "PRIMARY_VHD_FILESIZE=$($vhd.FileSize)"
+          Write-Host "PRIMARY_VHD_PARENT=$($vhd.ParentPath)"
+          if($LASTEXITCODE -ne 0){Write-Host 'WSL capability command had nonzero status; evidence retained'}
+          Write-Host 'WSL_DISK_CAPABILITY_PROBE=PASS'
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
