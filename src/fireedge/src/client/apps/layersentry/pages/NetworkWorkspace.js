@@ -28,7 +28,7 @@ import {
 import { Plus } from 'iconoir-react'
 import { useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
-import { VnAPI } from '@FeaturesModule'
+import { useViews, VnAPI } from '@FeaturesModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
   CAPABILITY_IDS,
@@ -120,12 +120,15 @@ const NetworkInventory = () => {
 
 const NetworkWorkspace = ({ endpoints }) => {
   const history = useHistory()
+  const { view } = useViews()
+  const isAdmin = view === 'admin'
   const [tab, setTab] = useState(0)
   const capabilityModel = getCapabilityModel(endpoints)
   const canCreate = isCapabilityEnabled(
     CAPABILITY_IDS.NETWORK_CREATE,
     capabilityModel
   )
+  const canCreateSegments = isAdmin && canCreate
   const canViewFirewall = isCapabilityVisible(
     CAPABILITY_IDS.FIREWALL_RULES,
     capabilityModel
@@ -170,14 +173,26 @@ const NetworkWorkspace = ({ endpoints }) => {
       description="Browse workload networks while mutation-heavy firewall, blueprint and router surfaces remain separately qualified."
       actions={
         canCreate ? (
-          <Button
-            variant="contained"
-            startIcon={<Plus width={17} height={17} />}
-            onClick={() => history.push('/network/create')}
-            sx={{ textTransform: 'none' }}
-          >
-            Create network
-          </Button>
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+            <Button
+              variant="outlined"
+              startIcon={<Plus width={17} height={17} />}
+              onClick={() => history.push('/network/create')}
+              sx={{ textTransform: 'none' }}
+            >
+              Create one network
+            </Button>
+            {canCreateSegments && (
+              <Button
+                variant="contained"
+                startIcon={<Plus width={17} height={17} />}
+                onClick={() => history.push('/network/segments/create')}
+                sx={{ textTransform: 'none' }}
+              >
+                Create workload segments
+              </Button>
+            )}
+          </Box>
         ) : null
       }
     >
@@ -219,6 +234,20 @@ const NetworkWorkspace = ({ endpoints }) => {
                   />
                 ))}
               </Box>
+              {canCreateSegments && (
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() =>
+                    history.push('/network/segments/create', {
+                      environment: prefix,
+                    })
+                  }
+                  sx={{ mt: 1, px: 0, textTransform: 'none' }}
+                >
+                  Create {name} Web/App/DB segments
+                </Button>
+              )}
             </Box>
           ))}
         </Box>
