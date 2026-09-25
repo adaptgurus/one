@@ -23,6 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           stale_runs=(
+            36190669017
             36190334257
             36190285002
             36190119487
