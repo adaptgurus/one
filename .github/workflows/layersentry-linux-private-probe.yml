@@ -1,0 +1,48 @@
+name: LayerSentry Linux Private Repo Probe
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/layersentry-linux-private-probe.yml'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Probe layersentry1 private repo access
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){ exit 0 }
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $key=Join-Path $dir 'deploy_ed25519'
+          $known=Join-Path $dir 'known_hosts'
+          if(-not(Test-Path $key)){ throw 'deployment SSH key missing' }
+          if(-not(Test-Path $known)){ throw 'known_hosts missing' }
+          $remote=@'
+          set +e
+          echo "HOST=$(hostname)"
+          command -v git >/dev/null && git --version || echo GIT=ABSENT
+          command -v python3 >/dev/null && python3 --version || echo PYTHON3=ABSENT
+          command -v go >/dev/null && go version || echo GO=ABSENT
+          command -v node >/dev/null && node --version || echo NODE=ABSENT
+          echo '---GITHUB SSH ACCESS---'
+          timeout 15 git -c core.sshCommand='ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8' ls-remote git@github.com:adaptgurus/layersentry-platform.git HEAD >/tmp/ls-git-probe.out 2>/tmp/ls-git-probe.err
+          rc=$?
+          if [ "$rc" -eq 0 ]; then
+            awk '{print "PRIVATE_REPO_HEAD=" $1}' /tmp/ls-git-probe.out | head -1
+            echo PRIVATE_REPO_ACCESS=PASS
+          else
+            echo PRIVATE_REPO_ACCESS=FAIL
+            tail -4 /tmp/ls-git-probe.err
+          fi
+          rm -f /tmp/ls-git-probe.out /tmp/ls-git-probe.err
+          exit 0
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remote))
+          $cmd="printf '%s' '$b64' | base64 -d | bash"
+          & ssh.exe -T -i $key -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" layersentry-deploy@172.17.60.30 $cmd
+          if($LASTEXITCODE -ne 0){ throw "layersentry1 probe failed rc=$LASTEXITCODE" }
