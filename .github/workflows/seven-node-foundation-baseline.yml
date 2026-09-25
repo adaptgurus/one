@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   baseline:
-    runs-on: [self-hosted, Windows, X64]
+    runs-on: WIN-GK6MO7T7OPC
     timeout-minutes: 15
     steps:
       - name: Bind exact runner
