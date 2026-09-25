@@ -244,6 +244,42 @@ const list = (
 }
 
 /**
+ * Proxy the current tenant's bounded audit ledger without exposing arbitrary
+ * query construction to the browser.
+ *
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.limit
+ * @param userData
+ * @param oneConnection
+ */
+const listEvents = (
+  res = {},
+  next = defaultEmptyFunction,
+  { limit = 100 } = {},
+  userData = {},
+  oneConnection
+) => {
+  const parsedLimit = Number(limit)
+  if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 200) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Event list limit must be between 1 and 200.',
+    })
+    next()
+
+    return
+  }
+  call(
+    res,
+    next,
+    { method: 'GET', path: `/v1/events?limit=${parsedLimit}` },
+    userData,
+    oneConnection
+  )
+}
+
+/**
  * @param res
  * @param next
  * @param root0
@@ -280,4 +316,4 @@ const approve = (
   )
 }
 
-module.exports = { approve, get, list, submit }
+module.exports = { approve, get, list, listEvents, submit }

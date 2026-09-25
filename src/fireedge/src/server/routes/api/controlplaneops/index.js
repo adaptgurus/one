@@ -21,11 +21,13 @@ const {
   approve,
   get,
   list,
+  listEvents,
   submit,
 } = require('server/routes/api/controlplaneops/functions')
 
 module.exports = [
   { ...Commands[Actions.LIST], action: list },
+  { ...Commands[Actions.EVENTS], action: listEvents },
   { ...Commands[Actions.SUBMIT], action: submit },
   { ...Commands[Actions.GET], action: get },
   { ...Commands[Actions.APPROVE], action: approve },

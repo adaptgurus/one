@@ -228,6 +228,7 @@ test('durable-operation gateway stays typed, tenant-authenticated and fail close
     ['idempotencyKey', 'postBody'],
   ])
   expectCommand(routes, 'Actions.GET', 'GET', [['id', 'resource']])
+  expectCommand(routes, 'Actions.EVENTS', 'GET', [['limit', 'query']])
   expectCommand(routes, 'Actions.APPROVE', 'POST', [
     ['id', 'resource'],
     ['planHash', 'postBody'],
@@ -265,8 +266,16 @@ test('durable-operation gateway stays typed, tenant-authenticated and fail close
   assert.match(operationsUi, /await stepUp\(\{ tfatoken: totp \}\)\.unwrap\(\)/)
   assert.match(operationsUi, /await approveOperation\(/)
   assert.match(operationsUi, /Codes are verified server-side and are never stored/)
+  assert.match(operationsUi, /eventsQuery\.data\?\.events/)
+  assert.match(operationsUi, /event\.event_type/)
+  assert.match(
+    operationsUi,
+    /event\.operation_id \|\| event\.intent_id \|\| event\.id/
+  )
+  assert.doesNotMatch(operationsUi, /global audit API is not exposed/)
 
   expectClientAction(client, 'getControlPlaneOperations', 'LIST')
+  expectClientAction(client, 'getControlPlaneEvents', 'EVENTS')
   expectClientAction(client, 'submitControlPlaneOperation', 'SUBMIT')
   expectClientAction(client, 'getControlPlaneOperation', 'GET')
   expectClientAction(client, 'approveControlPlaneOperation', 'APPROVE')

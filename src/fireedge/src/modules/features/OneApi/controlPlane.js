@@ -26,6 +26,14 @@ const controlPlaneApi = oneApi.injectEndpoints({
       }),
       providesTags: ['LAYERSENTRY_OPERATIONS'],
     }),
+    getControlPlaneEvents: builder.query({
+      query: ({ limit = 100 } = {}) => ({
+        params: { limit },
+        command: Commands[Actions.EVENTS],
+        showNotification: false,
+      }),
+      providesTags: ['LAYERSENTRY_OPERATIONS'],
+    }),
     submitControlPlaneOperation: builder.mutation({
       query: (params) => ({
         params,
@@ -58,6 +66,7 @@ const controlPlaneApi = oneApi.injectEndpoints({
 
 export const {
   useGetControlPlaneOperationsQuery,
+  useGetControlPlaneEventsQuery,
   useSubmitControlPlaneOperationMutation,
   useGetControlPlaneOperationQuery,
   useLazyGetControlPlaneOperationQuery,

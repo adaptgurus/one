@@ -27,6 +27,7 @@ const Actions = {
   SUBMIT: 'controlplaneops.submit',
   GET: 'controlplaneops.get',
   APPROVE: 'controlplaneops.approve',
+  EVENTS: 'controlplaneops.events',
 }
 
 module.exports = {
@@ -34,6 +35,12 @@ module.exports = {
   Commands: {
     [Actions.LIST]: {
       path: basepath,
+      httpMethod: GET,
+      auth: true,
+      params: { limit: { from: query } },
+    },
+    [Actions.EVENTS]: {
+      path: '/v1/controlplane/events',
       httpMethod: GET,
       auth: true,
       params: { limit: { from: query } },

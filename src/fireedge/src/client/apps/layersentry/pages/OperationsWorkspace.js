@@ -48,6 +48,13 @@ const OperationsWorkspace = ({ endpoints }) => {
   const operations = Array.isArray(operationsQuery.data?.operations)
     ? operationsQuery.data.operations
     : []
+  const eventsQuery = ControlPlaneAPI.useGetControlPlaneEventsQuery(
+    { limit: 100 },
+    { pollingInterval: tab === 3 ? 10000 : 0, skip: tab !== 3 }
+  )
+  const events = Array.isArray(eventsQuery.data?.events)
+    ? eventsQuery.data.events
+    : []
   const [approveOperation, approval] =
     ControlPlaneAPI.useApproveControlPlaneOperationMutation()
   const [stepUp, stepUpState] = AuthAPI.useStepUpMutation()
@@ -197,19 +204,63 @@ const OperationsWorkspace = ({ endpoints }) => {
             <Typography sx={{ fontSize: 16, fontWeight: 750, mb: 1 }}>
               Audit trail
             </Typography>
-            <Alert severity="info">
-              Resource events remain authoritative in LayerSentry and OneKS. A
-              global audit API is not exposed by the current FireEdge backend,
-              so LayerSentry does not invent audit records. Resource-specific
-              event tabs remain available from their detail pages.
-            </Alert>
-            <Typography
-              sx={{ mt: 2, fontSize: 12, color: colors.text.secondary }}
-            >
-              Audit entries will include actor, operation, resource, timestamp,
-              result and reference ID when the backend global audit endpoint is
-              added.
-            </Typography>
+            {eventsQuery.isLoading && <LinearProgress />}
+            {eventsQuery.isError && (
+              <Alert severity="warning">
+                The tenant audit ledger is unavailable. No audit records are
+                fabricated from browser state.
+              </Alert>
+            )}
+            {!eventsQuery.isLoading &&
+              !eventsQuery.isError &&
+              events.length === 0 && (
+                <Alert severity="info">
+                  No audit events are recorded for this tenant.
+                </Alert>
+              )}
+            <Box sx={{ display: 'grid', gap: 1 }}>
+              {events.map((event) => (
+                <Box
+                  key={event.id}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: '2fr 1fr auto' },
+                    gap: 1,
+                    alignItems: 'center',
+                    p: 1.5,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 1.5,
+                  }}
+                >
+                  <Box>
+                    <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+                      {event.event_type || 'Audit event'} ·{' '}
+                      {event.resource?.kind || 'Resource'}{' '}
+                      {event.resource?.id || 'unknown'}
+                    </Typography>
+                    <Typography sx={{ fontSize: 11, color: colors.text.muted }}>
+                      Actor {event.actor?.user || 'unknown'} ·{' '}
+                      {event.at
+                        ? new Date(event.at).toLocaleString()
+                        : 'time unavailable'}
+                    </Typography>
+                  </Box>
+                  <Typography
+                    sx={{ fontSize: 12, color: colors.text.secondary }}
+                  >
+                    Reference{' '}
+                    {event.operation_id || event.intent_id || event.id}
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={event.policy_decision || 'RECORDED'}
+                    color={
+                      event.policy_decision === 'DENY' ? 'error' : 'default'
+                    }
+                  />
+                </Box>
+              ))}
+            </Box>
           </Box>
         )}
       </Surface>
