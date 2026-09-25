@@ -98,15 +98,47 @@ export const isLayerSentryNetworkBlueprint = (template = {}) => {
  */
 export const isLayerSentrySecurityGroupCompatible = (
   securityGroup = {},
-  isolationPolicy = ''
+  isolationPolicy = '',
+  environment = ''
 ) => {
   const body = securityGroup?.TEMPLATE ?? {}
   const policy = normalized(isolationPolicy).toUpperCase()
+  const requestedEnvironment = normalized(environment).toUpperCase()
+  const allowedEnvironments = normalized(body.LAYERSENTRY_ENVIRONMENTS)
+    .toUpperCase()
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
+  const rules = body.RULE ? [].concat(body.RULE) : []
+  const scopedRules =
+    rules.length > 0 &&
+    rules.every((rule) => {
+      const direction = normalized(rule?.RULE_TYPE).toUpperCase()
+      const protocol = normalized(rule?.PROTOCOL).toUpperCase()
+      if (!['INBOUND', 'OUTBOUND'].includes(direction)) return false
+      if (!['ALL', 'TCP', 'UDP', 'ICMP', 'IPSEC'].includes(protocol)) {
+        return false
+      }
+      if (/^\d+$/.test(normalized(rule?.NETWORK_ID))) return true
+
+      try {
+        const size = Number(rule?.SIZE)
+        ipv4ToNumber(rule?.IP)
+
+        return Number.isInteger(size) && size >= 1 && size <= 65536
+      } catch {
+        return false
+      }
+    })
 
   return (
     isolationPolicies.has(policy) &&
+    environments.has(requestedEnvironment) &&
     normalized(body.LAYERSENTRY_APPROVED).toUpperCase() === 'YES' &&
-    normalized(body.LAYERSENTRY_ISOLATION_POLICY).toUpperCase() === policy
+    normalized(body.LAYERSENTRY_ISOLATION_POLICY).toUpperCase() === policy &&
+    (allowedEnvironments.includes('ANY') ||
+      allowedEnvironments.includes(requestedEnvironment)) &&
+    scopedRules
   )
 }
 
@@ -163,7 +195,11 @@ export const buildLayerSentryNetworkOverlay = (
   const securityGroup = securityGroups.find(
     (candidate) =>
       normalized(candidate?.ID) === securityGroupId &&
-      isLayerSentrySecurityGroupCompatible(candidate, isolation)
+      isLayerSentrySecurityGroupCompatible(
+        candidate,
+        isolation,
+        environment
+      )
   )
   if (!/^\d+$/.test(securityGroupId) || !securityGroup) {
     throw new Error('Select an available firewall rule set')

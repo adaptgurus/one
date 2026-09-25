@@ -118,7 +118,8 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
   const compatibleSecurityGroups = securityGroups.filter((securityGroup) =>
     isLayerSentrySecurityGroupCompatible(
       securityGroup,
-      draft.isolationPolicy
+      draft.isolationPolicy,
+      draft.environment
     )
   )
 

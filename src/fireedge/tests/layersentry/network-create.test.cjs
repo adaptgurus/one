@@ -50,6 +50,14 @@ const groups = [
     TEMPLATE: {
       LAYERSENTRY_APPROVED: 'YES',
       LAYERSENTRY_ISOLATION_POLICY: 'ISOLATED',
+      LAYERSENTRY_ENVIRONMENTS: 'DEV,UAT',
+      RULE: {
+        PROTOCOL: 'UDP',
+        RULE_TYPE: 'OUTBOUND',
+        IP: '10.20.30.2',
+        SIZE: '1',
+        RANGE: '53',
+      },
     },
   },
 ]
@@ -83,17 +91,36 @@ test('simple network creation accepts only provider-approved native blueprints',
 
 test('communication policy requires an exact approved native Security Group', () => {
   assert.equal(
-    api.isLayerSentrySecurityGroupCompatible(groups[0], 'ISOLATED'),
+    api.isLayerSentrySecurityGroupCompatible(groups[0], 'ISOLATED', 'DEV'),
     true
   )
   assert.equal(
-    api.isLayerSentrySecurityGroupCompatible(groups[0], 'SAME_ENVIRONMENT'),
+    api.isLayerSentrySecurityGroupCompatible(
+      groups[0],
+      'SAME_ENVIRONMENT',
+      'DEV'
+    ),
     false
   )
   assert.equal(
     api.isLayerSentrySecurityGroupCompatible(
       { ID: '12', TEMPLATE: { LAYERSENTRY_ISOLATION_POLICY: 'ISOLATED' } },
-      'ISOLATED'
+      'ISOLATED',
+      'DEV'
+    ),
+    false
+  )
+  assert.equal(
+    api.isLayerSentrySecurityGroupCompatible(
+      {
+        ...groups[0],
+        TEMPLATE: {
+          ...groups[0].TEMPLATE,
+          RULE: { PROTOCOL: 'ALL', RULE_TYPE: 'OUTBOUND' },
+        },
+      },
+      'ISOLATED',
+      'DEV'
     ),
     false
   )
