@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 4G Physical Resume
+name: LayerSentry Physical POC Stage 4H Durable Physical Resume
 
 on:
   pull_request:
@@ -18,11 +18,11 @@ jobs:
     name: storage-deploy-${{ matrix.slot }}
     strategy:
       fail-fast: false
-      max-parallel: 3
+      max-parallel: 12
       matrix:
-        slot: [1, 2, 3]
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
     runs-on: [self-hosted, Linux]
-    timeout-minutes: 60
+    timeout-minutes: 360
     steps:
       - name: Expand LayerSentry datastore backing and deploy
         id: run
@@ -34,7 +34,12 @@ jobs:
           if [ "$RUNNER_NAME" != "demolayersentry1" ]; then
             echo "executed=false" >> "$GITHUB_OUTPUT"
             echo "HOLD: reserving non-controller runner slot to route one job to demolayersentry1"
-            sleep 3500
+            sleep 21000
+            exit 0
+          fi
+          if sudo -n test -f /root/layersentry-poc/STAGE4H_COMPLETE; then
+            echo "executed=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP: Stage 4H already completed on demolayersentry1"
             exit 0
           fi
           echo "executed=true" >> "$GITHUB_OUTPUT"
@@ -225,10 +230,21 @@ jobs:
           for u in http://127.0.0.1:2616 http://192.168.1.121:2616; do
             code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 "$u" || true)
             echo "$u => $code"
+            test "$code" != "000"
           done
 
+          echo "--- persist runner service when available ---"
+          mapfile -t runner_units < <(systemctl list-unit-files 'actions.runner.*.service' --no-legend 2>/dev/null | awk '{print $1}')
+          printf 'runner_units=%s\n' "${runner_units[*]:-none}"
+          for svc in "${runner_units[@]:-}"; do
+            [ -n "$svc" ] || continue
+            systemctl enable "$svc" || true
+          done
+
+          touch "$DEPLOY_ROOT/STAGE4H_COMPLETE"
+          chmod 0600 "$DEPLOY_ROOT/STAGE4H_COMPLETE"
           echo "deployment_log=$LOG"
-          echo "=== STAGE4E_STORAGE_DEPLOY_PASS $(date -u +%FT%TZ) ==="
+          echo "=== STAGE4H_STORAGE_DEPLOY_PASS $(date -u +%FT%TZ) ==="
           ROOT
 
       - name: Upload storage/deploy journal
