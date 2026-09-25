@@ -59,7 +59,7 @@ jobs:
           Add-Type -TypeDefinition $src -Language CSharp -OutputAssembly $askpass -OutputType ConsoleApplication
           "LS_ASKPASS=$askpass" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           $protected=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($password))
-          $secure=[Security.Cryptography.ProtectedData]::Protect([Convert]::FromBase64String($protected),$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)
+          $secure=[System.Security.Cryptography.ProtectedData]::Protect([Convert]::FromBase64String($protected),$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
           [IO.File]::WriteAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'),$secure)
           Remove-Item Env:LS_ROOT_PASSWORD
           Write-Host 'CREDENTIAL_DECRYPTED_IN_MEMORY=PASS'
@@ -69,8 +69,9 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          Add-Type -AssemblyName System.Security
           $secure=[IO.File]::ReadAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'))
-          $raw=[Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)
+          $raw=[System.Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
           $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($raw)
           $env:SSH_ASKPASS=$env:LS_ASKPASS
           $env:SSH_ASKPASS_REQUIRE='force'
@@ -86,8 +87,9 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          Add-Type -AssemblyName System.Security
           $secure=[IO.File]::ReadAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'))
-          $raw=[Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)
+          $raw=[System.Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
           $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($raw)
           $env:SSH_ASKPASS=$env:LS_ASKPASS
           $env:SSH_ASKPASS_REQUIRE='force'
@@ -136,8 +138,9 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
+          Add-Type -AssemblyName System.Security
           $secure=[IO.File]::ReadAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'))
-          $raw=[Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)
+          $raw=[System.Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
           $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($raw)
           $env:SSH_ASKPASS=$env:LS_ASKPASS
           $env:SSH_ASKPASS_REQUIRE='force'
