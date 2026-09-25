@@ -131,7 +131,7 @@ test('Kubernetes uses the typed KubeOne portal and never falls back to OneKS', (
   )
   const portal = read('src/client/apps/layersentry/Portal.js')
   const proxy = read('src/server/routes/api/kubeoneportal/functions.js')
-  assert.match(workspace, /useGetKubeOneClustersQuery/)
+  assert.match(workspace, /KubeOnePortalAPI\.useGetKubeOneClustersQuery/)
   assert.match(workspace, /Create namespace/)
   assert.match(workspace, /Download kubeconfig/)
   assert.match(workspace, /GPU \/ vGPU profile/)

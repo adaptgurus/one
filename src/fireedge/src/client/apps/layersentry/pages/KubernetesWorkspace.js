@@ -25,12 +25,7 @@ import {
 import { Download, Plus, Refresh } from 'iconoir-react'
 import PropTypes from 'prop-types'
 import { useMemo, useState } from 'react'
-import {
-  useCreateKubeOneNamespaceMutation,
-  useGetKubeOneClustersQuery,
-  useGetKubeOneNamespacesQuery,
-  useLazyGetKubeOneKubeconfigQuery,
-} from '@modules/features/OneApi/kubeOnePortal'
+import { KubeOnePortalAPI } from '@FeaturesModule'
 import { PageFrame, Surface } from 'client/apps/layersentry/components/Primitives'
 
 const downloadText = (name, value) => {
@@ -50,10 +45,11 @@ const ClusterManager = ({ cluster, profiles }) => {
   const [namespace, setNamespace] = useState('')
   const [accelerator, setAccelerator] = useState('')
   const [count, setCount] = useState(1)
-  const namespaces = useGetKubeOneNamespacesQuery(cluster.id)
-  const [createNamespace, createState] = useCreateKubeOneNamespaceMutation()
+  const namespaces = KubeOnePortalAPI.useGetKubeOneNamespacesQuery(cluster.id)
+  const [createNamespace, createState] =
+    KubeOnePortalAPI.useCreateKubeOneNamespaceMutation()
   const [loadKubeconfig, kubeconfigState] =
-    useLazyGetKubeOneKubeconfigQuery()
+    KubeOnePortalAPI.useLazyGetKubeOneKubeconfigQuery()
   const selectedProfile = profiles.find(({ id }) => id === accelerator)
 
   const addNamespace = async () => {
@@ -220,7 +216,7 @@ ClusterManager.propTypes = {
 }
 
 const KubernetesWorkspace = () => {
-  const query = useGetKubeOneClustersQuery()
+  const query = KubeOnePortalAPI.useGetKubeOneClustersQuery()
   const [selected, setSelected] = useState('')
   const clusters = query.data?.clusters || []
   const activeID = selected || clusters[0]?.id || ''
