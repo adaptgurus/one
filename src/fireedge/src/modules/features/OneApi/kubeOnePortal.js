@@ -39,6 +39,25 @@ const kubeOnePortalApi = oneApi.injectEndpoints({
         { type: 'KUBEONE_PORTAL', id: `worker-reconciliation-${id}` },
       ],
     }),
+    getKubeOneApplications: builder.query({
+      query: (id) => ({
+        params: { id },
+        command: Commands[Actions.APPLICATIONS],
+        showNotification: false,
+      }),
+      providesTags: (_result, _error, id) => [
+        { type: 'KUBEONE_PORTAL', id: `applications-${id}` },
+      ],
+    }),
+    installKubeOneApplication: builder.mutation({
+      query: ({ id, app }) => ({
+        params: { id, app },
+        command: Commands[Actions.INSTALL_APPLICATION],
+      }),
+      invalidatesTags: (_result, _error, { id }) => [
+        { type: 'KUBEONE_PORTAL', id: `applications-${id}` },
+      ],
+    }),
     reconcileKubeOneWorkers: builder.mutation({
       query: (id) => ({
         params: { id },
@@ -58,6 +77,8 @@ export const {
   useCreateKubeOneNamespaceMutation,
   useLazyGetKubeOneKubeconfigQuery,
   useGetKubeOneWorkerReconciliationQuery,
+  useGetKubeOneApplicationsQuery,
+  useInstallKubeOneApplicationMutation,
   useReconcileKubeOneWorkersMutation,
 } = kubeOnePortalApi
 
