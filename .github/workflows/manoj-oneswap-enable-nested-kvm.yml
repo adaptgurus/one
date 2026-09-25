@@ -38,7 +38,7 @@ jobs:
           Write-Host "HOST_MEMORY_FREE=$freeBytes"
           Write-Host "APPLIANCE_MEMORY_CURRENT=$($ap.MemoryStartup)"
           Write-Host "APPLIANCE_EXPOSE_CURRENT=$($cpu.ExposeVirtualizationExtensions)"
-          if($freeBytes -lt 6GB){throw "Insufficient host free memory for safe 4GB appliance allocation: $freeBytes"}
+          if($freeBytes -lt 2GB){throw "Insufficient host free memory for safe appliance restart: $freeBytes"}
           "APPLIANCE_OLD_MEMORY=$($ap.MemoryStartup)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "APPLIANCE_OLD_EXPOSE=$($cpu.ExposeVirtualizationExtensions)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           Write-Host 'NESTED_KVM_CAPACITY_GATE=PASS'
@@ -102,20 +102,19 @@ jobs:
           if((Get-VM -Name 'ls-appliance-qual').State -ne 'Off'){throw 'OneSwap appliance did not power off cleanly'}
           Write-Host 'APPLIANCE_GRACEFUL_OFF=PASS'
 
-      - name: Enable nested virtualization and 4GB static memory
+      - name: Enable nested virtualization and preserve appliance memory
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
           $name='ls-appliance-qual'
           if((Get-VM -Name $name).State -ne 'Off'){throw 'Appliance must be Off before processor/memory change'}
           Set-VMProcessor -VMName $name -ExposeVirtualizationExtensions $true -ErrorAction Stop
-          Set-VMMemory -VMName $name -DynamicMemoryEnabled $false -StartupBytes 4GB -ErrorAction Stop
           $cpu=Get-VMProcessor -VMName $name
           $vm=Get-VM -Name $name
           Write-Host "APPLIANCE_EXPOSE_AFTER=$($cpu.ExposeVirtualizationExtensions)"
           Write-Host "APPLIANCE_MEMORY_AFTER=$($vm.MemoryStartup)"
           if(-not $cpu.ExposeVirtualizationExtensions){throw 'Nested virtualization did not enable'}
-          if($vm.MemoryStartup -ne 4GB){throw 'Appliance memory is not 4GB'}
+          if($vm.MemoryStartup -ne [Int64]$env:APPLIANCE_OLD_MEMORY){throw 'Appliance memory changed unexpectedly'}
           Start-VM -Name $name -ErrorAction Stop
           $deadline=(Get-Date).AddSeconds(120)
           while((Get-Date) -lt $deadline){
