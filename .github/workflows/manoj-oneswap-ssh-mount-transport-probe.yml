@@ -1,0 +1,79 @@
+name: Manoj OneSwap SSH Mount Transport Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-ssh-mount-transport-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-ssh-mount-transport-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and prepare appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected checkpoint'}
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-ssh-mount-probe.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Exercise Mount-VHD through OneSwap SSH transport
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $ruby=@'
+          require 'yaml'
+          require 'json'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
+          cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml')||{}
+          opts={}
+          cfg.each{|k,v| opts[k.to_s.sub(/^:/,'').to_sym]=v}
+          opts[:hyperv_connection]='manoj-qual'
+          profile=OneSwapHyperV::ConnectionProfile.from_options(opts)
+          transport=OneSwapHyperV::SSHTransport.new(profile)
+          ps=<<~'POWERSHELL'
+          $ErrorActionPreference='Stop'
+          $ProgressPreference='SilentlyContinue'
+          $path='C:\LayerSentryLab\qualification\ls-migration-source-test\os.vhdx'
+          $sw=[Diagnostics.Stopwatch]::StartNew()
+          $mount=Mount-VHD -Path $path -ReadOnly -NoDriveLetter -Passthru -ErrorAction Stop
+          try {
+            $disk=$mount | Get-Disk -ErrorAction Stop
+            $sw.Stop()
+            [pscustomobject]@{Ok=$true;DiskNumber=[int]$disk.Number;ElapsedMs=[int64]$sw.ElapsedMilliseconds}|ConvertTo-Json -Compress
+          } finally {
+            Dismount-VHD -Path $path -ErrorAction SilentlyContinue
+          }
+          POWERSHELL
+          STDERR.puts 'SSH_MOUNT_PROBE_START'
+          result=transport.powershell_json(ps, timeout: 90)
+          STDERR.puts "SSH_MOUNT_PROBE_RESULT=#{JSON.generate(result)}"
+          puts JSON.generate(result)
+          '@
+          $ruby=[regex]::Replace($ruby,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ruby))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | timeout 120s sudo ruby"
+          if($LASTEXITCODE -ne 0){throw "OneSwap SSH mount transport probe failed rc=$LASTEXITCODE"}
+          Write-Host 'ONESWAP_SSH_MOUNT_TRANSPORT_PROBE=PASS'
