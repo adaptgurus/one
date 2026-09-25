@@ -56,6 +56,12 @@ const ClusterManager = ({ cluster, profiles }) => {
   )
   const [reconcileWorkers, reconcileState] =
     KubeOnePortalAPI.useReconcileKubeOneWorkersMutation()
+  const applications = KubeOnePortalAPI.useGetKubeOneApplicationsQuery(
+    cluster.id,
+    { pollingInterval: 5000 }
+  )
+  const [installApplication, installState] =
+    KubeOnePortalAPI.useInstallKubeOneApplicationMutation()
   const selectedProfile = profiles.find(({ id }) => id === accelerator)
   const workerPending = cluster.status.ready_nodes < cluster.expected_nodes
   const controlPlaneHealthy =
@@ -79,6 +85,16 @@ const ClusterManager = ({ cluster, profiles }) => {
     await reconcileWorkers(cluster.id).unwrap()
     await workerJob.refetch()
   }
+  const installCatalogApplication = async (app) => {
+    await installApplication({ id: cluster.id, app }).unwrap()
+    await applications.refetch()
+  }
+  const applicationItems = applications.data?.applications || []
+  const installedApps = new Set(
+    applicationItems
+      .filter(({ installed }) => installed)
+      .map(({ profile }) => profile.id)
+  )
 
   return (
     <Stack spacing={2}>
@@ -174,6 +190,99 @@ const ClusterManager = ({ cluster, profiles }) => {
                   </TableCell>
                 </TableRow>
               ))}
+            </TableBody>
+          </Table>
+        )}
+      </Surface>
+
+      <Surface sx={{ p: 2 }}>
+        <Typography variant="h6">Applications</Typography>
+        <Typography color="text.secondary" sx={{ mb: 2 }}>
+          Install only LayerSentry-qualified applications on this selected
+          KubeOne cluster. Helm repository, chart, version, namespace, and
+          values are fixed by the server catalog.
+        </Typography>
+        {applications.isLoading ? (
+          <LinearProgress />
+        ) : applications.isError ? (
+          <Alert severity="error">
+            Application catalog or Helm inventory is unavailable.
+          </Alert>
+        ) : applicationItems.length === 0 ? (
+          <Alert severity="info">
+            No qualified applications are published for this cluster.
+          </Alert>
+        ) : (
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Application</TableCell>
+                <TableCell>Category</TableCell>
+                <TableCell>Version</TableCell>
+                <TableCell>Status</TableCell>
+                <TableCell align="right">Action</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {applicationItems.map(({ profile, installed, job }) => {
+                const missing = (profile.dependencies || []).filter(
+                  (dependency) => !installedApps.has(dependency)
+                )
+                const running = job?.status === 'RUNNING'
+                return (
+                  <TableRow key={profile.id}>
+                    <TableCell>
+                      <Typography fontWeight={600}>{profile.label}</Typography>
+                      {profile.description && (
+                        <Typography variant="caption" color="text.secondary">
+                          {profile.description}
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell>{profile.category}</TableCell>
+                    <TableCell>{profile.version}</TableCell>
+                    <TableCell>
+                      <Chip
+                        size="small"
+                        color={installed ? 'success' : running ? 'info' : 'default'}
+                        label={
+                          installed
+                            ? 'Installed'
+                            : running
+                              ? 'Installing'
+                              : job?.status || 'Available'
+                        }
+                      />
+                      {missing.length > 0 && (
+                        <Typography
+                          variant="caption"
+                          color="warning.main"
+                          display="block"
+                          sx={{ mt: 0.5 }}
+                        >
+                          Requires: {missing.join(', ')}
+                        </Typography>
+                      )}
+                    </TableCell>
+                    <TableCell align="right">
+                      <Button
+                        size="small"
+                        variant={installed ? 'outlined' : 'contained'}
+                        disabled={
+                          installed ||
+                          running ||
+                          missing.length > 0 ||
+                          installState.isLoading ||
+                          !controlPlaneHealthy
+                        }
+                        onClick={() => installCatalogApplication(profile.id)}
+                      >
+                        {installed ? 'Installed' : running ? 'Installing' : 'Install'}
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
             </TableBody>
           </Table>
         )}
