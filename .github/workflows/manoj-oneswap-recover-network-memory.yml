@@ -1,0 +1,120 @@
+name: Manoj OneSwap Recover Network and Memory
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-recover-network-memory.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-appliance-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and protect migration source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_STATE=$($src.State)"
+          Write-Host "SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
+
+          $os=Get-CimInstance Win32_OperatingSystem
+          $freeMB=[math]::Round($os.FreePhysicalMemory/1024)
+          Write-Host "HOST_FREE_MB=$freeMB"
+          if($freeMB -lt 4096){throw "Host free memory too low for safe appliance increase: $freeMB MB"}
+          Write-Host 'APPLIANCE_RECOVERY_SOURCE_GATE=PASS'
+
+      - name: Gracefully stop OneSwap appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($vm.State -eq 'Running'){
+            Write-Host 'REQUESTING_APPLIANCE_GRACEFUL_SHUTDOWN'
+            Stop-VM -Name $vm.Name -Shutdown -ErrorAction Stop
+          }
+          $deadline=(Get-Date).AddMinutes(3)
+          do {
+            Start-Sleep -Seconds 3
+            $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+            Write-Host "APPLIANCE_SHUTDOWN_STATE=$($vm.State)"
+          } while($vm.State -ne 'Off' -and (Get-Date) -lt $deadline)
+          if($vm.State -ne 'Off'){throw "Appliance did not gracefully shut down; refusing hard power-off. state=$($vm.State)"}
+          Write-Host 'APPLIANCE_GRACEFUL_SHUTDOWN=PASS'
+
+      - name: Increase only recovery appliance memory to 4GB
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw 'Appliance must be Off before memory change'}
+          $before=Get-VMMemory -VM $vm -ErrorAction Stop
+          Write-Host "APPLIANCE_MEMORY_BEFORE_MB=$([math]::Round($before.Startup/1MB))"
+          Set-VMMemory -VMName $vm.Name -DynamicMemoryEnabled $false -StartupBytes 4GB -ErrorAction Stop
+          $after=Get-VMMemory -VMName $vm.Name -ErrorAction Stop
+          Write-Host "APPLIANCE_MEMORY_AFTER_MB=$([math]::Round($after.Startup/1MB))"
+          if($after.Startup -ne 4GB -or $after.DynamicMemoryEnabled){throw 'Appliance memory change not applied exactly'}
+          Write-Host 'APPLIANCE_MEMORY_4GB=PASS'
+
+      - name: Start appliance and wait for original SSH endpoint
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Start-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          $deadline=(Get-Date).AddMinutes(8)
+          $ssh=$false
+          do {
+            Start-Sleep -Seconds 5
+            $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+            $ips=@(Get-VMNetworkAdapter -VMName $vm.Name -ErrorAction Stop | ForEach-Object {$_.IPAddresses}) | Where-Object {$_}
+            Write-Host "APPLIANCE_BOOT_STATE=$($vm.State) HEARTBEAT=$($vm.Heartbeat) IP=$($ips -join ',')"
+            $tcp=New-Object Net.Sockets.TcpClient
+            try {
+              $ar=$tcp.BeginConnect('10.250.10.32',22,$null,$null)
+              $ok=$ar.AsyncWaitHandle.WaitOne(1500,$false)
+              if($ok -and $tcp.Connected){$tcp.EndConnect($ar);$ssh=$true}
+            } catch {} finally {$tcp.Close()}
+          } while(-not $ssh -and (Get-Date) -lt $deadline)
+          if(-not $ssh){throw 'Appliance original SSH endpoint 10.250.10.32:22 did not recover after clean restart'}
+          Write-Host 'APPLIANCE_SSH_RECOVERED=PASS'
+
+      - name: Prepare appliance key and verify guest memory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-memory-recovered.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $cmd="set -euo pipefail; free -m; grep -E '^(MemTotal|MemAvailable|SwapTotal|SwapFree):' /proc/meminfo; echo APPLIANCE_GUEST_MEMORY_4GB=PASS"
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $tmp "ci@10.250.10.32" $cmd
+          if($LASTEXITCODE -ne 0){throw 'Appliance guest memory verification failed'}
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
+          Write-Host 'APPLIANCE_RECOVERY_SOURCE_INVARIANT=PASS'
