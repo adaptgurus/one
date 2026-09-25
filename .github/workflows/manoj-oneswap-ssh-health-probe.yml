@@ -1,0 +1,81 @@
+name: Manoj OneSwap SSH Health Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-ssh-health-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-ssh-health-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect Manoj SSH service and listener
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected checkpoint'}
+          $svc=Get-Service sshd -ErrorAction Stop
+          Write-Host "SSHD_STATUS=$($svc.Status)"
+          $procs=@(Get-Process sshd -ErrorAction SilentlyContinue)
+          Write-Host "SSHD_PROCESS_COUNT=$($procs.Count)"
+          $listeners=@(Get-NetTCPConnection -State Listen -LocalPort 22 -ErrorAction SilentlyContinue)
+          Write-Host "SSHD_LISTENER_COUNT=$($listeners.Count)"
+          $est=@(Get-NetTCPConnection -State Established -LocalPort 22 -ErrorAction SilentlyContinue)
+          Write-Host "SSHD_ESTABLISHED_COUNT=$($est.Count)"
+          if($svc.Status -ne 'Running'){throw 'sshd is not Running'}
+          if($listeners.Count -lt 1){throw 'no TCP/22 listener'}
+          Write-Host 'MANOJ_SSH_LOCAL_HEALTH=PASS'
+
+      - name: Prepare appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-ssh-health.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Test trivial OneSwap PowerShell transport
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $ruby=@'
+          require 'yaml'
+          require 'json'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
+          cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml')||{}
+          opts={}
+          cfg.each{|k,v| opts[k.to_s.sub(/^:/,'').to_sym]=v}
+          opts[:hyperv_connection]='manoj-qual'
+          p=OneSwapHyperV::ConnectionProfile.from_options(opts)
+          STDERR.puts "PROFILE host=#{p.host} user=#{p.user} port=#{p.port}"
+          t=OneSwapHyperV::SSHTransport.new(p)
+          ps="[pscustomobject]@{Ok=\$true;Computer=\$env:COMPUTERNAME}|ConvertTo-Json -Compress"
+          result=t.powershell_json(ps, timeout: 30)
+          puts JSON.generate(result)
+          '@
+          $ruby=[regex]::Replace($ruby,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ruby))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | timeout 60s sudo ruby"
+          if($LASTEXITCODE -ne 0){throw "trivial OneSwap SSH transport failed rc=$LASTEXITCODE"}
+          Write-Host 'ONESWAP_TRIVIAL_SSH_TRANSPORT=PASS'
