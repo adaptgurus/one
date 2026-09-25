@@ -81,6 +81,7 @@ const oneApi = createApi({
   },
   refetchOnMountOrArgChange: 30,
   tagTypes: [
+    'KUBEONE_PORTAL',
     ...Object.values(ONE_RESOURCES),
     ...Object.values(ONE_RESOURCES_POOL),
     ...Object.values(DOCUMENT),

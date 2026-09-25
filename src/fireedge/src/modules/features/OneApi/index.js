@@ -34,6 +34,7 @@ import VnAPI from '@modules/features/OneApi/network'
 import VnTemplateAPI from '@modules/features/OneApi/networkTemplate'
 import { oneApi } from '@modules/features/OneApi/oneApi'
 import OneKsAPI from '@modules/features/OneApi/oneKs'
+import KubeOnePortalAPI from '@modules/features/OneApi/kubeOnePortal'
 import {
   DOCUMENT,
   DOCUMENT_POOL,
@@ -78,6 +79,7 @@ export {
   ProvisionAPI,
   provisionEndpoints,
   OneKsAPI,
+  KubeOnePortalAPI,
   SecurityGroupAPI,
   ServiceAPI,
   ServiceTemplateAPI,

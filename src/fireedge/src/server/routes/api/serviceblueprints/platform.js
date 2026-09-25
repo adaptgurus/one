@@ -28,6 +28,7 @@ const DEFAULT_PLATFORM_TIMEOUT_MS = 10_000
 const GATEWAY_TOKEN_HEADER = 'X-LayerSentry-Gateway-Token'
 const GATEWAY_USER_HEADER = 'X-LayerSentry-User'
 const GATEWAY_UID_HEADER = 'X-LayerSentry-UID'
+const GATEWAY_TENANT_HEADER = 'X-LayerSentry-Tenant'
 const GATEWAY_ADMIN_HEADER = 'X-LayerSentry-Oneadmin'
 
 const validIdentity = (value) => {
@@ -206,6 +207,7 @@ const buildPlatformRequest = (
     [GATEWAY_TOKEN_HEADER]: config.gatewayToken,
     [GATEWAY_USER_HEADER]: actor.user,
     [GATEWAY_UID_HEADER]: actor.uid,
+    [GATEWAY_TENANT_HEADER]: actor.uid,
     [GATEWAY_ADMIN_HEADER]: actor.oneadmin ? 'true' : 'false',
     'Content-Type': 'application/json',
   }
@@ -269,6 +271,7 @@ module.exports = {
   GATEWAY_TOKEN_HEADER,
   GATEWAY_USER_HEADER,
   GATEWAY_UID_HEADER,
+  GATEWAY_TENANT_HEADER,
   GATEWAY_ADMIN_HEADER,
   buildPlatformRequest,
   getPlatformConfig,

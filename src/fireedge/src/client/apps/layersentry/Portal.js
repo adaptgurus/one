@@ -139,25 +139,7 @@ const Portal = ({ endpoints }) => {
         <Route
           exact
           path={PRODUCT_PATHS.KUBERNETES_CREATE}
-          render={() =>
-            create({
-              endpoints,
-              title: 'Create Kubernetes Cluster',
-              description:
-                'Provision infrastructure through typed OpenNebula APIs and reconcile the Kubernetes lifecycle through KubeOne.',
-              legacyPath: '/kubernetes/create',
-              returnTo: PRODUCT_PATHS.KUBERNETES,
-              steps: [
-                'Basics',
-                'Version',
-                'Control Plane',
-                'Workers',
-                'Network',
-                'Storage & Add-ons',
-                'Review',
-              ],
-            })
-          }
+          render={() => <Redirect to={PRODUCT_PATHS.KUBERNETES} />}
         />
         <Route
           exact

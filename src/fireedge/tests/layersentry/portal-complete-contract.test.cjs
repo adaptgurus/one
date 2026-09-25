@@ -93,7 +93,10 @@ test('creation pages expose consistent guided workflow stages', () => {
   const portal = read('src/client/apps/layersentry/Portal.js')
   assert.match(page, /data-layersentry-workflow-steps/)
   assert.match(portal, /Operating System/)
-  assert.match(portal, /Control Plane/)
+  assert.match(
+    portal,
+    /PRODUCT_PATHS\.KUBERNETES_CREATE[\s\S]*Redirect to=\{PRODUCT_PATHS\.KUBERNETES\}/
+  )
   assert.match(portal, /Retention/)
   assert.match(portal, /Protocol & Port/)
 })
@@ -122,16 +125,19 @@ test('non-Kubernetes workspaces have dedicated LayerSentry product surfaces', ()
   }
 })
 
-test('Kubernetes remains OneKS-backed and gates cluster creation independently', () => {
+test('Kubernetes uses the typed KubeOne portal and never falls back to OneKS', () => {
   const workspace = read(
     'src/client/apps/layersentry/pages/KubernetesWorkspace.js'
   )
-  assert.match(workspace, /View qualified OneKS clusters/)
-  assert.match(workspace, /CAPABILITY_IDS\.KUBERNETES_CREATE/)
-  assert.match(workspace, /isCapabilityEnabled\(/)
-  assert.match(workspace, /canCreate \? \(/)
-  assert.match(workspace, /legacyPath="\/kubernetes"/)
-  assert.doesNotMatch(workspace, /Harbor|Argo CD|OpenEverest/)
+  const portal = read('src/client/apps/layersentry/Portal.js')
+  const proxy = read('src/server/routes/api/kubeoneportal/functions.js')
+  assert.match(workspace, /useGetKubeOneClustersQuery/)
+  assert.match(workspace, /Create namespace/)
+  assert.match(workspace, /Download kubeconfig/)
+  assert.match(workspace, /GPU \/ vGPU profile/)
+  assert.match(proxy, /\/v1\/kubernetes\/clusters/)
+  assert.doesNotMatch(workspace, /OneKS|legacyPath/)
+  assert.doesNotMatch(portal, /legacyPath: '\/kubernetes\/create'/)
 })
 
 test('LayerSentry presents the native admin view as Super Admin', () => {
