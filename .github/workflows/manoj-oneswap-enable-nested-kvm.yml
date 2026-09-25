@@ -1,0 +1,188 @@
+name: Manoj OneSwap Enable Nested KVM
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-enable-nested-kvm.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-enable-nested-kvm
+  cancel-in-progress: true
+
+jobs:
+  enable:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and capacity gate
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Off'){throw "Source must remain Off: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected source checkpoint'}
+          $ap=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($ap.State -ne 'Running'){throw "OneSwap appliance not Running: $($ap.State)"}
+          $cpu=Get-VMProcessor -VMName $ap.Name -ErrorAction Stop
+          $os=Get-CimInstance Win32_OperatingSystem
+          [Int64]$freeBytes=[Int64]$os.FreePhysicalMemory*1KB
+          [Int64]$totalBytes=[Int64]$os.TotalVisibleMemorySize*1KB
+          Write-Host "HOST_MEMORY_TOTAL=$totalBytes"
+          Write-Host "HOST_MEMORY_FREE=$freeBytes"
+          Write-Host "APPLIANCE_MEMORY_CURRENT=$($ap.MemoryStartup)"
+          Write-Host "APPLIANCE_EXPOSE_CURRENT=$($cpu.ExposeVirtualizationExtensions)"
+          if($freeBytes -lt 6GB){throw "Insufficient host free memory for safe 4GB appliance allocation: $freeBytes"}
+          "APPLIANCE_OLD_MEMORY=$($ap.MemoryStartup)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "APPLIANCE_OLD_EXPOSE=$($cpu.ExposeVirtualizationExtensions)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'NESTED_KVM_CAPACITY_GATE=PASS'
+
+      - name: Prepare appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-enable-nested-kvm.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Capture durable state hash and gracefully power off appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          op="manoj-hv-ls-migration-source-test-20260924"
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]; c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_"); suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$op")
+          python3 - "$state" <<'PY'
+          import json,sys
+          s=json.load(open(sys.argv[1]))
+          print("PRE_RESTART_PHASE="+str(s.get("phase")))
+          if s.get("phase")!="MORPHING": raise SystemExit("expected MORPHING")
+          if s.get("delta_applied_at") or s.get("import_started_at") or s.get("template_id") or s.get("image_imports"): raise SystemExit("unexpected later-phase evidence")
+          if sorted(int(x) for x in (s.get("delta_applied_indices") or []))!=[0,1]: raise SystemExit("delta proof incomplete")
+          PY
+          echo "PRE_RESTART_STATE_SHA=$(sha256sum "$state" | awk '{print $1}')"
+          sync
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          $out=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'pre-restart state gate failed'}
+          $out | ForEach-Object {Write-Host $_}
+          $shaLine=@($out | Where-Object {$_ -like 'PRE_RESTART_STATE_SHA=*'} | Select-Object -Last 1)
+          if(-not $shaLine){throw 'state SHA missing'}
+          "PRE_RESTART_STATE_SHA=$($shaLine.Substring('PRE_RESTART_STATE_SHA='.Length))" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "sudo sh -c 'sync; systemctl poweroff'" 2>$null
+          Start-Sleep -Seconds 3
+          $deadline=(Get-Date).AddSeconds(120)
+          while((Get-Date) -lt $deadline){
+            $state=(Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State
+            Write-Host "APPLIANCE_SHUTDOWN_STATE=$state"
+            if($state -eq 'Off'){break}
+            Start-Sleep -Seconds 3
+          }
+          if((Get-VM -Name 'ls-appliance-qual').State -ne 'Off'){throw 'OneSwap appliance did not power off cleanly'}
+          Write-Host 'APPLIANCE_GRACEFUL_OFF=PASS'
+
+      - name: Enable nested virtualization and 4GB static memory
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $name='ls-appliance-qual'
+          if((Get-VM -Name $name).State -ne 'Off'){throw 'Appliance must be Off before processor/memory change'}
+          Set-VMProcessor -VMName $name -ExposeVirtualizationExtensions $true -ErrorAction Stop
+          Set-VMMemory -VMName $name -DynamicMemoryEnabled $false -StartupBytes 4GB -ErrorAction Stop
+          $cpu=Get-VMProcessor -VMName $name
+          $vm=Get-VM -Name $name
+          Write-Host "APPLIANCE_EXPOSE_AFTER=$($cpu.ExposeVirtualizationExtensions)"
+          Write-Host "APPLIANCE_MEMORY_AFTER=$($vm.MemoryStartup)"
+          if(-not $cpu.ExposeVirtualizationExtensions){throw 'Nested virtualization did not enable'}
+          if($vm.MemoryStartup -ne 4GB){throw 'Appliance memory is not 4GB'}
+          Start-VM -Name $name -ErrorAction Stop
+          $deadline=(Get-Date).AddSeconds(120)
+          while((Get-Date) -lt $deadline){
+            $state=(Get-VM -Name $name).State
+            Write-Host "APPLIANCE_START_STATE=$state"
+            if($state -eq 'Running'){break}
+            Start-Sleep -Seconds 3
+          }
+          if((Get-VM -Name $name).State -ne 'Running'){throw 'Appliance did not return Running'}
+          Write-Host 'APPLIANCE_NESTED_CONFIG=PASS'
+
+      - name: Verify KVM and unchanged durable migration state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $ready=$false
+          for($i=0;$i -lt 40;$i++){
+            & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=4 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo ready" *> $null
+            if($LASTEXITCODE -eq 0){$ready=$true;break}
+            Start-Sleep -Seconds 3
+          }
+          if(-not $ready){throw 'Appliance SSH did not recover'}
+
+          $script=@'
+          set -euo pipefail
+          flags=$(grep -m1 -Eo '\b(vmx|svm)\b' /proc/cpuinfo | tr '\n' ',' || true)
+          echo "CPU_FLAGS=$flags"
+          if echo "$flags" | grep -q svm; then sudo modprobe kvm_amd || true; fi
+          if echo "$flags" | grep -q vmx; then sudo modprobe kvm_intel || true; fi
+          sudo modprobe kvm || true
+          echo "DEV_KVM_PRESENT=$(test -c /dev/kvm && echo true || echo false)"
+          lsmod | grep -E '^kvm' || true
+          test -c /dev/kvm
+
+          op="manoj-hv-ls-migration-source-test-20260924"
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]; c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_"); suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$op")
+          current=$(sha256sum "$state" | awk '{print $1}')
+          echo "POST_RESTART_STATE_SHA=$current"
+          [ "$current" = "__EXPECTED_SHA__" ]
+          python3 - "$state" <<'PY'
+          import json,sys
+          s=json.load(open(sys.argv[1]))
+          print("POST_RESTART_PHASE="+str(s.get("phase")))
+          if s.get("phase")!="MORPHING": raise SystemExit("phase changed")
+          if s.get("delta_applied_at") or s.get("import_started_at") or s.get("template_id") or s.get("image_imports"): raise SystemExit("later-phase evidence appeared")
+          PY
+          free -m
+          echo 'NESTED_KVM_GUEST_GATE=PASS'
+          '@
+          $script=$script.Replace('__EXPECTED_SHA__',$env:PRE_RESTART_STATE_SHA)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Nested KVM or state-integrity gate failed'}
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off'){throw 'Nested KVM change altered source state'}
+          if($n -ne 0){throw 'Unexpected source checkpoint'}
