@@ -1,3 +1,18 @@
+/* ------------------------------------------------------------------------- *
+ * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
+ * ------------------------------------------------------------------------- */
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { readFileSync } = require('node:fs')
@@ -31,8 +46,7 @@ const loadEsmSourceAsCommonJs = (file) => {
   return compiled.exports
 }
 
-const { parseIpv4Cidr, ipv4CidrFromNetwork } =
-  loadEsmSourceAsCommonJs(cidrFile)
+const { parseIpv4Cidr, ipv4CidrFromNetwork } = loadEsmSourceAsCommonJs(cidrFile)
 
 test('LayerSentry IPv4 CIDR compiles to native OpenNebula context', () => {
   assert.deepEqual(parseIpv4Cidr('10.20.30.17/24'), {
@@ -77,10 +91,7 @@ test('LayerSentry IPv4 CIDR rejects invalid networks and masks', () => {
     ipv4CidrFromNetwork('10.20.30.17', '255.255.255.0'),
     '10.20.30.0/24'
   )
-  assert.equal(
-    ipv4CidrFromNetwork('10.20.30.0', '255.0.255.0'),
-    undefined
-  )
+  assert.equal(ipv4CidrFromNetwork('10.20.30.0', '255.0.255.0'), undefined)
 })
 
 test('Virtual Network create form wires CIDR without replacing native APIs', () => {
