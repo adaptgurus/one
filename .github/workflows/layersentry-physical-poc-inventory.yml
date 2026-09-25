@@ -14,12 +14,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  layersentry_1:
-    name: probe-layersentry-1
-    runs-on: "layersentry 1"
-    timeout-minutes: 5
+  demolayersentry1:
+    name: probe-demolayersentry1
+    runs-on: demolayersentry1
+    timeout-minutes: 6
     steps:
-      - name: Identify runner
+      - name: Identify physical runner
         shell: bash
         run: |
           set -euo pipefail
@@ -28,19 +28,31 @@ jobs:
           echo "os=$RUNNER_OS arch=$RUNNER_ARCH"
           id
           hostnamectl 2>/dev/null || true
+          echo "=== addresses ==="
           ip -br addr || true
-          lsblk -e7 -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL || true
+          ip route || true
+          echo "=== block ==="
+          lsblk -e7 -o NAME,KNAME,SIZE,TYPE,FSTYPE,FSVER,MOUNTPOINTS,MODEL,SERIAL,WWN || true
+          findmnt -R / || true
+          echo "=== resources ==="
           free -h || true
-          lscpu | sed -n '1,25p' || true
+          lscpu || true
+          echo "=== virtualization ==="
+          systemd-detect-virt || true
+          ls -l /dev/kvm 2>/dev/null || true
+          lsmod | grep -E '(^kvm|vfio|bridge|8021q)' || true
+          echo "=== privilege ==="
           printf 'sudo_noninteractive='
           if sudo -n true 2>/dev/null; then echo yes; else echo no; fi
+          echo "=== services ==="
+          systemctl --no-pager --type=service --state=running | head -n 120 || true
 
-  layersentry_2:
-    name: probe-layersentry-2
-    runs-on: "layersentry 2"
-    timeout-minutes: 5
+  demolayersentry2:
+    name: probe-demolayersentry2
+    runs-on: demolayersentry2
+    timeout-minutes: 6
     steps:
-      - name: Identify runner
+      - name: Identify physical runner
         shell: bash
         run: |
           set -euo pipefail
@@ -49,9 +61,21 @@ jobs:
           echo "os=$RUNNER_OS arch=$RUNNER_ARCH"
           id
           hostnamectl 2>/dev/null || true
+          echo "=== addresses ==="
           ip -br addr || true
-          lsblk -e7 -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL || true
+          ip route || true
+          echo "=== block ==="
+          lsblk -e7 -o NAME,KNAME,SIZE,TYPE,FSTYPE,FSVER,MOUNTPOINTS,MODEL,SERIAL,WWN || true
+          findmnt -R / || true
+          echo "=== resources ==="
           free -h || true
-          lscpu | sed -n '1,25p' || true
+          lscpu || true
+          echo "=== virtualization ==="
+          systemd-detect-virt || true
+          ls -l /dev/kvm 2>/dev/null || true
+          lsmod | grep -E '(^kvm|vfio|bridge|8021q)' || true
+          echo "=== privilege ==="
           printf 'sudo_noninteractive='
           if sudo -n true 2>/dev/null; then echo yes; else echo no; fi
+          echo "=== services ==="
+          systemctl --no-pager --type=service --state=running | head -n 120 || true
