@@ -200,7 +200,7 @@ test('simple network overlay rejects invalid or out-of-range addressing', () => 
   )
 })
 
-test('network dialog uses typed template instantiation and authoritative readback', () => {
+test('network dialog uses dedicated server-side admission', () => {
   const source = readFileSync(
     resolve(
       __dirname,
@@ -209,21 +209,40 @@ test('network dialog uses typed template instantiation and authoritative readbac
     'utf8'
   )
 
-  assert.match(source, /useInstantiateVNTemplateMutation/)
-  assert.match(source, /useUpdateVNetMutation/)
-  assert.match(source, /useLazyGetVNetworkQuery/)
+  assert.match(source, /useCreateLayerSentryNetworkMutation/)
   assert.match(source, /buildLayerSentryNetworkOverlay/)
-  assert.match(source, /jsonToXml\(request\.template\)/)
-  assert.match(source, /authoritative readback is not yet complete/)
-  assert.match(source, /observed\?\.TEMPLATE\?\.SECURITY_GROUPS/)
-  assert.match(source, /observed\?\.VN_MAD/)
-  assert.match(source, /observed\?\.AR_POOL\?\.AR/)
-  assert.match(source, /A network with this name already exists/)
   assert.match(source, /Do not submit another create request/)
-  assert.match(source, /SECURITY_GROUPS: request\.template\.SECURITY_GROUPS/)
-  assert.match(
-    source,
-    /disabled=\{instantiateState\.isLoading \|\| updateState\.isLoading\}/
-  )
+  assert.match(source, /disabled=\{createState\.isLoading\}/)
   assert.doesNotMatch(source, /label="(?:VN_MAD|VLAN_ID|PHYDEV)"/)
+})
+
+test('server independently validates and reconciles the native network', () => {
+  const routes = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/server/routes/api/layersentrynetwork/routes.js'
+    ),
+    'utf8'
+  )
+  const source = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/server/routes/api/layersentrynetwork/functions.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(routes, /path: '\/v1\/layersentry\/networks'/)
+  assert.match(routes, /auth: true/)
+  assert.match(source, /VNTEMPLATE_INFO/)
+  assert.match(source, /SECGROUP_INFO/)
+  assert.match(source, /VN_POOL_INFO/)
+  assert.match(source, /VNTEMPLATE_INSTANTIATE/)
+  assert.match(source, /VN_UPDATE/)
+  assert.match(source, /VN_INFO/)
+  assert.match(source, /LAYERSENTRY_ENVIRONMENTS/)
+  assert.match(source, /scopedSecurityRules/)
+  assert.match(source, /SECURITY_GROUPS: request\.template\.SECURITY_GROUPS/)
+  assert.match(source, /resourceId: Number\(allocatedId\)/)
+  assert.doesNotMatch(source, /executeCommand|child_process|ssh|kubectl/i)
 })

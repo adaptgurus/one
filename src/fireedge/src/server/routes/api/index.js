@@ -56,6 +56,7 @@ const routes = [
   'oneform',
   'oneks',
   'kubeoneportal',
+  'layersentrynetwork',
   'serviceblueprints',
   'vm',
   'vmpool',

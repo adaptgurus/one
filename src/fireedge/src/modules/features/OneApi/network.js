@@ -14,6 +14,10 @@
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 import { Actions, Commands } from 'server/utils/constants/commands/vn'
+import {
+  Actions as LayerSentryNetworkActions,
+  Commands as LayerSentryNetworkCommands,
+} from 'server/routes/api/layersentrynetwork/routes'
 
 import {
   FilterFlag,
@@ -49,6 +53,14 @@ const { VNET_POOL } = ONE_RESOURCES_POOL
 
 const vNetworkApi = oneApi.injectEndpoints({
   endpoints: (builder) => ({
+    createLayerSentryNetwork: builder.mutation({
+      query: (params) => ({
+        params,
+        command:
+          LayerSentryNetworkCommands[LayerSentryNetworkActions.CREATE],
+      }),
+      invalidatesTags: [VNET_POOL],
+    }),
     getVNetworks: builder.query({
       /**
        * Retrieves information for all or part of the virtual networks in the pool.
@@ -580,6 +592,7 @@ export const networkQueries = (({
   useLazyGetVNetworkQuery,
 
   // Mutations
+  useCreateLayerSentryNetworkMutation,
   useAllocateVnetMutation,
   useRemoveVNetMutation,
   useAddRangeToVNetMutation,
@@ -604,6 +617,7 @@ export const networkQueries = (({
   useLazyGetVNetworkQuery,
 
   // Mutations
+  useCreateLayerSentryNetworkMutation,
   useAllocateVnetMutation,
   useRemoveVNetMutation,
   useAddRangeToVNetMutation,

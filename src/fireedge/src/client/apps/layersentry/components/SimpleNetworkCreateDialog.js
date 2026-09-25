@@ -34,7 +34,6 @@ import {
   VnTemplateAPI,
   useGeneralApi,
 } from '@FeaturesModule'
-import { jsonToXml } from '@UtilsModule'
 import {
   buildLayerSentryNetworkOverlay,
   isLayerSentryNetworkBlueprint,
@@ -77,9 +76,6 @@ const policies = [
   ['SAME_ENVIRONMENT', 'Same Environment'],
   ['CUSTOM', 'Custom firewall rules'],
 ]
-const toArray = (value) =>
-  value === undefined || value === null ? [] : [].concat(value)
-
 const Field = ({ select, children, ...props }) => (
   <TextField fullWidth size="small" select={select} {...props}>
     {children}
@@ -100,14 +96,8 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
     VnTemplateAPI.useGetVNTemplatesQuery(undefined, { skip: !open })
   const { data: securityGroups = [], isLoading: securityGroupsLoading } =
     SecurityGroupAPI.useGetSecGroupsQuery(undefined, { skip: !open })
-  const [instantiate, instantiateState] =
-    VnTemplateAPI.useInstantiateVNTemplateMutation()
-  const [updateNetwork, updateState] = VnAPI.useUpdateVNetMutation()
-  const [readNetwork] = VnAPI.useLazyGetVNetworkQuery()
-  const { data: existingNetworks = [] } = VnAPI.useGetVNetworksQuery(
-    undefined,
-    { skip: !open }
-  )
+  const [createNetwork, createState] =
+    VnAPI.useCreateLayerSentryNetworkMutation()
   const approvedTemplates = useMemo(
     () => templates.filter(isLayerSentryNetworkBlueprint),
     [templates]
@@ -130,7 +120,7 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
   }
 
   const close = () => {
-    if (instantiateState.isLoading) return
+    if (createState.isLoading) return
     setDraft(initialDraft)
     setReview(undefined)
     setCreated(undefined)
@@ -154,74 +144,25 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
   }
 
   const submit = async () => {
-    let allocatedId
     try {
       const request = buildLayerSentryNetworkOverlay(
         draft,
         selectedBlueprint,
         compatibleSecurityGroups
       )
-      if (
-        existingNetworks.some(
-          ({ NAME }) => NAME?.trim().toLowerCase() === request.name.toLowerCase()
-        )
-      ) {
-        throw new Error('A network with this name already exists')
-      }
-
-      const id = await instantiate({
-        id: selectedBlueprint.ID,
+      const { id, network: observed } = await createNetwork({
+        ...draft,
         name: request.name,
-        template: jsonToXml(request.template),
       }).unwrap()
-      allocatedId = id
-      let observed = await readNetwork({ id }).unwrap()
-      const observedSecurityGroups = `${
-        observed?.TEMPLATE?.SECURITY_GROUPS ?? ''
-      }`
-        .split(',')
-        .map((value) => value.trim())
-        .filter(Boolean)
-      if (
-        observedSecurityGroups.length !== 1 ||
-        observedSecurityGroups[0] !== request.template.SECURITY_GROUPS
-      ) {
-        await updateNetwork({
-          id,
-          template: jsonToXml({
-            ...(observed?.TEMPLATE ?? {}),
-            SECURITY_GROUPS: request.template.SECURITY_GROUPS,
-          }),
-          replace: 0,
-        }).unwrap()
-        observed = await readNetwork({ id }).unwrap()
-      }
-      const observedRanges = toArray(observed?.AR_POOL?.AR)
-      const observedRange = observedRanges.find(
-        ({ IP, SIZE }) =>
-          IP === request.template.AR.IP &&
-          `${SIZE}` === `${request.template.AR.SIZE}`
-      )
-      if (
-        `${observed?.ID}` !== `${id}` ||
-        observed?.NAME !== request.name ||
-        observed?.TEMPLATE?.LAYERSENTRY_ENVIRONMENT !== draft.environment ||
-        `${observed?.TEMPLATE?.SECURITY_GROUPS}` !==
-          `${request.template.SECURITY_GROUPS}` ||
-        observed?.VN_MAD !== selectedBlueprint?.TEMPLATE?.VN_MAD ||
-        !observedRange
-      ) {
-        throw new Error(
-          `Network #${id} was accepted but authoritative readback is not yet complete`
-        )
-      }
+      if (!id || !observed) throw new Error('Network readback is unavailable')
       setCreated(observed)
       setError('')
       enqueueSuccess(`Network created - #${id} ${request.name}`)
     } catch (submitError) {
+      const partialId = submitError?.data?.data?.resourceId
       setError(
-        allocatedId
-          ? `Network #${allocatedId} exists, but policy/readback reconciliation failed. Do not submit another create request; ask an administrator to reconcile this network.`
+        partialId
+          ? `Network #${partialId} exists, but policy/readback reconciliation failed. Do not submit another create request; ask an administrator to reconcile this network.`
           : submitError?.data?.message ??
               submitError?.message ??
               'LayerSentry could not create the network.'
@@ -413,12 +354,10 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
         {!created && review && (
           <Button
             variant="contained"
-            disabled={instantiateState.isLoading || updateState.isLoading}
+            disabled={createState.isLoading}
             onClick={submit}
           >
-            {instantiateState.isLoading || updateState.isLoading
-              ? 'Creating…'
-              : 'Create network'}
+            {createState.isLoading ? 'Creating…' : 'Create network'}
           </Button>
         )}
       </DialogActions>
