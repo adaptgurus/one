@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 2A Network Preflight
+name: LayerSentry Physical POC Stage 2B Bridge Host1
 
 on:
   pull_request:
@@ -14,52 +14,119 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  preflight:
-    name: network-preflight-${{ matrix.slot }}
+  bridge:
+    name: bridge-host1-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
         slot: [1, 2, 3]
     runs-on: [self-hosted, Linux]
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
-      - name: Install nmstate and capture rollback baseline
+      - name: Transactionally create br0 on demolayersentry1
         shell: bash
         run: |
           set -euo pipefail
           echo "runner_name=$RUNNER_NAME"
-          case "$RUNNER_NAME" in
-            demolayersentry1|demolayersentry2) ;;
-            *) echo "GUARD_SKIP_NON_PHYSICAL_RUNNER"; exit 0 ;;
-          esac
+          if [ "$RUNNER_NAME" != "demolayersentry1" ]; then
+            echo "GUARD_SKIP_NON_TARGET_RUNNER"
+            exit 0
+          fi
 
-          install -d -m 0750 /var/log/layersentry-poc /etc/layersentry-poc/network
           LOG=/var/log/layersentry-poc/activity.log
           exec > >(tee -a "$LOG") 2>&1
-          echo "=== STAGE2A_NETWORK_PREFLIGHT_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE2B_BRIDGE_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
 
-          echo "--- current network ---"
+          EXPECTED_IP=192.168.1.121
+          PEER_IP=192.168.1.122
+          GATEWAY=192.168.1.1
+          test "$(id -u)" -eq 0
+          command -v nmstatectl >/dev/null
+          ip -4 -o addr show dev eno1 | grep -F "$EXPECTED_IP/24"
+
+          cat >/etc/layersentry-poc/network/br0-desired.yaml <<EOF
+          ---
+          interfaces:
+          - name: br0
+            type: linux-bridge
+            state: up
+            ipv4:
+              enabled: true
+              dhcp: false
+              address:
+              - ip: $EXPECTED_IP
+                prefix-length: 24
+            ipv6:
+              enabled: false
+            bridge:
+              options:
+                stp:
+                  enabled: false
+              port:
+              - name: eno1
+          - name: eno1
+            type: ethernet
+            state: up
+            ipv4:
+              enabled: false
+            ipv6:
+              enabled: false
+          routes:
+            config:
+            - destination: 0.0.0.0/0
+              next-hop-address: $GATEWAY
+              next-hop-interface: br0
+          dns-resolver:
+            config:
+              server:
+              - 8.8.8.8
+              - 1.1.1.1
+          EOF
+          chmod 0600 /etc/layersentry-poc/network/br0-desired.yaml
+
+          echo "--- desired network ---"
+          cat /etc/layersentry-poc/network/br0-desired.yaml
+
+          CHECKPOINT=""
+          rollback_on_error() {
+            rc=$?
+            if [ -n "$CHECKPOINT" ]; then
+              echo "Validation failed; rolling back checkpoint $CHECKPOINT"
+              nmstatectl rollback "$CHECKPOINT" || true
+            fi
+            exit "$rc"
+          }
+          trap rollback_on_error ERR
+
+          echo "--- apply without commit ---"
+          APPLY_OUTPUT=$(nmstatectl apply --no-commit --timeout 120 /etc/layersentry-poc/network/br0-desired.yaml)
+          printf '%s\n' "$APPLY_OUTPUT"
+          CHECKPOINT=$(printf '%s\n' "$APPLY_OUTPUT" | tail -n1)
+          case "$CHECKPOINT" in
+            /org/freedesktop/NetworkManager/Checkpoint/*) ;;
+            *) echo "Unexpected checkpoint: $CHECKPOINT"; exit 1 ;;
+          esac
+
+          echo "--- validate candidate state ---"
+          ip -4 -o addr show dev br0 | grep -F "$EXPECTED_IP/24"
+          ! ip -4 -o addr show dev eno1 | grep -q 'inet '
+          ip -4 route show default | grep -F "via $GATEWAY dev br0"
+          bridge link | grep -E 'eno1.*master br0'
+          ping -c 3 -W 2 "$GATEWAY"
+          ping -c 2 -W 2 "$PEER_IP"
+          curl -fsS --connect-timeout 5 --max-time 15 https://api.github.com/ >/dev/null
+
+          echo "--- commit candidate state ---"
+          nmstatectl commit "$CHECKPOINT"
+          CHECKPOINT=""
+          trap - ERR
+
+          echo "--- persistent postflight ---"
+          nmstatectl show br0
+          nmcli -t -f NAME,TYPE,DEVICE,STATE con show
           ip -br addr
           ip -4 route
-          nmcli -t -f NAME,UUID,TYPE,DEVICE,STATE con show
-          ping -c 2 -W 2 192.168.1.1
-          curl -fsS --connect-timeout 5 --max-time 10 https://api.github.com/ >/dev/null
-
-          echo "--- install nmstate ---"
-          if ! command -v nmstatectl >/dev/null 2>&1; then
-            dnf -y install nmstate
-          fi
-          nmstatectl --version || nmstatectl version || true
-
-          echo "--- persist pre-change state ---"
-          nmstatectl show > /etc/layersentry-poc/network/pre-bridge-state.yaml
-          chmod 0600 /etc/layersentry-poc/network/pre-bridge-state.yaml
-          sha256sum /etc/layersentry-poc/network/pre-bridge-state.yaml
-
-          echo "--- verify package/network after install ---"
-          rpm -q nmstate
-          nmstatectl show eno1
-          ping -c 2 -W 2 192.168.1.1
-          curl -fsS --connect-timeout 5 --max-time 10 https://api.github.com/ >/dev/null
-          echo "=== STAGE2A_NETWORK_PREFLIGHT_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          ping -c 2 -W 2 "$GATEWAY"
+          curl -fsS --connect-timeout 5 --max-time 15 https://api.github.com/ >/dev/null
+          echo "=== STAGE2B_BRIDGE_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
