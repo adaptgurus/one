@@ -159,17 +159,41 @@ jobs:
           $script=@'
           set -e
           echo NFS_SERVER=172.17.60.210
-          if command -v showmount >/dev/null 2>&1; then
-            showmount -e 172.17.60.210 || true
-          else
-            echo SHOWMOUNT_UNAVAILABLE
+          if ! command -v showmount >/dev/null 2>&1; then
+            echo INSTALLING_NFS_UTILS=1
+            dnf -y install nfs-utils >/tmp/layersentry-nfs-utils-install.log
           fi
-          if command -v rpcinfo >/dev/null 2>&1; then
-            rpcinfo -p 172.17.60.210 | head -40 || true
-          else
-            echo RPCINFO_UNAVAILABLE
-          fi
+          echo '--- EXPORTS ---'
+          showmount -e 172.17.60.210
+          echo '--- RPC ---'
+          rpcinfo -p 172.17.60.210 | head -40 || true
           timeout 4 bash -c '</dev/tcp/172.17.60.210/2049' && echo NFS_TCP_2049=PASS || echo NFS_TCP_2049=FAIL
+          echo '--- READONLY CAPACITY PROBE ---'
+          mapfile -t exports < <(showmount -e 172.17.60.210 | awk 'NR>1 && $1 ~ /^\// {print $1}')
+          probe=/mnt/layersentry-nfs-capacity-probe
+          mkdir -p "$probe"
+          for export in "${exports[@]}"; do
+            name=$(printf '%s' "$export" | sed 's#[^A-Za-z0-9_.-]#_#g')
+            mountpoint="$probe/$name"
+            mkdir -p "$mountpoint"
+            mounted=0
+            for vers in 4.2 4.1 3; do
+              if timeout 15 mount -t nfs -o "ro,nosuid,nodev,noexec,vers=$vers" "172.17.60.210:$export" "$mountpoint" 2>/tmp/layersentry-nfs-mount.err; then
+                echo "NFS_EXPORT=$export VERSION=$vers"
+                df -B1 --output=source,fstype,size,used,avail,pcent,target "$mountpoint" | tail -n 1
+                findmnt -n -o SOURCE,FSTYPE,OPTIONS,TARGET "$mountpoint"
+                mounted=1
+                umount "$mountpoint"
+                break
+              fi
+            done
+            if [ "$mounted" -ne 1 ]; then
+              echo "NFS_EXPORT=$export MOUNT=FAILED"
+              tail -n 2 /tmp/layersentry-nfs-mount.err || true
+            fi
+            rmdir "$mountpoint" 2>/dev/null || true
+          done
+          rmdir "$probe" 2>/dev/null || true
           '@
           $script=$script -replace "`r`n","`n"
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
