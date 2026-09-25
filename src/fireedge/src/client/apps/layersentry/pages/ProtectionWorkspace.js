@@ -27,7 +27,20 @@ import {
 import { Plus } from 'iconoir-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
-import { BackupJobAPI, DatastoreAPI, ImageAPI, useViews } from '@FeaturesModule'
+import {
+  BackupJobAPI,
+  DatastoreAPI,
+  ImageAPI,
+  useModalsApi,
+  useViews,
+} from '@FeaturesModule'
+import { Backups as BackupsResource } from '@ResourcesModule'
+import {
+  getBackupDiskIds,
+  getBackupIncrements,
+  getBackupRestoreOptions,
+  getBackupVmIds,
+} from '@ModelsModule'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import {
   CAPABILITY_IDS,
@@ -74,7 +87,7 @@ const formatLastBackup = (value) => {
   const timestamp = Number(value)
   if (!Number.isFinite(timestamp) || timestamp <= 0) return 'Never'
 
-  return new Date(timestamp).toLocaleString()
+  return new Date(timestamp * 1000).toLocaleString()
 }
 
 const formatBackupSize = (value) => {
@@ -84,9 +97,28 @@ const formatBackupSize = (value) => {
   return `${Math.max(1, Math.ceil(sizeMb / 1024))} GB`
 }
 
-const BackupPlanInventory = () => {
+const BackupPlanInventory = ({ canMutate }) => {
   const query = BackupJobAPI.useGetBackupJobsQuery()
   const plans = toArray(query.data)
+  const [retry, retryState] = BackupJobAPI.useRetryBackupJobMutation()
+  const [operationError, setOperationError] = useState('')
+  const [operationStatus, setOperationStatus] = useState('')
+
+  const retryPlan = async (id) => {
+    setOperationError('')
+    setOperationStatus('')
+    try {
+      await retry({ id }).unwrap()
+      await query.refetch()
+      setOperationStatus(
+        `Retry accepted for Backup Plan #${id}; native state will continue to reconcile.`
+      )
+    } catch (reason) {
+      setOperationError(
+        reason?.data?.message ?? reason?.message ?? 'The backup retry failed.'
+      )
+    }
+  }
 
   if (query.isLoading || query.isFetching) return <LinearProgress />
 
@@ -111,6 +143,8 @@ const BackupPlanInventory = () => {
       data-layersentry-readonly-backup-plan-inventory
       sx={{ display: 'grid', gap: 1 }}
     >
+      {operationError && <Alert severity="error">{operationError}</Alert>}
+      {operationStatus && <Alert severity="success">{operationStatus}</Alert>}
       {plans.map((plan) => (
         <Box
           key={plan.ID ?? plan.NAME}
@@ -133,15 +167,78 @@ const BackupPlanInventory = () => {
             Last backup: {formatLastBackup(plan.LAST_BACKUP_TIME)}
             {plan.PRIORITY ? ` · Priority ${plan.PRIORITY}` : ''}
           </Typography>
+          <Typography
+            sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
+          >
+            {plan.TEMPLATE?.LAYERSENTRY_PLAN
+              ? `${plan.TEMPLATE.LAYERSENTRY_PLAN} · `
+              : ''}
+            keep {plan.TEMPLATE?.KEEP_LAST ?? '—'} · Backup Storage #
+            {plan.TEMPLATE?.DATASTORE_ID ?? '—'}
+          </Typography>
+          <Typography
+            sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
+          >
+            {plan.TEMPLATE?.SCHED_ACTION?.DAYS
+              ? `Every ${plan.TEMPLATE.SCHED_ACTION.DAYS} hours · `
+              : ''}
+            {plan.TEMPLATE?.LAYERSENTRY_RECONCILE === 'NATIVE_READBACK'
+              ? 'Native readback reconciled'
+              : 'Native plan'}
+          </Typography>
+          {canMutate && getBackupPlanState(plan) === 'Error' && (
+            <Button
+              size="small"
+              sx={{ mt: 1, textTransform: 'none' }}
+              disabled={retryState.isLoading}
+              onClick={() => retryPlan(plan.ID)}
+            >
+              Retry failed plan
+            </Button>
+          )}
         </Box>
       ))}
     </Box>
   )
 }
 
-const RecoveryPointInventory = () => {
+BackupPlanInventory.propTypes = { canMutate: PropTypes.bool }
+
+const RecoveryPointInventory = ({ canRestore }) => {
   const query = ImageAPI.useGetBackupsQuery()
   const backups = toArray(query.data)
+  const { showModal } = useModalsApi()
+  const [restore] = ImageAPI.useRestoreBackupMutation()
+
+  const restorePoint = (backup) => {
+    const increments = getBackupIncrements(backup)
+    const backupDiskIds = getBackupDiskIds(backup)
+    const vmsId = getBackupVmIds(backup)
+    showModal({
+      isFormDialog: true,
+      name: 'Restore recovery point',
+      dialogProps: {
+        title: `Restore ${backup.NAME ?? `recovery point #${backup.ID}`}`,
+        dataCy: 'modal-layersentry-restore-point',
+        steps: BackupsResource.Forms.RestoreForm,
+        stepProps: {
+          increments,
+          backupDiskIds,
+          vmsId,
+          disableImageSelection: true,
+        },
+        initialValues: { increments, backupDiskIds },
+      },
+      onSubmit: async (formData) => {
+        await restore({
+          id: backup.ID,
+          datastore: formData.datastore,
+          options: getBackupRestoreOptions(formData),
+        }).unwrap()
+        await query.refetch()
+      },
+    })
+  }
 
   if (query.isLoading || query.isFetching) return <LinearProgress />
 
@@ -188,12 +285,23 @@ const RecoveryPointInventory = () => {
               {increments.length} increment
               {increments.length === 1 ? '' : 's'}
             </Typography>
+            {canRestore && (
+              <Button
+                size="small"
+                sx={{ mt: 1, textTransform: 'none' }}
+                onClick={() => restorePoint(backup)}
+              >
+                Restore…
+              </Button>
+            )}
           </Box>
         )
       })}
     </Box>
   )
 }
+
+RecoveryPointInventory.propTypes = { canRestore: PropTypes.bool }
 
 const isBackupDatastore = (datastore = {}) =>
   String(datastore?.TYPE) === '3' ||
@@ -320,7 +428,11 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
         <Tab label="Recovery Points" />
       </Tabs>
       <Surface sx={{ mt: 2, p: 2 }}>
-        {tab === 0 ? <BackupPlanInventory /> : <RecoveryPointInventory />}
+        {tab === 0 ? (
+          <BackupPlanInventory canMutate={canCreateBackupPlan} />
+        ) : (
+          <RecoveryPointInventory canRestore={canCreateBackupPlan} />
+        )}
       </Surface>
     </PageFrame>
   )
