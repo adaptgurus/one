@@ -13,7 +13,12 @@ permissions:
 
 jobs:
   run:
-    runs-on: WIN-GK6MO7T7OPC
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        slot: [1, 2, 3]
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -24,8 +29,11 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME"
-          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){ throw "Wrong runner: $env:RUNNER_NAME / $env:COMPUTERNAME" }
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            "LS_TARGET=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            exit 0
+          }
           "LS_TARGET=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Execute Stage 1
