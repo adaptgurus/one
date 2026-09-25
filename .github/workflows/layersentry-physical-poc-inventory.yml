@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 4B Deploy
+name: LayerSentry Physical POC Stage 4C Repo Fix Deploy
 
 on:
   pull_request:
@@ -10,12 +10,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: layersentry-physical-poc-stage4b-${{ github.event.pull_request.number }}
+  group: layersentry-physical-poc-stage4c-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   deploy:
-    name: onedeploy-baseline-${{ matrix.slot }}
+    name: repofix-deploy-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -24,7 +24,7 @@ jobs:
     runs-on: [self-hosted, Linux]
     timeout-minutes: 55
     steps:
-      - name: Deploy OpenNebula baseline with OneDeploy
+      - name: Pin Rocky repo path and deploy
         shell: bash
         run: |
           set -euo pipefail
@@ -34,9 +34,9 @@ jobs:
             exit 0
           fi
 
-          umask 077
           exec sudo -n bash <<'ROOT'
           set -euo pipefail
+          umask 077
           export PATH=/opt/layersentry-one-deploy-venv/bin:$PATH
           export ANSIBLE_DISPLAY_ARGS_TO_STDOUT=false
           export ANSIBLE_NOCOLOR=1
@@ -47,34 +47,50 @@ jobs:
           INV="$DEPLOY_ROOT/poc-inventory.yml"
           LOGDIR="$DEPLOY_ROOT/logs"
           mkdir -p "$LOGDIR"
-          LOG="$LOGDIR/stage4b-deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
-          touch "$LOG"
-          chmod 0600 "$LOG"
+          LOG="$LOGDIR/stage4c-repofix-deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
+          touch "$LOG"; chmod 0600 "$LOG"
           exec > >(tee -a "$LOG") 2>&1
 
-          echo "=== STAGE4B_DEPLOY_BEGIN $(date -u +%FT%TZ) ==="
-          test -d "$REPO/.git"
-          test -s "$INV"
-          test -x /opt/layersentry-one-deploy-venv/bin/ansible-playbook
-          test -s "$DEPLOY_ROOT/one_pass"
-          test -s "$DEPLOY_ROOT/db_pass"
+          echo "=== STAGE4C_BEGIN $(date -u +%FT%TZ) ==="
 
-          echo "--- target identity ---"
-          hostname -f || hostname
-          ip -4 -br addr show br0
-          ip -4 route show default
-          df -hT /home
-          test -d /home/layersentry/datastores
-          test -d /home/layersentry/images
+          python3 - "$INV" <<'PY'
+          import sys, yaml
+          path=sys.argv[1]
+          with open(path, 'r', encoding='utf-8') as f:
+              data=yaml.safe_load(f)
+          if not isinstance(data, dict):
+              raise SystemExit("inventory root is not a mapping")
+          allv=data.setdefault('all', {}).setdefault('vars', {})
+          repo=allv.setdefault('opennebula_repo_url', {})
+          repo['RedHat']='https://downloads.opennebula.io/repo/7.4/RedHat'
+          with open(path, 'w', encoding='utf-8') as f:
+              yaml.safe_dump(data, f, sort_keys=False)
+          PY
+          chmod 0600 "$INV"
+
+          echo "--- effective override ---"
+          python3 - "$INV" <<'PY'
+          import sys,yaml
+          d=yaml.safe_load(open(sys.argv[1]))
+          print("opennebula_repo_url.RedHat="+d['all']['vars']['opennebula_repo_url']['RedHat'])
+          PY
+
+          echo "--- restore/test working repo on both hosts ---"
+          ansible -i "$INV" all -b -m shell -a "cat > /etc/yum.repos.d/opennebula.repo <<'EOF'
+          [opennebula]
+          name=OpenNebula Community Edition 7.4
+          baseurl=https://downloads.opennebula.io/repo/7.4/RedHat/\$releasever/\$basearch
+          enabled=1
+          gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-opennebula2
+          repo_gpgcheck=1
+          gpgcheck=1
+          EOF
+          dnf -q clean metadata
+          dnf -q makecache --disablerepo='*' --enablerepo=opennebula
+          dnf -q --showduplicates list opennebula | tail -n 5"
 
           cd "$REPO"
-          echo "--- inventory graph ---"
-          ansible-inventory -i "$INV" --graph
-          echo "--- connectivity gate ---"
-          ansible -i "$INV" all -m ping
-          ansible -i "$INV" all -b -m command -a 'id -u'
-
-          echo "--- OneDeploy pre ---"
+          echo "--- OneDeploy pre retry ---"
           make V= I="$INV" pre
 
           echo "--- OneDeploy site ---"
@@ -92,25 +108,24 @@ jobs:
           sudo -u oneadmin bash -lc 'onedatastore list'
           sudo -u oneadmin bash -lc 'onevnet list'
 
-          echo "--- web/API listeners ---"
-          ss -lntp | grep -E ':(2616|2633)\b' || true
-          for u in http://127.0.0.1:2616 http://127.0.0.1:2633; do
-            code=$(curl -k -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 "$u" || true)
+          echo "--- URL health ---"
+          for u in http://127.0.0.1:2616 http://192.168.1.121:2616; do
+            code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 "$u" || true)
             echo "$u => $code"
           done
 
-          echo "--- peer host health ---"
+          echo "--- peer libvirt health ---"
           ssh -i /root/.ssh/layersentry_poc_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 layersentry-deploy@192.168.1.122             'hostname; ip -4 -br addr show br0; sudo -n systemctl is-active libvirtd || sudo -n systemctl is-active virtqemud || true; sudo -n virsh nodeinfo | sed -n "1,12p"'
 
           echo "deployment_log=$LOG"
-          echo "=== STAGE4B_DEPLOY_PASS $(date -u +%FT%TZ) ==="
+          echo "=== STAGE4C_PASS $(date -u +%FT%TZ) ==="
           ROOT
 
       - name: Upload deployment journal
-        if: always() && runner.name == 'demolayersentry1'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: layersentry-physical-poc-stage4b-deploy-${{ matrix.slot }}
-          path: /root/layersentry-poc/logs/stage4b-deploy-*.log
+          name: layersentry-stage4c-${{ matrix.slot }}
+          path: /root/layersentry-poc/logs/stage4c-repofix-deploy-*.log
           if-no-files-found: warn
           retention-days: 14
