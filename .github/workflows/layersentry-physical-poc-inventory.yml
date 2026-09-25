@@ -255,10 +255,34 @@ jobs:
           install -d -o root -g root -m 0700 "$BACKUP_DIR"
           TS=$(date -u +%Y%m%dT%H%M%SZ)
           DUMP_BIN=$(command -v mariadb-dump || command -v mysqldump || true)
+          MYSQL_BIN=$(command -v mariadb || command -v mysql || true)
           test -n "$DUMP_BIN"
-          "$DUMP_BIN" --protocol=socket opennebula | gzip -1 > "$BACKUP_DIR/opennebula-$TS.sql.gz"
+          test -n "$MYSQL_BIN"
+          DBPASS=$(cat "$DEPLOY_ROOT/db_pass")
+          export MYSQL_PWD="$DBPASS"
+          "$DUMP_BIN" --protocol=socket -u oneadmin --single-transaction --quick --routines --events --triggers opennebula |
+            gzip -1 > "$BACKUP_DIR/opennebula-$TS.sql.gz"
           gzip -t "$BACKUP_DIR/opennebula-$TS.sql.gz"
+          test "$(gzip -dc "$BACKUP_DIR/opennebula-$TS.sql.gz" | wc -c)" -gt 1024
+
+          VERIFY_DB="opennebula_restore_verify_$(date -u +%s)"
+          "$MYSQL_BIN" --protocol=socket -u oneadmin -e "CREATE DATABASE \`$VERIFY_DB\` CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci"
+          cleanup_verify_db() {
+            "$MYSQL_BIN" --protocol=socket -u oneadmin -e "DROP DATABASE IF EXISTS \`$VERIFY_DB\`" >/dev/null 2>&1 || true
+          }
+          trap cleanup_verify_db EXIT
+          gzip -dc "$BACKUP_DIR/opennebula-$TS.sql.gz" | "$MYSQL_BIN" --protocol=socket -u oneadmin "$VERIFY_DB"
+          SOURCE_TABLES=$("$MYSQL_BIN" --protocol=socket -u oneadmin -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='opennebula'")
+          RESTORE_TABLES=$("$MYSQL_BIN" --protocol=socket -u oneadmin -Nse "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$VERIFY_DB'")
+          echo "backup_restore_table_count source=$SOURCE_TABLES restored=$RESTORE_TABLES"
+          test "$SOURCE_TABLES" -gt 0
+          test "$SOURCE_TABLES" = "$RESTORE_TABLES"
+          cleanup_verify_db
+          trap - EXIT
+          unset MYSQL_PWD DBPASS
+
           tar -C / -czf "$BACKUP_DIR/opennebula-management-$TS.tgz" etc/one var/lib/one/.one
+          tar -tzf "$BACKUP_DIR/opennebula-management-$TS.tgz" >/dev/null
           chmod 0600 "$BACKUP_DIR/opennebula-$TS.sql.gz" "$BACKUP_DIR/opennebula-management-$TS.tgz"
           ls -lh "$BACKUP_DIR/opennebula-$TS.sql.gz" "$BACKUP_DIR/opennebula-management-$TS.tgz"
 
