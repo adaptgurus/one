@@ -1,0 +1,65 @@
+name: Manoj OneSwap Appliance Network Recovery Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-appliance-network-recovery-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-appliance-network-recovery-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind Manoj and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_STATE=$($src.State)"
+          Write-Host "SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
+          Write-Host 'APPLIANCE_NET_SOURCE_GATE=PASS'
+
+      - name: Inspect appliance Hyper-V network and integration state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          Write-Host "APPLIANCE_STATE=$($vm.State)"
+          Write-Host "APPLIANCE_STATUS=$($vm.Status)"
+          Write-Host "APPLIANCE_HEARTBEAT=$($vm.Heartbeat)"
+
+          Get-VMNetworkAdapter -VMName $vm.Name -ErrorAction Stop | ForEach-Object {
+            Write-Host ("NIC name={0} switch={1} status={2} mac={3} ip={4}" -f $_.Name,$_.SwitchName,$_.Status,$_.MacAddress,(@($_.IPAddresses) -join ','))
+          }
+          Get-VMIntegrationService -VMName $vm.Name -ErrorAction SilentlyContinue | ForEach-Object {
+            Write-Host ("INTEGRATION name={0} enabled={1} primary={2} secondary={3}" -f $_.Name,$_.Enabled,$_.PrimaryStatusDescription,$_.SecondaryStatusDescription)
+          }
+
+          $tnc=Test-NetConnection -ComputerName '10.250.10.32' -Port 22 -WarningAction SilentlyContinue
+          Write-Host "SSH_TCP_SUCCESS=$($tnc.TcpTestSucceeded)"
+          Write-Host "SSH_REMOTE=$($tnc.RemoteAddress)"
+          Write-Host "SSH_INTERFACE=$($tnc.InterfaceAlias)"
+          Write-Host 'APPLIANCE_NETWORK_DIAGNOSTIC=PASS'
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
