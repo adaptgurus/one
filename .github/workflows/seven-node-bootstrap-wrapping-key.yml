@@ -1,0 +1,49 @@
+name: Seven Node Bootstrap Wrapping Key
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-bootstrap-wrapping-key.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  wrapping-key:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        slot: [1, 2, 3]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Bind or hold runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            Write-Host 'NON_TARGET_RUNNER_HOLD'
+            Start-Sleep -Seconds 90
+            exit 0
+          }
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          New-Item -ItemType Directory -Force -Path $dir | Out-Null
+          & icacls.exe $dir /inheritance:r | Out-Null
+          & icacls.exe $dir /grant:r 'Administrators:(OI)(CI)(F)' 'SYSTEM:(OI)(CI)(F)' | Out-Null
+          $keyFile=Join-Path $dir 'wrap-rsa.xml'
+          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
+          if(Test-Path $keyFile){
+            $rsa.FromXmlString((Get-Content $keyFile -Raw))
+          } else {
+            [IO.File]::WriteAllText($keyFile,$rsa.ToXmlString($true),[Text.UTF8Encoding]::new($false))
+            & icacls.exe $keyFile /inheritance:r | Out-Null
+            & icacls.exe $keyFile /grant:r 'Administrators:(F)' 'SYSTEM:(F)' | Out-Null
+          }
+          $p=$rsa.ExportParameters($false)
+          Write-Host ('TARGET_RUNNER_WRAP_MODULUS_B64=' + [Convert]::ToBase64String($p.Modulus))
+          Write-Host ('TARGET_RUNNER_WRAP_EXPONENT_B64=' + [Convert]::ToBase64String($p.Exponent))
+          Write-Host 'TARGET_RUNNER_WRAP_READY=PASS'
