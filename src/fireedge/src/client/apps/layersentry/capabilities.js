@@ -175,6 +175,7 @@ const CAPABILITY_PATHS = Object.freeze([
   ['/storage/images', CAPABILITY_IDS.STORAGE_IMAGES],
   ['/storage/files', CAPABILITY_IDS.STORAGE_FILES],
   ['/storage', CAPABILITY_IDS.STORAGE],
+  ['/network/segments/create', CAPABILITY_IDS.NETWORK_CREATE],
   ['/network/create', CAPABILITY_IDS.NETWORK_CREATE],
   ['/network/templates', CAPABILITY_IDS.NETWORK_TEMPLATES],
   ['/network/routers', CAPABILITY_IDS.VIRTUAL_ROUTERS],
