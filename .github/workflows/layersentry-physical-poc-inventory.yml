@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 4E Storage + Deploy
+name: LayerSentry Physical POC Stage 4G Physical Resume
 
 on:
   pull_request:
@@ -34,7 +34,7 @@ jobs:
           if [ "$RUNNER_NAME" != "demolayersentry1" ]; then
             echo "executed=false" >> "$GITHUB_OUTPUT"
             echo "HOLD: reserving non-controller runner slot to route one job to demolayersentry1"
-            sleep 180
+            sleep 3500
             exit 0
           fi
           echo "executed=true" >> "$GITHUB_OUTPUT"
