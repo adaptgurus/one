@@ -134,10 +134,6 @@ jobs:
           require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
           require '/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper'
           require '/usr/lib/one/ruby/cli/one_helper/hyperv_hot_hardening'
-          require '/usr/lib/one/ruby/cli/one_helper/hyperv_hot_edge_hardening'
-          require '/usr/lib/one/ruby/cli/one_helper/hyperv_virtio_hardening'
-          require '/usr/lib/one/ruby/cli/one_helper/hyperv_final_safety_hardening'
-          require '/usr/lib/one/ruby/cli/one_helper/hyperv_network_hardening'
 
           cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml') || {}
           normalized={}
