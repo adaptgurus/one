@@ -203,3 +203,40 @@ test('LayerSentry keeps mutation and data-safety API exposure fail closed', () =
     /MUTATING_CAPABILITIES\.has\(capabilityId\)[\s\S]*isCapabilityEnabled/
   )
 })
+
+test('durable-operation gateway stays typed, tenant-authenticated and fail closed', () => {
+  const routes = read('src/server/routes/api/controlplaneops/routes.js')
+  const functions = read('src/server/routes/api/controlplaneops/functions.js')
+  const platform = read(
+    'src/server/routes/api/serviceblueprints/platform.js'
+  )
+  const client = read('src/modules/features/OneApi/controlPlane.js')
+
+  expectCommand(routes, 'Actions.LIST', 'GET', [['limit', 'query']])
+  expectCommand(routes, 'Actions.SUBMIT', 'POST', [
+    ['resourceKind', 'postBody'],
+    ['resourceId', 'postBody'],
+    ['action', 'postBody'],
+    ['desiredState', 'postBody'],
+    ['idempotencyKey', 'postBody'],
+  ])
+  expectCommand(routes, 'Actions.GET', 'GET', [['id', 'resource']])
+
+  assert.match(functions, /const allowedActions = new Set\(\[/)
+  assert.match(functions, /resourceKind !== 'VirtualMachine'/)
+  assert.match(functions, /JSON\.stringify\(desiredState\)\.length > 65536/)
+  assert.match(functions, /validIdempotencyKey\(idempotencyKey\)/)
+  assert.doesNotMatch(functions, /child_process|exec\(|spawn\(|shell/i)
+  assert.match(functions, /parsedLimit < 1 \|\| parsedLimit > 200/)
+
+  assert.match(platform, /resolvePlatformActor\(userData, oneConnection\)/)
+  assert.match(platform, /GATEWAY_TENANT_HEADER\]: actor\.uid/)
+  assert.match(platform, /GATEWAY_ADMIN_HEADER\]: actor\.oneadmin/)
+  assert.match(platform, /if \(!caFile \|\| !certFile \|\| !keyFile\)/)
+  assert.match(platform, /rejectUnauthorized: true/)
+  assert.match(platform, /if \(idempotencyKey\) headers\['Idempotency-Key'\]/)
+
+  expectClientAction(client, 'getControlPlaneOperations', 'LIST')
+  expectClientAction(client, 'submitControlPlaneOperation', 'SUBMIT')
+  expectClientAction(client, 'getControlPlaneOperation', 'GET')
+})
