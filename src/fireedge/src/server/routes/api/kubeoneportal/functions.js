@@ -192,6 +192,13 @@ const kubeconfig = (
 
 /**
  * Provision a registered server-owned KubeOne cluster plan.
+ *
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.id
+ * @param userData
+ * @param oneConnection
  */
 const provision = (
   res = {},
@@ -221,6 +228,14 @@ const provision = (
   )
 }
 
+/**
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.id
+ * @param userData
+ * @param oneConnection
+ */
 const provisionStatus = (
   res = {},
   next = defaultEmptyFunction,
@@ -248,6 +263,14 @@ const provisionStatus = (
   )
 }
 
+/**
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.id
+ * @param userData
+ * @param oneConnection
+ */
 const controlPlaneReconciliation = (
   res = {},
   next = defaultEmptyFunction,
@@ -278,6 +301,14 @@ const controlPlaneReconciliation = (
   )
 }
 
+/**
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.id
+ * @param userData
+ * @param oneConnection
+ */
 const controlPlaneReconciliationStatus = (
   res = {},
   next = defaultEmptyFunction,
