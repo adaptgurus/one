@@ -217,6 +217,7 @@ export const validateWorkloadSegments = (segments = []) => {
 
   if (!segments.length) {
     batchErrors.push('Add at least one workload segment.')
+
     return { rowErrors, batchErrors, valid: false }
   }
 
