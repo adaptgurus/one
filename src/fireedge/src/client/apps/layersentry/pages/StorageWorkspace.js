@@ -60,6 +60,8 @@ const toArray = (value) =>
     : [value]
 const asNumber = (value) => Number.parseInt(value, 10) || 0
 const mbToGb = (value) => Math.max(1, Math.ceil(asNumber(value) / 1024))
+const vmFromRefresh = (result, id) =>
+  toArray(result?.data).find(({ ID }) => String(ID) === String(id))
 
 const StorageWorkspace = ({ endpoints }) => {
   const { view } = useViews()
@@ -126,6 +128,13 @@ const StorageWorkspace = ({ endpoints }) => {
     detachState.isLoading ||
     resizeState.isLoading ||
     removeState.isLoading
+  const refreshVM = async (id) => {
+    try {
+      return vmFromRefresh(await vmQuery.refetch(), id)
+    } catch {
+      return null
+    }
+  }
 
   const runAttach = async () => {
     if (!vm?.ID) return enqueueError('Select a virtual machine first.')
@@ -167,11 +176,16 @@ const StorageWorkspace = ({ endpoints }) => {
         template: jsonToXml({ DISK: { IMAGE_ID: selectedImage } }),
       }).unwrap()
       setUnattachedImage(null)
+      const refreshedVM = await refreshVM(vm.ID)
+      const confirmed = toArray(refreshedVM?.TEMPLATE?.DISK).some(
+        ({ IMAGE_ID }) => String(IMAGE_ID) === String(selectedImage)
+      )
       enqueueSuccess(
-        'Disk attach request accepted. Refresh to confirm the authoritative VM state.'
+        confirmed
+          ? 'Disk attachment confirmed by authoritative VM readback.'
+          : 'Disk attach request accepted. Refresh to confirm the authoritative VM state.'
       )
       setImageId('')
-      vmQuery.refetch()
       imageQuery.refetch()
     } catch (error) {
       if (createdImage) setUnattachedImage(createdImage)
@@ -192,10 +206,17 @@ const StorageWorkspace = ({ endpoints }) => {
     }
     try {
       await detachDisk({ id: vm.ID, disk: disk.DISK_ID }).unwrap()
+      const refreshedVM = await refreshVM(vm.ID)
+      const confirmed =
+        refreshedVM &&
+        !toArray(refreshedVM.TEMPLATE?.DISK).some(
+          ({ DISK_ID }) => String(DISK_ID) === String(disk.DISK_ID)
+        )
       enqueueSuccess(
-        'Disk detach request accepted. The disk image is preserved; refresh to confirm VM state.'
+        confirmed
+          ? 'Disk detachment confirmed. The persistent disk image is preserved.'
+          : 'Disk detach request accepted. The disk image is preserved; refresh to confirm VM state.'
       )
-      vmQuery.refetch()
     } catch (error) {
       enqueueError(
         error?.data?.message ?? error?.message ?? 'Could not detach disk.'
@@ -214,10 +235,17 @@ const StorageWorkspace = ({ endpoints }) => {
         disk: disk.DISK_ID,
         size: String(nextGb * 1024),
       }).unwrap()
-      enqueueSuccess(
-        `Disk resize request accepted for ${nextGb} GB. Refresh to confirm provider state.`
+      const refreshedVM = await refreshVM(vm.ID)
+      const confirmed = toArray(refreshedVM?.TEMPLATE?.DISK).some(
+        ({ DISK_ID, SIZE }) =>
+          String(DISK_ID) === String(disk.DISK_ID) &&
+          asNumber(SIZE) >= nextGb * 1024
       )
-      vmQuery.refetch()
+      enqueueSuccess(
+        confirmed
+          ? `Disk resize to ${nextGb} GB confirmed by authoritative VM readback.`
+          : `Disk resize request accepted for ${nextGb} GB. Refresh to confirm provider state.`
+      )
     } catch (error) {
       enqueueError(
         error?.data?.message ?? error?.message ?? 'Could not resize disk.'
