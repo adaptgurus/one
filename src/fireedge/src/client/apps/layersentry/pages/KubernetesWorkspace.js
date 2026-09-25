@@ -40,7 +40,7 @@ const KubernetesWorkspace = ({ endpoints }) => {
   return (
     <PageFrame
       title="Kubernetes"
-      description="View qualified OneKS clusters. Create and Day-2 actions appear only when their individual production paths are qualified."
+      description="View KubeOne-managed clusters. Create and Day-2 actions appear only when their individual production paths are qualified."
       actions={
         canCreate ? (
           <Button

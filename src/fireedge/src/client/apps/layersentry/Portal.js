@@ -144,7 +144,7 @@ const Portal = ({ endpoints }) => {
               endpoints,
               title: 'Create Kubernetes Cluster',
               description:
-                'Provision a managed cluster through the native OneKS lifecycle.',
+                'Provision infrastructure through typed OpenNebula APIs and reconcile the Kubernetes lifecycle through KubeOne.',
               legacyPath: '/kubernetes/create',
               returnTo: PRODUCT_PATHS.KUBERNETES,
               steps: [
