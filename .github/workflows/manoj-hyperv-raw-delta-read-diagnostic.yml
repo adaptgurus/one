@@ -1,0 +1,167 @@
+name: Manoj HyperV Raw Delta Read Diagnostic
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-raw-delta-read-diagnostic.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-raw-delta-read-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Reproduce RCT raw read path safely
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue)
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if($snaps.Count -ne 0){throw 'Unexpected checkpoint'}
+
+          $diskDrive=@(Get-VMHardDiskDrive -VM $vm | Sort-Object ControllerNumber,ControllerLocation | Select-Object -First 1)
+          if($diskDrive.Count -ne 1){throw 'Primary source disk missing'}
+          $path=[string]$diskDrive[0].Path
+          $vhd=Get-VHD -Path $path -ErrorAction Stop
+          Write-Host "RAW_DIAG_PATH=$path"
+          Write-Host "RAW_DIAG_PRE_ATTACHED=$($vhd.Attached)"
+          Write-Host "RAW_DIAG_PRE_DISKNUMBER=$($vhd.DiskNumber)"
+          if([bool]$vhd.Attached){throw 'Primary VHDX is already attached before diagnostic; refusing to disturb possible stale owner'}
+
+          $rct='rctX:e0cf6beb:4aad:4f4d:a8c0:8e5ef750b639:00000006'
+          $virtualSize=[int64]$vhd.Size
+          $svc=Get-WmiObject -Namespace root/virtualization/v2 -Class Msvm_ImageManagementService -ErrorAction Stop
+          $ranges=New-Object System.Collections.Generic.List[object]
+          $offset=[int64]0
+          $chunk=[int64](512*1024*1024)
+          while($offset -lt $virtualSize){
+            $remaining=$virtualSize-$offset
+            $length=[Math]::Min($chunk,$remaining)
+            $result=$svc.GetVirtualDiskChanges($path,$rct,'',$offset,$length)
+            if($result.ReturnValue -ne 0){throw "GetVirtualDiskChanges failed code=$($result.ReturnValue) offset=$offset"}
+            for($i=0;$i -lt @($result.ChangedByteOffsets).Count;$i++){
+              $ranges.Add([pscustomobject]@{Offset=[int64]$result.ChangedByteOffsets[$i];Length=[int64]$result.ChangedByteLengths[$i]})
+            }
+            $processed=[int64]$result.ProcessedByteLength
+            if($processed -le 0){throw 'GetVirtualDiskChanges returned zero processed bytes'}
+            $offset += $processed
+          }
+          $total=[int64]0
+          foreach($range in $ranges){$total += [int64]$range.Length}
+          Write-Host "RAW_DIAG_RANGES=$($ranges.Count)"
+          Write-Host "RAW_DIAG_CHANGED_BYTES=$total"
+
+          $mount=$null
+          $source=$null
+          $handle=$null
+          try {
+            Write-Host "RAW_DIAG_STAGE=mount-start"
+            $sw=[Diagnostics.Stopwatch]::StartNew()
+            $mount=Mount-VHD -Path $path -ReadOnly -NoDriveLetter -Passthru -ErrorAction Stop
+            $sw.Stop()
+            Write-Host "RAW_DIAG_STAGE=mount-pass elapsed_ms=$($sw.ElapsedMilliseconds)"
+
+            Write-Host "RAW_DIAG_STAGE=get-disk-start"
+            $sw.Restart()
+            $diskObj=$mount | Get-Disk -ErrorAction Stop
+            $sw.Stop()
+            Write-Host "RAW_DIAG_STAGE=get-disk-pass disk=$($diskObj.Number) elapsed_ms=$($sw.ElapsedMilliseconds)"
+
+            if(-not ('LayerSentry.RawDiskNativeDiag' -as [type])){
+              Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+namespace LayerSentry {
+    public static class RawDiskNativeDiag {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern SafeFileHandle CreateFileW(
+            string lpFileName,
+            uint dwDesiredAccess,
+            uint dwShareMode,
+            IntPtr lpSecurityAttributes,
+            uint dwCreationDisposition,
+            uint dwFlagsAndAttributes,
+            IntPtr hTemplateFile);
+    }
+}
+"@
+            }
+            $slash=[string][char]92
+            $rawPath=$slash+$slash+'.'+$slash+'PhysicalDrive'+$diskObj.Number
+            Write-Host "RAW_DIAG_STAGE=createfile-start path=$rawPath"
+            $sw.Restart()
+            $handle=[LayerSentry.RawDiskNativeDiag]::CreateFileW($rawPath,[uint32]2147483648,[uint32]3,[IntPtr]::Zero,[uint32]3,[uint32]0,[IntPtr]::Zero)
+            $sw.Stop()
+            if($handle.IsInvalid){
+              $win32=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
+              throw "CreateFileW failed win32=$win32"
+            }
+            Write-Host "RAW_DIAG_STAGE=createfile-pass elapsed_ms=$($sw.ElapsedMilliseconds)"
+
+            Write-Host "RAW_DIAG_STAGE=filestream-start"
+            $sw.Restart()
+            $source=[IO.FileStream]::new($handle,[IO.FileAccess]::Read)
+            $sw.Stop()
+            Write-Host "RAW_DIAG_STAGE=filestream-pass canSeek=$($source.CanSeek) elapsed_ms=$($sw.ElapsedMilliseconds)"
+
+            $buffer=New-Object byte[] (1024*1024)
+            $readTotal=[int64]0
+            $swRead=[Diagnostics.Stopwatch]::StartNew()
+            $index=0
+            foreach($range in $ranges){
+              $index++
+              $source.Seek([int64]$range.Offset,[IO.SeekOrigin]::Begin) | Out-Null
+              $remaining=[int64]$range.Length
+              while($remaining -gt 0){
+                $want=[int][Math]::Min($buffer.Length,$remaining)
+                $read=$source.Read($buffer,0,$want)
+                if($read -le 0){throw "Unexpected EOF range=$index offset=$($range.Offset)"}
+                $readTotal += $read
+                $remaining -= $read
+              }
+              if(($index % 25) -eq 0 -or $index -eq $ranges.Count){
+                Write-Host "RAW_DIAG_READ_PROGRESS ranges_done=$index bytes=$readTotal elapsed_ms=$($swRead.ElapsedMilliseconds)"
+              }
+            }
+            $swRead.Stop()
+            Write-Host "RAW_DIAG_READ_PASS ranges=$($ranges.Count) bytes=$readTotal elapsed_ms=$($swRead.ElapsedMilliseconds)"
+            if($readTotal -ne $total){throw "Raw read byte mismatch expected=$total actual=$readTotal"}
+          }
+          finally {
+            if($null -ne $source){$source.Dispose(); $source=$null; $handle=$null}
+            elseif($null -ne $handle){$handle.Dispose(); $handle=$null}
+            if($null -ne $mount){
+              Write-Host 'RAW_DIAG_STAGE=dismount-start'
+              Dismount-VHD -Path $path -ErrorAction SilentlyContinue
+              Write-Host 'RAW_DIAG_STAGE=dismount-done'
+            }
+          }
+
+          $post=Get-VHD -Path $path -ErrorAction Stop
+          Write-Host "RAW_DIAG_POST_ATTACHED=$($post.Attached)"
+          if([bool]$post.Attached){throw 'Diagnostic left VHDX attached'}
+          Write-Host 'RAW_DELTA_READ_DIAGNOSTIC=PASS'
+
+      - name: Re-prove source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($vm.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw 'Diagnostic changed source state'}
+          if($n -ne 0){throw 'Unexpected source checkpoint'}
