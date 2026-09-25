@@ -27,9 +27,9 @@ import {
 } from '@mui/material'
 import { Plus } from 'iconoir-react'
 import { useMemo, useState } from 'react'
-import { useHistory } from 'react-router-dom'
 import { VnAPI } from '@FeaturesModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
+import SimpleNetworkCreateDialog from 'client/apps/layersentry/components/SimpleNetworkCreateDialog'
 import {
   CAPABILITY_IDS,
   getCapabilityModel,
@@ -119,8 +119,8 @@ const NetworkInventory = () => {
 }
 
 const NetworkWorkspace = ({ endpoints }) => {
-  const history = useHistory()
   const [tab, setTab] = useState(0)
+  const [createOpen, setCreateOpen] = useState(false)
   const capabilityModel = getCapabilityModel(endpoints)
   const canCreate = isCapabilityEnabled(
     CAPABILITY_IDS.NETWORK_CREATE,
@@ -173,7 +173,7 @@ const NetworkWorkspace = ({ endpoints }) => {
           <Button
             variant="contained"
             startIcon={<Plus width={17} height={17} />}
-            onClick={() => history.push('/network/create')}
+            onClick={() => setCreateOpen(true)}
             sx={{ textTransform: 'none' }}
           >
             Create network
@@ -181,6 +181,10 @@ const NetworkWorkspace = ({ endpoints }) => {
         ) : null
       }
     >
+      <SimpleNetworkCreateDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+      />
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
           title="Environment network pattern"
