@@ -1,0 +1,82 @@
+name: Manoj Appliance Helper User Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-appliance-helper-user-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST' -or $env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'Wrong runner'}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
+          Write-Host 'HELPER_USER_SOURCE_GATE=PASS'
+
+      - name: Probe bounded public-key usernames with pinned host key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $helperIp='10.250.10.42'
+          $keySrc='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $key=Join-Path $env:RUNNER_TEMP 'helper-user.key'
+          Copy-Item -Force $keySrc $key
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $key *> $null
+          if($LASTEXITCODE -ne 0){throw 'helper key invalid'}
+
+          $kh=Join-Path $env:RUNNER_TEMP 'helper-known-hosts'
+          $old=$ErrorActionPreference
+          $ErrorActionPreference='SilentlyContinue'
+          $scan1=& ssh-keyscan.exe -T 5 -t ed25519 $helperIp 2>$null
+          $rc1=$LASTEXITCODE
+          Start-Sleep -Seconds 2
+          $scan2=& ssh-keyscan.exe -T 5 -t ed25519 $helperIp 2>$null
+          $rc2=$LASTEXITCODE
+          $ErrorActionPreference=$old
+          if($rc1 -ne 0 -or $rc2 -ne 0 -or -not $scan1 -or -not $scan2){throw 'stable helper host-key scan failed'}
+          if([string]::Join([Environment]::NewLine,@($scan1)) -ne [string]::Join([Environment]::NewLine,@($scan2))){throw 'helper host key changed'}
+          $scan1 | Out-File -FilePath $kh -Encoding ascii
+          & ssh-keygen.exe -lf $kh -E sha256 | ForEach-Object {Write-Host "HELPER_HOST_KEY=$_"}
+          
+          $found=''
+          foreach($user in @('root','opc','oneadmin','ubuntu','rocky')){
+            $old=$ErrorActionPreference
+            $ErrorActionPreference='SilentlyContinue'
+            $out=& ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$kh" -o ConnectTimeout=5 -o ConnectionAttempts=1 -i $key "$user@$helperIp" "whoami" 2>$null
+            $rc=$LASTEXITCODE
+            $ErrorActionPreference=$old
+            Write-Host "HELPER_USER_PROBE user=$user rc=$rc"
+            if($rc -eq 0 -and -not [string]::IsNullOrWhiteSpace(($out -join ''))){
+              $found=$user
+              Write-Host "HELPER_AUTH_USER=$user"
+              $out | ForEach-Object {Write-Host "HELPER_WHOAMI=$_"}
+              break
+            }
+          }
+          if([string]::IsNullOrWhiteSpace($found)){throw 'No bounded helper username accepted the pinned public key'}
+          Write-Host 'HELPER_USER_PROBE=PASS'
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
