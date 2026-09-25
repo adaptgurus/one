@@ -14,18 +14,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  demolayersentry1:
-    name: probe-demolayersentry1
-    runs-on: demolayersentry1
-    timeout-minutes: 6
+  probe:
+    name: concurrent-probe-${{ matrix.slot }}
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        slot: [1, 2, 3]
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 8
     steps:
-      - name: Identify physical runner
+      - name: Hold runner and identify host
         shell: bash
         run: |
           set -euo pipefail
+          echo "slot=${{ matrix.slot }}"
           echo "runner_name=$RUNNER_NAME"
           echo "hostname=$(hostname -f 2>/dev/null || hostname)"
           echo "os=$RUNNER_OS arch=$RUNNER_ARCH"
+          # Keep this runner occupied long enough for other slots to bind elsewhere.
+          sleep 75
           id
           hostnamectl 2>/dev/null || true
           echo "=== addresses ==="
@@ -36,7 +44,7 @@ jobs:
           findmnt -R / || true
           echo "=== resources ==="
           free -h || true
-          lscpu || true
+          lscpu | sed -n '1,50p' || true
           echo "=== virtualization ==="
           systemd-detect-virt || true
           ls -l /dev/kvm 2>/dev/null || true
@@ -44,38 +52,3 @@ jobs:
           echo "=== privilege ==="
           printf 'sudo_noninteractive='
           if sudo -n true 2>/dev/null; then echo yes; else echo no; fi
-          echo "=== services ==="
-          systemctl --no-pager --type=service --state=running | head -n 120 || true
-
-  demolayersentry2:
-    name: probe-demolayersentry2
-    runs-on: demolayersentry2
-    timeout-minutes: 6
-    steps:
-      - name: Identify physical runner
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "runner_name=$RUNNER_NAME"
-          echo "hostname=$(hostname -f 2>/dev/null || hostname)"
-          echo "os=$RUNNER_OS arch=$RUNNER_ARCH"
-          id
-          hostnamectl 2>/dev/null || true
-          echo "=== addresses ==="
-          ip -br addr || true
-          ip route || true
-          echo "=== block ==="
-          lsblk -e7 -o NAME,KNAME,SIZE,TYPE,FSTYPE,FSVER,MOUNTPOINTS,MODEL,SERIAL,WWN || true
-          findmnt -R / || true
-          echo "=== resources ==="
-          free -h || true
-          lscpu || true
-          echo "=== virtualization ==="
-          systemd-detect-virt || true
-          ls -l /dev/kvm 2>/dev/null || true
-          lsmod | grep -E '(^kvm|vfio|bridge|8021q)' || true
-          echo "=== privilege ==="
-          printf 'sudo_noninteractive='
-          if sudo -n true 2>/dev/null; then echo yes; else echo no; fi
-          echo "=== services ==="
-          systemctl --no-pager --type=service --state=running | head -n 120 || true
