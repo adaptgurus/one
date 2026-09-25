@@ -26,7 +26,12 @@ import { FIELDS as VM_GROUP_FIELDS } from '@modules/resources/VmTemplate/Forms/C
 // Label
 import { CapacityMemoryLabel } from '@modules/resources/VmTemplate/Forms/Legend'
 
-import { T, VmTemplate, VmTemplateFeatures } from '@ConstantsModule'
+import {
+  INPUT_TYPES,
+  T,
+  VmTemplate,
+  VmTemplateFeatures,
+} from '@ConstantsModule'
 import {
   Field,
   Section,
@@ -34,6 +39,41 @@ import {
   filterFieldsByHypervisor,
   getObjectSchemaFromFields,
 } from '@UtilsModule'
+
+const ENVIRONMENT = {
+  name: 'environment',
+  label: 'Environment',
+  type: INPUT_TYPES.SELECT,
+  values: [
+    { text: 'Production', value: 'PROD' },
+    { text: 'UAT', value: 'UAT' },
+    { text: 'Development', value: 'DEV' },
+    { text: 'Stage', value: 'STAGE' },
+    { text: 'Custom', value: 'CUSTOM' },
+  ],
+  validation: string()
+    .oneOf(['PROD', 'UAT', 'DEV', 'STAGE', 'CUSTOM'])
+    .required()
+    .default('DEV'),
+  grid: { md: 6 },
+}
+
+const WORKLOAD_TIER = {
+  name: 'workloadTier',
+  label: 'Workload tier',
+  type: INPUT_TYPES.SELECT,
+  values: [
+    { text: 'Web', value: 'WEB' },
+    { text: 'Application', value: 'APP' },
+    { text: 'Database', value: 'DB' },
+    { text: 'Custom', value: 'CUSTOM' },
+  ],
+  validation: string()
+    .oneOf(['WEB', 'APP', 'DB', 'CUSTOM'])
+    .required()
+    .default('CUSTOM'),
+  grid: { md: 6 },
+}
 
 /**
  * @param {VmTemplate} [vmTemplate] - VM Template
@@ -52,22 +92,26 @@ const SECTIONS = (
 ) => {
   const hypervisor = vmTemplate?.TEMPLATE?.HYPERVISOR
   const informationFields = selfService
-    ? INFORMATION_FIELDS.filter(({ name }) =>
-        ['name', 'instances'].includes(name)
-      ).map((field) =>
-        field.name === 'name'
-          ? {
-              ...field,
-              dependOf: undefined,
-              validation: string()
-                .trim()
-                .min(1, 'Enter a VM name')
-                .max(128, 'VM name must be 128 characters or fewer')
-                .required('Enter a VM name')
-                .default(''),
-            }
-          : field
-      )
+    ? [
+        ...INFORMATION_FIELDS.filter(({ name }) =>
+          ['name', 'instances'].includes(name)
+        ).map((field) =>
+          field.name === 'name'
+            ? {
+                ...field,
+                dependOf: undefined,
+                validation: string()
+                  .trim()
+                  .min(1, 'Enter a VM name')
+                  .max(128, 'VM name must be 128 characters or fewer')
+                  .required('Enter a VM name')
+                  .default(''),
+              }
+            : field
+        ),
+        ENVIRONMENT,
+        WORKLOAD_TIER,
+      ]
     : INFORMATION_FIELDS
 
   return [

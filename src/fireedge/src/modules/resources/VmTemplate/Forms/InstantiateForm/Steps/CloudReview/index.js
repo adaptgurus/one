@@ -17,6 +17,7 @@ import { Alert, Box, Chip, Stack, Typography } from '@mui/material'
 import PropTypes from 'prop-types'
 import { useFormContext } from 'react-hook-form'
 import { object } from 'yup'
+import { useAuth, VnAPI } from '@FeaturesModule'
 
 export const STEP_ID = 'review'
 
@@ -50,6 +51,12 @@ const Content = ({ vmTemplate }) => {
   const resources = form.resources ?? {}
   const services = form.services ?? {}
   const gpu = services.LAYERSENTRY_GPU_REQUEST ?? {}
+  const { user, groups = [] } = useAuth()
+  const { data: networks = [] } = VnAPI.useGetVNetworksQuery()
+  const projectName = groups.find(({ ID }) => `${ID}` === `${user?.GID}`)?.NAME
+  const selectedNetwork = networks.find(
+    ({ ID }) => `${ID}` === `${resources.networkId}`
+  )
   const advanced = [
     resources.storageIopsEnabled && `Storage ${resources.storageIops} IOPS`,
     resources.networkQosEnabled && `Network ${resources.networkSpeedMbps} Mbps`,
@@ -69,6 +76,12 @@ const Content = ({ vmTemplate }) => {
 
       <Box>
         <ReviewRow label="VM name" value={general.name} />
+        <ReviewRow
+          label="Project"
+          value={projectName ?? `Group #${user?.GID ?? 'current'}`}
+        />
+        <ReviewRow label="Environment" value={general.environment} />
+        <ReviewRow label="Workload tier" value={general.workloadTier} />
         <ReviewRow label="Image / blueprint" value={vmTemplate?.NAME} />
         <ReviewRow label="Instances" value={String(general.instances ?? 1)} />
         <ReviewRow label="vCPU" value={String(general.VCPU ?? '—')} />
@@ -89,7 +102,14 @@ const Content = ({ vmTemplate }) => {
               : 'None'
           }
         />
-        <ReviewRow label="Network" value={resources.networkId} />
+        <ReviewRow
+          label="Network"
+          value={
+            selectedNetwork
+              ? `${selectedNetwork.NAME} (#${selectedNetwork.ID})`
+              : resources.networkId
+          }
+        />
         <ReviewRow
           label="IP assignment"
           value={

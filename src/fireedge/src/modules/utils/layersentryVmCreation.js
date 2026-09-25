@@ -205,6 +205,40 @@ export const applyLayerSentryVmDefaults = (
   },
 })
 
+const workloadEnvironments = new Set(['PROD', 'UAT', 'DEV', 'STAGE', 'CUSTOM'])
+const workloadTiers = new Set(['WEB', 'APP', 'DB', 'CUSTOM'])
+
+/**
+ * Bind business-facing workload classification to strict provider metadata.
+ * OpenNebula remains authoritative for project ownership through the
+ * authenticated user's group; a browser-provided project identifier is never
+ * accepted here.
+ *
+ * @param {object} template - Native OpenNebula VM template body
+ * @param {object} general - LayerSentry Basics step values
+ * @returns {object} Template with bounded LayerSentry classification
+ */
+export const applyLayerSentryWorkloadClassification = (
+  template = {},
+  general = {}
+) => {
+  const environment = normalized(general.environment).toUpperCase()
+  const tier = normalized(general.workloadTier).toUpperCase()
+
+  if (!workloadEnvironments.has(environment)) {
+    throw new Error('Select a valid workload environment')
+  }
+  if (!workloadTiers.has(tier)) {
+    throw new Error('Select a valid workload tier')
+  }
+
+  return {
+    ...template,
+    LAYERSENTRY_ENVIRONMENT: environment,
+    LAYERSENTRY_TIER: tier,
+  }
+}
+
 const positiveInteger = (value, minimum, maximum, name) => {
   const parsed = Number(value)
   if (!Number.isInteger(parsed) || parsed < minimum || parsed > maximum) {

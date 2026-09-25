@@ -36,6 +36,7 @@ import {
   filterTemplateData,
   applyLayerSentryCloudResources,
   applyLayerSentryVmDefaults,
+  applyLayerSentryWorkloadClassification,
   hasTemplateId,
   normalizeProtectionRequest,
   resolvePublishedGpuRequest,
@@ -119,6 +120,10 @@ export function InstantiateVmTemplate() {
               filteredTemplate,
               rawTemplate?.access,
               apiTemplateData
+            )
+            filteredTemplate = applyLayerSentryWorkloadClassification(
+              filteredTemplate,
+              rawTemplate?.general
             )
 
             const selectedNetwork = await getVNetwork({

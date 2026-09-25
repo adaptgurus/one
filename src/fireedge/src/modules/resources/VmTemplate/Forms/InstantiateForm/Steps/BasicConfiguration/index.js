@@ -14,7 +14,7 @@
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 import PropTypes from 'prop-types'
-import { useTheme } from '@mui/material'
+import { Alert, useTheme } from '@mui/material'
 import { useMemo } from 'react'
 
 import { FormWithSchema } from '@ComponentsModule'
@@ -24,7 +24,7 @@ import {
 } from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/BasicConfiguration/schema'
 import useStyles from '@modules/resources/VmTemplate/Forms/InstantiateForm/Steps/BasicConfiguration/styles'
 import { RESOURCE_NAMES, T, VmTemplate } from '@ConstantsModule'
-import { useViews } from '@FeaturesModule'
+import { useAuth, useViews } from '@FeaturesModule'
 import { getActionsAvailable as getSectionsAvailable } from '@UtilsModule'
 
 export const STEP_ID = 'general'
@@ -39,6 +39,7 @@ const Content = ({
   const theme = useTheme()
   const classes = useMemo(() => useStyles(theme), [theme])
   const { view, getResourceView } = useViews()
+  const { user, groups = [] } = useAuth()
 
   const resource = RESOURCE_NAMES.VM_TEMPLATE
   const resourceView = getResourceView(resource) ?? {}
@@ -46,6 +47,7 @@ const Content = ({
   const resolvedFeatures = features ?? resourceView.features ?? {}
   const resolvedView = requestedView ?? view
   const selfService = resolvedView === 'cloud'
+  const projectName = groups.find(({ ID }) => `${ID}` === `${user?.GID}`)?.NAME
 
   const sections = useMemo(() => {
     const hypervisor = vmTemplate?.TEMPLATE?.HYPERVISOR
@@ -72,6 +74,12 @@ const Content = ({
 
   return (
     <div className={classes.root}>
+      {selfService && (
+        <Alert severity="info" sx={{ mb: 2 }}>
+          Project: {projectName ?? `Group #${user?.GID ?? 'current'}`}. Access
+          and ownership are enforced by the authenticated OpenNebula project.
+        </Alert>
+      )}
       {sections.map(({ id, legend, fields }) => (
         <FormWithSchema
           key={id}

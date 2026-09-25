@@ -162,6 +162,34 @@ test('LayerSentry VM defaults force virtio networking without deleting template 
   assert.equal(result.NIC_DEFAULT.FILTER, 'clean-traffic')
 })
 
+test('workload classification is strict and cannot accept a browser project owner', () => {
+  const result = api.applyLayerSentryWorkloadClassification(
+    { MEMORY: '4096' },
+    {
+      environment: 'prod',
+      workloadTier: 'db',
+      project: 'forged-project',
+      projectId: '999',
+    }
+  )
+
+  assert.equal(result.LAYERSENTRY_ENVIRONMENT, 'PROD')
+  assert.equal(result.LAYERSENTRY_TIER, 'DB')
+  assert.equal(result.PROJECT, undefined)
+  assert.equal(result.PROJECT_ID, undefined)
+  assert.throws(
+    () =>
+      api.applyLayerSentryWorkloadClassification(
+        {},
+        {
+          environment: 'UNKNOWN',
+          workloadTier: 'WEB',
+        }
+      ),
+    /valid workload environment/
+  )
+})
+
 test('provider guest renderer overrides Rocky fallback and other Linux stays auto', () => {
   assert.equal(
     api.getLayerSentryGuestNetcfgType({
@@ -485,6 +513,7 @@ test('cloud instantiate flow is customer-only and strips helper data', () => {
   assert.match(basic, /'name', 'instances'/)
   assert.match(basic, /required\('Enter a VM name'\)/)
   assert.match(instantiate, /applyLayerSentryCloudResources/)
+  assert.match(instantiate, /applyLayerSentryWorkloadClassification/)
   assert.match(instantiate, /useLazyGetVNetworkQuery/)
   assert.match(instantiate, /delete requestTemplate\.resources/)
   assert.match(instantiate, /delete requestTemplate\.services/)
@@ -502,6 +531,9 @@ test('VM create review summarizes choices without rendering secrets', () => {
 
   for (const label of [
     'VM name',
+    'Project',
+    'Environment',
+    'Workload tier',
     'Image / blueprint',
     'vCPU',
     'Memory',
@@ -517,7 +549,6 @@ test('VM create review summarizes choices without rendering secrets', () => {
   assert.match(review, /Secrets and private key material are never/)
   assert.doesNotMatch(review, /access\.password|confirmPassword|sshPublicKey/)
 })
-
 
 test('form renderer treats dynamic hidden input types as hidden fields', () => {
   const source = readFileSync(
