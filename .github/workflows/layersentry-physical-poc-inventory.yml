@@ -11,18 +11,29 @@ permissions:
 
 concurrency:
   group: layersentry-physical-poc-stage4b-${{ github.event.pull_request.number }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   deploy:
-    name: onedeploy-baseline
-    runs-on: demolayersentry1
+    name: onedeploy-baseline-${{ matrix.slot }}
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        slot: [1, 2, 3]
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 55
     steps:
       - name: Deploy OpenNebula baseline with OneDeploy
         shell: bash
         run: |
           set -euo pipefail
+          echo "runner_name=$RUNNER_NAME slot=${{ matrix.slot }}"
+          if [ "$RUNNER_NAME" != "demolayersentry1" ]; then
+            echo "SKIP: deployment controller is demolayersentry1"
+            exit 0
+          fi
+
           umask 077
           exec sudo -n bash <<'ROOT'
           set -euo pipefail
@@ -70,20 +81,19 @@ jobs:
           make V= I="$INV" site
 
           echo "--- service health ---"
-          systemctl --no-pager --full status opennebula opennebula-fireedge opennebula-gate opennebula-flow || true
           systemctl is-active opennebula
           systemctl is-active opennebula-fireedge
           systemctl is-active opennebula-gate
           systemctl is-active opennebula-flow
 
-          echo "--- OpenNebula API/CLI health ---"
+          echo "--- OpenNebula CLI health ---"
           sudo -u oneadmin bash -lc 'onezone list'
           sudo -u oneadmin bash -lc 'onehost list'
           sudo -u oneadmin bash -lc 'onedatastore list'
           sudo -u oneadmin bash -lc 'onevnet list'
 
           echo "--- web/API listeners ---"
-          ss -lntp | grep -E ':(2616|2633|5030|2474|2475|2476|9869|29876)\b' || true
+          ss -lntp | grep -E ':(2616|2633)\b' || true
           for u in http://127.0.0.1:2616 http://127.0.0.1:2633; do
             code=$(curl -k -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 "$u" || true)
             echo "$u => $code"
@@ -97,10 +107,10 @@ jobs:
           ROOT
 
       - name: Upload deployment journal
-        if: always()
+        if: always() && runner.name == 'demolayersentry1'
         uses: actions/upload-artifact@v4
         with:
-          name: layersentry-physical-poc-stage4b-deploy
+          name: layersentry-physical-poc-stage4b-deploy-${{ matrix.slot }}
           path: /root/layersentry-poc/logs/stage4b-deploy-*.log
           if-no-files-found: warn
           retention-days: 14
