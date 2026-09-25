@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       max-parallel: 3
       matrix:
-        slot: [1, 2, 3]
+        slot: [1, 2]
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
     steps:
@@ -32,7 +32,9 @@ jobs:
           Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
           if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
             "LS_TARGET=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-            exit 0
+            Write-Host 'NON_TARGET_RUNNER_HOLD'
+            Start-Sleep -Seconds 120
+            throw "Target foundation runner did not claim this slot: $env:RUNNER_NAME"
           }
           "LS_TARGET=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
