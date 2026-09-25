@@ -1,0 +1,207 @@
+name: Manoj OneSwap Large PowerShell File Transport Fix
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-large-powershell-file-transport-fix.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-large-powershell-file-transport-fix
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and require replay-safe state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected user-visible checkpoint'}
+          if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
+
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-file-transport.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'FILE_TRANSPORT_SOURCE_GATE=PASS'
+
+      - name: Prove durable DELTA_CAPTURING state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          state=$(find /var/lib/layersentry-oneswap/reflink-work/oneswap-hyperv-hot -maxdepth 2 -type f -name state.json -path '*manoj-hv-ls-migration-source-test-20260924*' -print)
+          [ "$(printf '%s\n' "$state" | sed '/^$/d' | wc -l)" -eq 1 ]
+          python3 - "$state" <<'PY'
+          import json,os,sys
+          s=json.load(open(sys.argv[1]))
+          print("STATE_PHASE="+str(s.get("phase")))
+          if s.get("phase")!="DELTA_CAPTURING": raise SystemExit("not DELTA_CAPTURING")
+          if s.get("delta_applied_at") or s.get("template_id") or s.get("imported_at"): raise SystemExit("later phase evidence exists")
+          if s.get("image_imports"): raise SystemExit("image import evidence exists")
+          ds=s.get("disks",[])
+          if len(ds)!=2: raise SystemExit("disk count mismatch")
+          for i,d in enumerate(ds):
+              p=d.get("prepared_raw_path","")
+              if not os.path.isfile(p): raise SystemExit(f"prepared disk {i} missing")
+              if os.path.getsize(p)!=int(d.get("virtual_size",-1)): raise SystemExit(f"prepared disk {i} size mismatch")
+          print("FILE_TRANSPORT_STATE_GATE=PASS")
+          PY
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'state gate failed'}
+
+      - name: Download and deploy exact remote-file transport helper
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $head='4d4eaff422c2f038eb541d2db064ce9106d0ec71'
+          $src=Join-Path $env:RUNNER_TEMP 'hyperv_helper.remote-file.rb'
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $src "https://raw.githubusercontent.com/adaptgurus/one-swap/$head/hyperv_helper.rb"
+          if($LASTEXITCODE -ne 0){throw 'download failed'}
+          $text=Get-Content -LiteralPath $src -Raw
+          if($text -notmatch 'run_remote_script_capture'){throw 'remote-file transport marker missing'}
+          if($text -match "\['-Command', '-'\]"){throw 'broken native stdin transport still present'}
+          $sha=(Get-FileHash -Algorithm SHA256 $src).Hash.ToLower()
+          Write-Host "FILE_TRANSPORT_SOURCE head=$head sha256=$sha"
+
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $common=@('-o','LogLevel=ERROR','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-o','ConnectTimeout=8','-i',$env:ONESWAP_TEMP_KEY)
+          & scp.exe @common $src "ci@10.250.10.32:/tmp/hyperv_helper.remote-file.rb"
+          if($LASTEXITCODE -ne 0){throw 'scp helper failed'}
+          $script=@'
+          set -euo pipefail
+          src=/tmp/hyperv_helper.remote-file.rb
+          dst=/usr/lib/one/ruby/cli/one_helper/hyperv_helper.rb
+          expected="__SHA__"
+          [ "$(sha256sum "$src" | awk '{print $1}')" = "$expected" ]
+          ruby -c "$src"
+          grep -q 'run_remote_script_capture' "$src"
+          ! grep -Fq "['-Command', '-']" "$src"
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          sudo cp -a "$dst" "$dst.before-remote-file-$stamp"
+          sudo install -o root -g root -m 0644 "$src" "$dst"
+          sudo ruby -c "$dst"
+          [ "$(sudo sha256sum "$dst" | awk '{print $1}')" = "$expected" ]
+          rm -f "$src"
+          echo "FILE_TRANSPORT_RUNTIME_DEPLOY=PASS sha256=$expected"
+          '@
+          $script=$script.Replace('__SHA__',$sha)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe @common "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'runtime deploy failed'}
+
+      - name: Validate oversized PowerShell JSON transport
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          cat >/tmp/ls-file-transport-e2e.rb <<'RUBY'
+          require 'yaml'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
+          cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml') || {}
+          o={}; cfg.each{|k,v| o[k.to_s.sub(/^:/,'').to_sym]=v}; o[:hyperv_connection]='manoj-qual'
+          p=OneSwapHyperV::ConnectionProfile.from_options(o)
+          t=OneSwapHyperV::SSHTransport.new(p)
+          padding=("# layersentry-file-transport-padding-0123456789abcdef\n"*700)
+          ps="$ErrorActionPreference='Stop'\n"+padding+"[pscustomobject]@{Marker='LS_FILE_TRANSPORT_PASS';State=[string](Get-VM -Name 'ls-migration-source-test').State}|ConvertTo-Json -Compress\n"
+          bytes=OneSwapHyperV::Util.powershell_encoded(ps).bytesize
+          puts "FILE_TRANSPORT_ENCODED_BYTES=#{bytes}"
+          raise 'payload did not exceed threshold' unless bytes > OneSwapHyperV::SSHTransport::POWERSHELL_ENCODED_COMMAND_MAX_BYTES
+          result=t.powershell_json(ps,timeout:60)
+          raise 'marker mismatch' unless result['Marker']=='LS_FILE_TRANSPORT_PASS'
+          raise 'source state mismatch' unless result['State']=='Off'
+          puts "FILE_TRANSPORT_RESULT=#{result}"
+          puts 'ONESWAP_LARGE_FILE_TRANSPORT=PASS'
+          RUBY
+          timeout --signal=TERM --kill-after=5s 90s sudo ruby /tmp/ls-file-transport-e2e.rb
+          rc=$?
+          rm -f /tmp/ls-file-transport-e2e.rb
+          exit $rc
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw "large remote-file transport E2E failed rc=$LASTEXITCODE"}
+
+      - name: Validate exact disk0 RCT bundle and transfer
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          cat >/tmp/ls-rct-file-transport-probe.rb <<'RUBY'
+          require 'digest'
+          require 'json'
+          require 'yaml'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper'
+          cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml') || {}
+          o={}; cfg.each{|k,v| o[k.to_s.sub(/^:/,'').to_sym]=v}
+          o[:hyperv_connection]='manoj-qual'; o[:hyperv_delta_timeout]=120; o[:hyperv_transfer_timeout]=120
+          op='manoj-hv-ls-migration-source-test-20260924'
+          work=(cfg['work_dir']||cfg[:work_dir]||'/var/tmp').to_s
+          safe=op.gsub(/[^A-Za-z0-9_.-]/,'_'); suffix=Digest::SHA256.hexdigest(op)[0,16]
+          state=JSON.parse(File.read(File.join(work,'oneswap-hyperv-hot',"#{safe}-#{suffix}",'state.json')))
+          raise "unsafe phase #{state['phase']}" unless state['phase']=='DELTA_CAPTURING'
+          raise 'later evidence exists' if state['delta_applied_at'] || state['template_id'] || state['imported_at'] || Array(state['image_imports']).any?
+          p=OneSwapHyperV::ConnectionProfile.from_options(o); t=OneSwapHyperV::SSHTransport.new(p); s=OneSwapHyperV::HotSource.new(t,o)
+          start=Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          remote=s.send(:create_remote_delta_bundle!,state,state.fetch('disks').fetch(0),0)
+          gen=((Process.clock_gettime(Process::CLOCK_MONOTONIC)-start)*1000).round
+          puts "RCT_FILE_REMOTE=#{JSON.generate(remote)}"
+          puts "RCT_FILE_GENERATE_MS=#{gen}"
+          local='/tmp/ls-rct-file-delta.lshv'; File.delete(local) if File.exist?(local)
+          start=Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          t.stream_file(remote.fetch('Path'),local,timeout:120)
+          xfer=((Process.clock_gettime(Process::CLOCK_MONOTONIC)-start)*1000).round
+          actual=Digest::SHA256.file(local).hexdigest
+          raise 'size mismatch' unless File.size(local)==Integer(remote.fetch('FileSize'))
+          raise 'sha mismatch' unless actual==remote.fetch('SHA256').to_s.downcase
+          puts "RCT_FILE_TRANSFER_MS=#{xfer}"
+          puts "RCT_FILE_BYTES=#{File.size(local)}"
+          puts "RCT_FILE_SHA256=#{actual}"
+          puts 'ONESWAP_RCT_FILE_TRANSPORT=PASS'
+          File.delete(local) if File.exist?(local)
+          RUBY
+          timeout --signal=TERM --kill-after=5s 300s sudo ruby /tmp/ls-rct-file-transport-probe.rb
+          rc=$?
+          rm -f /tmp/ls-rct-file-transport-probe.rb /tmp/ls-rct-file-delta.lshv
+          exit $rc
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw "exact RCT file transport probe failed rc=$LASTEXITCODE"}
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($vm.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw 'Transport deployment changed source state'}
+          if($n -ne 0){throw 'Unexpected checkpoint'}
+          Write-Host 'FILE_TRANSPORT_SOURCE_INVARIANT=PASS'
