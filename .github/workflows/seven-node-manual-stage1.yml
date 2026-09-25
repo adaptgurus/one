@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: seven-node-manual-foundation-stage1
+  cancel-in-progress: true
+
 jobs:
   run:
     strategy:
