@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 2C Bridge Host1
+name: LayerSentry Physical POC Stage 2D Bridge Host2
 
 on:
   pull_request:
@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   bridge:
-    name: bridge-host1-${{ matrix.slot }}
+    name: bridge-host2-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -24,22 +24,22 @@ jobs:
     runs-on: [self-hosted, Linux]
     timeout-minutes: 8
     steps:
-      - name: Transactionally create and commit br0 on host1
+      - name: Transactionally create and commit br0 on host2
         shell: bash
         run: |
           set -euo pipefail
           echo "runner_name=$RUNNER_NAME"
-          if [ "$RUNNER_NAME" != "demolayersentry1" ]; then
+          if [ "$RUNNER_NAME" != "demolayersentry2" ]; then
             echo "GUARD_SKIP_NON_TARGET_RUNNER"
             exit 0
           fi
 
           LOG=/var/log/layersentry-poc/activity.log
           exec > >(tee -a "$LOG") 2>&1
-          echo "=== STAGE2C_BRIDGE_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE2D_BRIDGE_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
 
-          EXPECTED_IP=192.168.1.121
-          PEER_IP=192.168.1.122
+          EXPECTED_IP=192.168.1.122
+          PEER_IP=192.168.1.121
           GATEWAY=192.168.1.1
           test "$(id -u)" -eq 0
           ip -4 -o addr show dev eno1 | grep -F "$EXPECTED_IP/24"
@@ -120,4 +120,4 @@ jobs:
           ping -c 2 -W 2 "$GATEWAY"
           ping -c 2 -W 2 "$PEER_IP"
           curl -fsS --connect-timeout 5 --max-time 15 https://api.github.com/ >/dev/null
-          echo "=== STAGE2C_BRIDGE_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE2D_BRIDGE_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
