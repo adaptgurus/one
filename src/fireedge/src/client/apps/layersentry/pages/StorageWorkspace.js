@@ -113,6 +113,7 @@ const StorageWorkspace = ({ endpoints }) => {
   const [imageId, setImageId] = useState('')
   const [datastoreId, setDatastoreId] = useState('')
   const [resizeValues, setResizeValues] = useState({})
+  const [unattachedImage, setUnattachedImage] = useState(null)
 
   const vm = useMemo(
     () => vms.find(({ ID }) => String(ID) === String(vmId)),
@@ -128,6 +129,7 @@ const StorageWorkspace = ({ endpoints }) => {
 
   const runAttach = async () => {
     if (!vm?.ID) return enqueueError('Select a virtual machine first.')
+    let createdImage = null
     try {
       let selectedImage = imageId
       if (mode === 'new') {
@@ -149,6 +151,11 @@ const StorageWorkspace = ({ endpoints }) => {
             PERSISTENT: 'YES',
           }),
         }).unwrap()
+        createdImage = {
+          id: selectedImage,
+          name,
+          vmId: vm.ID,
+        }
       }
       if (!selectedImage) {
         enqueueError('Select an existing disk image.')
@@ -159,11 +166,15 @@ const StorageWorkspace = ({ endpoints }) => {
         id: vm.ID,
         template: jsonToXml({ DISK: { IMAGE_ID: selectedImage } }),
       }).unwrap()
-      enqueueSuccess('Disk attach requested successfully.')
+      setUnattachedImage(null)
+      enqueueSuccess(
+        'Disk attach request accepted. Refresh to confirm the authoritative VM state.'
+      )
       setImageId('')
       vmQuery.refetch()
       imageQuery.refetch()
     } catch (error) {
+      if (createdImage) setUnattachedImage(createdImage)
       enqueueError(
         error?.data?.message ?? error?.message ?? 'Could not attach disk.'
       )
@@ -181,7 +192,9 @@ const StorageWorkspace = ({ endpoints }) => {
     }
     try {
       await detachDisk({ id: vm.ID, disk: disk.DISK_ID }).unwrap()
-      enqueueSuccess('Disk detach requested. The disk image is preserved.')
+      enqueueSuccess(
+        'Disk detach request accepted. The disk image is preserved; refresh to confirm VM state.'
+      )
       vmQuery.refetch()
     } catch (error) {
       enqueueError(
@@ -201,7 +214,9 @@ const StorageWorkspace = ({ endpoints }) => {
         disk: disk.DISK_ID,
         size: String(nextGb * 1024),
       }).unwrap()
-      enqueueSuccess(`Disk resize requested to ${nextGb} GB.`)
+      enqueueSuccess(
+        `Disk resize request accepted for ${nextGb} GB. Refresh to confirm provider state.`
+      )
       vmQuery.refetch()
     } catch (error) {
       enqueueError(
@@ -217,7 +232,9 @@ const StorageWorkspace = ({ endpoints }) => {
     if (typed !== image.NAME) return
     try {
       await removeImage({ id: image.ID }).unwrap()
-      enqueueSuccess('Disk image deleted permanently.')
+      enqueueSuccess(
+        'Disk image deletion request accepted. Refresh to confirm provider state.'
+      )
       imageQuery.refetch()
     } catch (error) {
       enqueueError(
@@ -432,6 +449,19 @@ const StorageWorkspace = ({ endpoints }) => {
                   New disks are created as persistent disk images. Detaching
                   them does not delete their data.
                 </Alert>
+                {unattachedImage &&
+                  String(unattachedImage.vmId) === String(vm.ID) && (
+                    <Alert
+                      severity="warning"
+                      onClose={() => setUnattachedImage(null)}
+                    >
+                      Disk image {unattachedImage.name} (ID{' '}
+                      {unattachedImage.id}) was created, but its VM attachment
+                      was not confirmed. The image was preserved for safety.
+                      Select “Attach existing disk” to retry, or review it in
+                      Disk images before deleting it.
+                    </Alert>
+                  )}
                 <Box>
                   <Button
                     variant="contained"
