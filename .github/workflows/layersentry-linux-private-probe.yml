@@ -31,3 +31,5 @@ jobs:
           $cmd="printf 'HOST='; hostname; if sudo -n true >/dev/null 2>&1; then echo SUDO=PASS; else echo SUDO=FAIL; fi; command -v git >/dev/null && git --version || echo GIT=ABSENT; command -v python3 >/dev/null && python3 --version || echo PYTHON3=ABSENT; command -v go >/dev/null && go version || echo GO=ABSENT; command -v node >/dev/null && node --version || echo NODE=ABSENT; exit 0"
           & ssh.exe -T -i $key -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" layersentry-deploy@172.17.60.30 $cmd
           if($LASTEXITCODE -ne 0){ throw "layersentry1 probe failed rc=$LASTEXITCODE" }
+          & ssh.exe -T -i $key -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" root@172.17.60.30 "id -u"
+          if($LASTEXITCODE -eq 0){ Write-Host 'ROOT_KEY_AUTH=PASS' } else { Write-Host 'ROOT_KEY_AUTH=FAIL'; $global:LASTEXITCODE=0 }
