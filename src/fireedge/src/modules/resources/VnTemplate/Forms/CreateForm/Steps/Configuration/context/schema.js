@@ -22,6 +22,7 @@ import {
   disableFields,
   SEMICOLON_CHAR,
 } from '@UtilsModule'
+import { parseIpv4Cidr } from '@modules/resources/VirtualNetwork/Forms/CreateForm/cidr'
 import {
   T,
   INPUT_TYPES,
@@ -29,6 +30,23 @@ import {
   VNET_METHODS6,
   RESTRICTED_ATTRIBUTES_TYPE,
 } from '@ConstantsModule'
+
+/** @type {Field} IPv4 CIDR helper field */
+const NETWORK_CIDR_FIELD = {
+  name: 'NETWORK_CIDR',
+  label: 'IPv4 CIDR',
+  tooltip:
+    'IPv4 network in CIDR notation. LayerSentry converts this to the native OpenNebula network address and mask.',
+  type: INPUT_TYPES.TEXT,
+  validation: string()
+    .trim()
+    .notRequired()
+    .test(
+      'ipv4-cidr',
+      'Enter a valid IPv4 CIDR, for example 10.20.30.0/24.',
+      (value) => !value || Boolean(parseIpv4Cidr(value))
+    ),
+}
 
 /** @type {Field} Network address field */
 const NETWORK_ADDRESS_FIELD = {
@@ -135,11 +153,13 @@ const ROUTES_FIELD = {
 /**
  * @param {object} oneConfig - Open Nebula configuration
  * @param {boolean} adminGroup - If the user belongs to oneadmin group
+ * @param {boolean} isVnet - If true, expose Virtual Network helpers
  * @returns {Array} Fields
  */
-export const FIELDS = (oneConfig, adminGroup) =>
+export const FIELDS = (oneConfig, adminGroup, isVnet = false) =>
   disableFields(
     [
+      isVnet && NETWORK_CIDR_FIELD,
       NETWORK_ADDRESS_FIELD,
       NETWORK_MASK_FIELD,
       GATEWAY_FIELD,
@@ -149,7 +169,7 @@ export const FIELDS = (oneConfig, adminGroup) =>
       METHOD_FIELD,
       IP6_METHOD_FIELD,
       ROUTES_FIELD,
-    ],
+    ].filter(Boolean),
     '',
     oneConfig,
     adminGroup,
@@ -159,7 +179,8 @@ export const FIELDS = (oneConfig, adminGroup) =>
 /**
  * @param {object} oneConfig - Open Nebula configuration
  * @param {boolean} adminGroup - If the user belongs to oneadmin group
+ * @param {boolean} isVnet - If true, include Virtual Network helpers
  * @returns {object} Schema
  */
-export const SCHEMA = (oneConfig, adminGroup) =>
-  getObjectSchemaFromFields(FIELDS(oneConfig, adminGroup))
+export const SCHEMA = (oneConfig, adminGroup, isVnet = false) =>
+  getObjectSchemaFromFields(FIELDS(oneConfig, adminGroup, isVnet))
