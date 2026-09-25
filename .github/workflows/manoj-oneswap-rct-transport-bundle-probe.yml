@@ -1,0 +1,123 @@
+name: Manoj OneSwap RCT Transport Bundle Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-rct-transport-bundle-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-rct-transport-bundle-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind Manoj and require replay-safe state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected user-visible checkpoint'}
+          if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
+          Write-Host 'RCT_TRANSPORT_SOURCE_GATE=PASS'
+
+      - name: Prepare appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-rct-transport-probe.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Generate and transfer disk0 RCT bundle through repaired OneSwap transport
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          cat >/tmp/ls-rct-transport-bundle-probe.rb <<'RUBY'
+          require 'digest'
+          require 'json'
+          require 'yaml'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper'
+
+          cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml') || {}
+          normalized={}
+          cfg.each{|k,v| normalized[k.to_s.sub(/^:/,'').to_sym]=v}
+          normalized[:hyperv_connection]='manoj-qual'
+          normalized[:hyperv_delta_timeout]=120
+          normalized[:hyperv_transfer_timeout]=120
+
+          op='manoj-hv-ls-migration-source-test-20260924'
+          work=(cfg['work_dir'] || cfg[:work_dir] || '/var/tmp').to_s
+          safe=op.gsub(/[^A-Za-z0-9_.-]/,'_')
+          suffix=Digest::SHA256.hexdigest(op)[0,16]
+          state_path=File.join(work,'oneswap-hyperv-hot',"#{safe}-#{suffix}",'state.json')
+          state=JSON.parse(File.read(state_path))
+          raise "unsafe phase #{state['phase']}" unless state['phase']=='DELTA_CAPTURING'
+          raise 'later phase evidence exists' if state['delta_applied_at'] || state['template_id'] || state['imported_at'] || Array(state['image_imports']).any?
+
+          profile=OneSwapHyperV::ConnectionProfile.from_options(normalized)
+          transport=OneSwapHyperV::SSHTransport.new(profile)
+          source=OneSwapHyperV::HotSource.new(transport, normalized)
+          disk=state.fetch('disks').fetch(0)
+
+          start=Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          remote=source.send(:create_remote_delta_bundle!, state, disk, 0)
+          elapsed=((Process.clock_gettime(Process::CLOCK_MONOTONIC)-start)*1000).round
+          puts "RCT_REMOTE_BUNDLE=#{JSON.generate(remote)}"
+          puts "RCT_REMOTE_GENERATE_MS=#{elapsed}"
+          raise 'empty delta bundle' unless Integer(remote.fetch('FileSize')) > 0
+
+          local='/tmp/ls-rct-transport-delta-00.lshv'
+          File.delete(local) if File.exist?(local)
+          start=Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          transport.stream_file(remote.fetch('Path'), local, timeout: 120)
+          transfer_ms=((Process.clock_gettime(Process::CLOCK_MONOTONIC)-start)*1000).round
+          raise 'size mismatch' unless File.size(local)==Integer(remote.fetch('FileSize'))
+          actual=Digest::SHA256.file(local).hexdigest
+          raise 'sha mismatch' unless actual==remote.fetch('SHA256').to_s.downcase
+          puts "RCT_TRANSPORT_TRANSFER_MS=#{transfer_ms}"
+          puts "RCT_TRANSPORT_BUNDLE_BYTES=#{File.size(local)}"
+          puts "RCT_TRANSPORT_BUNDLE_SHA256=#{actual}"
+          puts 'ONESWAP_RCT_TRANSPORT_BUNDLE_PROBE=PASS'
+          File.delete(local) if File.exist?(local)
+          RUBY
+          timeout --signal=TERM --kill-after=5s 300s sudo ruby /tmp/ls-rct-transport-bundle-probe.rb
+          rc=$?
+          rm -f /tmp/ls-rct-transport-bundle-probe.rb /tmp/ls-rct-transport-delta-00.lshv
+          exit $rc
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw "OneSwap RCT transport bundle probe failed rc=$LASTEXITCODE"}
+
+      - name: Re-prove source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($vm.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw 'Probe changed source state'}
+          if($n -ne 0){throw 'Unexpected checkpoint'}
+          Write-Host 'RCT_TRANSPORT_SOURCE_INVARIANT=PASS'
