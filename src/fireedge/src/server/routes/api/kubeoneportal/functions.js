@@ -191,6 +191,123 @@ const kubeconfig = (
 }
 
 /**
+ * Provision a registered server-owned KubeOne cluster plan.
+ */
+const provision = (
+  res = {},
+  next = defaultEmptyFunction,
+  { id } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!validClusterID(id)) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Invalid cluster identity.',
+    })
+    next()
+
+    return
+  }
+  call(
+    res,
+    next,
+    {
+      method: 'POST',
+      path: `/v1/kubernetes/clusters/${encodeURIComponent(id)}/provision`,
+      data: {},
+    },
+    userData,
+    oneConnection
+  )
+}
+
+const provisionStatus = (
+  res = {},
+  next = defaultEmptyFunction,
+  { id } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!validClusterID(id)) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Invalid cluster identity.',
+    })
+    next()
+
+    return
+  }
+  call(
+    res,
+    next,
+    {
+      method: 'GET',
+      path: `/v1/kubernetes/clusters/${encodeURIComponent(id)}/provision`,
+    },
+    userData,
+    oneConnection
+  )
+}
+
+const controlPlaneReconciliation = (
+  res = {},
+  next = defaultEmptyFunction,
+  { id } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!validClusterID(id)) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Invalid cluster identity.',
+    })
+    next()
+
+    return
+  }
+  call(
+    res,
+    next,
+    {
+      method: 'POST',
+      path: `/v1/kubernetes/clusters/${encodeURIComponent(
+        id
+      )}/control-plane-reconciliation`,
+      data: {},
+    },
+    userData,
+    oneConnection
+  )
+}
+
+const controlPlaneReconciliationStatus = (
+  res = {},
+  next = defaultEmptyFunction,
+  { id } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!validClusterID(id)) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Invalid cluster identity.',
+    })
+    next()
+
+    return
+  }
+  call(
+    res,
+    next,
+    {
+      method: 'GET',
+      path: `/v1/kubernetes/clusters/${encodeURIComponent(
+        id
+      )}/control-plane-reconciliation`,
+    },
+    userData,
+    oneConnection
+  )
+}
+
+/**
  * @param res
  * @param next
  * @param root0
@@ -344,6 +461,10 @@ module.exports = {
   namespaces,
   createNamespace,
   kubeconfig,
+  provision,
+  provisionStatus,
+  controlPlaneReconciliation,
+  controlPlaneReconciliationStatus,
   workerReconciliation,
   reconcileWorkers,
   applications,
