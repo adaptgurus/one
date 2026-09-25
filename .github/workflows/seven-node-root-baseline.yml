@@ -58,21 +58,22 @@ jobs:
           '@
           Add-Type -TypeDefinition $src -Language CSharp -OutputAssembly $askpass -OutputType ConsoleApplication
           "LS_ASKPASS=$askpass" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-          $protected=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($password))
-          $secure=[System.Security.Cryptography.ProtectedData]::Protect([Convert]::FromBase64String($protected),$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
-          [IO.File]::WriteAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'),$secure)
           Remove-Item Env:LS_ROOT_PASSWORD
-          Write-Host 'CREDENTIAL_DECRYPTED_IN_MEMORY=PASS'
+          Write-Host 'CREDENTIAL_UNWRAP_AND_ASKPASS=PASS'
 
       - name: Recover prior incomplete sudoers fragment
         if: env.LS_TARGET_RUNNER == 'true'
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          Add-Type -AssemblyName System.Security
-          $secure=[IO.File]::ReadAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'))
-          $raw=[System.Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
-          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($raw)
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $wrap=Join-Path $dir 'wrap-rsa.xml'
+          if(-not (Test-Path $wrap)){ throw 'Target-runner wrapping key missing' }
+          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
+          $rsa.FromXmlString((Get-Content $wrap -Raw))
+          $cipher='uOFG3EVKXJ2kWA5kyf2ahgyNAauS/9B3OlBCQqiz3tUXDzflxMH4AU34S1keokx1QZRJfnOmi3jVJ+ZGhWmFJV1nw8W8agEj167GQtyolsN3Zs+3are2CNJcvR4yvfqW4cDjqp7+toZpABZ2k/zim3pUnsLe2Sg/S7xWGHPF8otCRZGG/PFKKEfewBtFM2wkv/dGRpLLws59MXhawVkSAzpQ3rQmY5JosK4zYhBIdYcHbjNtpWvIwOVCSEWLEPt/hMpGOGfWW6kHUiX+ZMUyCwvv4O4s2ttkUzDgQtz3PKISVPiNAuHV51ePrfP5nlTHijRL7X0ecB9R+MYoB2w41OlJiLhnl/hIk/gLG9R07LiKhkOPaIRf1stDl/pMYeF/I1obty4i/r5A7Su7F4yOARuzFRStXIRIV4ZSbD9Qvw34tBHD7YP1BWiGEUZ71516VgyLJK/sDpcmLglxCf8MQ4Ij4BI6iLbQcR7XXvrVskbc+Ye7gaJT78u21yuJOHyQ'
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($rsa.Decrypt([Convert]::FromBase64String($cipher),$true))
+          if([string]::IsNullOrWhiteSpace($env:LS_ROOT_PASSWORD)){ throw 'Credential decrypt failed' }
           $env:SSH_ASKPASS=$env:LS_ASKPASS
           $env:SSH_ASKPASS_REQUIRE='force'
           $env:DISPLAY='LayerSentry'
@@ -87,10 +88,14 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          Add-Type -AssemblyName System.Security
-          $secure=[IO.File]::ReadAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'))
-          $raw=[System.Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
-          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($raw)
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $wrap=Join-Path $dir 'wrap-rsa.xml'
+          if(-not (Test-Path $wrap)){ throw 'Target-runner wrapping key missing' }
+          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
+          $rsa.FromXmlString((Get-Content $wrap -Raw))
+          $cipher='uOFG3EVKXJ2kWA5kyf2ahgyNAauS/9B3OlBCQqiz3tUXDzflxMH4AU34S1keokx1QZRJfnOmi3jVJ+ZGhWmFJV1nw8W8agEj167GQtyolsN3Zs+3are2CNJcvR4yvfqW4cDjqp7+toZpABZ2k/zim3pUnsLe2Sg/S7xWGHPF8otCRZGG/PFKKEfewBtFM2wkv/dGRpLLws59MXhawVkSAzpQ3rQmY5JosK4zYhBIdYcHbjNtpWvIwOVCSEWLEPt/hMpGOGfWW6kHUiX+ZMUyCwvv4O4s2ttkUzDgQtz3PKISVPiNAuHV51ePrfP5nlTHijRL7X0ecB9R+MYoB2w41OlJiLhnl/hIk/gLG9R07LiKhkOPaIRf1stDl/pMYeF/I1obty4i/r5A7Su7F4yOARuzFRStXIRIV4ZSbD9Qvw34tBHD7YP1BWiGEUZ71516VgyLJK/sDpcmLglxCf8MQ4Ij4BI6iLbQcR7XXvrVskbc+Ye7gaJT78u21yuJOHyQ'
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($rsa.Decrypt([Convert]::FromBase64String($cipher),$true))
+          if([string]::IsNullOrWhiteSpace($env:LS_ROOT_PASSWORD)){ throw 'Credential decrypt failed' }
           $env:SSH_ASKPASS=$env:LS_ASKPASS
           $env:SSH_ASKPASS_REQUIRE='force'
           $env:DISPLAY='LayerSentry'
@@ -138,10 +143,14 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          Add-Type -AssemblyName System.Security
-          $secure=[IO.File]::ReadAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'))
-          $raw=[System.Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[System.Security.Cryptography.DataProtectionScope]::LocalMachine)
-          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($raw)
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $wrap=Join-Path $dir 'wrap-rsa.xml'
+          if(-not (Test-Path $wrap)){ throw 'Target-runner wrapping key missing' }
+          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
+          $rsa.FromXmlString((Get-Content $wrap -Raw))
+          $cipher='uOFG3EVKXJ2kWA5kyf2ahgyNAauS/9B3OlBCQqiz3tUXDzflxMH4AU34S1keokx1QZRJfnOmi3jVJ+ZGhWmFJV1nw8W8agEj167GQtyolsN3Zs+3are2CNJcvR4yvfqW4cDjqp7+toZpABZ2k/zim3pUnsLe2Sg/S7xWGHPF8otCRZGG/PFKKEfewBtFM2wkv/dGRpLLws59MXhawVkSAzpQ3rQmY5JosK4zYhBIdYcHbjNtpWvIwOVCSEWLEPt/hMpGOGfWW6kHUiX+ZMUyCwvv4O4s2ttkUzDgQtz3PKISVPiNAuHV51ePrfP5nlTHijRL7X0ecB9R+MYoB2w41OlJiLhnl/hIk/gLG9R07LiKhkOPaIRf1stDl/pMYeF/I1obty4i/r5A7Su7F4yOARuzFRStXIRIV4ZSbD9Qvw34tBHD7YP1BWiGEUZ71516VgyLJK/sDpcmLglxCf8MQ4Ij4BI6iLbQcR7XXvrVskbc+Ye7gaJT78u21yuJOHyQ'
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($rsa.Decrypt([Convert]::FromBase64String($cipher),$true))
+          if([string]::IsNullOrWhiteSpace($env:LS_ROOT_PASSWORD)){ throw 'Credential decrypt failed' }
           $env:SSH_ASKPASS=$env:LS_ASKPASS
           $env:SSH_ASKPASS_REQUIRE='force'
           $env:DISPLAY='LayerSentry'
@@ -166,6 +175,5 @@ jobs:
           & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" root@172.17.60.30 $remote
           if($LASTEXITCODE -ne 0){ throw 'NFS discovery failed' }
           Remove-Item Env:LS_ROOT_PASSWORD
-          Remove-Item (Join-Path $env:RUNNER_TEMP 'ls-root.dpapi') -Force -ErrorAction SilentlyContinue
           Remove-Item $env:LS_ASKPASS -Force -ErrorAction SilentlyContinue
           Write-Host 'PLAINTEXT_CREDENTIAL_PERSISTED=false'
