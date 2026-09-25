@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 4H Durable Physical Resume
+name: LayerSentry Physical POC Stage 4I Full Product Resume
 
 on:
   pull_request:
@@ -31,15 +31,36 @@ jobs:
           set -euo pipefail
           echo "runner_name=$RUNNER_NAME slot=${{ matrix.slot }}"
 
-          if [ "$RUNNER_NAME" != "demolayersentry1" ]; then
+          if [ "$RUNNER_NAME" = "TESTSER-TWOSITE-ONE" ]; then
             echo "executed=false" >> "$GITHUB_OUTPUT"
-            echo "HOLD: reserving non-controller runner slot to route one job to demolayersentry1"
+            echo "HOLD: reserve testser while waiting for demolayersentry1"
             sleep 21000
             exit 0
           fi
-          if sudo -n test -f /root/layersentry-poc/STAGE4H_COMPLETE; then
+          if [ "$RUNNER_NAME" = "demolayersentry2" ]; then
             echo "executed=false" >> "$GITHUB_OUTPUT"
-            echo "SKIP: Stage 4H already completed on demolayersentry1"
+            echo "PEER_RECOVERY: persist host2 runner service"
+            sudo -n bash -c '
+              set -e
+              mapfile -t units < <(systemctl list-unit-files "actions.runner.*.service" --no-legend 2>/dev/null | awk "{print \$1}")
+              for svc in "${units[@]}"; do
+                [ -n "$svc" ] || continue
+                install -d -m 0755 "/etc/systemd/system/$svc.d"
+                printf "[Service]\nRestart=always\nRestartSec=10\n" > "/etc/systemd/system/$svc.d/10-layersentry-restart.conf"
+                systemctl enable "$svc"
+              done
+              systemctl daemon-reload
+            '
+            exit 0
+          fi
+          if [ "$RUNNER_NAME" != "demolayersentry1" ]; then
+            echo "executed=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP: unsupported self-hosted runner $RUNNER_NAME"
+            exit 0
+          fi
+          if sudo -n test -f /root/layersentry-poc/STAGE4I_COMPLETE; then
+            echo "executed=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP: Stage 4I already completed on demolayersentry1"
             exit 0
           fi
           echo "executed=true" >> "$GITHUB_OUTPUT"
@@ -56,13 +77,16 @@ jobs:
           REPO="$DEPLOY_ROOT/one-deploy"
           INV="$DEPLOY_ROOT/poc-inventory.yml"
           LOGDIR="$DEPLOY_ROOT/logs"
+          UI_SHA="364016c5d25f1e6c1d9f60700705779f4e3c3328"
+          UI_ROOT="/opt/layersentry/fireedge"
+          UI_RELEASE="$UI_ROOT/releases/$UI_SHA"
           mkdir -p "$LOGDIR"
-          LOG="$LOGDIR/stage4e-storage-deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
+          LOG="$LOGDIR/stage4i-full-product-$(date -u +%Y%m%dT%H%M%SZ).log"
           touch "$LOG"
           chmod 0600 "$LOG"
           exec > >(tee -a "$LOG") 2>&1
 
-          echo "=== STAGE4E_STORAGE_DEPLOY_BEGIN $(date -u +%FT%TZ) ==="
+          echo "=== STAGE4I_FULL_PRODUCT_BEGIN $(date -u +%FT%TZ) ==="
           test -d "$REPO/.git"
           test -s "$INV"
           test -x /opt/layersentry-one-deploy-venv/bin/ansible-playbook
@@ -226,32 +250,154 @@ jobs:
           sudo -u oneadmin bash -lc 'onedatastore list'
           sudo -u oneadmin bash -lc 'onevnet list'
 
-          echo "--- local URL health ---"
-          for u in http://127.0.0.1:2616 http://192.168.1.121:2616; do
-            code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 "$u" || true)
+          echo "--- initial database and management backup ---"
+          BACKUP_DIR=/home/layersentry/backups
+          install -d -o root -g root -m 0700 "$BACKUP_DIR"
+          TS=$(date -u +%Y%m%dT%H%M%SZ)
+          DUMP_BIN=$(command -v mariadb-dump || command -v mysqldump || true)
+          test -n "$DUMP_BIN"
+          "$DUMP_BIN" --protocol=socket opennebula | gzip -1 > "$BACKUP_DIR/opennebula-$TS.sql.gz"
+          gzip -t "$BACKUP_DIR/opennebula-$TS.sql.gz"
+          tar -C / -czf "$BACKUP_DIR/opennebula-management-$TS.tgz" etc/one var/lib/one/.one
+          chmod 0600 "$BACKUP_DIR/opennebula-$TS.sql.gz" "$BACKUP_DIR/opennebula-management-$TS.tgz"
+          ls -lh "$BACKUP_DIR/opennebula-$TS.sql.gz" "$BACKUP_DIR/opennebula-management-$TS.tgz"
+
+          echo "--- LayerSentry exact-head FireEdge build ---"
+          if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'Number(process.versions.node.split(".")[0])' 2>/dev/null || echo 0)" -lt 22 ]; then
+            dnf -y module reset nodejs || true
+            dnf -y module enable nodejs:22
+            dnf -y install nodejs npm
+          fi
+          node --version
+          npm --version
+          test "$(node -p 'Number(process.versions.node.split(".")[0])')" -ge 22
+
+          install -d -o root -g root -m 0755 "$UI_ROOT/releases"
+          if [ ! -d "$UI_RELEASE/.git" ] || [ "$(git -C "$UI_RELEASE" rev-parse HEAD 2>/dev/null || true)" != "$UI_SHA" ]; then
+            rm -rf "$UI_RELEASE"
+            install -d -o root -g root -m 0755 "$UI_RELEASE"
+            git -C "$UI_RELEASE" init
+            git -C "$UI_RELEASE" remote add origin https://github.com/adaptgurus/one.git
+            git -C "$UI_RELEASE" fetch --depth=1 origin "$UI_SHA"
+            git -C "$UI_RELEASE" checkout --detach FETCH_HEAD
+          fi
+          test "$(git -C "$UI_RELEASE" rev-parse HEAD)" = "$UI_SHA"
+
+          cd "$UI_RELEASE/src/fireedge"
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test tests/layersentry/*.test.cjs
+          npm run lint
+          npm run build
+          test -s dist/index.js
+          test -n "$(find dist/client -type f -name 'bundle.layersentry.js' -print -quit)"
+          npm prune --omit=dev --ignore-scripts --no-audit --no-fund
+
+          chown -R root:oneadmin "$UI_ROOT"
+          chmod -R g+rX "$UI_ROOT"
+          ln -sfn "$UI_RELEASE/src/fireedge" "$UI_ROOT/current"
+
+          echo "--- LayerSentry FireEdge systemd override + rollback ---"
+          install -d -o root -g root -m 0755 /etc/systemd/system/opennebula-fireedge.service.d
+          cat >/etc/systemd/system/opennebula-fireedge.service.d/20-layersentry-runtime.conf <<EOF
+          [Service]
+          Environment=NODE_ENV=production
+          ExecStart=
+          ExecStart=/bin/sh -c 'exec /usr/bin/node /opt/layersentry/fireedge/current/dist/index.js >>/var/log/one/fireedge.log 2>>/var/log/one/fireedge.error'
+          EOF
+          install -d -o root -g root -m 0755 /opt/layersentry/bin
+          cat >/opt/layersentry/bin/rollback-fireedge-to-vendor <<'EOF'
+          #!/bin/bash
+          set -euo pipefail
+          rm -f /etc/systemd/system/opennebula-fireedge.service.d/20-layersentry-runtime.conf
+          systemctl daemon-reload
+          systemctl restart opennebula-fireedge
+          systemctl is-active opennebula-fireedge
+          EOF
+          chmod 0750 /opt/layersentry/bin/rollback-fireedge-to-vendor
+
+          if systemctl is-active --quiet firewalld; then
+            ZONE=$(firewall-cmd --get-zone-of-interface=br0 2>/dev/null || true)
+            if [ -z "$ZONE" ] || [ "$ZONE" = "no zone" ]; then
+              ZONE=$(firewall-cmd --get-default-zone)
+            fi
+            RULE='rule family="ipv4" source address="192.168.1.0/24" port port="2616" protocol="tcp" accept'
+            firewall-cmd --zone="$ZONE" --permanent --query-rich-rule="$RULE" >/dev/null 2>&1 ||
+              firewall-cmd --zone="$ZONE" --permanent --add-rich-rule="$RULE"
+            firewall-cmd --reload
+          fi
+
+          systemctl daemon-reload
+          systemctl restart opennebula-fireedge
+          systemctl is-active opennebula-fireedge
+          systemctl show -p ExecStart opennebula-fireedge | grep -F '/opt/layersentry/fireedge/current/dist/index.js'
+
+          echo "--- LayerSentry product URL verification ---"
+          for u in http://127.0.0.1:2616/fireedge/layersentry http://192.168.1.121:2616/fireedge/layersentry; do
+            BODY=$(mktemp)
+            code=$(curl -sS -o "$BODY" -w '%{http_code}' --connect-timeout 5 "$u" || true)
             echo "$u => $code"
-            test "$code" != "000"
+            test "$code" = "200"
+            grep -F '<title>LayerSentry | Private Cloud</title>' "$BODY"
+            grep -F 'bundle.layersentry.js' "$BODY"
+            rm -f "$BODY"
           done
+
+          echo "--- peer-to-controller URL verification ---"
+          cd "$REPO"
+          ansible -i "$INV" demolayersentry2 -m shell -a '
+            set -e
+            body=$(mktemp)
+            code=$(curl -sS -o "$body" -w "%{http_code}" --connect-timeout 5 http://192.168.1.121:2616/fireedge/layersentry || true)
+            echo "peer_http_code=$code"
+            test "$code" = "200"
+            grep -F "<title>LayerSentry | Private Cloud</title>" "$body"
+            rm -f "$body"
+          '
+
+          echo "--- compute/KVM verification ---"
+          ansible -i "$INV" all -b -m shell -a '
+            set -e
+            echo "HOST=$(hostname)"
+            lsmod | grep -E "^kvm"
+            virsh nodeinfo | sed -n "1,14p"
+          '
 
           echo "--- persist runner service when available ---"
           mapfile -t runner_units < <(systemctl list-unit-files 'actions.runner.*.service' --no-legend 2>/dev/null | awk '{print $1}')
           printf 'runner_units=%s\n' "${runner_units[*]:-none}"
           for svc in "${runner_units[@]:-}"; do
             [ -n "$svc" ] || continue
-            systemctl enable "$svc" || true
+            install -d -m 0755 "/etc/systemd/system/$svc.d"
+            printf '[Service]\nRestart=always\nRestartSec=10\n' > "/etc/systemd/system/$svc.d/10-layersentry-restart.conf"
+            systemctl enable "$svc"
+            systemctl is-active "$svc"
           done
+          systemctl daemon-reload
+
+          echo "--- persist peer runner service ---"
+          ansible -i "$INV" demolayersentry2 -b -m shell -a '
+            set -e
+            mapfile -t units < <(systemctl list-unit-files "actions.runner.*.service" --no-legend 2>/dev/null | awk "{print \$1}")
+            for svc in "${units[@]}"; do
+              [ -n "$svc" ] || continue
+              install -d -m 0755 "/etc/systemd/system/$svc.d"
+              printf "[Service]\nRestart=always\nRestartSec=10\n" > "/etc/systemd/system/$svc.d/10-layersentry-restart.conf"
+              systemctl enable "$svc"
+            done
+            systemctl daemon-reload
+          '
 
           touch "$DEPLOY_ROOT/STAGE4H_COMPLETE"
           chmod 0600 "$DEPLOY_ROOT/STAGE4H_COMPLETE"
           echo "deployment_log=$LOG"
-          echo "=== STAGE4H_STORAGE_DEPLOY_PASS $(date -u +%FT%TZ) ==="
+          echo "=== STAGE4I_FULL_PRODUCT_PASS $(date -u +%FT%TZ) ==="
           ROOT
 
       - name: Upload storage/deploy journal
         if: always() && steps.run.outputs.executed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: layersentry-stage4e-storage-deploy-${{ matrix.slot }}
+          name: layersentry-stage4i-full-product-${{ matrix.slot }}
           path: /root/layersentry-poc/logs/stage4e-storage-deploy-*.log
           if-no-files-found: warn
           retention-days: 14
