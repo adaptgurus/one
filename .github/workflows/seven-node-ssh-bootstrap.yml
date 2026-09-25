@@ -72,17 +72,43 @@ jobs:
             layersentry6='172.17.60.35'
             layersentryol7='172.17.60.36'
           }
-          $script="printf 'HOST='; hostname; . /etc/os-release; printf 'OS=%s %s\\n' \"\$NAME\" \"\$VERSION_ID\"; printf 'KERNEL='; uname -r; printf 'CPU_LOGICAL='; nproc; printf 'MEM_KB='; awk '/MemTotal/ {print \$2}' /proc/meminfo; printf 'VIRT='; systemd-detect-virt 2>/dev/null || true; printf 'SELINUX='; getenforce 2>/dev/null || true; echo '---IP---'; ip -br addr; echo '---ROUTE---'; ip route; echo '---BLOCK---'; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS; echo '---DF---'; df -hT; echo '---KVM---'; test -e /dev/kvm && ls -l /dev/kvm || echo KVM_DEVICE_ABSENT; echo '---PKG---'; rpm -qa 2>/dev/null | grep -Ei 'opennebula|qemu|libvirt|nfs-utils' | sort || true"
+          $script=@'
+          set -e
+          printf 'HOST='; hostname
+          . /etc/os-release
+          printf 'OS=%s %s\n' "$NAME" "$VERSION_ID"
+          printf 'KERNEL='; uname -r
+          printf 'CPU_LOGICAL='; nproc
+          printf 'MEM_KB='; awk '/MemTotal/ {print $2}' /proc/meminfo
+          printf 'VIRT='; systemd-detect-virt 2>/dev/null || true
+          printf 'SELINUX='; getenforce 2>/dev/null || true
+          echo '---IP---'; ip -br addr
+          echo '---ROUTE---'; ip route
+          echo '---BLOCK---'; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS
+          echo '---DF---'; df -hT
+          echo '---KVM---'; test -e /dev/kvm && ls -l /dev/kvm || echo KVM_DEVICE_ABSENT
+          echo '---PKG---'; rpm -qa 2>/dev/null | grep -Ei 'opennebula|qemu|libvirt|nfs-utils' | sort || true
+          '@
+          $scriptB64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
           foreach($e in $hosts.GetEnumerator()){
             Write-Host "::group::$($e.Key) $($e.Value)"
-            & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" "root@$($e.Value)" $script
+            $remote="printf '%s' '$scriptB64' | base64 -d | bash"
+            & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" "root@$($e.Value)" $remote
             if($LASTEXITCODE -ne 0){ throw "Read-only inventory failed for $($e.Key)" }
             Write-Host "::endgroup::"
           }
 
           Write-Host '--- NFS DISCOVERY ---'
-          $nfs="echo NFS_SERVER=172.17.60.210; command -v showmount >/dev/null 2>&1 && showmount -e 172.17.60.210 || echo SHOWMOUNT_UNAVAILABLE; command -v rpcinfo >/dev/null 2>&1 && rpcinfo -p 172.17.60.210 | head -40 || echo RPCINFO_UNAVAILABLE; timeout 4 bash -c '</dev/tcp/172.17.60.210/2049' && echo NFS_TCP_2049=PASS || echo NFS_TCP_2049=FAIL"
-          & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" root@172.17.60.30 $nfs
+          $nfsScript=@'
+          set -e
+          echo NFS_SERVER=172.17.60.210
+          command -v showmount >/dev/null 2>&1 && showmount -e 172.17.60.210 || echo SHOWMOUNT_UNAVAILABLE
+          command -v rpcinfo >/dev/null 2>&1 && rpcinfo -p 172.17.60.210 | head -40 || echo RPCINFO_UNAVAILABLE
+          timeout 4 bash -c '</dev/tcp/172.17.60.210/2049' && echo NFS_TCP_2049=PASS || echo NFS_TCP_2049=FAIL
+          '@
+          $nfsB64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($nfsScript))
+          $nfsRemote="printf '%s' '$nfsB64' | base64 -d | bash"
+          & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" root@172.17.60.30 $nfsRemote
           if($LASTEXITCODE -ne 0){ throw 'NFS discovery failed' }
 
           Remove-Item Env:LS_ROOT_PASSWORD -ErrorAction SilentlyContinue
