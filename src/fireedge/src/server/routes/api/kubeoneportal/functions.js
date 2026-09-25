@@ -6,6 +6,7 @@ const { defaultEmptyFunction } = defaults
 const { ok, badRequest, serviceUnavailable } = httpCodes
 
 const validClusterID = (value) => /^[a-zA-Z0-9]([a-zA-Z0-9_.-]{0,126}[a-zA-Z0-9])?$/.test(String(value || ''))
+const validApplicationID = (value) => /^[a-z0-9]([-a-z0-9_.]*[a-z0-9])?$/.test(String(value || ''))
 
 const proxyError = (res, next, error) => {
   const status = Number(error?.response?.status)
@@ -54,4 +55,16 @@ const reconcileWorkers = (res = {}, next = defaultEmptyFunction, { id } = {}, us
   call(res, next, { method: 'POST', path: `/v1/kubernetes/clusters/${encodeURIComponent(id)}/worker-reconciliation`, data: {} }, userData, oneConnection)
 }
 
-module.exports = { list, namespaces, createNamespace, kubeconfig, workerReconciliation, reconcileWorkers }
+const applications = (res = {}, next = defaultEmptyFunction, { id } = {}, userData = {}, oneConnection) => {
+  if (!validClusterID(id)) { res.locals.httpCode = httpResponse(badRequest, { error: 'Invalid cluster identity.' }); next(); return }
+  call(res, next, { method: 'GET', path: `/v1/kubernetes/clusters/${encodeURIComponent(id)}/applications` }, userData, oneConnection)
+}
+
+const installApplication = (res = {}, next = defaultEmptyFunction, { id, app } = {}, userData = {}, oneConnection) => {
+  if (!validClusterID(id) || !validApplicationID(app)) {
+    res.locals.httpCode = httpResponse(badRequest, { error: 'Invalid cluster or application identity.' }); next(); return
+  }
+  call(res, next, { method: 'POST', path: `/v1/kubernetes/clusters/${encodeURIComponent(id)}/applications/${encodeURIComponent(app)}`, data: {} }, userData, oneConnection)
+}
+
+module.exports = { list, namespaces, createNamespace, kubeconfig, workerReconciliation, reconcileWorkers, applications, installApplication }
