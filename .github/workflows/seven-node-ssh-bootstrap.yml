@@ -77,21 +77,9 @@ jobs:
           $ok=@()
           foreach($ip in $hosts){
             Write-Host "::group::bootstrap $ip"
-            $remote=@"
-          set -euo pipefail
-          if ! id -u layersentry-deploy >/dev/null 2>&1; then useradd -m -s /bin/bash layersentry-deploy; fi
-          install -d -m 700 -o layersentry-deploy -g layersentry-deploy /home/layersentry-deploy/.ssh
-          cat > /home/layersentry-deploy/.ssh/authorized_keys <<'LSKEY'
-          $pub
-          LSKEY
-          chown layersentry-deploy:layersentry-deploy /home/layersentry-deploy/.ssh/authorized_keys
-          chmod 600 /home/layersentry-deploy/.ssh/authorized_keys
-          printf '%s\n' 'layersentry-deploy ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/90-layersentry-deploy
-          chmod 440 /etc/sudoers.d/90-layersentry-deploy
-          visudo -cf /etc/sudoers.d/90-layersentry-deploy
-          echo LAYERSENTRY_DEPLOY_BOOTSTRAP=PASS
-          "@
-            $remote | & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" "root@$ip" "bash -s"
+            $pubB64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($pub + [Environment]::NewLine))
+            $remote="set -e; id -u layersentry-deploy >/dev/null 2>&1 || useradd -m -s /bin/bash layersentry-deploy; install -d -m 700 -o layersentry-deploy -g layersentry-deploy /home/layersentry-deploy/.ssh; printf '%s' '$pubB64' | base64 -d > /home/layersentry-deploy/.ssh/authorized_keys; chown layersentry-deploy:layersentry-deploy /home/layersentry-deploy/.ssh/authorized_keys; chmod 600 /home/layersentry-deploy/.ssh/authorized_keys; printf '%s\\n' 'layersentry-deploy ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/90-layersentry-deploy; chmod 440 /etc/sudoers.d/90-layersentry-deploy; visudo -cf /etc/sudoers.d/90-layersentry-deploy; echo LAYERSENTRY_DEPLOY_BOOTSTRAP=PASS"
+            & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" "root@$ip" $remote
             $rc=$LASTEXITCODE
             if($rc -ne 0){ throw "Password bootstrap failed for $ip rc=$rc" }
             $verify=& ssh.exe -T -i $key -o BatchMode=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "layersentry-deploy@$ip" "sudo -n true && printf 'KEY_SUDO=PASS HOST=' && hostname" 2>&1
