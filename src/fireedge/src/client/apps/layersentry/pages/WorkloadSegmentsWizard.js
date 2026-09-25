@@ -67,7 +67,7 @@ const getErrorMessage = (error) =>
   error?.data?.message ??
   error?.data?.error?.message ??
   error?.message ??
-  'OpenNebula did not accept the network request.'
+  'LayerSentry did not accept the network request.'
 
 const SegmentCard = ({ segment, errors, onChange, onRemove, disabled }) => {
   const change = (field) => (event) => onChange(field, event.target.value)
@@ -200,7 +200,7 @@ const SegmentCard = ({ segment, errors, onChange, onRemove, disabled }) => {
               label="Bridge name"
               value={segment.bridge}
               onChange={change('bridge')}
-              helperText="Optional. Blank lets OpenNebula use its native bridge naming."
+              helperText="Optional. Blank uses native LayerSentry bridge naming."
               disabled={disabled}
               size="small"
             />
@@ -438,7 +438,7 @@ const WorkloadSegmentsWizard = () => {
   return (
     <PageFrame
       title="Create workload segments"
-      description="Create several isolated workload networks in one guided operation. Every segment is allocated as a native OpenNebula Virtual Network."
+      description="Create several isolated workload networks in one guided operation. Every segment is allocated as a native LayerSentry Network."
       actions={
         <Button
           variant="outlined"
@@ -453,13 +453,13 @@ const WorkloadSegmentsWizard = () => {
       <Alert severity="info" sx={{ mt: 2 }}>
         Use a separate segment for Web, Application, Database, Management or
         Backup traffic. LayerSentry validates the whole batch before sending
-        native OpenNebula network allocations.
+        native LayerSentry network allocations.
       </Alert>
 
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
           title="Batch settings"
-          description="Choose the OpenNebula cluster once, then define each workload segment."
+          description="Choose the infrastructure cluster once, then define each workload segment."
         />
         <TextField
           select
