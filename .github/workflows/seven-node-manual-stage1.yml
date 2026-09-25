@@ -29,6 +29,9 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+          sparse-checkout: |
+            lab/seven-node
+          sparse-checkout-cone-mode: true
 
       - name: Bind target runner
         shell: powershell
