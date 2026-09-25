@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 4D Forced Controller Deploy
+name: LayerSentry Physical POC Stage 4E Storage + Deploy
 
 on:
   pull_request:
@@ -14,26 +14,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  deploy:
-    name: forced-controller-${{ matrix.slot }}
+  controller:
+    name: storage-deploy-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
         slot: [1, 2, 3]
     runs-on: [self-hosted, Linux]
-    timeout-minutes: 55
+    timeout-minutes: 60
     steps:
-      - name: Route and deploy
-        id: deploy
+      - name: Expand LayerSentry datastore backing and deploy
+        id: run
         shell: bash
         run: |
           set -euo pipefail
           echo "runner_name=$RUNNER_NAME slot=${{ matrix.slot }}"
+
           if [ "$RUNNER_NAME" != "demolayersentry1" ]; then
             echo "executed=false" >> "$GITHUB_OUTPUT"
-            echo "HOLD: reserving non-controller runner slot so another job can reach demolayersentry1"
-            sleep 120
+            echo "HOLD: reserving non-controller runner slot to route one job to demolayersentry1"
+            sleep 180
             exit 0
           fi
           echo "executed=true" >> "$GITHUB_OUTPUT"
@@ -51,32 +52,118 @@ jobs:
           INV="$DEPLOY_ROOT/poc-inventory.yml"
           LOGDIR="$DEPLOY_ROOT/logs"
           mkdir -p "$LOGDIR"
-          LOG="$LOGDIR/stage4d-deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
-          touch "$LOG"; chmod 0600 "$LOG"
+          LOG="$LOGDIR/stage4e-storage-deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
+          touch "$LOG"
+          chmod 0600 "$LOG"
           exec > >(tee -a "$LOG") 2>&1
 
-          echo "=== STAGE4D_BEGIN $(date -u +%FT%TZ) ==="
+          echo "=== STAGE4E_STORAGE_DEPLOY_BEGIN $(date -u +%FT%TZ) ==="
+          test -d "$REPO/.git"
+          test -s "$INV"
+          test -x /opt/layersentry-one-deploy-venv/bin/ansible-playbook
 
+          cd "$REPO"
+
+          echo "--- storage inventory before changes ---"
+          ansible -i "$INV" all -b -m shell -a '
+            set -e
+            echo "HOST=$(hostname)"
+            echo "HOME_MOUNT=$(findmnt -n -o SOURCE,FSTYPE,TARGET /home)"
+            df -hT /home
+            echo "--- lsblk ---"
+            lsblk -e7 -o NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL
+            echo "--- LVM ---"
+            pvs 2>/dev/null || true
+            vgs 2>/dev/null || true
+            lvs -a -o+devices 2>/dev/null || true
+            echo "--- current OpenNebula paths ---"
+            ls -ld /var/lib/one /var/lib/one/datastores 2>/dev/null || true
+            findmnt -T /var/lib/one/datastores 2>/dev/null || true
+          '
+
+          echo "--- capacity safety gate: require > 1 TiB free on /home on each physical host ---"
+          ansible -i "$INV" all -b -m shell -a '
+            set -e
+            avail=$(df -B1 --output=avail /home | tail -1 | tr -d " ")
+            echo "available_bytes=$avail"
+            test "$avail" -gt 1099511627776
+          '
+
+          echo "--- prepare dedicated datastore backing directories ---"
+          ansible -i "$INV" all -b -m shell -a '
+            set -e
+            install -d -o root -g 9869 -m 0750 /home/layersentry
+            install -d -o 9869 -g 9869 -m 0750 /home/layersentry/datastores
+            install -d -o 9869 -g 9869 -m 0750 /home/layersentry/datastores/0
+            install -d -o 9869 -g 9869 -m 0750 /home/layersentry/datastores/1
+            install -d -o 9869 -g 9869 -m 0750 /home/layersentry/datastores/2
+            stat -c "%n %U:%G %a" /home/layersentry /home/layersentry/datastores /home/layersentry/datastores/{0,1,2}
+          '
+
+          echo "--- patch OneDeploy inventory: Rocky repo + multi-TB datastore backing ---"
           python3 - "$INV" <<'PY'
           import sys, yaml
-          path=sys.argv[1]
-          with open(path, 'r', encoding='utf-8') as f:
-              data=yaml.safe_load(f)
-          allv=data.setdefault('all', {}).setdefault('vars', {})
-          allv.setdefault('opennebula_repo_url', {})['RedHat']='https://downloads.opennebula.io/repo/7.4/RedHat'
-          with open(path, 'w', encoding='utf-8') as f:
+          path = sys.argv[1]
+          with open(path, "r", encoding="utf-8") as f:
+              data = yaml.safe_load(f)
+          if not isinstance(data, dict):
+              raise SystemExit("inventory root is not a mapping")
+
+          allv = data.setdefault("all", {}).setdefault("vars", {})
+          allv.setdefault("opennebula_repo_url", {})["RedHat"] = "https://downloads.opennebula.io/repo/7.4/RedHat"
+
+          allv["ds"] = {
+              "mode": "generic",
+              "config": {
+                  "SYSTEM_DS": {
+                      "system": {
+                          "symlink": {
+                              "groups": ["node"],
+                              "src": "/home/layersentry/datastores/0",
+                          }
+                      }
+                  },
+                  "IMAGE_DS": {
+                      "default": {
+                          "symlink": {
+                              "groups": ["frontend", "node"],
+                              "src": "/home/layersentry/datastores/1",
+                          }
+                      }
+                  },
+                  "FILE_DS": {
+                      "files": {
+                          "symlink": {
+                              "groups": ["frontend"],
+                              "src": "/home/layersentry/datastores/2",
+                          }
+                      }
+                  },
+              },
+          }
+
+          with open(path, "w", encoding="utf-8") as f:
               yaml.safe_dump(data, f, sort_keys=False)
           PY
           chmod 0600 "$INV"
 
-          echo "repo_override=https://downloads.opennebula.io/repo/7.4/RedHat"
+          python3 - "$INV" <<'PY'
+          import sys, yaml
+          d = yaml.safe_load(open(sys.argv[1], encoding="utf-8"))
+          v = d["all"]["vars"]
+          print("opennebula_repo_url.RedHat=" + v["opennebula_repo_url"]["RedHat"])
+          print("ds.mode=" + v["ds"]["mode"])
+          for group, name in (("SYSTEM_DS","system"),("IMAGE_DS","default"),("FILE_DS","files")):
+              print(group + "=" + v["ds"]["config"][group][name]["symlink"]["src"])
+          PY
 
+          echo "--- restore/test signed OpenNebula 7.4 repository on both hosts ---"
           ansible -i "$INV" all -b -m shell -a "cat > /etc/yum.repos.d/opennebula.repo <<'EOF'
           [opennebula]
           name=OpenNebula Community Edition 7.4
           baseurl=https://downloads.opennebula.io/repo/7.4/RedHat/\$releasever/\$basearch
           enabled=1
-          gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-opennebula2
+          gpgkey=https://downloads.opennebula.io/repo/repo2.key
           repo_gpgcheck=1
           gpgcheck=1
           EOF
@@ -84,42 +171,71 @@ jobs:
           dnf -q makecache --disablerepo='*' --enablerepo=opennebula
           dnf -q --showduplicates list opennebula | tail -n 5"
 
-          cd "$REPO"
-          echo "--- pre ---"
+          echo "--- OneDeploy pre ---"
           make V= I="$INV" pre
-          echo "--- site ---"
+
+          echo "--- OneDeploy site ---"
           make V= I="$INV" site
 
-          echo "--- services ---"
+          echo "--- persist ownership and SELinux labeling for datastore backing ---"
+          ansible -i "$INV" all -b -m shell -a '
+            set -e
+            chown root:9869 /home/layersentry
+            chmod 0750 /home/layersentry
+            chown -R 9869:9869 /home/layersentry/datastores
+            find /home/layersentry/datastores -type d -exec chmod 0750 {} +
+
+            if command -v getenforce >/dev/null 2>&1 && [ "$(getenforce)" != "Disabled" ]; then
+              if ! command -v semanage >/dev/null 2>&1; then
+                dnf -y -q install policycoreutils-python-utils
+              fi
+              semanage fcontext -a -e /var/lib/one/datastores /home/layersentry/datastores 2>/dev/null ||
+                semanage fcontext -m -e /var/lib/one/datastores /home/layersentry/datastores
+              restorecon -RF /home/layersentry/datastores
+            fi
+          '
+
+          echo "--- datastore path/capacity verification ---"
+          ansible -i "$INV" all -b -m shell -a '
+            set -e
+            echo "HOST=$(hostname)"
+            for id in 0 1 2; do
+              if [ -e "/var/lib/one/datastores/$id" ] || [ -L "/var/lib/one/datastores/$id" ]; then
+                printf "ds%s -> " "$id"
+                readlink -f "/var/lib/one/datastores/$id"
+                df -hT "/var/lib/one/datastores/$id"
+              fi
+            done
+            stat -c "%n %u:%g %a" /home/layersentry/datastores /home/layersentry/datastores/{0,1,2}
+          '
+
+          echo "--- OpenNebula service health ---"
           systemctl is-active opennebula
           systemctl is-active opennebula-fireedge
           systemctl is-active opennebula-gate
           systemctl is-active opennebula-flow
 
-          echo "--- CLI ---"
+          echo "--- OpenNebula CLI datastore/host health ---"
           sudo -u oneadmin bash -lc 'onezone list'
           sudo -u oneadmin bash -lc 'onehost list'
           sudo -u oneadmin bash -lc 'onedatastore list'
           sudo -u oneadmin bash -lc 'onevnet list'
 
-          echo "--- URL ---"
+          echo "--- local URL health ---"
           for u in http://127.0.0.1:2616 http://192.168.1.121:2616; do
             code=$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 "$u" || true)
             echo "$u => $code"
           done
 
-          echo "--- peer ---"
-          ssh -i /root/.ssh/layersentry_poc_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 layersentry-deploy@192.168.1.122             'hostname; ip -4 -br addr show br0; sudo -n systemctl is-active libvirtd || sudo -n systemctl is-active virtqemud || true; sudo -n virsh nodeinfo | sed -n "1,12p"'
-
           echo "deployment_log=$LOG"
-          echo "=== STAGE4D_PASS $(date -u +%FT%TZ) ==="
+          echo "=== STAGE4E_STORAGE_DEPLOY_PASS $(date -u +%FT%TZ) ==="
           ROOT
 
-      - name: Upload deployment journal
-        if: always() && steps.deploy.outputs.executed == 'true'
+      - name: Upload storage/deploy journal
+        if: always() && steps.run.outputs.executed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: layersentry-stage4d-${{ matrix.slot }}
-          path: /root/layersentry-poc/logs/stage4d-deploy-*.log
+          name: layersentry-stage4e-storage-deploy-${{ matrix.slot }}
+          path: /root/layersentry-poc/logs/stage4e-storage-deploy-*.log
           if-no-files-found: warn
           retention-days: 14
