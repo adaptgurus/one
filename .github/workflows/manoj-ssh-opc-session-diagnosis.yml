@@ -1,0 +1,57 @@
+name: Manoj SSH opc Session Diagnosis
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-ssh-opc-session-diagnosis.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-ssh-opc-session-diagnosis
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Diagnose opc OpenSSH session
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off"}
+          $ip=@(Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop | Where-Object {$_.IPAddress -eq '10.250.10.1'})
+          Write-Host "PROFILE_IP_BINDING_COUNT=$($ip.Count)"
+          foreach($x in $ip){Write-Host "PROFILE_IP interface=$($x.InterfaceAlias) state=$($x.AddressState) prefix=$($x.PrefixLength)"}
+          $u=Get-LocalUser -Name 'opc' -ErrorAction Stop
+          Write-Host "OPC_ENABLED=$($u.Enabled)"
+          Write-Host "OPC_LASTLOGON=$($u.LastLogon)"
+          $svc=Get-Service sshd -ErrorAction Stop
+          Write-Host "SSHD_STATUS=$($svc.Status)"
+          $cfg='C:\ProgramData\ssh\sshd_config'
+          if(Test-Path $cfg){
+            Write-Host 'SSHD_CONFIG_SELECTED_LINES_BEGIN'
+            Get-Content $cfg | Where-Object {$_ -match '^(Port|ListenAddress|PubkeyAuthentication|PasswordAuthentication|AuthorizedKeysFile|Match|AllowUsers|DenyUsers|ForceCommand|Subsystem)'} | ForEach-Object {Write-Host $_}
+            Write-Host 'SSHD_CONFIG_SELECTED_LINES_END'
+          }
+          $reg=Get-ItemProperty 'HKLM:\SOFTWARE\OpenSSH' -ErrorAction SilentlyContinue
+          if($reg){Write-Host "OPENSSH_DEFAULT_SHELL=$($reg.DefaultShell)"}
+          $log='OpenSSH/Operational'
+          try {
+            $events=@(Get-WinEvent -LogName $log -MaxEvents 30 -ErrorAction Stop)
+            Write-Host "OPENSSH_EVENT_COUNT=$($events.Count)"
+            foreach($e in $events){
+              $msg=($e.Message -replace '[\r\n]+',' ')
+              Write-Host "OPENSSH_EVENT time=$($e.TimeCreated.ToUniversalTime().ToString('o')) id=$($e.Id) level=$($e.LevelDisplayName) msg=$msg"
+            }
+          } catch {
+            Write-Host "OPENSSH_EVENT_READ_ERROR=$($_.Exception.Message)"
+          }
+          Write-Host 'MANOJ_SSH_OPC_DIAG=PASS'
