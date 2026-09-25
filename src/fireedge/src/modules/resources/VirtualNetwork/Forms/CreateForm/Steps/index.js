@@ -19,6 +19,10 @@ import General, {
   STEP_ID as GENERAL_ID,
 } from '@modules/resources/VirtualNetwork/Forms/CreateForm/Steps/General'
 import { VN_DRIVERS } from '@ConstantsModule'
+import {
+  ipv4CidrFromNetwork,
+  parseIpv4Cidr,
+} from '@modules/resources/VirtualNetwork/Forms/CreateForm/cidr'
 import { jsonToXml, createSteps } from '@UtilsModule'
 import {
   getUnknownVars,
@@ -44,6 +48,7 @@ const Steps = createSteps(
     (stepProps) =>
       Configuration({
         ...stepProps,
+        isVnet: true,
         tabIds: getConfigurationTabs(stepProps),
       }),
   ],
@@ -71,6 +76,10 @@ const Steps = createSteps(
             ...TEMPLATE,
             AR: addressRanges,
             ...vnet,
+            NETWORK_CIDR: ipv4CidrFromNetwork(
+              TEMPLATE?.NETWORK_ADDRESS ?? vnet?.NETWORK_ADDRESS,
+              TEMPLATE?.NETWORK_MASK ?? vnet?.NETWORK_MASK
+            ),
             SECURITY_GROUPS: normalizeAttributeList(TEMPLATE.SECURITY_GROUPS),
             PHYDEV_SWITCH: phyDevSwitch,
             BRIDGE_SWITCH: bridgeSwitch,
@@ -96,6 +105,13 @@ const Steps = createSteps(
     transformBeforeSubmit: (formData) => {
       const { [GENERAL_ID]: general = {}, [EXTRA_ID]: extra = {} } =
         formData ?? {}
+
+      const cidr = parseIpv4Cidr(extra?.NETWORK_CIDR)
+      if (cidr) {
+        extra.NETWORK_ADDRESS = cidr.networkAddress
+        extra.NETWORK_MASK = cidr.networkMask
+      }
+      delete extra.NETWORK_CIDR
 
       if (Array.isArray(extra?.SECURITY_GROUPS)) {
         if (extra.SECURITY_GROUPS.length) {
