@@ -97,10 +97,14 @@ const ClusterManager = ({ cluster, profiles }) => {
   const controlPlanePending =
     cluster.provisioned &&
     cluster.status.ready_control_planes < cluster.expected_control_planes
-  const controlPlaneHealthy =
+  const existingControlPlaneHealthy =
+    cluster.provisioned &&
     cluster.status.api_ready &&
-    cluster.status.ready_control_planes === cluster.expected_control_planes &&
+    cluster.status.ready_control_planes >= 1 &&
     cluster.status.kube_system_non_ready === 0
+  const controlPlaneHealthy =
+    existingControlPlaneHealthy &&
+    cluster.status.ready_control_planes === cluster.expected_control_planes
   const job = workerJob.data?.job
   const cpJob = controlPlaneJob.data?.job
   const createJob = provisionJob.data?.job
@@ -159,6 +163,7 @@ const ClusterManager = ({ cluster, profiles }) => {
                 <Chip size="small" color="warning" label="Not provisioned" />
               )}
               {cluster.provisioned && (
+                <>
               <Chip
                 size="small"
                 color={cluster.status.api_ready ? 'success' : 'error'}
@@ -176,6 +181,7 @@ const ClusterManager = ({ cluster, profiles }) => {
                 size="small"
                 label={`${cluster.status.ready_control_planes}/${cluster.status.control_planes} control planes Ready`}
               />
+                </>
               )}
             </Stack>
           </Box>
@@ -252,7 +258,7 @@ const ClusterManager = ({ cluster, profiles }) => {
           disabled={
             !cluster.self_service_lifecycle ||
             !controlPlanePending ||
-            !controlPlaneHealthy ||
+            !existingControlPlaneHealthy ||
             controlPlaneState.isLoading ||
             cpJob?.status === 'RUNNING'
           }
@@ -267,7 +273,7 @@ const ClusterManager = ({ cluster, profiles }) => {
             {cluster.expected_control_planes} Ready).
           </Alert>
         )}
-        {controlPlanePending && !controlPlaneHealthy && (
+        {controlPlanePending && !existingControlPlaneHealthy && (
           <Alert severity="warning" sx={{ mt: 2 }}>
             Control-plane reconciliation is blocked until the currently joined
             quorum and kube-system are healthy.
@@ -343,8 +349,6 @@ const ClusterManager = ({ cluster, profiles }) => {
             </TableBody>
           </Table>
         )}
-      </Surface>
-
       </Surface>
       )}
 
@@ -447,8 +451,6 @@ const ClusterManager = ({ cluster, profiles }) => {
             </TableBody>
           </Table>
         )}
-      </Surface>
-
       </Surface>
       )}
 
