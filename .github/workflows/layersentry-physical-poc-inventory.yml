@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Inventory
+name: LayerSentry Physical POC Stage 1 Storage
 
 on:
   pull_request:
@@ -10,12 +10,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: layersentry-physical-poc-probe-${{ github.event.pull_request.number }}
+  group: layersentry-physical-poc-stage-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  inventory:
-    name: inventory-${{ matrix.slot }}
+  storage:
+    name: storage-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -24,7 +24,7 @@ jobs:
     runs-on: [self-hosted, Linux]
     timeout-minutes: 8
     steps:
-      - name: Inventory bound host
+      - name: Prepare LayerSentry storage backing
         shell: bash
         run: |
           set -euo pipefail
@@ -34,61 +34,44 @@ jobs:
             *) echo "GUARD_SKIP_NON_PHYSICAL_RUNNER"; exit 0 ;;
           esac
 
-          echo "=== identity ==="
-          echo "utc=$(date -u +%FT%TZ)"
-          echo "hostname=$(hostname -f 2>/dev/null || hostname)"
-          id
-          hostnamectl 2>/dev/null || true
-          uname -a
-          cat /etc/os-release || true
-          printf 'sudo_noninteractive='
-          if sudo -n true 2>/dev/null; then echo yes; else echo no; fi
+          install -d -m 0750 /var/log/layersentry-poc
+          LOG=/var/log/layersentry-poc/activity.log
+          exec > >(tee -a "$LOG") 2>&1
+          echo "=== STAGE1_STORAGE_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
 
-          echo "=== cpu-memory-numa ==="
-          lscpu || true
-          free -h || true
-          numactl --hardware 2>/dev/null || true
+          echo "--- preflight ---"
+          test "$(id -u)" -eq 0
+          findmnt /home
+          df -hT /home
+          ls -ld /home /home/layersentry 2>/dev/null || true
 
-          echo "=== storage ==="
-          lsblk -e7 -o NAME,KNAME,MAJ:MIN,SIZE,TYPE,FSTYPE,FSVER,LABEL,UUID,MOUNTPOINTS,MODEL,SERIAL,WWN,ROTA,TRAN || true
-          blkid 2>/dev/null || true
-          findmnt -R / || true
-          df -hT || true
-          sudo -n pvs -o+pv_used 2>/dev/null || true
-          sudo -n vgs -o+vg_free 2>/dev/null || true
-          sudo -n lvs -a -o+devices 2>/dev/null || true
-          sudo -n mdadm --detail --scan 2>/dev/null || true
-          sudo -n zpool status 2>/dev/null || true
+          echo "--- create dedicated backing tree ---"
+          install -d -m 0750 /home/layersentry
+          install -d -m 0750 /home/layersentry/datastores
+          install -d -m 0750 /home/layersentry/images
+          install -d -m 0750 /home/layersentry/backups
+          install -d -m 0750 /home/layersentry/tmp
+          install -d -m 0750 /etc/layersentry-poc
 
-          echo "=== network ==="
-          ip -br link || true
-          ip -br addr || true
-          ip -4 route show table all || true
-          ip rule || true
-          bridge link 2>/dev/null || true
-          bridge vlan show 2>/dev/null || true
-          nmcli -t -f NAME,UUID,TYPE,DEVICE,STATE connection show 2>/dev/null || true
-          nmcli -f GENERAL,IP4,IP6 device show 2>/dev/null || true
-          for n in /sys/class/net/*; do
-            d=$(basename "$n")
-            printf '%s mac=' "$d"
-            cat "$n/address" 2>/dev/null || true
-          done
+          cat >/etc/layersentry-poc/storage.env <<EOF
+          LAYERSENTRY_STORAGE_BACKING=/home/layersentry
+          LAYERSENTRY_DATASTORES_BACKING=/home/layersentry/datastores
+          LAYERSENTRY_IMAGE_BACKING=/home/layersentry/images
+          LAYERSENTRY_BACKUP_BACKING=/home/layersentry/backups
+          EOF
+          chmod 0644 /etc/layersentry-poc/storage.env
 
-          echo "=== virtualization ==="
-          systemd-detect-virt || true
-          ls -l /dev/kvm 2>/dev/null || true
-          lsmod | grep -E '(^kvm|vfio|bridge|8021q)' || true
-          sudo -n virt-host-validate 2>/dev/null || true
+          echo "--- integrity/write test ---"
+          TESTFILE="/home/layersentry/tmp/.write-test-$$"
+          printf 'layersentry-storage-ok %s %s\n' "$RUNNER_NAME" "$(date -u +%FT%TZ)" > "$TESTFILE"
+          sync "$TESTFILE"
+          test -s "$TESTFILE"
+          sha256sum "$TESTFILE"
+          rm -f "$TESTFILE"
 
-          echo "=== services-packages-ports ==="
-          systemctl --no-pager --type=service --state=running | head -n 160 || true
-          rpm -qa 2>/dev/null | grep -Ei 'opennebula|libvirt|qemu|mariadb|mysql|postgres|keepalived|haproxy|nginx|podman|docker' | sort || true
-          dpkg-query -W 2>/dev/null | grep -Ei 'opennebula|libvirt|qemu|mariadb|mysql|postgres|keepalived|haproxy|nginx|podman|docker' | sort || true
-          sudo -n ss -lntup 2>/dev/null || ss -lnt 2>/dev/null || true
-
-          echo "=== runner-filesystem ==="
-          pwd
-          git rev-parse --show-toplevel 2>/dev/null || true
-          git remote -v 2>/dev/null | sed -E 's#(https://)[^/@]+@#\\1[REDACTED]@#g' || true
-          echo "PHYSICAL_INVENTORY_COMPLETE"
+          echo "--- postflight ---"
+          findmnt /home
+          df -hT /home
+          du -sh /home/layersentry
+          find /home/layersentry -maxdepth 1 -mindepth 1 -printf '%M %u:%g %p\n' | sort
+          echo "=== STAGE1_STORAGE_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
