@@ -30,7 +30,7 @@ import {
 import { Plus, Trash } from 'iconoir-react'
 import { useMemo, useRef, useState } from 'react'
 import { useHistory, useLocation } from 'react-router-dom'
-import { ClusterAPI, useGeneralApi, VnAPI } from '@FeaturesModule'
+import { ClusterAPI, useGeneralApi, useViews, VnAPI } from '@FeaturesModule'
 import { jsonToXml } from '@UtilsModule'
 import {
   PageFrame,
@@ -287,9 +287,13 @@ SegmentCard.defaultProps = {
 const WorkloadSegmentsWizard = () => {
   const history = useHistory()
   const location = useLocation()
+  const { view } = useViews()
+  const isAdmin = view === 'admin'
   const { enqueueSuccess, enqueueError } = useGeneralApi()
-  const [allocate, allocationState] = VnAPI.useAllocateVnetMutation()
-  const clusterQuery = ClusterAPI.useGetClustersQuery()
+  const [allocate] = VnAPI.useAllocateVnetMutation()
+  const clusterQuery = ClusterAPI.useGetClustersQuery(undefined, {
+    skip: !isAdmin,
+  })
   const clusters = toArray(clusterQuery.data)
   const keySequence = useRef(0)
 
@@ -309,11 +313,12 @@ const WorkloadSegmentsWizard = () => {
     withKeys(createStandardSegmentSet(initialEnvironment))
   )
   const [cluster, setCluster] = useState('-1')
-  const [validation, setValidation] = useState(() =>
-    validateWorkloadSegments(segments)
-  )
   const [result, setResult] = useState(null)
-  const submitting = allocationState.isLoading
+  const [submitting, setSubmitting] = useState(false)
+  const validation = useMemo(
+    () => validateWorkloadSegments(segments),
+    [segments]
+  )
 
   const summary = useMemo(
     () => ({
@@ -324,13 +329,6 @@ const WorkloadSegmentsWizard = () => {
     }),
     [segments]
   )
-
-  const validate = (nextSegments) => {
-    const next = validateWorkloadSegments(nextSegments)
-    setValidation(next)
-
-    return next
-  }
 
   const updateSegment = (key, field, value) => {
     setSegments((current) => {
@@ -352,18 +350,13 @@ const WorkloadSegmentsWizard = () => {
 
         return { ...segment, [field]: value }
       })
-      validate(next)
-
       return next
     })
   }
 
   const removeSegment = (key) => {
     setSegments((current) => {
-      const next = current.filter((segment) => segment.key !== key)
-      validate(next)
-
-      return next
+      return current.filter((segment) => segment.key !== key)
     })
   }
 
@@ -379,7 +372,6 @@ const WorkloadSegmentsWizard = () => {
           }),
         ]),
       ]
-      validate(next)
 
       return next
     })
@@ -391,14 +383,13 @@ const WorkloadSegmentsWizard = () => {
         ...current,
         ...withKeys(createStandardSegmentSet(environment)),
       ]
-      validate(next)
 
       return next
     })
   }
 
   const runCreate = async () => {
-    const checked = validate(segments)
+    const checked = validateWorkloadSegments(segments)
     setResult(null)
 
     if (!checked.valid) {
@@ -407,6 +398,7 @@ const WorkloadSegmentsWizard = () => {
       return
     }
 
+    setSubmitting(true)
     const created = []
     for (const segment of segments) {
       try {
@@ -426,6 +418,7 @@ const WorkloadSegmentsWizard = () => {
         enqueueError(
           `Stopped after ${created.length} of ${segments.length} segments. ${message}`
         )
+        setSubmitting(false)
 
         return
       }
@@ -433,6 +426,28 @@ const WorkloadSegmentsWizard = () => {
 
     setResult({ status: 'success', created })
     enqueueSuccess(`${created.length} workload segments created successfully.`)
+    setSubmitting(false)
+  }
+
+  if (!isAdmin) {
+    return (
+      <PageFrame
+        title="Create workload segments"
+        description="This workflow is restricted to LayerSentry Super Admin."
+      >
+        <Alert severity="warning" sx={{ mt: 2 }}>
+          Workload-segment creation includes infrastructure VLAN, bridge and
+          cluster controls and is available only in the Super Admin view.
+        </Alert>
+        <Button
+          variant="outlined"
+          onClick={() => history.push('/network')}
+          sx={{ mt: 2, textTransform: 'none' }}
+        >
+          Back to Networks
+        </Button>
+      </PageFrame>
+    )
   }
 
   return (
