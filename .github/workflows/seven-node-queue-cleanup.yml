@@ -1,0 +1,44 @@
+name: Seven Node Queue Cleanup
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-queue-cleanup.yml'
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel-stale:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Cancel obsolete seven-node runs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          stale_runs=(
+            36190285002
+            36190119487
+            36189992234
+            36189863754
+            36189177261
+            36189264953
+            36186728130
+            36185485957
+            36182300449
+          )
+          for run_id in "${stale_runs[@]}"; do
+            code="$(curl -sS -o /tmp/cancel-body -w '%{http_code}'               -X POST               -H "Authorization: Bearer $GH_TOKEN"               -H "Accept: application/vnd.github+json"               -H "X-GitHub-Api-Version: 2022-11-28"               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel")"
+            case "$code" in
+              202) echo "CANCELLED run=$run_id" ;;
+              409|404) echo "ALREADY_DONE_OR_ABSENT run=$run_id http=$code" ;;
+              *) cat /tmp/cancel-body; echo "cancel failed run=$run_id http=$code" >&2; exit 1 ;;
+            esac
+          done
+          echo "STALE_SEVEN_NODE_QUEUE_CLEANUP=PASS"
