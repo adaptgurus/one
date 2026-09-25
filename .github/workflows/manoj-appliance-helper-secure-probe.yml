@@ -1,0 +1,87 @@
+name: Manoj Appliance Helper Secure Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-appliance-helper-secure-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and source invariant
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST' -or $env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'Wrong runner'}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
+          Write-Host 'HELPER_SECURE_SOURCE_GATE=PASS'
+
+      - name: Pin helper SSH key and connect
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $helperIp='10.250.10.42'
+          $keySrc='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $key=Join-Path $env:RUNNER_TEMP 'helper-secure.key'
+          Copy-Item -Force $keySrc $key
+          & icacls.exe $key /inheritance:r | Out-Null
+          & icacls.exe $key /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $key /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $key *> $null
+          if($LASTEXITCODE -ne 0){throw 'helper key invalid'}
+
+          $kh=Join-Path $env:RUNNER_TEMP 'helper-known-hosts'
+          $scan1=& ssh-keyscan.exe -T 5 -t ed25519 $helperIp 2>$null
+          if($LASTEXITCODE -ne 0 -or -not $scan1){throw 'helper ed25519 host key scan failed'}
+          Start-Sleep -Seconds 2
+          $scan2=& ssh-keyscan.exe -T 5 -t ed25519 $helperIp 2>$null
+          if($LASTEXITCODE -ne 0 -or -not $scan2){throw 'helper second host key scan failed'}
+          $s1=[string]::Join([Environment]::NewLine,@($scan1))
+          $s2=[string]::Join([Environment]::NewLine,@($scan2))
+          if($s1 -ne $s2){throw 'helper host key changed between scans'}
+          $scan1 | Out-File -FilePath $kh -Encoding ascii
+          $fp=& ssh-keygen.exe -lf $kh -E sha256
+          Write-Host "HELPER_HOST_KEY_FINGERPRINT=$fp"
+
+          $cmd=@'
+          set -euo pipefail
+          echo "HELPER_HOST=$(hostname)"
+          echo '===IP_ADDR==='
+          ip -br addr
+          echo '===IP_ROUTE==='
+          ip route
+          echo '===RESOLV==='
+          cat /etc/resolv.conf || true
+          echo '===NETWORK_FILES==='
+          for f in /etc/netplan/*.yaml /etc/NetworkManager/system-connections/* /etc/systemd/network/*; do
+            [ -f "$f" ] || continue
+            echo "---FILE:$f---"
+            sudo sed -E 's/(password|psk|secret|token):.*/\1: <redacted>/Ig' "$f"
+          done
+          echo 'HELPER_SECURE_NETWORK_PROBE=PASS'
+          '@
+          $cmd=[regex]::Replace($cmd,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($cmd))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$kh" -o ConnectTimeout=8 -i $key "ci@$helperIp" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'secure helper SSH probe failed'}
+
+          Write-Host 'HELPER_SSH_PINNED=PASS'
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
