@@ -1,0 +1,131 @@
+name: Manoj HyperV MORPHING Reconcile
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-morphing-reconcile.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-morphing-reconcile
+  cancel-in-progress: true
+
+jobs:
+  reconcile:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and preserve source Off
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_STATE=$($vm.State)"
+          Write-Host "SOURCE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if($n -ne 0){throw 'Unexpected checkpoint'}
+          Write-Host 'MORPHING_SOURCE_GATE=PASS'
+
+      - name: Prepare appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-morphing-reconcile.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Prove durable MORPHING and exact delta application
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          cat >/tmp/ls-morphing-reconcile.py <<'PY'
+          import hashlib,json,os,struct,sys
+          op="manoj-hv-ls-migration-source-test-20260924"
+          import subprocess
+          ruby = r'''
+          require 'digest'; require 'yaml'
+          op=ARGV[0]
+          c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+          work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+          safe=op.gsub(/[^A-Za-z0-9_.-]/,"_")
+          suffix=Digest::SHA256.hexdigest(op)[0,16]
+          puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          '''
+          p=subprocess.check_output(["ruby","-e",ruby,op],text=True).strip()
+          s=json.load(open(p))
+          print("STATE_PATH="+p)
+          for key in ["phase","delta_capture_started_at","delta_captured_at","morph_started_at","delta_applied_at","import_started_at","template_id","imported_at"]:
+              print(f"STATE_{key.upper()}={s.get(key)}")
+          print("STATE_DELTA_APPLIED_INDICES="+json.dumps(s.get("delta_applied_indices")))
+          print("STATE_IMAGE_IMPORTS="+str(len(s.get("image_imports") or [])))
+          if s.get("phase")!="MORPHING":
+              raise SystemExit("expected MORPHING")
+          bundles=s.get("delta_bundles") or []
+          disks=s.get("disks") or []
+          if len(bundles)!=len(disks) or not bundles:
+              raise SystemExit("durable delta bundle evidence missing")
+          applied=sorted(int(x) for x in (s.get("delta_applied_indices") or []))
+          if applied!=list(range(len(disks))):
+              raise SystemExit(f"not all delta indexes durably marked applied: {applied}")
+          for i,(b,d) in enumerate(zip(bundles,disks)):
+              bp=b.get("path",""); rp=d.get("prepared_raw_path","")
+              if not os.path.isfile(bp): raise SystemExit(f"bundle {i} missing")
+              if not os.path.isfile(rp): raise SystemExit(f"raw {i} missing")
+              if os.path.getsize(bp)!=int(b.get("size",-1)): raise SystemExit(f"bundle {i} size mismatch")
+              h=hashlib.sha256(open(bp,"rb").read()).hexdigest()
+              if h.lower()!=str(b.get("sha256","")).lower(): raise SystemExit(f"bundle {i} sha mismatch")
+              with open(bp,"rb") as bf, open(rp,"rb") as rf:
+                  if bf.read(8)!=b"LSHVDEL1": raise SystemExit(f"bundle {i} magic invalid")
+                  vsize=struct.unpack("<q",bf.read(8))[0]
+                  count=struct.unpack("<i",bf.read(4))[0]
+                  if vsize!=int(d.get("virtual_size",-1)): raise SystemExit(f"bundle {i} virtual size mismatch")
+                  compared=0
+                  for n in range(count):
+                      off=struct.unpack("<q",bf.read(8))[0]
+                      ln=struct.unpack("<q",bf.read(8))[0]
+                      left=ln; rf.seek(off)
+                      while left:
+                          want=min(left,1024*1024)
+                          payload=bf.read(want)
+                          raw=rf.read(want)
+                          if len(payload)!=want or len(raw)!=want or payload!=raw:
+                              raise SystemExit(f"raw delta mismatch disk={i} range={n} offset={off} length={ln}")
+                          left-=want; compared+=want
+                  if bf.read(1): raise SystemExit(f"bundle {i} trailing data")
+              print(f"MORPHING_DELTA_MATCH disk={i} ranges={count} bytes={compared}")
+          print("MORPHING_DELTA_APPLICATION_PROOF=PASS")
+          PY
+          python3 /tmp/ls-morphing-reconcile.py
+          rm -f /tmp/ls-morphing-reconcile.py
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'MORPHING reconciliation failed'}
+
+      - name: Re-prove source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($vm.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw 'Reconcile changed source state'}
+          if($n -ne 0){throw 'Unexpected checkpoint'}
+          Write-Host 'MORPHING_SOURCE_INVARIANT=PASS'
