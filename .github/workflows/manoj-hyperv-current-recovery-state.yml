@@ -1,0 +1,129 @@
+name: Manoj HyperV Current Recovery State
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-current-recovery-state.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-current-recovery-state
+  cancel-in-progress: true
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Inspect Manoj host and source safety
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue)
+          Write-Host "SOURCE_STATE=$($src.State)"
+          Write-Host "SOURCE_CHECKPOINTS=$($snaps.Count)"
+          if($src.State -ne 'Off' -or $snaps.Count -ne 0){throw 'Source safety invariant failed'}
+
+          $os=Get-CimInstance Win32_OperatingSystem
+          Write-Host "HOST_TOTAL_MB=$([math]::Round($os.TotalVisibleMemorySize/1024))"
+          Write-Host "HOST_FREE_MB=$([math]::Round($os.FreePhysicalMemory/1024))"
+
+          Get-VM | Sort-Object Name | ForEach-Object {
+            Write-Host ("HOST_VM name={0} state={1} startup_mb={2} assigned_mb={3}" -f $_.Name,$_.State,[math]::Round($_.MemoryStartup/1MB),[math]::Round($_.MemoryAssigned/1MB))
+          }
+
+          $ap=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          $mem=Get-VMMemory -VM $ap -ErrorAction Stop
+          Write-Host "APPLIANCE_STATE=$($ap.State)"
+          Write-Host "APPLIANCE_STARTUP_MB=$([math]::Round($mem.Startup/1MB))"
+          Write-Host "APPLIANCE_ASSIGNED_MB=$([math]::Round($ap.MemoryAssigned/1MB))"
+          Write-Host "APPLIANCE_DYNAMIC=$($mem.DynamicMemoryEnabled)"
+          Write-Host "APPLIANCE_MIN_MB=$([math]::Round($mem.Minimum/1MB))"
+          Write-Host "APPLIANCE_MAX_MB=$([math]::Round($mem.Maximum/1MB))"
+          Write-Host 'HOST_RECOVERY_CAPACITY_INSPECT=PASS'
+
+      - name: Prepare appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-current-recovery.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Inspect durable recovery state and appliance guest
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          operation="manoj-hv-ls-migration-source-test-20260924"
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]
+            c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_")
+            suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$operation")
+          python3 - "$state" <<'PY'
+          import json,os,sys,hashlib
+          p=sys.argv[1]
+          s=json.load(open(p))
+          keys=[
+            "phase","delta_capture_started_at","delta_captured_at","morph_started_at",
+            "delta_applied_at","morph_prelaunch_recovery_started_at",
+            "morph_prelaunch_recovery_completed_at","morph_prelaunch_recovery_reason",
+            "morph_no_write_recovery_started_at","morph_no_write_recovery_completed_at",
+            "morph_no_write_recovery_reason","morph_no_write_recovery_memsize_mb",
+            "morph_no_write_recovery_smp","import_started_at","template_id","imported_at"
+          ]
+          print("STATE_PATH="+p)
+          for k in keys:
+              print("STATE_"+k.upper()+"="+str(s.get(k)))
+          print("STATE_DELTA_APPLIED_INDICES="+repr(s.get("delta_applied_indices")))
+          print("STATE_IMAGE_IMPORTS="+str(len(s.get("image_imports") or [])))
+          for i,d in enumerate(s.get("disks") or []):
+              q=d.get("prepared_raw_path","")
+              st=os.stat(q)
+              print(f"PREPARED_DISK index={i} path={q} bytes={st.st_size} mtime={st.st_mtime_ns}")
+          root=os.path.dirname(p)
+          xml=os.path.join(root,"final-libvirt.xml")
+          print("FINAL_XML_EXISTS="+str(os.path.isfile(xml)))
+          print("FINAL_XML_SIZE="+str(os.path.getsize(xml) if os.path.isfile(xml) else -1))
+          print("FINAL_XML_MTIME_NS="+str(os.stat(xml).st_mtime_ns if os.path.isfile(xml) else -1))
+          PY
+          echo '===APPLIANCE_MEMORY==='
+          free -m
+          grep -E '^(MemTotal|MemFree|MemAvailable|SwapTotal|SwapFree):' /proc/meminfo
+          echo "DEV_KVM_PRESENT=$(test -c /dev/kvm && echo true || echo false)"
+          echo 'CURRENT_RECOVERY_STATE_INSPECT=PASS'
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'current recovery state inspection failed'}
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue)
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$($snaps.Count)"
+          if($src.State -ne 'Off' -or $snaps.Count -ne 0){throw 'Source invariant failed'}
+          Write-Host 'CURRENT_STATE_SOURCE_INVARIANT=PASS'
