@@ -31,6 +31,7 @@ jobs:
           Get-Service -Name 'actions.runner.*' -ErrorAction SilentlyContinue |
             Select-Object Name,DisplayName,Status,StartType | Format-Table -AutoSize
           Get-Command ssh.exe -ErrorAction Stop | Select-Object Name,Source
+          Get-Command wsl.exe -ErrorAction SilentlyContinue | Select-Object Name,Source
           Get-Command python.exe -ErrorAction SilentlyContinue | Select-Object Name,Source
           Get-Command plink.exe -ErrorAction SilentlyContinue | Select-Object Name,Source
           Get-Command showmount.exe -ErrorAction SilentlyContinue | Select-Object Name,Source
@@ -57,16 +58,20 @@ jobs:
             $ping=Test-Connection -ComputerName $ip -Count 1 -Quiet -ErrorAction SilentlyContinue
             $ssh='not-attempted'
             if($tcp22){
-              $out=& ssh.exe -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "root@$ip" "printf 'HOSTNAME='; hostname; printf 'OS='; . /etc/os-release; printf '%s %s\n' \"$NAME\" \"$VERSION_ID\"; printf 'CPU='; nproc; printf 'MEM_KB='; awk '/MemTotal/ {print $2}' /proc/meminfo; printf 'VIRT='; systemd-detect-virt 2>/dev/null || true" 2>&1
-              if($LASTEXITCODE -eq 0){$ssh='key-auth-pass'; Write-Host ($out | Out-String)} else {$ssh="key-auth-fail:$LASTEXITCODE"; Write-Host ($out | Select-Object -Last 4 | Out-String)}
+              $out=& ssh.exe -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "root@$ip" "hostname" 2>&1
+              $rc=$LASTEXITCODE
+              if($rc -eq 0){$ssh='key-auth-pass'; Write-Host ($out | Out-String)} else {$ssh="key-auth-fail:$rc"; Write-Host ($out | Select-Object -Last 4 | Out-String)}
+              $global:LASTEXITCODE=0
             }
             $rows += [pscustomobject]@{hostname=$name;ip=$ip;ping=$ping;tcp22=$tcp22;ssh=$ssh}
             Write-Host "::endgroup::"
           }
           $rows | Format-Table -AutoSize
           $rows | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 (Join-Path $env:RUNNER_TEMP 'seven-node-connectivity.json')
+          exit 0
 
       - name: NFS discovery
+        if: always()
         shell: powershell
         run: |
           $ErrorActionPreference='Continue'
@@ -78,11 +83,20 @@ jobs:
           }
           $sm=Get-Command showmount.exe -ErrorAction SilentlyContinue
           if($sm){
-            Write-Host '--- NFS EXPORTS ---'
+            Write-Host '--- WINDOWS SHOWMOUNT EXPORTS ---'
             & $sm.Source -e $nfs
-            Write-Host "SHOWMOUNT_RC=$LASTEXITCODE"
+            Write-Host "WINDOWS_SHOWMOUNT_RC=$LASTEXITCODE"
+            $global:LASTEXITCODE=0
           } else {
-            Write-Host 'SHOWMOUNT_UNAVAILABLE'
+            Write-Host 'WINDOWS_SHOWMOUNT_UNAVAILABLE'
+          }
+          $wsl=Get-Command wsl.exe -ErrorAction SilentlyContinue
+          if($wsl){
+            Write-Host '--- WSL NFS DISCOVERY ---'
+            & $wsl.Source -e sh -lc "echo WSL_OK; command -v showmount || true; showmount -e 172.17.60.210 2>&1 || true"
+            $global:LASTEXITCODE=0
+          } else {
+            Write-Host 'WSL_UNAVAILABLE'
           }
           Write-Host '--- ROUTE TO NFS ---'
           route print $nfs
@@ -90,8 +104,10 @@ jobs:
           Get-WindowsOptionalFeature -Online -ErrorAction SilentlyContinue |
             Where-Object FeatureName -match 'NFS' |
             Select-Object FeatureName,State | Format-Table -AutoSize
+          exit 0
 
       - name: Local SSH material metadata
+        if: always()
         shell: powershell
         run: |
           $ErrorActionPreference='Continue'
@@ -108,6 +124,7 @@ jobs:
               Write-Host "::endgroup::"
             }
           }
+          exit 0
 
       - name: Upload non-secret baseline
         if: always()
