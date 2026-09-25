@@ -40,11 +40,16 @@ jobs:
           if($LASTEXITCODE -ne 0){throw 'helper key invalid'}
 
           $kh=Join-Path $env:RUNNER_TEMP 'helper-known-hosts'
+          $oldPreference=$ErrorActionPreference
+          $ErrorActionPreference='SilentlyContinue'
           $scan1=& ssh-keyscan.exe -T 5 -t ed25519 $helperIp 2>$null
-          if($LASTEXITCODE -ne 0 -or -not $scan1){throw 'helper ed25519 host key scan failed'}
+          $rc1=$LASTEXITCODE
           Start-Sleep -Seconds 2
           $scan2=& ssh-keyscan.exe -T 5 -t ed25519 $helperIp 2>$null
-          if($LASTEXITCODE -ne 0 -or -not $scan2){throw 'helper second host key scan failed'}
+          $rc2=$LASTEXITCODE
+          $ErrorActionPreference=$oldPreference
+          if($rc1 -ne 0 -or -not $scan1){throw 'helper ed25519 host key scan failed'}
+          if($rc2 -ne 0 -or -not $scan2){throw 'helper second host key scan failed'}
           $s1=[string]::Join([Environment]::NewLine,@($scan1))
           $s2=[string]::Join([Environment]::NewLine,@($scan2))
           if($s1 -ne $s2){throw 'helper host key changed between scans'}
