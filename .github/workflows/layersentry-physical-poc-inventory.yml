@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 2B Bridge Host1
+name: LayerSentry Physical POC Stage 2B Host1 Recovery
 
 on:
   pull_request:
@@ -14,17 +14,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  bridge:
-    name: bridge-host1-${{ matrix.slot }}
+  recovery:
+    name: bridge-recovery-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
         slot: [1, 2, 3]
     runs-on: [self-hosted, Linux]
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
-      - name: Transactionally create br0 on demolayersentry1
+      - name: Ensure host1 pre-bridge state is restored
         shell: bash
         run: |
           set -euo pipefail
@@ -33,100 +33,20 @@ jobs:
             echo "GUARD_SKIP_NON_TARGET_RUNNER"
             exit 0
           fi
-
           LOG=/var/log/layersentry-poc/activity.log
           exec > >(tee -a "$LOG") 2>&1
-          echo "=== STAGE2B_BRIDGE_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE2B_RECOVERY_BEGIN $(date -u +%FT%TZ) ==="
 
-          EXPECTED_IP=192.168.1.121
-          PEER_IP=192.168.1.122
-          GATEWAY=192.168.1.1
-          test "$(id -u)" -eq 0
-          command -v nmstatectl >/dev/null
-          ip -4 -o addr show dev eno1 | grep -F "$EXPECTED_IP/24"
+          nmstatectl rollback /org/freedesktop/NetworkManager/Checkpoint/1 || true
+          sleep 2
 
-          cat >/etc/layersentry-poc/network/br0-desired.yaml <<EOF
-          ---
-          interfaces:
-          - name: br0
-            type: linux-bridge
-            state: up
-            ipv4:
-              enabled: true
-              dhcp: false
-              address:
-              - ip: $EXPECTED_IP
-                prefix-length: 24
-            ipv6:
-              enabled: false
-            bridge:
-              options:
-                stp:
-                  enabled: false
-              port:
-              - name: eno1
-          - name: eno1
-            type: ethernet
-            state: up
-            ipv4:
-              enabled: false
-            ipv6:
-              enabled: false
-          routes:
-            config:
-            - destination: 0.0.0.0/0
-              next-hop-address: $GATEWAY
-              next-hop-interface: br0
-          dns-resolver:
-            config:
-              server:
-              - 8.8.8.8
-              - 1.1.1.1
-          EOF
-          chmod 0600 /etc/layersentry-poc/network/br0-desired.yaml
-
-          echo "--- desired network ---"
-          cat /etc/layersentry-poc/network/br0-desired.yaml
-
-          CHECKPOINT=""
-          rollback_on_error() {
-            rc=$?
-            if [ -n "$CHECKPOINT" ]; then
-              echo "Validation failed; rolling back checkpoint $CHECKPOINT"
-              nmstatectl rollback "$CHECKPOINT" || true
-            fi
-            exit "$rc"
-          }
-          trap rollback_on_error ERR
-
-          echo "--- apply without commit ---"
-          APPLY_OUTPUT=$(nmstatectl apply --no-commit --timeout 120 /etc/layersentry-poc/network/br0-desired.yaml)
-          printf '%s\n' "$APPLY_OUTPUT"
-          CHECKPOINT=$(printf '%s\n' "$APPLY_OUTPUT" | tail -n1)
-          case "$CHECKPOINT" in
-            /org/freedesktop/NetworkManager/Checkpoint/*) ;;
-            *) echo "Unexpected checkpoint: $CHECKPOINT"; exit 1 ;;
-          esac
-
-          echo "--- validate candidate state ---"
-          ip -4 -o addr show dev br0 | grep -F "$EXPECTED_IP/24"
-          ! ip -4 -o addr show dev eno1 | grep -q 'inet '
-          ip -4 route show default | grep -F "via $GATEWAY dev br0"
-          bridge link | grep -E 'eno1.*master br0'
-          ping -c 3 -W 2 "$GATEWAY"
-          ping -c 2 -W 2 "$PEER_IP"
-          curl -fsS --connect-timeout 5 --max-time 15 https://api.github.com/ >/dev/null
-
-          echo "--- commit candidate state ---"
-          nmstatectl commit "$CHECKPOINT"
-          CHECKPOINT=""
-          trap - ERR
-
-          echo "--- persistent postflight ---"
-          nmstatectl show br0
-          nmcli -t -f NAME,TYPE,DEVICE,STATE con show
+          echo "--- restored network ---"
           ip -br addr
           ip -4 route
-          ping -c 2 -W 2 "$GATEWAY"
+          nmcli -t -f NAME,TYPE,DEVICE,STATE con show
+          ip -4 -o addr show dev eno1 | grep -F '192.168.1.121/24'
+          ip -4 route show default | grep -F 'via 192.168.1.1 dev eno1'
+          ping -c 2 -W 2 192.168.1.1
+          ping -c 2 -W 2 192.168.1.122
           curl -fsS --connect-timeout 5 --max-time 15 https://api.github.com/ >/dev/null
-          echo "=== STAGE2B_BRIDGE_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE2B_RECOVERY_PASS $(date -u +%FT%TZ) ==="
