@@ -23,6 +23,16 @@ const enabledType = (value) => (value ? INPUT_TYPES.TEXT : INPUT_TYPES.HIDDEN)
 const enabledSwitch = (value) =>
   value ? INPUT_TYPES.SWITCH : INPUT_TYPES.HIDDEN
 
+export const ADVANCED_OPTIONS = {
+  name: 'advancedOptions',
+  label: 'Advanced options',
+  tooltip:
+    'Shows provider-qualified storage and network tuning without exposing raw templates.',
+  type: INPUT_TYPES.SWITCH,
+  validation: boolean().default(false),
+  grid: { md: 12 },
+}
+
 const DATA_DISK_ENABLED = {
   name: 'dataDiskEnabled',
   label: 'Add a data disk',
@@ -153,25 +163,31 @@ const NETWORK_SPEED = {
  */
 export const SECTIONS = (vmTemplate = {}) => [
   {
+    id: 'advanced-options',
+    legend: 'Configuration level',
+    fields: [ADVANCED_OPTIONS],
+  },
+  {
     id: 'data-disk',
     legend: 'Additional data disk',
-    fields: [
-      DATA_DISK_ENABLED,
-      DATA_DISK_SIZE,
-      STORAGE_IOPS_ENABLED(vmTemplate),
-      STORAGE_IOPS(vmTemplate),
-    ],
+    fields: [DATA_DISK_ENABLED, DATA_DISK_SIZE],
   },
   {
     id: 'network',
     legend: 'Network',
-    fields: [
-      NETWORK_ID,
-      IP_ASSIGNMENT,
-      STATIC_IP,
-      NETWORK_QOS_ENABLED,
-      NETWORK_SPEED,
-    ],
+    fields: [NETWORK_ID, IP_ASSIGNMENT, STATIC_IP],
+  },
+  {
+    id: 'advanced-storage',
+    legend: 'Advanced storage',
+    advanced: true,
+    fields: [STORAGE_IOPS_ENABLED(vmTemplate), STORAGE_IOPS(vmTemplate)],
+  },
+  {
+    id: 'advanced-network',
+    legend: 'Advanced network',
+    advanced: true,
+    fields: [NETWORK_QOS_ENABLED, NETWORK_SPEED],
   },
 ]
 

@@ -404,6 +404,33 @@ test('cloud resource request rejects invalid network and static IP values', () =
   )
 })
 
+test('cloud resource step gates qualified tuning behind a recoverable Advanced options toggle', () => {
+  const content = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources/index.js'
+    ),
+    'utf8'
+  )
+  const schema = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/CloudResources/schema.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(schema, /label: 'Advanced options'/)
+  assert.match(schema, /advanced: true/)
+  assert.match(content, /advancedSection \? advanced : true/)
+  assert.match(content, /Keep advanced settings/)
+  assert.match(content, /Reset to defaults/)
+  assert.match(content, /setValue\(`\$\{STEP_ID\}\.storageIopsEnabled`, false/)
+  assert.match(content, /setValue\(`\$\{STEP_ID\}\.networkQosEnabled`, false/)
+  assert.match(content, /Advanced storage or network settings are retained/)
+  assert.doesNotMatch(content, /template\/XML|raw template/i)
+})
+
 test('cloud view hides provider-only VM controls and derives CPU at two-to-one', () => {
   const templateView = readFileSync(
     resolve(__dirname, '../../etc/sunstone/views/cloud/vm-template-tab.yaml'),
