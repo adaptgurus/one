@@ -29,6 +29,7 @@ import SearchPage from 'client/apps/layersentry/pages/Search'
 import SettingsPage from 'client/apps/layersentry/pages/Settings'
 import StorageWorkspace from 'client/apps/layersentry/pages/StorageWorkspace'
 import NetworkWorkspace from 'client/apps/layersentry/pages/NetworkWorkspace'
+import WorkloadSegmentsWizard from 'client/apps/layersentry/pages/WorkloadSegmentsWizard'
 import KubernetesWorkspace from 'client/apps/layersentry/pages/KubernetesWorkspace'
 import OperationsWorkspace from 'client/apps/layersentry/pages/OperationsWorkspace'
 import ProtectionWorkspace from 'client/apps/layersentry/pages/ProtectionWorkspace'
@@ -165,6 +166,11 @@ const Portal = ({ endpoints }) => {
           render={() => <KubernetesWorkspace endpoints={endpoints} />}
         />
 
+        <Route
+          exact
+          path="/network/segments/create"
+          render={() => <WorkloadSegmentsWizard />}
+        />
         <Route
           exact
           path="/network/create"
