@@ -49,23 +49,8 @@ make requirements
 echo "ONEDEPLOY_REQUIREMENTS=PASS"
 
 : > "$ROOT/known_hosts"
-for ip in 172.17.60.30 172.17.60.31 172.17.60.32 172.17.60.33 172.17.60.34 172.17.60.35; do
-  keyscan_ok=0
-  for attempt in 1 2 3; do
-    if ssh-keyscan -T 5 -H "$ip" >> "$ROOT/known_hosts" 2>/dev/null; then
-      keyscan_ok=1
-      echo "SSH_KEYSCAN=PASS ip=$ip attempt=$attempt"
-      break
-    fi
-    sleep 1
-  done
-  if [[ "$keyscan_ok" -ne 1 ]]; then
-    echo "SSH_KEYSCAN=FAIL ip=$ip" >&2
-    exit 31
-  fi
-done
 chmod 600 "$ROOT/known_hosts"
-echo "SSH_KNOWN_HOSTS=PASS"
+echo "SSH_KNOWN_HOSTS_BOOTSTRAP=TOFU_FIXED_IPS"
 
 VAULT_PASS="$ROOT/vault-pass"
 VAULT_VARS="$ROOT/vault-vars.yml"
@@ -162,10 +147,19 @@ EOF
 chmod 600 "$INVENTORY"
 
 export ANSIBLE_HOST_KEY_CHECKING=True
-export ANSIBLE_SSH_ARGS="-q -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ROOT/known_hosts"
+export ANSIBLE_SSH_ARGS="-q -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$ROOT/known_hosts"
 EXTRA=(--vault-password-file "$VAULT_PASS" -e "@$VAULT_VARS")
 
 ansible -i "$INVENTORY" all -m ping "${EXTRA[@]}"
+for ip in 172.17.60.30 172.17.60.31 172.17.60.32 172.17.60.33 172.17.60.34 172.17.60.35; do
+  if ! ssh-keygen -F "$ip" -f "$ROOT/known_hosts" >/dev/null 2>&1; then
+    echo "SSH_HOSTKEY_RECORD=FAIL ip=$ip" >&2
+    exit 32
+  fi
+  echo "SSH_HOSTKEY_RECORD=PASS ip=$ip"
+done
+export ANSIBLE_SSH_ARGS="-q -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$ROOT/known_hosts"
+echo "SSH_KNOWN_HOSTS_STRICT=PASS"
 
 NFS_CMD="dnf -y install nfs-utils >/tmp/layersentry-nfs-utils.log; \
 mkdir -p /srv/layersentry/nfs/workload /srv/layersentry/nfs/images; \
