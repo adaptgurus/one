@@ -193,6 +193,7 @@ const Content = ({
  * @param {boolean} root0.isUpdate - If `true`, the form is being updated
  * @param {string[]} root0.tabIds - Configuration tabs included in the step
  * @param {boolean} root0.isInstantiate - If `true`, the form is instantiating
+ * @param {boolean} root0.isVnet - If `true`, this is a Virtual Network form
  * @returns {object} Optional configuration step
  */
 const Configuration = ({
