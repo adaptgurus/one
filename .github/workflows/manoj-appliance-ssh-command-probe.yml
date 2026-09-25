@@ -1,0 +1,87 @@
+name: Manoj Appliance SSH Command Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-appliance-ssh-command-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-appliance-ssh-command-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and prepare appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw 'Wrong runner'}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'Wrong host'}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw 'Source must remain Off'}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected checkpoint'}
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-appliance-command-probe.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Probe direct SSH command variants from appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $bash=@'
+          set -euo pipefail
+          eval "$(sudo ruby -ryaml -e '
+            c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            p=(c["hyperv_connections"]||c[:hyperv_connections]||{})["manoj-qual"] || (c["hyperv_connections"]||c[:hyperv_connections]||{})[:"manoj-qual"]
+            abort "profile missing" unless p
+            get=lambda{|k| p[k.to_s]||p[k.to_sym]}
+            puts "H=#{get.call(:host).to_s.shellescape}"
+            puts "U=#{get.call(:user).to_s.shellescape}"
+            puts "P=#{get.call(:port).to_i}"
+            puts "I=#{get.call(:identity_file).to_s.shellescape}"
+            puts "K=#{get.call(:known_hosts).to_s.shellescape}"
+          ' -rshellwords)"
+          common=(-T -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o PasswordAuthentication=no -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o TCPKeepAlive=yes -o "UserKnownHostsFile=$K" -p "$P" -i "$I" "$U@$H")
+
+          set +e
+          timeout 30s ssh "${common[@]}" cmd.exe /c echo LS_CMD_OK
+          rc1=$?
+          echo "DIRECT_SSH_CMD_RC=$rc1"
+
+          timeout 30s ssh "${common[@]}" powershell.exe -NoLogo -NoProfile -NonInteractive -Command "[Console]::WriteLine('LS_PS_OK')"
+          rc2=$?
+          echo "DIRECT_SSH_POWERSHELL_RC=$rc2"
+
+          enc=$(python3 - <<'PY'
+          import base64
+          s="[pscustomobject]@{Ok=$true;Computer=$env:COMPUTERNAME}|ConvertTo-Json -Compress"
+          print(base64.b64encode(s.encode("utf-16le")).decode())
+          PY
+          )
+          timeout 30s ssh "${common[@]}" powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand "$enc"
+          rc3=$?
+          echo "DIRECT_SSH_ENCODED_RC=$rc3"
+          set -e
+
+          if [ "$rc1" -ne 0 ] || [ "$rc2" -ne 0 ] || [ "$rc3" -ne 0 ]; then
+            exit 41
+          fi
+          echo 'APPLIANCE_DIRECT_SSH_COMMANDS=PASS'
+          '@
+          $bash=[regex]::Replace($bash,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($bash))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw "Appliance direct SSH command probe failed rc=$LASTEXITCODE"}
