@@ -30,16 +30,23 @@ jobs:
           }
           "LS_TARGET=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Clone exact Smart Installer branch
+      - name: Checkout exact Smart Installer branch
+        if: env.LS_TARGET == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: adaptgurus/layersentry-platform
+          ref: feat/smart-installer-existing-host-bootstrap-20260926
+          path: layersentry-platform-validation
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Bind checked out source
         if: env.LS_TARGET == 'true'
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $root=Join-Path $env:RUNNER_TEMP 'layersentry-platform-validation'
-          if(Test-Path $root){Remove-Item -Recurse -Force $root}
-          git clone --depth 1 --branch feat/smart-installer-existing-host-bootstrap-20260926 https://github.com/adaptgurus/layersentry-platform.git $root
-          Set-Location $root
-          git rev-parse HEAD
+          $root=Join-Path $env:GITHUB_WORKSPACE 'layersentry-platform-validation'
+          if(-not (Test-Path (Join-Path $root 'deploy'))){throw 'Smart Installer checkout missing deploy directory'}
           "LS_SOURCE=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Python compile and focused tests
