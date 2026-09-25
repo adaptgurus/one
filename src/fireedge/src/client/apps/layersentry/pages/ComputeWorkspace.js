@@ -16,6 +16,7 @@
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
 import {
+  Checkbox,
   Alert,
   Box,
   Button,
@@ -23,6 +24,7 @@ import {
   InputLabel,
   MenuItem,
   Select,
+  FormControlLabel,
   TextField,
   Typography,
 } from '@mui/material'
@@ -36,7 +38,13 @@ import {
 } from 'iconoir-react'
 import { useMemo, useState } from 'react'
 import { useHistory } from 'react-router-dom'
-import { VmAPI, useGeneralApi, useViews } from '@FeaturesModule'
+import {
+  DatastoreAPI,
+  HostAPI,
+  VmAPI,
+  useGeneralApi,
+  useViews,
+} from '@FeaturesModule'
 import { jsonToXml } from '@UtilsModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
@@ -55,6 +63,11 @@ import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import { colors } from 'client/apps/layersentry/theme/tokens'
 
 const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
+const getLastVmHistory = (vm) => {
+  const history = toArray(vm?.HISTORY_RECORDS?.HISTORY)
+
+  return history[history.length - 1] ?? {}
+}
 
 const COMPUTE_QUICK_ACTIONS = [
   {
@@ -131,7 +144,14 @@ const ComputeWorkspace = ({ endpoints }) => {
   const canUpdateVm =
     isAdmin &&
     isCapabilityEnabled(CAPABILITY_IDS.VM_UPDATE_CONFIG, capabilityModel)
+  const canMigrateVm =
+    isAdmin && isCapabilityEnabled(CAPABILITY_IDS.VM_MIGRATE, capabilityModel)
+  const hostQuery = HostAPI.useGetHostsQuery(undefined, { skip: !canMigrateVm })
+  const datastoreQuery = DatastoreAPI.useGetDatastoresQuery(undefined, {
+    skip: !canMigrateVm,
+  })
   const [resizeVm, resizeState] = VmAPI.useResizeMutation()
+  const [migrateVm, migrateState] = VmAPI.useMigrateMutation()
   const [renameVm, renameState] = VmAPI.useRenameVmMutation()
   const [updateUserTemplate, updateState] =
     VmAPI.useUpdateUserTemplateMutation()
@@ -140,6 +160,10 @@ const ComputeWorkspace = ({ endpoints }) => {
   const [editVcpu, setEditVcpu] = useState('')
   const [editMemoryGb, setEditMemoryGb] = useState('')
   const [editDescription, setEditDescription] = useState('')
+  const [targetHostId, setTargetHostId] = useState('')
+  const [targetDatastoreId, setTargetDatastoreId] = useState('')
+  const [liveStorageMove, setLiveStorageMove] = useState(true)
+  const [migrationStatus, setMigrationStatus] = useState('')
   const selectedVm = useMemo(
     () => vms.find(({ ID }) => String(ID) === String(selectedVmId)),
     [selectedVmId, vms]
@@ -153,7 +177,27 @@ const ComputeWorkspace = ({ endpoints }) => {
     [selectedVm]
   )
   const editorBusy =
-    resizeState.isLoading || renameState.isLoading || updateState.isLoading
+    resizeState.isLoading ||
+    renameState.isLoading ||
+    updateState.isLoading ||
+    migrateState.isLoading
+  const currentLocation = selectedVm ? getLastVmHistory(selectedVm) : {}
+  const allSystemDatastores = toArray(datastoreQuery.data).filter(
+    ({ TYPE }) => String(TYPE) === '1' || String(TYPE).toUpperCase() === 'SYSTEM_DS'
+  )
+  const currentDatastore = allSystemDatastores.find(
+    ({ ID }) => String(ID) === String(currentLocation?.DS_ID)
+  )
+  const currentTransferDriver =
+    currentDatastore?.TM_MAD ?? currentDatastore?.TEMPLATE?.TM_MAD
+  const systemDatastores = allSystemDatastores.filter((datastore) => {
+    const transferDriver = datastore?.TM_MAD ?? datastore?.TEMPLATE?.TM_MAD
+
+    return !currentTransferDriver || transferDriver === currentTransferDriver
+  })
+  const availableHosts = toArray(hostQuery.data).filter(
+    ({ STATE }) => String(STATE) === '2' || String(STATE).toUpperCase() === 'MONITORED'
+  )
 
   const selectVmForEdit = (id) => {
     const vm = vms.find(({ ID }) => String(ID) === String(id))
@@ -166,6 +210,42 @@ const ComputeWorkspace = ({ endpoints }) => {
         : ''
     )
     setEditDescription(vm?.USER_TEMPLATE?.DESCRIPTION ?? '')
+    const location = getLastVmHistory(vm)
+    setTargetHostId(String(location?.HID ?? ''))
+    setTargetDatastoreId('')
+    setMigrationStatus('')
+  }
+
+  const moveVmStorage = async () => {
+    if (!selectedVm?.ID || !targetHostId || !targetDatastoreId) return
+    if (String(currentLocation?.DS_ID) === String(targetDatastoreId)) {
+      setMigrationStatus('Choose a destination storage pool different from the current pool.')
+      return
+    }
+    if (liveStorageMove && String(selectedVm.STATE) !== '3') {
+      setMigrationStatus('Live storage migration requires a running virtual machine.')
+      return
+    }
+
+    try {
+      await migrateVm({
+        id: selectedVm.ID,
+        host: Number(targetHostId),
+        datastore: Number(targetDatastoreId),
+        live: liveStorageMove,
+        enforce: true,
+        type: liveStorageMove ? 0 : 1,
+      }).unwrap()
+      setMigrationStatus(
+        'OpenNebula accepted the storage move. Completion is shown only after the refreshed VM location reports the destination pool.'
+      )
+      await query.refetch()
+    } catch (error) {
+      const message =
+        error?.data?.message ?? error?.message ?? 'Could not move VM storage.'
+      setMigrationStatus(message)
+      enqueueError(message)
+    }
   }
 
   const applyVmSpecs = async () => {
@@ -323,7 +403,7 @@ const ComputeWorkspace = ({ endpoints }) => {
         </Box>
       </Surface>
 
-      {isAdmin && (canResizeVm || canUpdateVm) && (
+      {isAdmin && (canResizeVm || canUpdateVm || canMigrateVm) && (
         <Surface sx={{ mt: 2, p: 2.5 }} data-layersentry-vm-admin-editor>
           <SectionHeader
             title="Super Admin VM editor"
@@ -462,6 +542,109 @@ const ComputeWorkspace = ({ endpoints }) => {
                   </Button>
                 )}
               </Box>
+              {canMigrateVm && (
+                <Box
+                  sx={{
+                    mt: 1,
+                    p: 2,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 2,
+                  }}
+                >
+                  <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
+                    Move storage
+                  </Typography>
+                  <Typography sx={{ mt: 0.5, fontSize: 12, color: colors.text.secondary }}>
+                    Current host: {currentLocation?.HOSTNAME ?? '—'} · Current storage pool:{' '}
+                    {currentLocation?.DS_ID ?? '—'}. OpenNebula performs the native migration;
+                    LayerSentry never copies disk files directly.
+                  </Typography>
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' },
+                      gap: 1.25,
+                      mt: 1.5,
+                    }}
+                  >
+                    <FormControl fullWidth size="small">
+                      <InputLabel id="storage-move-host-label">Destination host</InputLabel>
+                      <Select
+                        labelId="storage-move-host-label"
+                        label="Destination host"
+                        value={targetHostId}
+                        onChange={(event) => setTargetHostId(event.target.value)}
+                      >
+                        {availableHosts.map((host) => (
+                          <MenuItem key={host.ID} value={String(host.ID)}>
+                            {host.NAME || `Host ${host.ID}`}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth size="small">
+                      <InputLabel id="storage-move-datastore-label">
+                        Destination storage pool
+                      </InputLabel>
+                      <Select
+                        labelId="storage-move-datastore-label"
+                        label="Destination storage pool"
+                        value={targetDatastoreId}
+                        onChange={(event) => setTargetDatastoreId(event.target.value)}
+                      >
+                        {systemDatastores.map((datastore) => (
+                          <MenuItem
+                            key={datastore.ID}
+                            value={String(datastore.ID)}
+                            disabled={String(datastore.ID) === String(currentLocation?.DS_ID)}
+                          >
+                            {datastore.NAME || `Storage ${datastore.ID}`}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                  </Box>
+                  <FormControlLabel
+                    sx={{ mt: 0.75 }}
+                    control={
+                      <Checkbox
+                        checked={liveStorageMove}
+                        onChange={(event) => setLiveStorageMove(event.target.checked)}
+                      />
+                    }
+                    label="Keep the running VM online (live migration)"
+                  />
+                  {systemDatastores.every(
+                    ({ ID }) => String(ID) === String(currentLocation?.DS_ID)
+                  ) && (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      No compatible destination storage pool is available. OpenNebula
+                      requires the source and destination to use the same transfer driver.
+                    </Alert>
+                  )}
+                  {!liveStorageMove && (
+                    <Alert severity="warning" sx={{ mt: 1 }}>
+                      Warm migration powers off the VM during the storage move. Review the
+                      workload maintenance window first.
+                    </Alert>
+                  )}
+                  {migrationStatus && (
+                    <Alert severity="info" sx={{ mt: 1 }}>
+                      {migrationStatus}
+                    </Alert>
+                  )}
+                  <Button
+                    variant="contained"
+                    disabled={
+                      editorBusy || !targetHostId || !targetDatastoreId
+                    }
+                    onClick={moveVmStorage}
+                    sx={{ mt: 1.25, textTransform: 'none' }}
+                  >
+                    {migrateState.isLoading ? 'Requesting move…' : 'Move storage'}
+                  </Button>
+                </Box>
+              )}
             </Box>
           )}
         </Surface>
