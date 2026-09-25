@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and       *
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
+/* eslint-disable jsdoc/require-jsdoc */
 
 export const SEGMENT_MODES = Object.freeze({
   VLAN: 'vlan',
@@ -234,6 +235,7 @@ export const validateWorkloadSegments = (segments = []) => {
     if (!name) errors.name = 'Network name is required.'
     if (name) {
       const previous = names.get(name.toLowerCase())
+
       if (previous !== undefined) {
         errors.name = 'Network name must be unique in this batch.'
         rowErrors[previous].name = 'Network name must be unique in this batch.'
@@ -266,8 +268,12 @@ export const validateWorkloadSegments = (segments = []) => {
       }
     }
 
-    if (mode === SEGMENT_MODES.BRIDGE && !validateTaggedVlans(segment.taggedVlans)) {
-      errors.taggedVlans = 'Use VLAN IDs/ranges from 1-4094, separated by commas.'
+    if (
+      mode === SEGMENT_MODES.BRIDGE &&
+      !validateTaggedVlans(segment.taggedVlans)
+    ) {
+      errors.taggedVlans =
+        'Use VLAN IDs/ranges from 1-4094, separated by commas.'
     }
 
     if (!parseIpv4Cidr(cidr)) {
