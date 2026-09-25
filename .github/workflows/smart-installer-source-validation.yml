@@ -1,0 +1,101 @@
+name: Smart Installer Source Validation
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/smart-installer-source-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3]
+      max-parallel: 3
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind target runner
+        shell: powershell
+        run: |
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            "LS_TARGET=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            exit 0
+          }
+          "LS_TARGET=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Clone exact Smart Installer branch
+        if: env.LS_TARGET == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $root=Join-Path $env:RUNNER_TEMP 'layersentry-platform-validation'
+          if(Test-Path $root){Remove-Item -Recurse -Force $root}
+          git clone --depth 1 --branch feat/smart-installer-existing-host-bootstrap-20260926 https://github.com/adaptgurus/layersentry-platform.git $root
+          Set-Location $root
+          git rev-parse HEAD
+          "LS_SOURCE=$root" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Python compile and focused tests
+        if: env.LS_TARGET == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-Location $env:LS_SOURCE
+          $native=$null
+          foreach($candidate in @('py.exe','python.exe','python3.exe')){
+            $cmd=Get-Command $candidate -ErrorAction SilentlyContinue
+            if($cmd){
+              try { & $cmd.Source --version; if($LASTEXITCODE -eq 0){$native=$cmd.Source; break} } catch {}
+            }
+          }
+          if($native){
+            if((Split-Path $native -Leaf) -ieq 'py.exe'){
+              & $native -3 -m py_compile deploy/layersentry_deployer/*.py tests/test_*.py
+              if($LASTEXITCODE -ne 0){throw 'Python compile failed'}
+              & $native -3 -m unittest tests.test_simple_installer tests.test_install_orchestrator tests.test_provider_volumes tests.test_provider_nfs_storage tests.test_provider_recovery -v
+            } else {
+              & $native -m py_compile deploy/layersentry_deployer/*.py tests/test_*.py
+              if($LASTEXITCODE -ne 0){throw 'Python compile failed'}
+              & $native -m unittest tests.test_simple_installer tests.test_install_orchestrator tests.test_provider_volumes tests.test_provider_nfs_storage tests.test_provider_recovery -v
+            }
+            if($LASTEXITCODE -ne 0){throw 'Focused Python tests failed'}
+            exit 0
+          }
+          $wsl=Get-Command wsl.exe -ErrorAction SilentlyContinue
+          if(-not $wsl){throw 'No working Python or WSL available on target runner'}
+          $win=$env:LS_SOURCE.Replace('\','/')
+          $drive=$win.Substring(0,1).ToLower()
+          $rest=$win.Substring(2)
+          $linux="/mnt/$drive$rest"
+          & $wsl.Source -e bash -lc "cd '$linux' && python3 -m py_compile deploy/layersentry_deployer/*.py tests/test_*.py && python3 -m unittest tests.test_simple_installer tests.test_install_orchestrator tests.test_provider_volumes tests.test_provider_nfs_storage tests.test_provider_recovery -v"
+          if($LASTEXITCODE -ne 0){throw 'Focused Python tests failed in WSL'}
+
+      - name: Host-agent Go tests
+        if: env.LS_TARGET == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Set-Location (Join-Path $env:LS_SOURCE 'deploy\host-agent')
+          $go=Get-Command go.exe -ErrorAction SilentlyContinue
+          if($go){
+            & $go.Source test ./internal/topology ./internal/storagecheck ./internal/hostops
+            if($LASTEXITCODE -ne 0){throw 'Focused Go tests failed'}
+            & $go.Source fmt ./internal/topology ./internal/storagecheck ./internal/hostops
+            if($LASTEXITCODE -ne 0){throw 'Go fmt failed'}
+            exit 0
+          }
+          $wsl=Get-Command wsl.exe -ErrorAction SilentlyContinue
+          if(-not $wsl){throw 'No Go or WSL available on target runner'}
+          $win=(Join-Path $env:LS_SOURCE 'deploy\host-agent').Replace('\','/')
+          $drive=$win.Substring(0,1).ToLower()
+          $rest=$win.Substring(2)
+          $linux="/mnt/$drive$rest"
+          & $wsl.Source -e bash -lc "cd '$linux' && command -v go >/dev/null && go test ./internal/topology ./internal/storagecheck ./internal/hostops && test -z \"\$(gofmt -l internal/topology internal/storagecheck internal/hostops)\""
+          if($LASTEXITCODE -ne 0){throw 'Focused Go tests failed in WSL'}
