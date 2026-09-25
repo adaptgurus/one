@@ -1,0 +1,54 @@
+name: LayerSentry KubeOne Integration
+
+on:
+  push:
+    branches:
+      - feat/kubeone-applications-ui-20260925
+    paths:
+      - 'src/fireedge/src/client/apps/layersentry/pages/KubernetesWorkspace.js'
+      - 'src/fireedge/src/modules/features/OneApi/kubeOnePortal.js'
+      - 'src/fireedge/src/server/routes/api/kubeoneportal/**'
+      - 'src/fireedge/tests/layersentry/kubeone-portal.test.cjs'
+      - '.github/workflows/kubeone-integration.yml'
+  pull_request:
+    paths:
+      - 'src/fireedge/src/client/apps/layersentry/pages/KubernetesWorkspace.js'
+      - 'src/fireedge/src/modules/features/OneApi/kubeOnePortal.js'
+      - 'src/fireedge/src/server/routes/api/kubeoneportal/**'
+      - 'src/fireedge/tests/layersentry/kubeone-portal.test.cjs'
+      - '.github/workflows/kubeone-integration.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  kubeone-integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/fireedge
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+      - name: Locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: KubeOne portal regression
+        run: node --test tests/layersentry/kubeone-portal.test.cjs
+      - name: Focused KubeOne lint
+        run: |
+          npx eslint             src/client/apps/layersentry/pages/KubernetesWorkspace.js             src/modules/features/OneApi/kubeOnePortal.js             src/server/routes/api/kubeoneportal/routes.js             src/server/routes/api/kubeoneportal/functions.js             src/server/routes/api/kubeoneportal/index.js
+      - name: Production build
+        run: npm run build
+      - name: Verify complete federation
+        run: |
+          test -s dist/index.js
+          test -s dist/client/bundle.layersentry.js
+          count="$(find dist/modules -type f -name remoteEntry.js | wc -l)"
+          echo "FEDERATED_REMOTES=$count"
+          test "$count" -eq 10
+          sha256sum dist/index.js dist/client/bundle.layersentry.js
