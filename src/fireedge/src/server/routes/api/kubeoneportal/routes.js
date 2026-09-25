@@ -11,6 +11,8 @@ const Actions = {
   KUBECONFIG: 'kubeoneportal.kubeconfig',
   WORKER_RECONCILIATION: 'kubeoneportal.worker.reconciliation',
   RECONCILE_WORKERS: 'kubeoneportal.workers.reconcile',
+  APPLICATIONS: 'kubeoneportal.applications',
+  INSTALL_APPLICATION: 'kubeoneportal.application.install',
 }
 
 module.exports = {
@@ -36,6 +38,14 @@ module.exports = {
     [Actions.RECONCILE_WORKERS]: {
       path: `${basepath}/clusters/:id/worker-reconciliation`, httpMethod: POST, auth: true,
       params: { id: { from: resource } },
+    },
+    [Actions.APPLICATIONS]: {
+      path: `${basepath}/clusters/:id/applications`, httpMethod: GET, auth: true,
+      params: { id: { from: resource } },
+    },
+    [Actions.INSTALL_APPLICATION]: {
+      path: `${basepath}/clusters/:id/applications/:app`, httpMethod: POST, auth: true,
+      params: { id: { from: resource }, app: { from: resource } },
     },
   },
 }
