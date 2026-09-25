@@ -1,0 +1,119 @@
+name: Seven Node Foundation Baseline
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-foundation-baseline.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seven-node-foundation-baseline
+  cancel-in-progress: true
+
+jobs:
+  baseline:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind exact runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME"
+          Write-Host "COMPUTERNAME=$env:COMPUTERNAME"
+          Write-Host "USERNAME=$env:USERNAME"
+          if ($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC') { throw "Wrong runner: $env:RUNNER_NAME" }
+          if ($env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC') { throw "Wrong computer: $env:COMPUTERNAME" }
+          Get-Service -Name 'actions.runner.*' -ErrorAction SilentlyContinue |
+            Select-Object Name,DisplayName,Status,StartType | Format-Table -AutoSize
+          Get-Command ssh.exe -ErrorAction Stop | Select-Object Name,Source
+          Get-Command python.exe -ErrorAction SilentlyContinue | Select-Object Name,Source
+          Get-Command plink.exe -ErrorAction SilentlyContinue | Select-Object Name,Source
+          Get-Command showmount.exe -ErrorAction SilentlyContinue | Select-Object Name,Source
+
+      - name: Network and SSH baseline
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $hosts=[ordered]@{
+            layersentry1='172.17.60.30'
+            layersentry2='172.17.60.31'
+            layersentry3='172.17.60.32'
+            layersentry4='172.17.60.33'
+            layersentry5='172.17.60.34'
+            layersentry6='172.17.60.35'
+            layersentryol7='172.17.60.36'
+          }
+          $rows=@()
+          foreach($e in $hosts.GetEnumerator()){
+            $name=$e.Key
+            $ip=$e.Value
+            Write-Host "::group::$name $ip"
+            $tcp22=(Test-NetConnection -ComputerName $ip -Port 22 -WarningAction SilentlyContinue).TcpTestSucceeded
+            $ping=Test-Connection -ComputerName $ip -Count 1 -Quiet -ErrorAction SilentlyContinue
+            $ssh='not-attempted'
+            if($tcp22){
+              $out=& ssh.exe -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "root@$ip" "printf 'HOSTNAME='; hostname; printf 'OS='; . /etc/os-release; printf '%s %s\n' \"$NAME\" \"$VERSION_ID\"; printf 'CPU='; nproc; printf 'MEM_KB='; awk '/MemTotal/ {print $2}' /proc/meminfo; printf 'VIRT='; systemd-detect-virt 2>/dev/null || true" 2>&1
+              if($LASTEXITCODE -eq 0){$ssh='key-auth-pass'; Write-Host ($out | Out-String)} else {$ssh="key-auth-fail:$LASTEXITCODE"; Write-Host ($out | Select-Object -Last 4 | Out-String)}
+            }
+            $rows += [pscustomobject]@{hostname=$name;ip=$ip;ping=$ping;tcp22=$tcp22;ssh=$ssh}
+            Write-Host "::endgroup::"
+          }
+          $rows | Format-Table -AutoSize
+          $rows | ConvertTo-Json -Depth 3 | Set-Content -Encoding UTF8 (Join-Path $env:RUNNER_TEMP 'seven-node-connectivity.json')
+
+      - name: NFS discovery
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $nfs='172.17.60.210'
+          Write-Host "NFS_SERVER=$nfs"
+          foreach($port in 111,2049){
+            $ok=(Test-NetConnection -ComputerName $nfs -Port $port -WarningAction SilentlyContinue).TcpTestSucceeded
+            Write-Host "TCP_$port=$ok"
+          }
+          $sm=Get-Command showmount.exe -ErrorAction SilentlyContinue
+          if($sm){
+            Write-Host '--- NFS EXPORTS ---'
+            & $sm.Source -e $nfs
+            Write-Host "SHOWMOUNT_RC=$LASTEXITCODE"
+          } else {
+            Write-Host 'SHOWMOUNT_UNAVAILABLE'
+          }
+          Write-Host '--- ROUTE TO NFS ---'
+          route print $nfs
+          Write-Host '--- WINDOWS NFS FEATURES ---'
+          Get-WindowsOptionalFeature -Online -ErrorAction SilentlyContinue |
+            Where-Object FeatureName -match 'NFS' |
+            Select-Object FeatureName,State | Format-Table -AutoSize
+
+      - name: Local SSH material metadata
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $dirs=@(
+            "$env:USERPROFILE\.ssh",
+            'C:\LayerSentryLab\qualification'
+          )
+          foreach($d in $dirs){
+            if(Test-Path $d){
+              Write-Host "::group::$d"
+              Get-ChildItem $d -Force -File |
+                Where-Object { $_.Name -match '(^id_|key$|key\.|known_hosts)' } |
+                Select-Object Name,Length,LastWriteTime | Format-Table -AutoSize
+              Write-Host "::endgroup::"
+            }
+          }
+
+      - name: Upload non-secret baseline
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: seven-node-foundation-baseline
+          path: ${{ runner.temp }}/seven-node-connectivity.json
+          if-no-files-found: warn
+          retention-days: 7
