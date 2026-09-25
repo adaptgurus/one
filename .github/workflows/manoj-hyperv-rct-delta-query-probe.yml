@@ -87,8 +87,14 @@ jobs:
 
             $samples=New-Object System.Collections.Generic.List[Int64]
             $samples.Add(0)
-            if($size -gt $chunk){$samples.Add([Int64][Math]::Max(0,[Math]::Floor($size/2)-($chunk/2)))}
-            if($size -gt $chunk){$samples.Add([Int64][Math]::Max(0,$size-$chunk))}
+            if($size -gt $chunk){
+              [Int64]$mid=[Int64]([Math]::Floor([double]$size/2.0))-([Int64]$chunk/2)
+              if($mid -lt 0){$mid=0}
+              $samples.Add($mid)
+              [Int64]$tail=$size-$chunk
+              if($tail -lt 0){$tail=0}
+              $samples.Add($tail)
+            }
             $uniq=@($samples | Sort-Object -Unique)
             foreach($offset in $uniq){
               $length=[Int64][Math]::Min($chunk,$size-$offset)
