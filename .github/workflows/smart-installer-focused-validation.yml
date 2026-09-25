@@ -1,0 +1,93 @@
+name: Smart Installer Focused Validation
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/smart-installer-focused-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        slot: [1,2,3]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind exact runner
+        id: bind
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            "target=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Start-Sleep -Seconds 120
+            exit 0
+          }
+          "target=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host 'TARGET_RUNNER=PASS'
+
+      - name: Checkout current Smart Installer branch
+        if: steps.bind.outputs.target == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: adaptgurus/layersentry-platform
+          ref: feat/smart-installer-existing-host-bootstrap-20260926
+          path: layersentry-platform
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Toolchain inventory
+        if: steps.bind.outputs.target == 'true'
+        shell: powershell
+        working-directory: layersentry-platform
+        run: |
+          $ErrorActionPreference='Continue'
+          Write-Host ('HEAD=' + (& git rev-parse HEAD))
+          foreach($cmd in 'py.exe','python.exe','go.exe','node.exe'){
+            $c=Get-Command $cmd -ErrorAction SilentlyContinue
+            if($c){ Write-Host ("TOOL $cmd=" + $c.Source) }
+            else { Write-Host ("TOOL $cmd=ABSENT") }
+          }
+          if(Get-Command py.exe -ErrorAction SilentlyContinue){ & py.exe -3 --version }
+          if(Get-Command go.exe -ErrorAction SilentlyContinue){ & go.exe version }
+
+      - name: Run focused Python tests
+        if: steps.bind.outputs.target == 'true'
+        shell: powershell
+        working-directory: layersentry-platform
+        run: |
+          $ErrorActionPreference='Stop'
+          $py=$null
+          if(Get-Command py.exe -ErrorAction SilentlyContinue){ $py=@('py.exe','-3') }
+          elseif(Get-Command python.exe -ErrorAction SilentlyContinue){ $py=@('python.exe') }
+          else { throw 'Python runtime unavailable on target runner' }
+          $tests=@(
+            'tests.test_simple_installer',
+            'tests.test_simple_installer_http',
+            'tests.test_existing_host_bootstrap',
+            'tests.test_provider_nfs_storage',
+            'tests.test_provider_volumes',
+            'tests.test_provider_recovery'
+          )
+          if($py.Count -eq 2){ & $py[0] $py[1] -m unittest @tests -v }
+          else { & $py[0] -m unittest @tests -v }
+          if($LASTEXITCODE -ne 0){ throw "Python focused tests failed rc=$LASTEXITCODE" }
+
+      - name: Run focused Go topology tests
+        if: steps.bind.outputs.target == 'true'
+        shell: powershell
+        working-directory: layersentry-platform\deploy\host-agent
+        run: |
+          $ErrorActionPreference='Stop'
+          $go=Get-Command go.exe -ErrorAction SilentlyContinue
+          if(-not $go){ throw 'Go runtime unavailable on target runner' }
+          & $go.Source test ./internal/topology ./internal/hostops ./internal/storagecheck
+          if($LASTEXITCODE -ne 0){ throw "Go focused tests failed rc=$LASTEXITCODE" }
