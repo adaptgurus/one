@@ -1,0 +1,37 @@
+name: Cross Lab Control Plane Probe
+
+on:
+  push:
+    branches: [lab/seven-node-foundation-20260926]
+    paths:
+      - ".github/workflows/cross-lab-control-plane-probe.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: WIN-GK6MO7T7OPC
+    timeout-minutes: 5
+    steps:
+      - name: Probe tester and OpenNebula control paths
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC'){ throw "Wrong runner: $env:RUNNER_NAME" }
+          $targets=[ordered]@{
+            rocky01='10.10.10.21'
+            rocky02='10.10.10.22'
+            rocky03='10.10.10.23'
+            manoj01='10.250.10.10'
+            manoj02='10.250.10.11'
+            manoj03='10.250.10.13'
+          }
+          foreach($e in $targets.GetEnumerator()){
+            $ping=Test-Connection -ComputerName $e.Value -Count 1 -Quiet -ErrorAction SilentlyContinue
+            foreach($port in 22,2633,19444,19445){
+              $ok=Test-NetConnection -ComputerName $e.Value -Port $port -InformationLevel Quiet -WarningAction SilentlyContinue
+              Write-Host "CROSS_LAB_ROUTE name=$($e.Key) ip=$($e.Value) port=$port tcp=$ok ping=$ping"
+            }
+          }
+          Write-Host 'CROSS_LAB_PROBE=PASS'
