@@ -30,6 +30,8 @@ const GATEWAY_USER_HEADER = 'X-LayerSentry-User'
 const GATEWAY_UID_HEADER = 'X-LayerSentry-UID'
 const GATEWAY_TENANT_HEADER = 'X-LayerSentry-Tenant'
 const GATEWAY_ADMIN_HEADER = 'X-LayerSentry-Oneadmin'
+const GATEWAY_ASSURANCE_HEADER = 'X-LayerSentry-Assurance-Level'
+const GATEWAY_STEP_UP_AT_HEADER = 'X-LayerSentry-Step-Up-At'
 
 const validIdentity = (value) => {
   const text = String(value ?? '').trim()
@@ -155,9 +157,7 @@ const getControlplaneConfig = () => {
       ? configuredTimeout
       : DEFAULT_PLATFORM_TIMEOUT_MS
   let httpsAgent
-  const caFile = String(
-    appConfig.layersentry_controlplane_ca_file || ''
-  ).trim()
+  const caFile = String(appConfig.layersentry_controlplane_ca_file || '').trim()
   const certFile = String(
     appConfig.layersentry_controlplane_client_cert_file || ''
   ).trim()
@@ -243,10 +243,15 @@ const resolvePlatformActor = (userData = {}, oneConnection) =>
           return
         }
 
+        const assuranceLevel = userData.assuranceLevel === 2 ? 2 : 1
+        const stepUpAt = String(userData.stepUpAt || '').trim()
+
         resolve({
           user: username,
           uid,
           oneadmin: uid === '0',
+          assuranceLevel,
+          ...(assuranceLevel === 2 && stepUpAt && { stepUpAt }),
         })
       },
     })
@@ -257,8 +262,12 @@ const resolvePlatformActor = (userData = {}, oneConnection) =>
  * the browser route response.
  *
  * @param {object} options - request options
+ * @param options.method
+ * @param options.path
  * @param {object} actor - resolved OpenNebula actor
+ * @param options.data
  * @param {object} config - validated platform configuration
+ * @param options.idempotencyKey
  * @returns {object} Axios request options
  */
 const buildPlatformRequest = (
@@ -276,7 +285,11 @@ const buildPlatformRequest = (
     [GATEWAY_UID_HEADER]: actor.uid,
     [GATEWAY_TENANT_HEADER]: actor.uid,
     [GATEWAY_ADMIN_HEADER]: actor.oneadmin ? 'true' : 'false',
+    [GATEWAY_ASSURANCE_HEADER]: actor.assuranceLevel === 2 ? '2' : '1',
     'Content-Type': 'application/json',
+  }
+  if (actor.assuranceLevel === 2 && actor.stepUpAt) {
+    headers[GATEWAY_STEP_UP_AT_HEADER] = actor.stepUpAt
   }
   if (idempotencyKey) headers['Idempotency-Key'] = idempotencyKey
 
@@ -302,6 +315,7 @@ const buildPlatformRequest = (
  * @param {object} request - platform request descriptor
  * @param {object} userData - authenticated FireEdge user data
  * @param {Function} oneConnection - OpenNebula XML-RPC connection factory
+ * @param config
  * @returns {Promise<object>} response body
  */
 const platformRequest = async (

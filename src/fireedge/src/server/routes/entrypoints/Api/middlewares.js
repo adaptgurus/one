@@ -73,7 +73,7 @@ const validateSession = ({
       .json(httpResponse(httpCodes.unauthorized))
   }
 
-  const { iss, aud, jti } = session
+  const { iss, aud, jti, assuranceLevel, stepUpAt } = session
 
   const id = iss
   const user = aud
@@ -83,6 +83,8 @@ const validateSession = ({
     id,
     user,
     password,
+    assuranceLevel,
+    stepUpAt,
   }
 
   if (!validateUser(user, password)) {

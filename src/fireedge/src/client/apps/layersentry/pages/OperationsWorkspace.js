@@ -18,6 +18,7 @@ import PropTypes from 'prop-types'
 import {
   Alert,
   Box,
+  Button,
   Chip,
   LinearProgress,
   Tab,
@@ -42,6 +43,8 @@ const OperationsWorkspace = ({ endpoints }) => {
   const operations = Array.isArray(operationsQuery.data?.operations)
     ? operationsQuery.data.operations
     : []
+  const [approveOperation, approval] =
+    ControlPlaneAPI.useApproveControlPlaneOperationMutation()
 
   return (
     <PageFrame
@@ -71,6 +74,13 @@ const OperationsWorkspace = ({ endpoints }) => {
                 state is fabricated.
               </Alert>
             )}
+            {approval.isError && (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                Approval was not accepted. Sign in with a freshly verified
+                second factor and retry; policy and ownership checks still
+                apply.
+              </Alert>
+            )}
             {!operationsQuery.isLoading &&
               !operationsQuery.isError &&
               operations.length === 0 && (
@@ -84,7 +94,10 @@ const OperationsWorkspace = ({ endpoints }) => {
                   key={operation.id}
                   sx={{
                     display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: '2fr 1fr auto' },
+                    gridTemplateColumns: {
+                      xs: '1fr',
+                      md: '2fr 1fr auto auto',
+                    },
                     gap: 1,
                     alignItems: 'center',
                     p: 1.5,
@@ -98,9 +111,7 @@ const OperationsWorkspace = ({ endpoints }) => {
                       {operation.resource?.kind || 'Resource'}{' '}
                       {operation.resource?.id || 'unknown'}
                     </Typography>
-                    <Typography
-                      sx={{ fontSize: 11, color: colors.text.muted }}
-                    >
+                    <Typography sx={{ fontSize: 11, color: colors.text.muted }}>
                       {operation.id} · updated{' '}
                       {operation.updated_at
                         ? new Date(operation.updated_at).toLocaleString()
@@ -125,6 +136,22 @@ const OperationsWorkspace = ({ endpoints }) => {
                         : 'default'
                     }
                   />
+                  {operation.state === 'AWAITING_APPROVAL' &&
+                    operation.plan_hash && (
+                      <Button
+                        size="small"
+                        variant="contained"
+                        disabled={approval.isLoading}
+                        onClick={() =>
+                          approveOperation({
+                            id: operation.id,
+                            planHash: operation.plan_hash,
+                          })
+                        }
+                      >
+                        Approve with MFA
+                      </Button>
+                    )}
                 </Box>
               ))}
             </Box>

@@ -59,6 +59,7 @@ if (!global.pending2FA) {
 
 const TFAResult = Object.freeze({
   OK: 'ok',
+  VERIFIED_2FA: 'verified_2fa',
   NOT_SUPPORTED: 'not_supported',
   NEED_2FA_SETUP: 'need_2fa_setup',
   COMPLETE_2FA_SETUP: 'complete_2fa_setup',
@@ -147,7 +148,7 @@ const check2FA = async (
   if (!tfatoken?.length) return TFAResult.NEED_2FA_TOKEN
   if (!validate2FA(MFASecret, tfatoken)) return TFAResult.INVALID_2FA
 
-  return TFAResult.OK
+  return TFAResult.VERIFIED_2FA
 }
 
 /**
@@ -214,9 +215,10 @@ const setup2FASecret = async ({ USER: { ID, TEMPLATE } = {} }, { connect }) => {
  *
  * @param {object} tokenData - { token, time }
  * @param {object} userInfo - { ID, NAME, TEMPLATE }
+ * @param assurance
  * @returns {object|null} { token: jwt, id, language? }
  */
-const genJWT = (tokenData = {}, userInfo = {}) => {
+const genJWT = (tokenData = {}, userInfo = {}, assurance = {}) => {
   const rawToken = tokenData?.token
   const { ID: id, NAME: username, TEMPLATE: template } = userInfo
 
@@ -226,6 +228,8 @@ const genJWT = (tokenData = {}, userInfo = {}) => {
     id,
     user: username,
     token: rawToken,
+    assuranceLevel: assurance.assuranceLevel,
+    stepUpAt: assurance.stepUpAt,
   })
 
   if (!jwt) return null
@@ -403,11 +407,15 @@ const generateSessionToken = (serverAdminData = {}, { USER = {} }, params) => {
     expires: tokenData.time,
   })
 
-  return genJWT(tokenData, {
-    NAME: JWTusername,
-    ID: userId,
-    TEMPLATE: template,
-  })
+  return genJWT(
+    tokenData,
+    {
+      NAME: JWTusername,
+      ID: userId,
+      TEMPLATE: template,
+    },
+    params
+  )
 }
 
 /**
@@ -521,6 +529,16 @@ const resolveTFAResponse = async (status, userData, params) => {
         },
         session: await createUserSession(userData, params), // Session should NOT be included in payload, these are passed as httpOnly cookies
       }
+    case TFAResult.VERIFIED_2FA:
+      return {
+        httpCode: ok,
+        payload: { status: TFAResult.OK },
+        session: await createUserSession(userData, {
+          ...params,
+          assuranceLevel: 2,
+          stepUpAt: new Date().toISOString(),
+        }),
+      }
     case TFAResult.NEED_2FA_SETUP:
       return {
         httpCode: accepted,
@@ -539,7 +557,11 @@ const resolveTFAResponse = async (status, userData, params) => {
         payload: {
           status: TFAResult.OK,
         },
-        session: await createUserSession(userData, params),
+        session: await createUserSession(userData, {
+          ...params,
+          assuranceLevel: 2,
+          stepUpAt: new Date().toISOString(),
+        }),
       }
     case TFAResult.NEED_2FA_TOKEN:
       return { httpCode: accepted, payload: { status } }

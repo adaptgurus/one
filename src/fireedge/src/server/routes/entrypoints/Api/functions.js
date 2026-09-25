@@ -60,7 +60,8 @@ const functionsRoutes = ({
             const { zone } = req.query
             const zoneData = getZone(zone)
             if (zoneData) {
-              const { user, password, id } = req.auth ?? {}
+              const { user, password, id, assuranceLevel, stepUpAt } =
+                req.auth ?? {}
               const { rpc } = zoneData
               writeInLoggerInvalidRPC(rpc)
               req.serverDataSource = {
@@ -78,6 +79,8 @@ const functionsRoutes = ({
                   id,
                   user,
                   password,
+                  assuranceLevel,
+                  stepUpAt,
                 }
               )
             } else {

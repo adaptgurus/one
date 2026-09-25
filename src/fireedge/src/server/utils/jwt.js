@@ -28,15 +28,21 @@ const { defaultJwtCookieName } = defaults
  * @param {string} jwtData.id - user ID
  * @param {string} jwtData.user - username
  * @param {string} jwtData.token - token opennebula
+ * @param {number} jwtData.assuranceLevel - authenticated assurance level
+ * @param {string} jwtData.stepUpAt - RFC3339 time of the verified second factor
  * @returns {string} JWT
  */
-const createJWT = ({ id, user, token }) => {
+const createJWT = ({ id, user, token, assuranceLevel = 1, stepUpAt }) => {
   if (id && user && token) {
-    return jwtEncode({
+    const payload = {
       iss: id, // user ID
       aud: user, // user name
       jti: token, // token
-    })
+      aal: assuranceLevel === 2 ? 2 : 1,
+    }
+    if (payload.aal === 2 && stepUpAt) payload.sat = stepUpAt
+
+    return jwtEncode(payload)
   }
 }
 
@@ -91,14 +97,18 @@ const validateAuth = (req = {}) => {
       if (!token) return false
 
       const payload = jwtDecode(token)
-      const { iss, aud, jti } = payload
+      const { iss, aud, jti, aal, sat } = payload
 
       if (!iss || !aud || !jti) return false
+
+      const assuranceLevel = aal === 2 && sat ? 2 : 1
 
       return {
         iss,
         aud,
         jti,
+        assuranceLevel,
+        ...(assuranceLevel === 2 && { stepUpAt: sat }),
       }
     } catch (error) {
       messageTerminal({

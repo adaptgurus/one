@@ -211,6 +211,8 @@ test('durable-operation gateway stays typed, tenant-authenticated and fail close
     'src/server/routes/api/serviceblueprints/platform.js'
   )
   const client = read('src/modules/features/OneApi/controlPlane.js')
+  const jwt = read('src/server/utils/jwt.js')
+  const auth = read('src/server/routes/api/auth/utils.js')
 
   expectCommand(routes, 'Actions.LIST', 'GET', [['limit', 'query']])
   expectCommand(routes, 'Actions.SUBMIT', 'POST', [
@@ -221,6 +223,10 @@ test('durable-operation gateway stays typed, tenant-authenticated and fail close
     ['idempotencyKey', 'postBody'],
   ])
   expectCommand(routes, 'Actions.GET', 'GET', [['id', 'resource']])
+  expectCommand(routes, 'Actions.APPROVE', 'POST', [
+    ['id', 'resource'],
+    ['planHash', 'postBody'],
+  ])
 
   assert.match(functions, /const allowedActions = new Set\(\[/)
   assert.match(functions, /resourceKind !== 'VirtualMachine'/)
@@ -235,8 +241,17 @@ test('durable-operation gateway stays typed, tenant-authenticated and fail close
   assert.match(platform, /if \(!caFile \|\| !certFile \|\| !keyFile\)/)
   assert.match(platform, /rejectUnauthorized: true/)
   assert.match(platform, /if \(idempotencyKey\) headers\['Idempotency-Key'\]/)
+  assert.match(platform, /GATEWAY_ASSURANCE_HEADER/)
+  assert.match(platform, /GATEWAY_STEP_UP_AT_HEADER/)
+
+  assert.match(auth, /VERIFIED_2FA: 'verified_2fa'/)
+  assert.match(auth, /assuranceLevel: 2/)
+  assert.match(auth, /stepUpAt: new Date\(\)\.toISOString\(\)/)
+  assert.match(jwt, /aal: assuranceLevel === 2 \? 2 : 1/)
+  assert.match(jwt, /assuranceLevel = aal === 2 && sat \? 2 : 1/)
 
   expectClientAction(client, 'getControlPlaneOperations', 'LIST')
   expectClientAction(client, 'submitControlPlaneOperation', 'SUBMIT')
   expectClientAction(client, 'getControlPlaneOperation', 'GET')
+  expectClientAction(client, 'approveControlPlaneOperation', 'APPROVE')
 })

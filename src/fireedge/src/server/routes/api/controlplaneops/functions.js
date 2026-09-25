@@ -1,3 +1,18 @@
+/* ------------------------------------------------------------------------- *
+ * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
+ * ------------------------------------------------------------------------- */
 const { defaults, httpCodes } = require('server/utils/constants')
 const { httpResponse } = require('server/utils/server')
 const {
@@ -40,9 +55,7 @@ const validID = (value) =>
     String(value || '')
   )
 const validOperationID = (value) =>
-  /^[a-zA-Z0-9](?:[a-zA-Z0-9_.-]{6,189}[a-zA-Z0-9])?$/.test(
-    String(value || '')
-  )
+  /^[a-zA-Z0-9](?:[a-zA-Z0-9_.-]{6,189}[a-zA-Z0-9])?$/.test(String(value || ''))
 const validIdempotencyKey = (value) =>
   /^[\x21-\x7e]{8,128}$/.test(String(value || ''))
 const plainObject = (value) =>
@@ -73,12 +86,20 @@ const proxyError = (res, next, error) => {
   next()
 }
 
-const call = (res, next, request, userData, oneConnection, responseCode = ok) => {
+const call = (
+  res,
+  next,
+  request,
+  userData,
+  oneConnection,
+  responseCode = ok
+) => {
   let config
   try {
     config = getControlplaneConfig()
   } catch (error) {
     proxyError(res, next, error)
+
     return
   }
   platformRequest(request, userData, oneConnection, config)
@@ -89,6 +110,19 @@ const call = (res, next, request, userData, oneConnection, responseCode = ok) =>
     .catch((error) => proxyError(res, next, error))
 }
 
+/**
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.resourceKind
+ * @param root0.resourceId
+ * @param root0.action
+ * @param root0.desiredState
+ * @param root0.reason
+ * @param root0.idempotencyKey
+ * @param userData
+ * @param oneConnection
+ */
 const submit = (
   res = {},
   next = defaultEmptyFunction,
@@ -103,7 +137,9 @@ const submit = (
   userData = {},
   oneConnection
 ) => {
-  const normalizedAction = String(action || '').trim().toUpperCase()
+  const normalizedAction = String(action || '')
+    .trim()
+    .toUpperCase()
   const normalizedReason = String(reason || '').trim()
   if (
     resourceKind !== 'VirtualMachine' ||
@@ -118,6 +154,7 @@ const submit = (
       error: 'Invalid durable virtual-machine operation request.',
     })
     next()
+
     return
   }
   call(
@@ -141,6 +178,14 @@ const submit = (
   )
 }
 
+/**
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.id
+ * @param userData
+ * @param oneConnection
+ */
 const get = (
   res = {},
   next = defaultEmptyFunction,
@@ -153,6 +198,7 @@ const get = (
       error: 'Invalid LayerSentry operation identity.',
     })
     next()
+
     return
   }
   call(
@@ -164,6 +210,14 @@ const get = (
   )
 }
 
+/**
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.limit
+ * @param userData
+ * @param oneConnection
+ */
 const list = (
   res = {},
   next = defaultEmptyFunction,
@@ -177,6 +231,7 @@ const list = (
       error: 'Operation list limit must be between 1 and 200.',
     })
     next()
+
     return
   }
   call(
@@ -188,4 +243,41 @@ const list = (
   )
 }
 
-module.exports = { get, list, submit }
+/**
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.id
+ * @param root0.planHash
+ * @param userData
+ * @param oneConnection
+ */
+const approve = (
+  res = {},
+  next = defaultEmptyFunction,
+  { id, planHash } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!validOperationID(id) || !/^[a-f0-9]{64}$/.test(String(planHash || ''))) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Invalid LayerSentry operation approval.',
+    })
+    next()
+
+    return
+  }
+  call(
+    res,
+    next,
+    {
+      method: 'POST',
+      path: `/v1/operations/${encodeURIComponent(id)}/approve`,
+      data: { plan_hash: planHash },
+    },
+    userData,
+    oneConnection
+  )
+}
+
+module.exports = { approve, get, list, submit }
