@@ -26,14 +26,6 @@ jobs:
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-          clean: false
-          sparse-checkout: |
-            lab/seven-node
-          sparse-checkout-cone-mode: true
-
       - name: Bind target runner
         shell: powershell
         run: |
@@ -46,6 +38,24 @@ jobs:
             throw "Target foundation runner did not claim this slot: $env:RUNNER_NAME"
           }
           "LS_TARGET=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Fetch exact qualification scripts
+        if: env.LS_TARGET == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $scriptDir=Join-Path $env:RUNNER_TEMP 'seven-node-exact-scripts'
+          New-Item -ItemType Directory -Force -Path $scriptDir | Out-Null
+          $base="https://raw.githubusercontent.com/$env:GITHUB_REPOSITORY/$env:GITHUB_SHA/lab/seven-node"
+          $stage1=Join-Path $scriptDir 'manual-foundation-stage1.sh'
+          $stage2=Join-Path $scriptDir 'manual-foundation-stage2.sh'
+          & curl.exe -fsSL "$base/manual-foundation-stage1.sh" -o $stage1
+          if($LASTEXITCODE -ne 0 -or -not (Test-Path $stage1)){ throw 'stage1 exact-script fetch failed' }
+          & curl.exe -fsSL "$base/manual-foundation-stage2.sh" -o $stage2
+          if($LASTEXITCODE -ne 0 -or -not (Test-Path $stage2)){ throw 'stage2 exact-script fetch failed' }
+          "LS_STAGE1_PATH=$stage1" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "LS_STAGE2_PATH=$stage2" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "EXACT_SCRIPT_FETCH=PASS sha=$env:GITHUB_SHA"
 
       - name: Execute Stage 1
         if: env.LS_TARGET == 'true'
@@ -72,7 +82,7 @@ jobs:
           $env:SSH_ASKPASS_REQUIRE='force'
           $env:DISPLAY='LayerSentry'
           $known=Join-Path $dir 'known_hosts'
-          $script=Join-Path $env:GITHUB_WORKSPACE 'lab\seven-node\manual-foundation-stage1.sh'
+          $script=$env:LS_STAGE1_PATH
           & scp.exe -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" $script "root@172.17.60.32:/root/layersentry-manual-stage1.sh"
           if($LASTEXITCODE -ne 0){ throw 'stage1 script transfer failed' }
           $sshExe=(Get-Command ssh.exe -ErrorAction Stop).Source
@@ -119,7 +129,7 @@ jobs:
           $env:SSH_ASKPASS_REQUIRE='force'
           $env:DISPLAY='LayerSentry'
           $known=Join-Path $dir 'known_hosts'
-          $script=Join-Path $env:GITHUB_WORKSPACE 'lab\seven-node\manual-foundation-stage2.sh'
+          $script=$env:LS_STAGE2_PATH
           & scp.exe -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" $script "root@172.17.60.32:/root/layersentry-manual-stage2.sh"
           if($LASTEXITCODE -ne 0){ throw 'stage2 script transfer failed' }
           & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" root@172.17.60.32 "chmod 700 /root/layersentry-manual-stage2.sh; bash /root/layersentry-manual-stage2.sh ${{ github.run_id }}"
