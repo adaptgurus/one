@@ -154,8 +154,11 @@ jobs:
           if(-not $line){throw 'remote export directory missing from durable state'}
           $remote=$line.Substring('REMOTE_EXPORT_DIR='.Length).Trim()
           if([string]::IsNullOrWhiteSpace($remote)){throw 'remote export directory is empty'}
-          $remoteNorm=($remote -replace '\\\\{2,}','\\')
-          $expected='C:\\LayerSentryMigration\\layersentry-hot-manoj-hv-ls-migration-source-test-20260924'
+          # state.json stores the Windows path with a doubled separator after the drive
+          # when surfaced through the Linux/Ruby layer. Normalize exactly that escaped
+          # representation to the real Windows path before any filesystem access.
+          $remoteNorm=$remote.Replace('\\','\')
+          $expected='C:\LayerSentryMigration\layersentry-hot-manoj-hv-ls-migration-source-test-20260924'
           if($remoteNorm -ne $expected){throw "Refusing unexpected remote export path: $remote"}
           Write-Host "HYPERV_REMOTE_EXPORT_DIR=$remoteNorm"
           if(-not (Test-Path -LiteralPath $remoteNorm)){throw "Hyper-V remote export directory missing: $remoteNorm"}
