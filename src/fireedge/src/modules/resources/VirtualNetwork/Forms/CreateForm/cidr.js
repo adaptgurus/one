@@ -15,7 +15,9 @@
  * ------------------------------------------------------------------------- */
 
 const parseIpv4 = (value) => {
-  const parts = String(value ?? '').trim().split('.')
+  const parts = String(value ?? '')
+    .trim()
+    .split('.')
   if (parts.length !== 4) return undefined
 
   const octets = parts.map((part) => {
@@ -57,14 +59,20 @@ const maskFromPrefix = (prefixLength) =>
  * @returns {object|undefined} Native OpenNebula network context attributes
  */
 export const parseIpv4Cidr = (value) => {
-  const [address, prefix, ...extra] = String(value ?? '').trim().split('/')
+  const [address, prefix, ...extra] = String(value ?? '')
+    .trim()
+    .split('/')
   if (extra.length) return undefined
 
   const octets = parseIpv4(address)
   if (!octets || !/^\d{1,2}$/.test(prefix ?? '')) return undefined
 
   const prefixLength = Number(prefix)
-  if (!Number.isInteger(prefixLength) || prefixLength < 0 || prefixLength > 32) {
+  if (
+    !Number.isInteger(prefixLength) ||
+    prefixLength < 0 ||
+    prefixLength > 32
+  ) {
     return undefined
   }
 
