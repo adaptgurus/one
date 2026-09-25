@@ -23,7 +23,10 @@ jobs:
           if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
           $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
           if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
-          $version=& ssh.exe -V 2>&1
+          $old=$ErrorActionPreference
+          $ErrorActionPreference='Continue'
+          $version=(& ssh.exe -V 2>&1 | Out-String).Trim()
+          $ErrorActionPreference=$old
           Write-Host "OPENSSH_CLIENT_VERSION=$version"
           $reg=Get-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -ErrorAction SilentlyContinue
           Write-Host "OPENSSH_DEFAULT_SHELL=$($reg.DefaultShell)"
