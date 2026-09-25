@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 1 Storage
+name: LayerSentry Physical POC Stage 2A Network Preflight
 
 on:
   pull_request:
@@ -14,17 +14,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  storage:
-    name: storage-${{ matrix.slot }}
+  preflight:
+    name: network-preflight-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
         slot: [1, 2, 3]
     runs-on: [self-hosted, Linux]
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
-      - name: Prepare LayerSentry storage backing
+      - name: Install nmstate and capture rollback baseline
         shell: bash
         run: |
           set -euo pipefail
@@ -34,44 +34,32 @@ jobs:
             *) echo "GUARD_SKIP_NON_PHYSICAL_RUNNER"; exit 0 ;;
           esac
 
-          install -d -m 0750 /var/log/layersentry-poc
+          install -d -m 0750 /var/log/layersentry-poc /etc/layersentry-poc/network
           LOG=/var/log/layersentry-poc/activity.log
           exec > >(tee -a "$LOG") 2>&1
-          echo "=== STAGE1_STORAGE_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE2A_NETWORK_PREFLIGHT_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
 
-          echo "--- preflight ---"
-          test "$(id -u)" -eq 0
-          findmnt /home
-          df -hT /home
-          ls -ld /home /home/layersentry 2>/dev/null || true
+          echo "--- current network ---"
+          ip -br addr
+          ip -4 route
+          nmcli -t -f NAME,UUID,TYPE,DEVICE,STATE con show
+          ping -c 2 -W 2 192.168.1.1
+          curl -fsS --connect-timeout 5 --max-time 10 https://api.github.com/ >/dev/null
 
-          echo "--- create dedicated backing tree ---"
-          install -d -m 0750 /home/layersentry
-          install -d -m 0750 /home/layersentry/datastores
-          install -d -m 0750 /home/layersentry/images
-          install -d -m 0750 /home/layersentry/backups
-          install -d -m 0750 /home/layersentry/tmp
-          install -d -m 0750 /etc/layersentry-poc
+          echo "--- install nmstate ---"
+          if ! command -v nmstatectl >/dev/null 2>&1; then
+            dnf -y install nmstate
+          fi
+          nmstatectl --version || nmstatectl version || true
 
-          cat >/etc/layersentry-poc/storage.env <<EOF
-          LAYERSENTRY_STORAGE_BACKING=/home/layersentry
-          LAYERSENTRY_DATASTORES_BACKING=/home/layersentry/datastores
-          LAYERSENTRY_IMAGE_BACKING=/home/layersentry/images
-          LAYERSENTRY_BACKUP_BACKING=/home/layersentry/backups
-          EOF
-          chmod 0644 /etc/layersentry-poc/storage.env
+          echo "--- persist pre-change state ---"
+          nmstatectl show > /etc/layersentry-poc/network/pre-bridge-state.yaml
+          chmod 0600 /etc/layersentry-poc/network/pre-bridge-state.yaml
+          sha256sum /etc/layersentry-poc/network/pre-bridge-state.yaml
 
-          echo "--- integrity/write test ---"
-          TESTFILE="/home/layersentry/tmp/.write-test-$$"
-          printf 'layersentry-storage-ok %s %s\n' "$RUNNER_NAME" "$(date -u +%FT%TZ)" > "$TESTFILE"
-          sync "$TESTFILE"
-          test -s "$TESTFILE"
-          sha256sum "$TESTFILE"
-          rm -f "$TESTFILE"
-
-          echo "--- postflight ---"
-          findmnt /home
-          df -hT /home
-          du -sh /home/layersentry
-          find /home/layersentry -maxdepth 1 -mindepth 1 -printf '%M %u:%g %p\n' | sort
-          echo "=== STAGE1_STORAGE_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "--- verify package/network after install ---"
+          rpm -q nmstate
+          nmstatectl show eno1
+          ping -c 2 -W 2 192.168.1.1
+          curl -fsS --connect-timeout 5 --max-time 10 https://api.github.com/ >/dev/null
+          echo "=== STAGE2A_NETWORK_PREFLIGHT_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
