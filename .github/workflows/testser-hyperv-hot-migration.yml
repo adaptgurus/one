@@ -1,0 +1,223 @@
+name: TESTSER HyperV Hot Migration Qualification
+
+on:
+  push:
+    branches:
+      - qual/testser-hyperv-hot-migration-20260926
+    paths:
+      - '.github/workflows/testser-hyperv-hot-migration.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testser-hyperv-hot-migration
+  cancel-in-progress: true
+
+jobs:
+  qualify:
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 45
+
+    steps:
+      - name: Bind exact TESTSER runner
+        id: bind
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_NAME=$RUNNER_NAME"
+          if [ "$RUNNER_NAME" != "TESTSER-TWOSITE-ONE" ]; then
+            echo "execute=false" >> "$GITHUB_OUTPUT"
+            echo "TESTSER_BIND=SKIP"
+            exit 0
+          fi
+          echo "execute=true" >> "$GITHUB_OUTPUT"
+          echo "TESTSER_BIND=PASS"
+
+      - name: Fetch exact OneSwap recovery code
+        if: steps.bind.outputs.execute == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/testser-hyperv-hot-qual"
+          rm -rf "$work"
+          mkdir -p "$work"
+          git clone --depth 1 --branch fix/hyperv-morphing-no-write-lowmem-recovery-20260925 \
+            https://github.com/adaptgurus/one-swap.git "$work/one-swap"
+          head=$(git -C "$work/one-swap" rev-parse HEAD)
+          echo "ONESWAP_HEAD=$head"
+          test "$head" = "7e1e49bf0410e6b4dd7b1770f1b2e749251c82c1"
+          echo "ONESWAP_WORK=$work/one-swap" >> "$GITHUB_ENV"
+          echo "ONESWAP_EXACT_HEAD=PASS"
+
+      - name: Run full HyperV Ruby suite
+        if: steps.bind.outputs.execute == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ONESWAP_WORK"
+          ruby -c hyperv_network_hardening.rb
+          ruby -c hyperv_import_recovery.rb
+          ruby -c hyperv_hot_helper.rb
+          total=0
+          for t in tests/hyperv*_test.rb; do
+            echo "RUN $t"
+            ruby "$t"
+            total=$((total+1))
+          done
+          echo "HYPERV_TEST_FILES=$total"
+          git diff --check
+          echo "HYPERV_FULL_SUITE=PASS"
+
+      - name: Prove final load chain and legacy virt-v2v fallback
+        if: steps.bind.outputs.execute == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$ONESWAP_WORK"
+          echo "V2V_VERSION=$(virt-v2v --version 2>&1 | head -1 || true)"
+          echo "V2V_IN_PLACE_VERSION=$(virt-v2v-in-place --version 2>&1 | head -1 || true)"
+          ruby -I. - <<'RUBY'
+          $LOADED_FEATURES << 'opennebula/image_pool.rb'
+          $LOADED_FEATURES << 'opennebula/template_pool.rb'
+          module OpenNebula
+            class ImagePool; end
+            class TemplatePool; end
+            def self.is_error?(_); false; end
+          end
+          class ConversionError < StandardError; end
+          class OneSwapHelper; end
+          require './hyperv_helper'
+          require './hyperv_hot_helper'
+          require './hyperv_hot_hardening'
+          require './hyperv_hot_edge_hardening'
+          require './hyperv_virtio_hardening'
+          require './hyperv_final_safety_hardening'
+          require './hyperv_network_hardening'
+
+          method = OneSwapHyperV::HotCoordinator.instance_method(:rerun_v2v_in_place!)
+          puts "FINAL_RERUN_SOURCE=#{method.source_location.join(':')}"
+          raise 'final override is not network hardening' unless method.source_location.first.end_with?('hyperv_network_hardening.rb')
+
+          c = OneSwapHyperV::HotCoordinator.allocate
+          c.instance_variable_set(:@options, {
+            :guest_os => 'linux',
+            :libguestfs_memsize_mb => 4096,
+            :libguestfs_smp => 1,
+            :hyperv_transfer_timeout => 480,
+            :v2v_in_place_path => '/usr/local/bin/virt-v2v-in-place'
+          })
+          env, argv, timeout = c.send(:final_network_v2v_command, '/tmp/final-libvirt.xml')
+          puts "FINAL_ENV_MEM=#{env['LIBGUESTFS_MEMSIZE']}"
+          puts "FINAL_ARGV=#{argv.join(' ')}"
+          puts "FINAL_TIMEOUT=#{timeout}"
+          raise 'libguestfs memory not propagated' unless env['LIBGUESTFS_MEMSIZE'] == '4096'
+          raise 'legacy virt-v2v must omit unsupported --smp' if argv.include?('--smp')
+          raise 'timeout not propagated' unless timeout == 480
+          puts 'FINAL_LOAD_CHAIN_LEGACY_COMPAT=PASS'
+          RUBY
+
+      - name: Run KVM-backed patched morph integration
+        if: steps.bind.outputs.execute == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          base=/var/lib/libvirt/images/noble-server-cloudimg-amd64.img
+          test -r "$base"
+          fixture="$RUNNER_TEMP/testser-hyperv-hot-qual/fixture"
+          rm -rf "$fixture"
+          mkdir -p "$fixture"
+
+          sudo -n qemu-img convert -f qcow2 -O raw "$base" "$fixture/source.raw"
+          sudo -n cp --reflink=auto "$fixture/source.raw" "$fixture/prepared.raw"
+          sudo -n chown -R "$(id -u):$(id -g)" "$fixture"
+
+          cat > "$fixture/run.rb" <<'RUBY'
+          require 'fileutils'
+          $LOADED_FEATURES << 'opennebula/image_pool.rb'
+          $LOADED_FEATURES << 'opennebula/template_pool.rb'
+          module OpenNebula
+            class ImagePool; end
+            class TemplatePool; end
+            def self.is_error?(_); false; end
+          end
+          class ConversionError < StandardError; end
+          class OneSwapHelper; end
+
+          repo = ENV.fetch('ONESWAP_WORK')
+          $LOAD_PATH.unshift(repo)
+          require File.join(repo, 'hyperv_helper')
+          require File.join(repo, 'hyperv_hot_helper')
+          require File.join(repo, 'hyperv_hot_hardening')
+          require File.join(repo, 'hyperv_hot_edge_hardening')
+          require File.join(repo, 'hyperv_virtio_hardening')
+          require File.join(repo, 'hyperv_final_safety_hardening')
+          require File.join(repo, 'hyperv_network_hardening')
+
+          fixture = ARGV.fetch(0)
+          prepared = File.join(fixture, 'prepared.raw')
+          c = OneSwapHyperV::HotCoordinator.allocate
+          c.instance_variable_set(:@dir, fixture)
+          c.instance_variable_set(:@options, {
+            :guest_os => 'linux',
+            :libguestfs_memsize_mb => 4096,
+            :libguestfs_smp => 1,
+            :hyperv_transfer_timeout => 480,
+            :v2v_in_place_path => '/usr/local/bin/virt-v2v-in-place',
+            :root => 'first'
+          })
+
+          xml = <<~XML
+            <domain type='kvm'>
+              <name>layersentry-hyperv-test</name>
+              <memory unit='MiB'>4096</memory>
+              <vcpu>2</vcpu>
+              <os><type arch='x86_64' machine='pc'>hvm</type><boot dev='hd'/></os>
+              <features><acpi/><apic/></features>
+              <devices>
+                <disk type='file' device='disk'>
+                  <driver name='qemu' type='raw'/>
+                  <source file='#{prepared}'/>
+                  <target dev='sda' bus='scsi'/>
+                </disk>
+                <controller type='scsi' model='virtio-scsi'/>
+              </devices>
+            </domain>
+          XML
+
+          c.define_singleton_method(:final_raw_libvirt_xml) { |_state, _paths| xml }
+          state = {
+            'disks' => [
+              {
+                'prepared_raw_path' => prepared,
+                'virtual_size' => File.size(prepared)
+              }
+            ]
+          }
+
+          c.send(:rerun_v2v_in_place!, state)
+          puts 'PATCHED_RERUN_V2V_IN_PLACE=PASS'
+          RUBY
+
+          sudo -n env ONESWAP_WORK="$ONESWAP_WORK" \
+            LIBGUESTFS_BACKEND=direct \
+            ruby "$fixture/run.rb" "$fixture"
+
+          sudo -n env LIBGUESTFS_BACKEND=direct LIBGUESTFS_MEMSIZE=4096 \
+            virt-inspector -a "$fixture/prepared.raw" > "$fixture/after.xml"
+          grep -q '<distro>ubuntu</distro>' "$fixture/after.xml"
+          grep -q '<arch>x86_64</arch>' "$fixture/after.xml"
+          echo "V2V_TESTER_KVM_INTEGRATION=PASS"
+
+      - name: Final evidence
+        if: steps.bind.outputs.execute == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_NAME=$RUNNER_NAME"
+          free -h
+          df -hT /
+          test -c /dev/kvm
+          echo "TESTSER_HYPERV_HOT_QUALIFICATION=PASS"
