@@ -1,4 +1,5 @@
 name: Manoj OneSwap Runtime Load Path Audit
+# rerun-after-hot-helper-repair-20260925
 
 on:
   push:
