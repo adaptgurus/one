@@ -119,6 +119,56 @@ const getPlatformConfig = () => {
 }
 
 /**
+ * Read the dedicated autonomy/control-plane connection settings.
+ *
+ * This is intentionally separate from the KubeOne/VM-service platform URL:
+ * routing durable VM operations to the wrong typed owner must fail closed.
+ *
+ * @returns {object} validated control-plane connection settings
+ */
+const getControlplaneConfig = () => {
+  const appConfig = getFireedgeConfig()
+  const configuredURL = String(
+    appConfig.layersentry_controlplane_url || ''
+  ).trim()
+  const gatewayToken = String(
+    appConfig.layersentry_controlplane_gateway_token || ''
+  ).trim()
+
+  if (!configuredURL) {
+    throw new Error('LayerSentry control-plane URL is not configured.')
+  }
+  if (gatewayToken.length < 32) {
+    throw new Error(
+      'LayerSentry control-plane gateway token is not configured or is too short.'
+    )
+  }
+
+  const baseURL = validatePlatformUrl(configuredURL)
+    .toString()
+    .replace(/\/$/, '')
+  const configuredTimeout = Number(
+    appConfig.layersentry_controlplane_timeout_ms
+  )
+  const timeout =
+    Number.isInteger(configuredTimeout) && configuredTimeout > 0
+      ? configuredTimeout
+      : DEFAULT_PLATFORM_TIMEOUT_MS
+  let httpsAgent
+  const caFile = String(
+    appConfig.layersentry_controlplane_ca_file || ''
+  ).trim()
+  if (caFile) {
+    httpsAgent = new https.Agent({
+      ca: readFileSync(caFile),
+      rejectUnauthorized: true,
+    })
+  }
+
+  return { baseURL, gatewayToken, timeout, httpsAgent }
+}
+
+/**
  * Resolve the authenticated OpenNebula actor from the session credentials.
  *
  * OpenNebula UID is used as the durable LayerSentry tenant key. The username is
@@ -274,6 +324,7 @@ module.exports = {
   GATEWAY_TENANT_HEADER,
   GATEWAY_ADMIN_HEADER,
   buildPlatformRequest,
+  getControlplaneConfig,
   getPlatformConfig,
   platformCapabilities,
   platformRequest,

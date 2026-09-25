@@ -82,6 +82,7 @@ const oneApi = createApi({
   refetchOnMountOrArgChange: 30,
   tagTypes: [
     'KUBEONE_PORTAL',
+    'LAYERSENTRY_OPERATIONS',
     ...Object.values(ONE_RESOURCES),
     ...Object.values(ONE_RESOURCES_POOL),
     ...Object.values(DOCUMENT),

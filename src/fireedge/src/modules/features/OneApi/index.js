@@ -18,6 +18,7 @@ import AclAPI from '@modules/features/OneApi/acl'
 import AuthAPI from '@modules/features/OneApi/auth'
 import BackupJobAPI from '@modules/features/OneApi/backupjobs'
 import ClusterAPI from '@modules/features/OneApi/cluster'
+import ControlPlaneAPI from '@modules/features/OneApi/controlPlane'
 import DatastoreAPI from '@modules/features/OneApi/datastore'
 import DriverAPI from '@modules/features/OneApi/driver'
 import GroupAPI from '@modules/features/OneApi/group'
@@ -62,6 +63,7 @@ export {
   AuthAPI,
   BackupJobAPI,
   ClusterAPI,
+  ControlPlaneAPI,
   DatastoreAPI,
   DriverAPI,
   DOCUMENT,
