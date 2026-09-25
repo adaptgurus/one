@@ -59,31 +59,60 @@ const ClusterManager = ({ cluster, profiles }) => {
   const [namespace, setNamespace] = useState('')
   const [accelerator, setAccelerator] = useState('')
   const [count, setCount] = useState(1)
-  const namespaces = KubeOnePortalAPI.useGetKubeOneNamespacesQuery(cluster.id)
+  const namespaces = KubeOnePortalAPI.useGetKubeOneNamespacesQuery(cluster.id, {
+    skip: !cluster.provisioned,
+  })
   const [createNamespace, createState] =
     KubeOnePortalAPI.useCreateKubeOneNamespaceMutation()
   const [loadKubeconfig, kubeconfigState] =
     KubeOnePortalAPI.useLazyGetKubeOneKubeconfigQuery()
+  const provisionJob = KubeOnePortalAPI.useGetKubeOneProvisionStatusQuery(
+    cluster.id,
+    { pollingInterval: 5000, skip: cluster.provisioned }
+  )
+  const [provisionCluster, provisionState] =
+    KubeOnePortalAPI.useProvisionKubeOneClusterMutation()
+  const controlPlaneJob =
+    KubeOnePortalAPI.useGetKubeOneControlPlaneReconciliationQuery(cluster.id, {
+      pollingInterval: 5000,
+      skip: !cluster.provisioned,
+    })
+  const [reconcileControlPlane, controlPlaneState] =
+    KubeOnePortalAPI.useReconcileKubeOneControlPlaneMutation()
   const workerJob = KubeOnePortalAPI.useGetKubeOneWorkerReconciliationQuery(
     cluster.id,
-    { pollingInterval: 5000 }
+    { pollingInterval: 5000, skip: !cluster.provisioned }
   )
   const [reconcileWorkers, reconcileState] =
     KubeOnePortalAPI.useReconcileKubeOneWorkersMutation()
   const applications = KubeOnePortalAPI.useGetKubeOneApplicationsQuery(
     cluster.id,
-    { pollingInterval: 5000 }
+    { pollingInterval: 5000, skip: !cluster.provisioned }
   )
   const [installApplication, installState] =
     KubeOnePortalAPI.useInstallKubeOneApplicationMutation()
   const selectedProfile = profiles.find(({ id }) => id === accelerator)
-  const workerPending = cluster.status.ready_nodes < cluster.expected_nodes
+  const workerPending =
+    cluster.provisioned && cluster.status.ready_nodes < cluster.expected_nodes
+  const controlPlanePending =
+    cluster.provisioned &&
+    cluster.status.ready_control_planes < cluster.expected_control_planes
   const controlPlaneHealthy =
     cluster.status.api_ready &&
     cluster.status.ready_control_planes === cluster.expected_control_planes &&
     cluster.status.kube_system_non_ready === 0
   const job = workerJob.data?.job
+  const cpJob = controlPlaneJob.data?.job
+  const createJob = provisionJob.data?.job
 
+  const createCluster = async () => {
+    await provisionCluster(cluster.id).unwrap()
+    await provisionJob.refetch()
+  }
+  const addControlPlane = async () => {
+    await reconcileControlPlane(cluster.id).unwrap()
+    await controlPlaneJob.refetch()
+  }
   const addNamespace = async () => {
     await createNamespace({ id: cluster.id, name: namespace }).unwrap()
     setNamespace('')
@@ -119,8 +148,17 @@ const ClusterManager = ({ cluster, profiles }) => {
           justifyContent="space-between"
         >
           <Box>
-            <Typography variant="h6">{cluster.id}</Typography>
+            <Typography variant="h6">{cluster.display_name || cluster.id}</Typography>
+            {cluster.display_name && cluster.display_name !== cluster.id && (
+              <Typography variant="caption" color="text.secondary">
+                {cluster.id}
+              </Typography>
+            )}
             <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
+              {!cluster.provisioned && (
+                <Chip size="small" color="warning" label="Not provisioned" />
+              )}
+              {cluster.provisioned && (
               <Chip
                 size="small"
                 color={cluster.status.api_ready ? 'success' : 'error'}
@@ -138,12 +176,13 @@ const ClusterManager = ({ cluster, profiles }) => {
                 size="small"
                 label={`${cluster.status.ready_control_planes}/${cluster.status.control_planes} control planes Ready`}
               />
+              )}
             </Stack>
           </Box>
           <Button
             variant="outlined"
             startIcon={<Download />}
-            disabled={kubeconfigState.isFetching}
+            disabled={!cluster.provisioned || kubeconfigState.isFetching}
             onClick={downloadKubeconfig}
           >
             Download kubeconfig
@@ -151,6 +190,107 @@ const ClusterManager = ({ cluster, profiles }) => {
         </Stack>
       </Surface>
 
+      {!cluster.provisioned && (
+        <Surface sx={{ p: 2 }}>
+          <Typography variant="h6">Create KubeOne cluster</Typography>
+          <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+            Provision this server-approved KubeOne plan. Control-plane and worker
+            hosts, endpoint, Kubernetes version, SSH identity, and manifest are
+            fixed by the provider; the browser cannot submit arbitrary hosts or
+            shell commands.
+          </Typography>
+          {!cluster.provisionable ? (
+            <Alert severity="warning">
+              This registered plan is inventory-only and cannot be provisioned.
+            </Alert>
+          ) : !cluster.self_service_lifecycle ? (
+            <Alert severity="warning">
+              Self-service lifecycle is not enabled for this cluster plan.
+            </Alert>
+          ) : (
+            <Button
+              variant="contained"
+              startIcon={<Plus />}
+              disabled={
+                provisionState.isLoading || createJob?.status === 'RUNNING'
+              }
+              onClick={createCluster}
+            >
+              {createJob?.status === 'RUNNING'
+                ? 'Creating cluster'
+                : 'Create cluster'}
+            </Button>
+          )}
+          {createJob && (
+            <Alert
+              severity={
+                createJob.status === 'SUCCEEDED'
+                  ? 'success'
+                  : createJob.status === 'RUNNING'
+                  ? 'info'
+                  : 'warning'
+              }
+              sx={{ mt: 2 }}
+            >
+              Cluster provisioning: {createJob.status}. {createJob.message || ''}
+            </Alert>
+          )}
+        </Surface>
+      )}
+
+      {cluster.provisioned && (
+      <Surface sx={{ p: 2 }}>
+        <Typography variant="h6">Control plane</Typography>
+        <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
+          Add only provider-approved control-plane hosts already declared in
+          this cluster&apos;s KubeOne manifest. Final production topology stays
+          odd and quorum-safe.
+        </Typography>
+        <Button
+          variant="contained"
+          startIcon={<Plus />}
+          disabled={
+            !cluster.self_service_lifecycle ||
+            !controlPlanePending ||
+            !controlPlaneHealthy ||
+            controlPlaneState.isLoading ||
+            cpJob?.status === 'RUNNING'
+          }
+          onClick={addControlPlane}
+        >
+          Add control plane
+        </Button>
+        {!controlPlanePending && (
+          <Alert severity="success" sx={{ mt: 2 }}>
+            Registered control-plane topology is converged (
+            {cluster.status.ready_control_planes}/
+            {cluster.expected_control_planes} Ready).
+          </Alert>
+        )}
+        {controlPlanePending && !controlPlaneHealthy && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Control-plane reconciliation is blocked until the currently joined
+            quorum and kube-system are healthy.
+          </Alert>
+        )}
+        {cpJob && (
+          <Alert
+            severity={
+              cpJob.status === 'SUCCEEDED'
+                ? 'success'
+                : cpJob.status === 'RUNNING'
+                ? 'info'
+                : 'warning'
+            }
+            sx={{ mt: 2 }}
+          >
+            Control-plane reconciliation: {cpJob.status}. {cpJob.message || ''}
+          </Alert>
+        )}
+      </Surface>
+      )}
+
+      {cluster.provisioned && (
       <Surface sx={{ p: 2 }}>
         <Typography variant="h6">Namespaces</Typography>
         <Stack
@@ -205,6 +345,10 @@ const ClusterManager = ({ cluster, profiles }) => {
         )}
       </Surface>
 
+      </Surface>
+      )}
+
+      {cluster.provisioned && (
       <Surface sx={{ p: 2 }}>
         <Typography variant="h6">Applications</Typography>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
@@ -305,6 +449,10 @@ const ClusterManager = ({ cluster, profiles }) => {
         )}
       </Surface>
 
+      </Surface>
+      )}
+
+      {cluster.provisioned && (
       <Surface sx={{ p: 2 }}>
         <Typography variant="h6">Add worker</Typography>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
@@ -340,6 +488,7 @@ const ClusterManager = ({ cluster, profiles }) => {
           <Button
             variant="contained"
             disabled={
+              !cluster.self_service_lifecycle ||
               !workerPending ||
               !controlPlaneHealthy ||
               reconcileState.isLoading ||
@@ -383,6 +532,7 @@ const ClusterManager = ({ cluster, profiles }) => {
           </Alert>
         )}
       </Surface>
+      )}
     </Stack>
   )
 }
@@ -437,7 +587,7 @@ const KubernetesWorkspace = () => {
             >
               {clusters.map(({ id }) => (
                 <MenuItem key={id} value={id}>
-                  {id}
+                  {clusters.find((item) => item.id === id)?.display_name || id}
                 </MenuItem>
               ))}
             </Select>
