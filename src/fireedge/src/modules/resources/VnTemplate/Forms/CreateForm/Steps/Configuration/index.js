@@ -97,6 +97,7 @@ const Content = ({
   adminGroup,
   tabIds,
   isInstantiate,
+  isVnet,
 }) => {
   const [selected, setSelected] = useState(0)
   const {
@@ -143,11 +144,12 @@ const Content = ({
               oneConfig={oneConfig}
               adminGroup={adminGroup}
               isInstantiate={isInstantiate}
+              isVnet={isVnet}
             />
           ),
         })
       ),
-    [driver, visibleTabs]
+    [driver, isVnet, visibleTabs]
   )
 
   const {
@@ -200,6 +202,7 @@ const Configuration = ({
   isUpdate: update,
   tabIds,
   isInstantiate,
+  isVnet = false,
 }) => {
   const isUpdate = update ?? data?.NAME !== undefined
 
@@ -210,7 +213,7 @@ const Configuration = ({
       isUpdate,
       oneConfig,
       adminGroup,
-      undefined,
+      isVnet,
       tabIds,
       isInstantiate
     ),
@@ -223,6 +226,7 @@ const Configuration = ({
         adminGroup,
         tabIds,
         isInstantiate,
+        isVnet,
       }),
   }
 }
@@ -233,6 +237,7 @@ Content.propTypes = {
   adminGroup: PropTypes.bool,
   tabIds: PropTypes.arrayOf(PropTypes.string),
   isInstantiate: PropTypes.bool,
+  isVnet: PropTypes.bool,
 }
 
 export { STEP_ID }
