@@ -246,7 +246,7 @@ cp "$VERIFY_LOG" "$EVIDENCE/"
 sha256sum "$EVIDENCE"/* > "$EVIDENCE/STAGE1_SHA256SUMS"
 touch "$ROOT/FOUNDATION_COMPLETE"
 echo "SEVEN_NODE_FOUNDATION=PASS"
-\r'}"
+\\r'}"
 if [[ -z "$ROOT_PASS" ]]; then
   echo "missing bootstrap password on stdin" >&2
   exit 2
