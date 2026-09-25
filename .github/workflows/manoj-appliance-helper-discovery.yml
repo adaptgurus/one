@@ -1,0 +1,70 @@
+name: Manoj Appliance Helper Discovery
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-appliance-helper-discovery.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind Manoj and protect source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST' -or $env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'Wrong runner'}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
+          Write-Host 'HELPER_DISCOVERY_SOURCE_GATE=PASS'
+
+      - name: Enumerate appliance candidates and TCP reachability
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $names=@(Get-VM | Where-Object {$_.Name -like 'ls-appliance*'} | Sort-Object Name | Select-Object -ExpandProperty Name)
+          foreach($name in $names){
+            $vm=Get-VM -Name $name -ErrorAction Stop
+            $cpu=Get-VMProcessor -VMName $name -ErrorAction SilentlyContinue
+            $mem=Get-VMMemory -VMName $name -ErrorAction SilentlyContinue
+            $disks=@(Get-VMHardDiskDrive -VMName $name -ErrorAction SilentlyContinue | Where-Object {$_.Path})
+            $nics=@(Get-VMNetworkAdapter -VMName $name -ErrorAction SilentlyContinue)
+            Write-Host ("APPLIANCE_CANDIDATE name={0} state={1} startup_mb={2} expose={3} disks={4}" -f $name,$vm.State,[math]::Round($mem.Startup/1MB),$cpu.ExposeVirtualizationExtensions,($disks.Count))
+            foreach($disk in $disks){
+              Write-Host ("APPLIANCE_DISK name={0} path={1} controller={2}:{3}" -f $name,$disk.Path,$disk.ControllerNumber,$disk.ControllerLocation)
+            }
+            foreach($nic in $nics){
+              $ips=@($nic.IPAddresses | Where-Object {$_})
+              Write-Host ("APPLIANCE_NIC name={0} mac={1} switch={2} status={3} ips={4}" -f $name,$nic.MacAddress,$nic.SwitchName,$nic.Status,($ips -join ','))
+              foreach($ip in $ips){
+                if($ip -notmatch ':'){
+                  $tcp=New-Object Net.Sockets.TcpClient
+                  $ok=$false
+                  try {
+                    $ar=$tcp.BeginConnect($ip,22,$null,$null)
+                    $done=$ar.AsyncWaitHandle.WaitOne(1200,$false)
+                    if($done -and $tcp.Connected){$tcp.EndConnect($ar);$ok=$true}
+                  } catch {} finally {$tcp.Close()}
+                  Write-Host "APPLIANCE_TCP22 name=$name ip=$ip success=$ok"
+                }
+              }
+            }
+          }
+          Write-Host 'APPLIANCE_HELPER_DISCOVERY=PASS'
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
