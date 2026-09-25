@@ -25,8 +25,14 @@ const {
 } = require('server/utils/constants/commands/secgroup')
 
 const { defaultEmptyFunction } = defaults
-const { ok, badRequest, conflict, internalServerError, unauthorized } =
-  httpCodes
+const {
+  ok,
+  badRequest,
+  conflict,
+  internalServerError,
+  serviceUnavailable,
+  unauthorized,
+} = httpCodes
 const { VN_INFO, VN_POOL_INFO, VN_UPDATE } = vnActions
 const { VNTEMPLATE_INFO, VNTEMPLATE_INSTANTIATE } = vnTemplateActions
 const { SECGROUP_INFO } = securityGroupActions
@@ -211,6 +217,7 @@ const invoke = (oneClient, action, parameters) =>
   })
 
 const verify = (network, id, request) => {
+  const template = network?.TEMPLATE ?? {}
   const ranges = toArray(network?.AR_POOL?.AR)
   const range = ranges.find(
     ({ IP, SIZE }) =>
@@ -222,12 +229,38 @@ const verify = (network, id, request) => {
     String(network?.ID) === String(id) &&
     network?.NAME === request.name &&
     network?.VN_MAD === request.driver &&
-    network?.TEMPLATE?.LAYERSENTRY_ENVIRONMENT ===
+    template.LAYERSENTRY_ENVIRONMENT ===
       request.template.LAYERSENTRY_ENVIRONMENT &&
-    String(network?.TEMPLATE?.SECURITY_GROUPS) ===
+    template.LAYERSENTRY_TIER === request.template.LAYERSENTRY_TIER &&
+    template.LAYERSENTRY_ISOLATION_POLICY ===
+      request.template.LAYERSENTRY_ISOLATION_POLICY &&
+    template.NETWORK_ADDRESS === request.template.NETWORK_ADDRESS &&
+    template.NETWORK_MASK === request.template.NETWORK_MASK &&
+    normalized(template.GATEWAY) === normalized(request.template.GATEWAY) &&
+    normalized(template.DNS) === normalized(request.template.DNS) &&
+    String(template.SECURITY_GROUPS) ===
       request.template.SECURITY_GROUPS &&
     Boolean(range)
   )
+}
+
+const readNetwork = async (oneClient, id) => {
+  const response = await invoke(oneClient, VN_INFO, [Number(id), false])
+
+  return response?.VNET
+}
+
+const findNetworkByName = (poolResponse, name) =>
+  toArray(poolResponse?.VNET_POOL?.VNET).find(
+    ({ NAME }) => normalized(NAME).toLowerCase() === name.toLowerCase()
+  )
+
+const respondWithNetwork = (res, id, network, extra = {}) => {
+  res.locals.httpCode = httpResponse(ok, {
+    id: Number(id),
+    network,
+    ...extra,
+  })
 }
 
 const create = async (
@@ -246,17 +279,22 @@ const create = async (
   }
 
   let allocatedId
+  let oneClient
+  let request
+  let admissionFailure = false
   try {
     const blueprintId = Number(params.blueprintId)
     const securityGroupId = Number(params.securityGroupId)
     if (!Number.isInteger(blueprintId) || blueprintId < 0) {
+      admissionFailure = true
       throw new Error('Select an approved network blueprint')
     }
     if (!Number.isInteger(securityGroupId) || securityGroupId <= 0) {
+      admissionFailure = true
       throw new Error('Select approved Firewall Rules')
     }
 
-    const oneClient = xmlrpc(user, password)
+    oneClient = xmlrpc(user, password)
     const [blueprintResponse, securityResponse, poolResponse] =
       await Promise.all([
         invoke(oneClient, VNTEMPLATE_INFO, [blueprintId, false]),
@@ -266,13 +304,26 @@ const create = async (
     const blueprint = blueprintResponse?.VNTEMPLATE
     const securityGroup = securityResponse?.SECURITY_GROUP
     if (!blueprint || !securityGroup) {
+      admissionFailure = true
       throw new Error('Selected provider policy is no longer available')
     }
-    const request = buildOverlay(params, blueprint, securityGroup)
-    const existing = toArray(poolResponse?.VNET_POOL?.VNET).find(
-      ({ NAME }) => normalized(NAME).toLowerCase() === request.name.toLowerCase()
-    )
+    try {
+      request = buildOverlay(params, blueprint, securityGroup)
+    } catch (error) {
+      admissionFailure = true
+      throw error
+    }
+    const existing = findNetworkByName(poolResponse, request.name)
     if (existing) {
+      const observedExisting = await readNetwork(oneClient, existing.ID)
+      if (verify(observedExisting, existing.ID, request)) {
+        respondWithNetwork(res, existing.ID, observedExisting, {
+          replayed: true,
+        })
+        next()
+
+        return
+      }
       res.locals.httpCode = httpResponse(
         conflict,
         { resourceId: existing.ID },
@@ -288,11 +339,7 @@ const create = async (
       request.name,
       toXml(request.template),
     ])
-    let networkResponse = await invoke(oneClient, VN_INFO, [
-      Number(allocatedId),
-      false,
-    ])
-    let network = networkResponse?.VNET
+    let network = await readNetwork(oneClient, allocatedId)
     const securityGroups = normalized(network?.TEMPLATE?.SECURITY_GROUPS)
       .split(',')
       .map((value) => value.trim())
@@ -309,32 +356,54 @@ const create = async (
         }),
         0,
       ])
-      networkResponse = await invoke(oneClient, VN_INFO, [
-        Number(allocatedId),
-        false,
-      ])
-      network = networkResponse?.VNET
+      network = await readNetwork(oneClient, allocatedId)
     }
     if (!verify(network, allocatedId, request)) {
       throw new Error('Authoritative network readback is incomplete')
     }
 
-    res.locals.httpCode = httpResponse(ok, {
-      id: Number(allocatedId),
-      network,
-    })
-  } catch {
-    res.locals.httpCode = allocatedId
-      ? httpResponse(
-          internalServerError,
-          { resourceId: Number(allocatedId) },
-          `Network #${allocatedId} exists but policy/readback reconciliation failed`
-        )
-      : httpResponse(
-          badRequest,
-          '',
-          'The network request failed authoritative validation'
-        )
+    respondWithNetwork(res, allocatedId, network)
+  } catch (error) {
+    if (!allocatedId && request && oneClient && !admissionFailure) {
+      try {
+        const pool = await invoke(oneClient, VN_POOL_INFO, [-2, -1, -1])
+        const candidate = findNetworkByName(pool, request.name)
+        if (candidate) {
+          const observed = await readNetwork(oneClient, candidate.ID)
+          if (verify(observed, candidate.ID, request)) {
+            respondWithNetwork(res, candidate.ID, observed, {
+              replayed: true,
+              reconciled: true,
+            })
+            next()
+
+            return
+          }
+        }
+      } catch {
+        // The result remains unknown; never retry the provider mutation here.
+      }
+    }
+
+    if (allocatedId) {
+      res.locals.httpCode = httpResponse(
+        internalServerError,
+        { resourceId: Number(allocatedId) },
+        `Network #${allocatedId} exists but policy/readback reconciliation failed`
+      )
+    } else if (admissionFailure) {
+      res.locals.httpCode = httpResponse(
+        badRequest,
+        '',
+        'The network request failed authoritative validation'
+      )
+    } else {
+      res.locals.httpCode = httpResponse(
+        serviceUnavailable,
+        '',
+        'OpenNebula could not complete the network request; authoritative state is unknown'
+      )
+    }
   }
   next()
 }
