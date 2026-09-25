@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 4A OneDeploy Validate
+name: LayerSentry Physical Runner Probe
 
 on:
   pull_request:
@@ -10,120 +10,94 @@ permissions:
   contents: read
 
 concurrency:
-  group: layersentry-physical-poc-stage-${{ github.event.pull_request.number }}
+  group: layersentry-physical-poc-probe-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
-  validate:
-    name: onedeploy-validate-${{ matrix.slot }}
-    strategy:
-      fail-fast: false
-      max-parallel: 3
-      matrix:
-        slot: [1, 2, 3]
-    runs-on: [self-hosted, Linux]
-    timeout-minutes: 20
+  demolayersentry1:
+    name: probe-demolayersentry1
+    runs-on: demolayersentry1
+    timeout-minutes: 7
     steps:
-      - name: Prepare and validate OneDeploy controller
+      - name: Identify runner
         shell: bash
         run: |
           set -euo pipefail
           echo "runner_name=$RUNNER_NAME"
-          if [ "$RUNNER_NAME" != "demolayersentry1" ]; then
-            echo "GUARD_SKIP_NON_CONTROLLER_RUNNER"
-            exit 0
-          fi
+          echo "hostname=$(hostname -f 2>/dev/null || hostname)"
+          echo "os=$RUNNER_OS arch=$RUNNER_ARCH"
+          id
+          hostnamectl 2>/dev/null || true
+          uname -a
+          cat /etc/os-release 2>/dev/null || true
+          echo "=== cpu/memory ==="
+          lscpu | sed -n '1,40p' || true
+          free -h || true
+          echo "=== network ==="
+          ip -br link || true
+          ip -br addr || true
+          ip route || true
+          bridge link 2>/dev/null || true
+          bridge vlan show 2>/dev/null || true
+          nmcli -t -f NAME,TYPE,DEVICE,STATE connection show 2>/dev/null || true
+          echo "=== block ==="
+          lsblk -e7 -o NAME,KNAME,TYPE,SIZE,FSTYPE,FSVER,LABEL,UUID,MOUNTPOINTS,MODEL,SERIAL,WWN,ROTA,TRAN || true
+          findmnt -R / || true
+          df -hT || true
+          sudo -n pvs 2>/dev/null || true
+          sudo -n vgs 2>/dev/null || true
+          sudo -n lvs -a -o+devices 2>/dev/null || true
+          echo "=== virtualization ==="
+          systemd-detect-virt || true
+          ls -l /dev/kvm 2>/dev/null || true
+          lsmod | grep -E '(^kvm|vfio|bridge|8021q)' || true
+          echo "=== services ==="
+          systemctl --no-pager --type=service --state=running | head -n 120 || true
+          echo "=== sudo ==="
+          if sudo -n true 2>/dev/null; then echo "sudo_noninteractive=yes"; else echo "sudo_noninteractive=no"; fi
+          echo "=== listeners ==="
+          sudo -n ss -lntup 2>/dev/null || ss -lnt 2>/dev/null || true
 
-          LOG=/var/log/layersentry-poc/activity.log
-          exec > >(tee -a "$LOG") 2>&1
-          echo "=== STAGE4A_ONEDEPLOY_VALIDATE_BEGIN $(date -u +%FT%TZ) ==="
-
-          test "$(id -u)" -eq 0
-          dnf -y install git python3-pip python3-devel gcc rsync openssh-clients
-
-          DEPLOY_ROOT=/root/layersentry-poc
-          REPO=$DEPLOY_ROOT/one-deploy
-          VENV=/opt/layersentry-one-deploy-venv
-          install -d -m 0700 "$DEPLOY_ROOT"
-
-          if [ ! -d "$REPO/.git" ]; then
-            git clone --branch fix/rocky-linux-support-20260925 --single-branch https://github.com/adaptgurus/one-deploy.git "$REPO"
-          else
-            git -C "$REPO" fetch origin fix/rocky-linux-support-20260925
-            git -C "$REPO" checkout fix/rocky-linux-support-20260925
-            git -C "$REPO" reset --hard origin/fix/rocky-linux-support-20260925
-          fi
-          test "$(git -C "$REPO" rev-parse HEAD)" = "033fbfe2a564c37c27fecd0e5e001599bab046b0"
-
-          if [ ! -x "$VENV/bin/ansible-playbook" ]; then
-            python3 -m venv "$VENV"
-            "$VENV/bin/pip" install --upgrade pip wheel
-            "$VENV/bin/pip" install 'ansible-core<2.17' netaddr 'pyone>=6.8.0' setuptools six xmltodict
-          fi
-
-          export PATH="$VENV/bin:$PATH"
-          cd "$REPO"
-          ansible-galaxy collection install --requirements-file requirements.yml --collections-path ansible_collections
-
-          INV="$DEPLOY_ROOT/poc-inventory.yml"
-          if [ ! -s "$DEPLOY_ROOT/one_pass" ]; then
-            umask 077
-            openssl rand -base64 36 | tr -d '\n' > "$DEPLOY_ROOT/one_pass"
-            openssl rand -base64 36 | tr -d '\n' > "$DEPLOY_ROOT/db_pass"
-          fi
-          ONEPASS=$(cat "$DEPLOY_ROOT/one_pass")
-          DBPASS=$(cat "$DEPLOY_ROOT/db_pass")
-
-          umask 077
-          cat >"$INV" <<EOF
-          ---
-          all:
-            vars:
-              env_name: layersentry-physical-poc
-              ansible_user: layersentry-deploy
-              ansible_ssh_private_key_file: /root/.ssh/layersentry_poc_ed25519
-              one_version: '7.4'
-              one_pass: '$ONEPASS'
-              db_backend: MariaDB
-              db_name: opennebula
-              db_owner: oneadmin
-              db_password: '$DBPASS'
-              features:
-                gate: true
-                flow: true
-                form: true
-                gui: true
-                prometheus: false
-                ceph: false
-                evpn: false
-              ds:
-                mode: ssh
-              vn: {}
-              kernel_ok_to_reboot: false
-
-          frontend:
-            hosts:
-              demolayersentry1:
-                ansible_host: 192.168.1.121
-
-          node:
-            hosts:
-              demolayersentry1:
-                ansible_host: 192.168.1.121
-              demolayersentry2:
-                ansible_host: 192.168.1.122
-          EOF
-          chmod 0600 "$INV"
-
-          echo "--- controller versions ---"
-          git rev-parse HEAD
-          ansible --version | head -n 3
-          echo "--- inventory graph (no variables) ---"
-          ansible-inventory -i "$INV" --graph
-          echo "--- SSH/privilege ping ---"
-          ansible -i "$INV" all -m ping
-          ansible -i "$INV" all -b -m command -a 'id -u'
-          echo "--- syntax checks ---"
-          ansible-playbook -i "$INV" --syntax-check opennebula.deploy.pre
-          ansible-playbook -i "$INV" --syntax-check opennebula.deploy.site
-          echo "=== STAGE4A_ONEDEPLOY_VALIDATE_PASS $(date -u +%FT%TZ) ==="
+  demolayersentry2:
+    name: probe-demolayersentry2
+    runs-on: demolayersentry2
+    timeout-minutes: 7
+    steps:
+      - name: Identify runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner_name=$RUNNER_NAME"
+          echo "hostname=$(hostname -f 2>/dev/null || hostname)"
+          echo "os=$RUNNER_OS arch=$RUNNER_ARCH"
+          id
+          hostnamectl 2>/dev/null || true
+          uname -a
+          cat /etc/os-release 2>/dev/null || true
+          echo "=== cpu/memory ==="
+          lscpu | sed -n '1,40p' || true
+          free -h || true
+          echo "=== network ==="
+          ip -br link || true
+          ip -br addr || true
+          ip route || true
+          bridge link 2>/dev/null || true
+          bridge vlan show 2>/dev/null || true
+          nmcli -t -f NAME,TYPE,DEVICE,STATE connection show 2>/dev/null || true
+          echo "=== block ==="
+          lsblk -e7 -o NAME,KNAME,TYPE,SIZE,FSTYPE,FSVER,LABEL,UUID,MOUNTPOINTS,MODEL,SERIAL,WWN,ROTA,TRAN || true
+          findmnt -R / || true
+          df -hT || true
+          sudo -n pvs 2>/dev/null || true
+          sudo -n vgs 2>/dev/null || true
+          sudo -n lvs -a -o+devices 2>/dev/null || true
+          echo "=== virtualization ==="
+          systemd-detect-virt || true
+          ls -l /dev/kvm 2>/dev/null || true
+          lsmod | grep -E '(^kvm|vfio|bridge|8021q)' || true
+          echo "=== services ==="
+          systemctl --no-pager --type=service --state=running | head -n 120 || true
+          echo "=== sudo ==="
+          if sudo -n true 2>/dev/null; then echo "sudo_noninteractive=yes"; else echo "sudo_noninteractive=no"; fi
+          echo "=== listeners ==="
+          sudo -n ss -lntup 2>/dev/null || ss -lnt 2>/dev/null || true
