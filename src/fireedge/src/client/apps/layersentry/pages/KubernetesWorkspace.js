@@ -1,6 +1,17 @@
 /* ------------------------------------------------------------------------- *
  * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
- * SPDX-License-Identifier: Apache-2.0                                       *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import {
@@ -26,7 +37,10 @@ import { Download, Plus, Refresh } from 'iconoir-react'
 import PropTypes from 'prop-types'
 import { useMemo, useState } from 'react'
 import { KubeOnePortalAPI } from '@FeaturesModule'
-import { PageFrame, Surface } from 'client/apps/layersentry/components/Primitives'
+import {
+  PageFrame,
+  Surface,
+} from 'client/apps/layersentry/components/Primitives'
 
 const downloadText = (name, value) => {
   const url = URL.createObjectURL(
@@ -106,11 +120,7 @@ const ClusterManager = ({ cluster, profiles }) => {
         >
           <Box>
             <Typography variant="h6">{cluster.id}</Typography>
-            <Stack
-              direction="row"
-              spacing={1}
-              sx={{ mt: 1, flexWrap: 'wrap' }}
-            >
+            <Stack direction="row" spacing={1} sx={{ mt: 1, flexWrap: 'wrap' }}>
               <Chip
                 size="small"
                 color={cluster.status.api_ready ? 'success' : 'error'}
@@ -224,11 +234,12 @@ const ClusterManager = ({ cluster, profiles }) => {
               </TableRow>
             </TableHead>
             <TableBody>
-              {applicationItems.map(({ profile, installed, job }) => {
+              {applicationItems.map(({ profile, installed, job: appJob }) => {
                 const missing = (profile.dependencies || []).filter(
                   (dependency) => !installedApps.has(dependency)
                 )
-                const running = job?.status === 'RUNNING'
+                const running = appJob?.status === 'RUNNING'
+
                 return (
                   <TableRow key={profile.id}>
                     <TableCell>
@@ -244,13 +255,15 @@ const ClusterManager = ({ cluster, profiles }) => {
                     <TableCell>
                       <Chip
                         size="small"
-                        color={installed ? 'success' : running ? 'info' : 'default'}
+                        color={
+                          installed ? 'success' : running ? 'info' : 'default'
+                        }
                         label={
                           installed
                             ? 'Installed'
                             : running
-                              ? 'Installing'
-                              : job?.status || 'Available'
+                            ? 'Installing'
+                            : appJob?.status || 'Available'
                         }
                       />
                       {missing.length > 0 && (
@@ -277,7 +290,11 @@ const ClusterManager = ({ cluster, profiles }) => {
                         }
                         onClick={() => installCatalogApplication(profile.id)}
                       >
-                        {installed ? 'Installed' : running ? 'Installing' : 'Install'}
+                        {installed
+                          ? 'Installed'
+                          : running
+                          ? 'Installing'
+                          : 'Install'}
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -335,8 +352,8 @@ const ClusterManager = ({ cluster, profiles }) => {
         </Stack>
         {!workerPending && (
           <Alert severity="success" sx={{ mt: 2 }}>
-            Registered worker topology is converged ({cluster.status.ready_nodes}/
-            {cluster.expected_nodes} nodes Ready).
+            Registered worker topology is converged (
+            {cluster.status.ready_nodes}/{cluster.expected_nodes} nodes Ready).
           </Alert>
         )}
         {workerPending && !controlPlaneHealthy && (
@@ -351,8 +368,8 @@ const ClusterManager = ({ cluster, profiles }) => {
               job.status === 'SUCCEEDED'
                 ? 'success'
                 : job.status === 'RUNNING'
-                  ? 'info'
-                  : 'warning'
+                ? 'info'
+                : 'warning'
             }
             sx={{ mt: 2 }}
           >
