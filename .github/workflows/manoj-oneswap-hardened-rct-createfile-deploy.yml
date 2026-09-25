@@ -1,0 +1,197 @@
+name: Manoj OneSwap Hardened RCT CreateFile Deploy
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-hardened-rct-createfile-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-hardened-rct-createfile-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and require replay-safe state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected user-visible checkpoint'}
+          if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
+          Write-Host 'HARDENED_RCT_SOURCE_GATE=PASS'
+
+      - name: Prepare appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-hardened-rct-createfile.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Prove durable DELTA_CAPTURING state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          operation="manoj-hv-ls-migration-source-test-20260924"
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]; c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_"); suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$operation")
+          python3 - "$state" <<'PY'
+          import json,os,sys
+          s=json.load(open(sys.argv[1]))
+          print("STATE_PHASE="+str(s.get("phase")))
+          if s.get("phase")!="DELTA_CAPTURING": raise SystemExit("not DELTA_CAPTURING")
+          if s.get("delta_applied_at") or s.get("template_id") or s.get("imported_at"): raise SystemExit("later-phase evidence exists")
+          if s.get("image_imports"): raise SystemExit("image import evidence exists")
+          for i,d in enumerate(s.get("disks",[])):
+              p=d.get("prepared_raw_path","")
+              if not os.path.isfile(p): raise SystemExit(f"prepared disk {i} missing")
+              if os.path.getsize(p)!=int(d.get("virtual_size",-1)): raise SystemExit(f"prepared disk {i} size mismatch")
+          print("HARDENED_RCT_STATE_GATE=PASS")
+          PY
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'safe state gate failed'}
+
+      - name: Deploy exact hardened CreateFile override
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $head='a77b945fc244dc92096b62afcee8bb70845f8d53'
+          $src=Join-Path $env:RUNNER_TEMP 'hyperv_hot_hardening.createfile.rb'
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $src "https://raw.githubusercontent.com/adaptgurus/one-swap/$head/hyperv_hot_hardening.rb"
+          if($LASTEXITCODE -ne 0){throw 'hardening file download failed'}
+          $text=Get-Content -LiteralPath $src -Raw
+          foreach($marker in @('CreateFileW','SafeFileHandle','[IO.FileStream]::new($handle,[IO.FileAccess]::Read)')){
+            if(-not $text.Contains($marker)){throw "Required hardening marker missing: $marker"}
+          }
+          if($text.Contains('[IO.File]::Open($rawPath')){throw 'Legacy raw PhysicalDrive File.Open still present in hardening source'}
+          $sha=(Get-FileHash -Algorithm SHA256 $src).Hash.ToLower()
+          Write-Host "HARDENED_RCT_SOURCE head=$head sha256=$sha"
+
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $common=@('-o','LogLevel=ERROR','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-o','ConnectTimeout=8','-i',$env:ONESWAP_TEMP_KEY)
+          & scp.exe @common $src "ci@10.250.10.32:/tmp/hyperv_hot_hardening.createfile.rb"
+          if($LASTEXITCODE -ne 0){throw 'hardening file scp failed'}
+
+          $script=@'
+          set -euo pipefail
+          src=/tmp/hyperv_hot_hardening.createfile.rb
+          dst=/usr/lib/one/ruby/cli/one_helper/hyperv_hot_hardening.rb
+          expected="__SHA__"
+          [ "$(sha256sum "$src" | awk '{print $1}')" = "$expected" ]
+          ruby -c "$src"
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          sudo cp -a "$dst" "$dst.before-createfile-hardening-$stamp"
+          sudo install -o root -g root -m 0644 "$src" "$dst"
+          sudo ruby -c "$dst"
+          [ "$(sudo sha256sum "$dst" | awk '{print $1}')" = "$expected" ]
+          sudo grep -Fq 'CreateFileW' "$dst"
+          ! sudo grep -Fq '[IO.File]::Open($rawPath' "$dst"
+          rm -f "$src"
+          echo "HARDENED_RCT_RUNTIME_DEPLOY=PASS sha256=$expected"
+          '@
+          $script=$script.Replace('__SHA__',$sha)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe @common "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'hardening deployment failed'}
+
+      - name: Validate real runtime load order and RCT bundle
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          cat >/tmp/ls-full-runtime-rct-probe.rb <<'RUBY'
+          require 'digest'
+          require 'json'
+          require 'yaml'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_hot_hardening'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_hot_edge_hardening'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_virtio_hardening'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_final_safety_hardening'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_network_hardening'
+
+          cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml') || {}
+          normalized={}
+          cfg.each{|k,v| normalized[k.to_s.sub(/^:/,'').to_sym]=v}
+          normalized[:hyperv_connection]='manoj-qual'
+          normalized[:hyperv_delta_timeout]=120
+          normalized[:hyperv_transfer_timeout]=120
+          op='manoj-hv-ls-migration-source-test-20260924'
+          work=(cfg['work_dir'] || cfg[:work_dir] || '/var/tmp').to_s
+          safe=op.gsub(/[^A-Za-z0-9_.-]/,'_')
+          suffix=Digest::SHA256.hexdigest(op)[0,16]
+          state=JSON.parse(File.read(File.join(work,'oneswap-hyperv-hot',"#{safe}-#{suffix}",'state.json')))
+          raise "unsafe phase #{state['phase']}" unless state['phase']=='DELTA_CAPTURING'
+
+          profile=OneSwapHyperV::ConnectionProfile.from_options(normalized)
+          transport=OneSwapHyperV::SSHTransport.new(profile)
+          source=OneSwapHyperV::HotSource.new(transport, normalized)
+          disk=state.fetch('disks').fetch(0)
+          start=Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          remote=source.send(:create_remote_delta_bundle!, state, disk, 0)
+          gen=((Process.clock_gettime(Process::CLOCK_MONOTONIC)-start)*1000).round
+          puts "FULL_RUNTIME_RCT_REMOTE=#{JSON.generate(remote)}"
+          puts "FULL_RUNTIME_RCT_GENERATE_MS=#{gen}"
+          local='/tmp/ls-full-runtime-rct-delta.lshv'
+          File.delete(local) if File.exist?(local)
+          start=Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          transport.stream_file(remote.fetch('Path'),local,timeout:120)
+          xfer=((Process.clock_gettime(Process::CLOCK_MONOTONIC)-start)*1000).round
+          raise 'size mismatch' unless File.size(local)==Integer(remote.fetch('FileSize'))
+          actual=Digest::SHA256.file(local).hexdigest
+          raise 'sha mismatch' unless actual==remote.fetch('SHA256').to_s.downcase
+          puts "FULL_RUNTIME_RCT_TRANSFER_MS=#{xfer}"
+          puts "FULL_RUNTIME_RCT_BYTES=#{File.size(local)}"
+          puts "FULL_RUNTIME_RCT_SHA256=#{actual}"
+          puts 'FULL_RUNTIME_RCT_VALIDATION=PASS'
+          File.delete(local) if File.exist?(local)
+          RUBY
+          timeout --signal=TERM --kill-after=5s 300s sudo ruby /tmp/ls-full-runtime-rct-probe.rb
+          rc=$?
+          rm -f /tmp/ls-full-runtime-rct-probe.rb /tmp/ls-full-runtime-rct-delta.lshv
+          exit $rc
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw "full runtime RCT validation failed rc=$LASTEXITCODE"}
+
+      - name: Re-prove source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($vm.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw 'Validation changed source state'}
+          if($n -ne 0){throw 'Unexpected checkpoint'}
+          Write-Host 'HARDENED_RCT_SOURCE_INVARIANT=PASS'
