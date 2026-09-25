@@ -15,8 +15,17 @@
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
-import { Alert, Box, Tab, Tabs, Typography } from '@mui/material'
+import {
+  Alert,
+  Box,
+  Chip,
+  LinearProgress,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material'
 import { useState } from 'react'
+import { ControlPlaneAPI } from '@FeaturesModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
   PageFrame,
@@ -26,6 +35,13 @@ import { colors } from 'client/apps/layersentry/theme/tokens'
 
 const OperationsWorkspace = ({ endpoints }) => {
   const [tab, setTab] = useState(0)
+  const operationsQuery = ControlPlaneAPI.useGetControlPlaneOperationsQuery(
+    { limit: 100 },
+    { pollingInterval: tab === 1 ? 5000 : 0, skip: tab !== 1 }
+  )
+  const operations = Array.isArray(operationsQuery.data?.operations)
+    ? operationsQuery.data.operations
+    : []
 
   return (
     <PageFrame
@@ -34,6 +50,7 @@ const OperationsWorkspace = ({ endpoints }) => {
     >
       <Tabs value={tab} onChange={(_, value) => setTab(value)} sx={{ mt: 2 }}>
         <Tab label="Health & Alerts" />
+        <Tab label="Durable Operations" />
         <Tab label="Support" />
         <Tab label="Audit" />
       </Tabs>
@@ -42,9 +59,81 @@ const OperationsWorkspace = ({ endpoints }) => {
           <ResourceBridge endpoints={endpoints} legacyPath="/attention" />
         )}
         {tab === 1 && (
-          <ResourceBridge endpoints={endpoints} legacyPath="/support" />
+          <Box sx={{ p: 1 }}>
+            <Typography sx={{ fontSize: 16, fontWeight: 750, mb: 1 }}>
+              Durable operations
+            </Typography>
+            {operationsQuery.isLoading && <LinearProgress />}
+            {operationsQuery.isError && (
+              <Alert severity="warning">
+                The dedicated LayerSentry operation service is unavailable.
+                Native infrastructure state remains visible, but no operation
+                state is fabricated.
+              </Alert>
+            )}
+            {!operationsQuery.isLoading &&
+              !operationsQuery.isError &&
+              operations.length === 0 && (
+                <Alert severity="info">
+                  No durable operations are recorded for this tenant.
+                </Alert>
+              )}
+            <Box sx={{ display: 'grid', gap: 1 }}>
+              {operations.map((operation) => (
+                <Box
+                  key={operation.id}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: { xs: '1fr', md: '2fr 1fr auto' },
+                    gap: 1,
+                    alignItems: 'center',
+                    p: 1.5,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 1.5,
+                  }}
+                >
+                  <Box>
+                    <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+                      {operation.action || 'Operation'} ·{' '}
+                      {operation.resource?.kind || 'Resource'}{' '}
+                      {operation.resource?.id || 'unknown'}
+                    </Typography>
+                    <Typography
+                      sx={{ fontSize: 11, color: colors.text.muted }}
+                    >
+                      {operation.id} · updated{' '}
+                      {operation.updated_at
+                        ? new Date(operation.updated_at).toLocaleString()
+                        : 'time unavailable'}
+                    </Typography>
+                  </Box>
+                  <Typography
+                    sx={{ fontSize: 12, color: colors.text.secondary }}
+                  >
+                    Completed {Number(operation.current_step || 0)} of{' '}
+                    {operation.plan?.steps?.length || '—'} steps
+                  </Typography>
+                  <Chip
+                    size="small"
+                    label={operation.state || 'UNKNOWN'}
+                    color={
+                      operation.state === 'SUCCEEDED'
+                        ? 'success'
+                        : operation.state === 'FAILED' ||
+                          operation.state === 'BLOCKED'
+                        ? 'error'
+                        : 'default'
+                    }
+                  />
+                </Box>
+              ))}
+            </Box>
+          </Box>
         )}
         {tab === 2 && (
+          <ResourceBridge endpoints={endpoints} legacyPath="/support" />
+        )}
+        {tab === 3 && (
           <Box sx={{ p: 1 }}>
             <Typography sx={{ fontSize: 16, fontWeight: 750, mb: 1 }}>
               Audit trail

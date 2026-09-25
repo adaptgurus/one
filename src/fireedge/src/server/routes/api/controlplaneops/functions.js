@@ -164,4 +164,28 @@ const get = (
   )
 }
 
-module.exports = { get, submit }
+const list = (
+  res = {},
+  next = defaultEmptyFunction,
+  { limit = 100 } = {},
+  userData = {},
+  oneConnection
+) => {
+  const parsedLimit = Number(limit)
+  if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 200) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Operation list limit must be between 1 and 200.',
+    })
+    next()
+    return
+  }
+  call(
+    res,
+    next,
+    { method: 'GET', path: `/v1/operations?limit=${parsedLimit}` },
+    userData,
+    oneConnection
+  )
+}
+
+module.exports = { get, list, submit }

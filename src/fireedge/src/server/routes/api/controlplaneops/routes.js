@@ -1,10 +1,11 @@
 const { httpMethod, from: fromData } = require('../../../utils/constants/defaults')
 
 const { GET, POST } = httpMethod
-const { postBody, resource } = fromData
+const { postBody, query, resource } = fromData
 const basepath = '/v1/controlplane/operations'
 
 const Actions = {
+  LIST: 'controlplaneops.list',
   SUBMIT: 'controlplaneops.submit',
   GET: 'controlplaneops.get',
 }
@@ -12,6 +13,12 @@ const Actions = {
 module.exports = {
   Actions,
   Commands: {
+    [Actions.LIST]: {
+      path: basepath,
+      httpMethod: GET,
+      auth: true,
+      params: { limit: { from: query } },
+    },
     [Actions.SUBMIT]: {
       path: basepath,
       httpMethod: POST,
