@@ -1,0 +1,286 @@
+name: TESTSER Workload Agent Preinstall Qualification
+
+on:
+  push:
+    branches:
+      - qual/testser-workload-agent-preinstall-20260926
+    paths:
+      - '.github/workflows/testser-workload-agent-preinstall.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    name: testser-slot-${{ matrix.slot }}
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        slot: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 35
+
+    steps:
+      - name: Bind TESTSER runner
+        id: bind
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner=$RUNNER_NAME slot=${{ matrix.slot }}"
+          if [ "$RUNNER_NAME" != "TESTSER-TWOSITE-ONE" ]; then
+            echo "execute=false" >> "$GITHUB_OUTPUT"
+            sleep 90
+            exit 0
+          fi
+          echo "execute=true" >> "$GITHUB_OUTPUT"
+
+      - name: Qualify VM375 image-preinstalled workload agent
+        if: steps.bind.outputs.execute == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/tmp/layersentry-vm375-live-qual.lock
+          if ! flock -n 9; then
+            echo "another TESTSER slot owns the qualification"
+            exit 0
+          fi
+
+          VMID=375
+          HOSTID=0
+          HOSTNAME=rocky-02
+          QDIR=/var/lib/one/layersentry-qual/20260926-014235
+          STACK="$QDIR/stack"
+          EXPECTED_AGENT=8c7084537356
+          EXPECTED_MACHINE=b2516bfcd69e49b49b265c3fe6b57407
+          SSH=(ssh -o BatchMode=yes -o ConnectTimeout=6 rocky-01)
+
+          one() { "${SSH[@]}" "$@"; }
+
+          # Ensure local SQL/TLS qualification processes remain available.
+          one sudo -n bash -s -- "$STACK" <<'REMOTE'
+          set -euo pipefail
+          stack="$1"
+          container=$(cat "$stack/db.container")
+          sudo podman inspect -f '{{.State.Running}}' "$container" | grep -qx true
+          if [ ! -s "$stack/controlplane.pid" ] || ! kill -0 "$(cat "$stack/controlplane.pid")" 2>/dev/null; then
+            nohup env LAYERSENTRY_QUAL_WORKDIR="$stack" "$stack/qual-controlplane-8c708-19556" >"$stack/controlplane.log" 2>&1 &
+            echo $! > "$stack/controlplane.pid"
+          fi
+          for i in $(seq 1 20); do
+            grep -q QUAL_CONTROLPLANE_READY "$stack/controlplane.log" 2>/dev/null && break
+            sleep 1
+          done
+          grep QUAL_CONTROLPLANE_READY "$stack/controlplane.log"
+          if [ ! -s "$stack/proxy.pid" ] || ! kill -0 "$(cat "$stack/proxy.pid")" 2>/dev/null; then
+            nohup python3 "$stack/proxy.py" >"$stack/proxy.log" 2>&1 &
+            echo $! > "$stack/proxy.pid"
+          fi
+          ss -ltn | grep -q ':19556 '
+          ss -ltn | grep -q ':19557 '
+          REMOTE
+
+          state() {
+            one onevm show "$VMID" | awk -F: '/^STATE/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2);print $2;exit}'
+          }
+
+          lcm() {
+            one onevm show "$VMID" | awk -F: '/^LCM_STATE/{gsub(/^[[:space:]]+|[[:space:]]+$/,"",$2);print $2;exit}'
+          }
+
+          wait_running() {
+            for i in $(seq 1 90); do
+              s="$(state || true)"
+              l="$(lcm || true)"
+              echo "wait_running[$i] state=$s lcm=$l"
+              if [[ "$s" == "ACTIVE" && "$l" == "RUNNING" ]]; then return 0; fi
+              sleep 4
+            done
+            one onevm show "$VMID"
+            return 1
+          }
+
+          wait_state() {
+            local wanted="$1"
+            for i in $(seq 1 90); do
+              s="$(state || true)"
+              echo "wait_state[$i] state=$s wanted=$wanted"
+              [[ "$s" == "$wanted" ]] && return 0
+              sleep 3
+            done
+            return 1
+          }
+
+          query_row() {
+            one sudo -n bash -s -- "$STACK" <<'REMOTE'
+          set -euo pipefail
+          stack="$1"
+          container=$(cat "$stack/db.container")
+          root_pass=$(cat "$stack/db_root.pass")
+          db=$(cat "$stack/db.name")
+          tenant=$(cat "$stack/tenant")
+          resource=$(cat "$stack/resource")
+          sudo podman exec "$container" mariadb -uroot -p"$root_pass" "$db" -N -B -e "
+          SELECT CONCAT_WS('|',
+            DATE_FORMAT(observed_at,'%Y-%m-%dT%H:%i:%s.%f'),
+            JSON_UNQUOTE(JSON_EXTRACT(payload,'$.boot_id')),
+            JSON_UNQUOTE(JSON_EXTRACT(payload,'$.integrity.sequence')),
+            JSON_UNQUOTE(JSON_EXTRACT(payload,'$.integrity.agent_version')),
+            JSON_UNQUOTE(JSON_EXTRACT(payload,'$.integrity.machine_id')),
+            JSON_UNQUOTE(JSON_EXTRACT(payload,'$.write_witnesses[0].status')),
+            JSON_UNQUOTE(JSON_EXTRACT(payload,'$.backup.freeze_capable')))
+          FROM layersentry_workload_telemetry
+          WHERE tenant='$tenant' AND resource_id='$resource';" 2>/dev/null || true
+          REMOTE
+          }
+
+          wait_telemetry_change() {
+            local old="$1"
+            for i in $(seq 1 90); do
+              row="$(query_row | tail -n 1)"
+              echo "telemetry[$i]=$row" >&2
+              if [[ -n "$row" && "$row" != "$old" ]]; then
+                printf '%s\n' "$row"
+                return 0
+              fi
+              sleep 4
+            done
+            return 1
+          }
+
+          validate_row() {
+            local row="$1"
+            IFS='|' read -r observed boot seq agent machine write freeze <<<"$row"
+            [[ -n "$observed" && -n "$boot" ]]
+            [[ "$seq" =~ ^[0-9]+$ ]] && (( seq >= 1 ))
+            [[ "$agent" == "$EXPECTED_AGENT" ]]
+            [[ "$machine" == "$EXPECTED_MACHINE" ]]
+            [[ "$write" == "PASS" ]]
+            [[ "$freeze" == "true" ]]
+          }
+
+          s="$(state)"
+          case "$s" in
+            HOLD) one onevm release "$VMID" ;;
+            POWEROFF) one onevm resume "$VMID" ;;
+            UNDEPLOYED) one onevm deploy -e "$VMID" "$HOSTID" 0 ;;
+            ACTIVE|PENDING) ;;
+            *) echo "unexpected initial VM state: $s" >&2; exit 1 ;;
+          esac
+          wait_running
+
+          first=""
+          for i in $(seq 1 90); do
+            first="$(query_row | tail -n 1)"
+            echo "first_telemetry[$i]=$first"
+            [[ -n "$first" ]] && break
+            sleep 4
+          done
+          [[ -n "$first" ]]
+          validate_row "$first"
+          IFS='|' read -r first_observed first_boot first_seq first_agent first_machine first_write first_freeze <<<"$first"
+          echo "FIRST_TELEMETRY_PASS observed=$first_observed boot=$first_boot seq=$first_seq agent=$first_agent"
+
+          one onevm poweroff "$VMID"
+          wait_state POWEROFF
+          one ssh -o BatchMode=yes -o ConnectTimeout=6 "$HOSTNAME" sudo -n bash -s -- "$VMID" "$QDIR" <<'REMOTE'
+          set -euo pipefail
+          vmid="$1"; qdir="$2"
+          disk="/var/lib/one/datastores/0/$vmid/disk.0"
+          out="$qdir/vm${vmid}-baseline.qcow2"
+          sudo qemu-img check "$disk"
+          sudo rm -f "$out"
+          sudo qemu-img convert -O qcow2 "$disk" "$out"
+          sudo qemu-img check "$out"
+          REMOTE
+          echo ROLLBACK_BASELINE_CAPTURE=PASS
+
+          one onevm resume "$VMID"
+          wait_running
+          second="$(wait_telemetry_change "$first" | tail -n 1)"
+          validate_row "$second"
+          IFS='|' read -r second_observed second_boot second_seq second_agent second_machine second_write second_freeze <<<"$second"
+          [[ "$second_boot" != "$first_boot" ]]
+          (( second_seq > first_seq ))
+          echo RESUME_PERSISTENCE_PASS seq=$second_seq boot=$second_boot
+
+          one onevm reboot "$VMID"
+          third="$(wait_telemetry_change "$second" | tail -n 1)"
+          validate_row "$third"
+          IFS='|' read -r third_observed third_boot third_seq third_agent third_machine third_write third_freeze <<<"$third"
+          if [[ "$third_boot" == "$second_boot" ]]; then
+            one onevm reboot --hard "$VMID"
+            third="$(wait_telemetry_change "$third" | tail -n 1)"
+            validate_row "$third"
+            IFS='|' read -r third_observed third_boot third_seq third_agent third_machine third_write third_freeze <<<"$third"
+          fi
+          [[ "$third_boot" != "$second_boot" ]]
+          (( third_seq > second_seq ))
+          echo REBOOT_PERSISTENCE_PASS seq=$third_seq boot=$third_boot
+
+          one onevm undeploy "$VMID"
+          wait_state UNDEPLOYED
+          one onevm deploy -e "$VMID" "$HOSTID" 0
+          wait_running
+          fourth="$(wait_telemetry_change "$third" | tail -n 1)"
+          validate_row "$fourth"
+          IFS='|' read -r fourth_observed fourth_boot fourth_seq fourth_agent fourth_machine fourth_write fourth_freeze <<<"$fourth"
+          [[ "$fourth_boot" != "$third_boot" ]]
+          (( fourth_seq > third_seq ))
+          echo UNDEPLOY_REDEPLOY_PERSISTENCE_PASS seq=$fourth_seq boot=$fourth_boot
+
+          one onevm poweroff "$VMID"
+          wait_state POWEROFF
+          one ssh -o BatchMode=yes -o ConnectTimeout=6 "$HOSTNAME" sudo -n bash -s -- "$VMID" "$QDIR" <<'REMOTE'
+          set -euo pipefail
+          vmid="$1"; qdir="$2"
+          disk="/var/lib/one/datastores/0/$vmid/disk.0"
+          baseline="$qdir/vm${vmid}-baseline.qcow2"
+          pre="$qdir/vm${vmid}-pre-rollback.qcow2"
+          tmp="$disk.rollback.tmp"
+          sudo qemu-img check "$disk"
+          sudo rm -f "$pre" "$tmp"
+          sudo qemu-img convert -O qcow2 "$disk" "$pre"
+          sudo qemu-img check "$baseline"
+          sudo qemu-img convert -O qcow2 "$baseline" "$tmp"
+          owner=$(stat -c '%u:%g' "$disk")
+          mode=$(stat -c '%a' "$disk")
+          sudo chown "$owner" "$tmp"
+          sudo chmod "$mode" "$tmp"
+          sudo mv -f "$tmp" "$disk"
+          sudo restorecon "$disk" 2>/dev/null || true
+          sudo qemu-img check "$disk"
+          REMOTE
+          echo ROLLBACK_DISK_RESTORE=PASS
+
+          one onevm resume "$VMID"
+          wait_running
+          rollback="$(wait_telemetry_change "$fourth" | tail -n 1)"
+          validate_row "$rollback"
+          IFS='|' read -r rollback_observed rollback_boot rollback_seq rollback_agent rollback_machine rollback_write rollback_freeze <<<"$rollback"
+          [[ "$rollback_boot" != "$fourth_boot" ]]
+          (( rollback_seq < fourth_seq ))
+          echo ROLLBACK_TELEMETRY_PASS restored_seq=$rollback_seq prior_seq=$fourth_seq
+
+          finding="$(one sudo -n bash -s -- "$STACK" <<'REMOTE'
+          set -euo pipefail
+          stack="$1"
+          container=$(cat "$stack/db.container")
+          root_pass=$(cat "$stack/db_root.pass")
+          db=$(cat "$stack/db.name")
+          tenant=$(cat "$stack/tenant")
+          resource=$(cat "$stack/resource")
+          sudo podman exec "$container" mariadb -uroot -p"$root_pass" "$db" -N -B -e "
+          SELECT COUNT(*) FROM layersentry_findings
+          WHERE tenant='$tenant' AND resource_id='$resource'
+            AND payload LIKE '%guest_restore_or_rollback_detected%';" 2>/dev/null
+          REMOTE
+          )"
+          [[ "$finding" =~ ^[0-9]+$ ]] && (( finding >= 1 ))
+          echo RESTORE_ROLLBACK_FINDING_PASS count=$finding
+
+          one onevm poweroff "$VMID"
+          wait_state POWEROFF
+          one sudo -n touch "$STACK/live-qualification.pass"
+          echo LIVE_IMAGE_PREINSTALL_QUALIFICATION=PASS
