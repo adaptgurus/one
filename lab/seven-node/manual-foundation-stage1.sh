@@ -202,6 +202,50 @@ fi
 
 touch "$ROOT/STAGE1_COMPLETE"
 echo "MANUAL_FOUNDATION_STAGE1=PASS"
+
+SITE_LOG="$ROOT/logs/one-deploy-site-$RUN_ID.log"
+set +e
+ansible-playbook -vv -i "$INVENTORY" "${EXTRA[@]}" opennebula.deploy.site > "$SITE_LOG" 2>&1
+SITE_RC=$?
+set -e
+cp "$SITE_LOG" "$EVIDENCE/"
+sha256sum "$EVIDENCE"/* > "$EVIDENCE/STAGE1_SHA256SUMS"
+
+echo "ONEDEPLOY_SITE_RC=$SITE_RC"
+if [[ "$SITE_RC" -ne 0 ]]; then
+  tail -n 250 "$SITE_LOG"
+  exit "$SITE_RC"
+fi
+
+VERIFY_LOG="$ROOT/logs/site-verify-$RUN_ID.log"
+{
+  echo "=== CONTROL PLANE SERVICES ==="
+  ansible -i "$INVENTORY" frontend -m shell -a "systemctl is-active opennebula; systemctl is-active opennebula-sunstone 2>/dev/null || systemctl is-active opennebula-fireedge 2>/dev/null || true" "${EXTRA[@]}"
+  echo "=== COMPUTE VIRTUALIZATION ==="
+  ansible -i "$INVENTORY" node -m shell -a "test -c /dev/kvm; virsh -c qemu:///system list --all >/dev/null; echo KVM_READY=PASS" "${EXTRA[@]}"
+  echo "=== NFS MOUNTS ==="
+  ansible -i "$INVENTORY" all -m shell -a "findmnt -n /srv/layersentry/nfs/workload; findmnt -n /srv/layersentry/nfs/images" "${EXTRA[@]}"
+  echo "=== OPENNEBULA INVENTORY ==="
+  ansible -i "$INVENTORY" layersentry3 -m shell -a "runuser -u oneadmin -- onehost list; runuser -u oneadmin -- onedatastore list; runuser -u oneadmin -- onecluster list; runuser -u oneadmin -- onevm list" "${EXTRA[@]}"
+} | tee "$VERIFY_LOG"
+
+for host in layersentry1 layersentry2 layersentry4; do
+  ansible -i "$INVENTORY" layersentry3 -m shell -a "runuser -u oneadmin -- onehost list | grep -q '$host'" "${EXTRA[@]}" >/dev/null
+done
+for dsid in 0 1 2; do
+  ansible -i "$INVENTORY" layersentry3 -m shell -a "runuser -u oneadmin -- onedatastore show $dsid >/dev/null" "${EXTRA[@]}" >/dev/null
+done
+if timeout 8 bash -c '</dev/tcp/172.17.60.20/2633'; then
+  echo "OPENNEBULA_VIP_2633=PASS" | tee -a "$VERIFY_LOG"
+else
+  echo "OPENNEBULA_VIP_2633=FAIL" | tee -a "$VERIFY_LOG" >&2
+  exit 51
+fi
+
+cp "$VERIFY_LOG" "$EVIDENCE/"
+sha256sum "$EVIDENCE"/* > "$EVIDENCE/STAGE1_SHA256SUMS"
+touch "$ROOT/FOUNDATION_COMPLETE"
+echo "SEVEN_NODE_FOUNDATION=PASS"
 \r'}"
 if [[ -z "$ROOT_PASS" ]]; then
   echo "missing bootstrap password on stdin" >&2
