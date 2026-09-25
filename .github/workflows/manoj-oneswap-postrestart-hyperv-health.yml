@@ -1,0 +1,55 @@
+name: Manoj OneSwap Post-Restart HyperV Health
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-postrestart-hyperv-health.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-postrestart-hyperv-health
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Inspect appliance from Hyper-V host
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($src.State -ne 'Off'){throw "Source must remain Off: $($src.State)"}
+          if(@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected source checkpoint'}
+          $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          $cpu=Get-VMProcessor -VMName $vm.Name -ErrorAction Stop
+          $net=@(Get-VMNetworkAdapter -VMName $vm.Name -ErrorAction Stop)
+          Write-Host "APPLIANCE_STATE=$($vm.State)"
+          Write-Host "APPLIANCE_STATUS=$($vm.Status)"
+          Write-Host "APPLIANCE_UPTIME=$($vm.Uptime)"
+          Write-Host "APPLIANCE_HEARTBEAT=$($vm.Heartbeat)"
+          Write-Host "APPLIANCE_EXPOSE=$($cpu.ExposeVirtualizationExtensions)"
+          foreach($n in $net){
+            Write-Host "APPLIANCE_NIC name=$($n.Name) switch=$($n.SwitchName) status=$($n.Status) mac=$($n.MacAddress) ips=$($n.IPAddresses -join ',')"
+          }
+          Get-VMIntegrationService -VMName $vm.Name | ForEach-Object {
+            Write-Host "INTEGRATION name=$($_.Name) enabled=$($_.Enabled) primary=$($_.PrimaryStatusDescription) secondary=$($_.SecondaryStatusDescription)"
+          }
+          Write-Host 'POSTRESTART_HYPERV_HEALTH=PASS'
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off'){throw 'Probe changed source state'}
+          if($n -ne 0){throw 'Unexpected source checkpoint'}
