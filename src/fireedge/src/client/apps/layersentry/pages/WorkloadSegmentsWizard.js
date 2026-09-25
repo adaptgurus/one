@@ -209,9 +209,7 @@ const SegmentCard = ({ segment, errors, onChange, onRemove, disabled }) => {
               value={segment.taggedVlans}
               onChange={change('taggedVlans')}
               error={Boolean(errors?.taggedVlans)}
-              helperText={
-                errors?.taggedVlans || 'Optional: 100,200-210,300'
-              }
+              helperText={errors?.taggedVlans || 'Optional: 100,200-210,300'}
               disabled={disabled}
               size="small"
             />
@@ -389,7 +387,10 @@ const WorkloadSegmentsWizard = () => {
 
   const addStandardSet = (environment) => {
     setSegments((current) => {
-      const next = [...current, ...withKeys(createStandardSegmentSet(environment))]
+      const next = [
+        ...current,
+        ...withKeys(createStandardSegmentSet(environment)),
+      ]
       validate(next)
 
       return next
