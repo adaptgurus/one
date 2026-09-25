@@ -1,0 +1,111 @@
+name: LayerSentry Physical POC Inventory
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/layersentry-physical-poc-inventory.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-physical-poc-inventory-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  inventory:
+    name: inventory-${{ matrix.slot }}
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 12
+    steps:
+      - name: Bind and inventory physical host
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          SAFE_RUNNER=$(printf '%s' "$RUNNER_NAME" | tr ' /' '__')
+          LOG="/tmp/layersentry-poc-inventory-${SAFE_RUNNER}-slot${{ matrix.slot }}.log"
+          exec > >(tee -a "$LOG") 2>&1
+
+          echo "LAYERSENTRY_POC_INVENTORY_V1"
+          echo "utc=$(date -u +%FT%TZ)"
+          echo "runner_name=$RUNNER_NAME"
+          echo "runner_os=$RUNNER_OS"
+          echo "runner_arch=$RUNNER_ARCH"
+          echo "hostname=$(hostname -f 2>/dev/null || hostname)"
+          echo "slot=${{ matrix.slot }}"
+
+          sleep 25
+
+          echo "=== identity ==="
+          id
+          hostnamectl 2>/dev/null || true
+          uname -a
+          cat /etc/os-release 2>/dev/null || true
+          printf 'sudo_noninteractive='
+          if sudo -n true 2>/dev/null; then echo yes; else echo no; fi
+
+          echo "=== cpu-memory ==="
+          lscpu || true
+          free -h || true
+
+          echo "=== block ==="
+          lsblk -e7 -o NAME,KNAME,TYPE,SIZE,FSTYPE,FSVER,LABEL,UUID,MOUNTPOINTS,MODEL,SERIAL,WWN,ROTA,TRAN || true
+          findmnt -R / || true
+          df -hT || true
+          sudo -n pvs 2>/dev/null || true
+          sudo -n vgs 2>/dev/null || true
+          sudo -n lvs -a -o+devices 2>/dev/null || true
+          sudo -n mdadm --detail --scan 2>/dev/null || true
+
+          echo "=== network ==="
+          ip -br link || true
+          ip -br addr || true
+          ip route show table main || true
+          ip rule || true
+          bridge link 2>/dev/null || true
+          bridge vlan show 2>/dev/null || true
+          nmcli -t -f NAME,UUID,TYPE,DEVICE,STATE connection show 2>/dev/null || true
+          nmcli -f GENERAL,IP4,IP6 device show 2>/dev/null || true
+          for n in /sys/class/net/*; do
+            d=$(basename "$n")
+            printf '%s -> ' "$d"
+            readlink -f "$n/device" 2>/dev/null || true
+          done
+          DEFDEV=$(ip route show default 2>/dev/null | awk 'NR==1{print $5}')
+          if [ -n "${DEFDEV:-}" ]; then sudo -n ethtool -i "$DEFDEV" 2>/dev/null || true; fi
+
+          echo "=== virtualization ==="
+          systemd-detect-virt || true
+          sudo -n virt-host-validate 2>/dev/null || true
+          ls -l /dev/kvm 2>/dev/null || true
+          lsmod | grep -E '(^kvm|vfio|bridge|8021q)' || true
+
+          echo "=== services-packages ==="
+          systemctl --no-pager --type=service --state=running | head -n 140 || true
+          rpm -qa 2>/dev/null | grep -Ei 'opennebula|libvirt|qemu|mariadb|mysql|postgres|keepalived|haproxy|nginx|podman|docker' | sort || true
+          dpkg-query -W 2>/dev/null | grep -Ei 'opennebula|libvirt|qemu|mariadb|mysql|postgres|keepalived|haproxy|nginx|podman|docker' | sort || true
+
+          echo "=== opennebula-existing ==="
+          command -v onehost || true
+          command -v oned || true
+          command -v sunstone-server || true
+          sudo -n systemctl status opennebula opennebula-sunstone opennebula-fireedge libvirtd virtqemud --no-pager 2>/dev/null || true
+
+          echo "=== ports ==="
+          sudo -n ss -lntup 2>/dev/null || ss -lnt 2>/dev/null || true
+          echo "inventory_log=$LOG"
+
+      - name: Upload inventory evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: layersentry-physical-poc-inventory-${{ matrix.slot }}
+          path: /tmp/layersentry-poc-inventory-*.log
+          if-no-files-found: error
+          retention-days: 14
