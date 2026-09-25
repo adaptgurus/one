@@ -39,23 +39,23 @@ jobs:
 
           if(-not ('LayerSentry.RawDiskNative' -as [type])) {
             Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
-namespace LayerSentry {
-    public static class RawDiskNative {
-        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-        public static extern SafeFileHandle CreateFileW(
-            string lpFileName,
-            uint dwDesiredAccess,
-            uint dwShareMode,
-            IntPtr lpSecurityAttributes,
-            uint dwCreationDisposition,
-            uint dwFlagsAndAttributes,
-            IntPtr hTemplateFile);
-    }
-}
-"@
+          using System;
+          using System.Runtime.InteropServices;
+          using Microsoft.Win32.SafeHandles;
+          namespace LayerSentry {
+              public static class RawDiskNative {
+                  [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+                  public static extern SafeFileHandle CreateFileW(
+                      string lpFileName,
+                      uint dwDesiredAccess,
+                      uint dwShareMode,
+                      IntPtr lpSecurityAttributes,
+                      uint dwCreationDisposition,
+                      uint dwFlagsAndAttributes,
+                      IntPtr hTemplateFile);
+              }
+          }
+          "@
           }
 
           $chunk=[Int64](512MB)
