@@ -318,6 +318,39 @@ export const getLayerSentryDataDiskPolicy = (sourceTemplate = {}) => {
 
 const networkTemplate = (network = {}) => network?.TEMPLATE ?? {}
 
+/**
+ * Return the authoritative environment published on a provider VNet.
+ * Untagged legacy networks are intentionally not inferred from their names.
+ *
+ * @param {object} network - OpenNebula VNet pool item
+ * @returns {string} Published environment or blank
+ */
+export const getLayerSentryNetworkEnvironment = (network = {}) =>
+  normalized(
+    networkTemplate(network)?.LAYERSENTRY_ENVIRONMENT
+  ).toUpperCase()
+
+/**
+ * Check whether a provider VNet is eligible for a workload environment.
+ * SHARED must be an explicit provider decision; missing metadata fails closed.
+ *
+ * @param {object} network - OpenNebula VNet pool item
+ * @param {string} workloadEnvironment - Requested workload environment
+ * @returns {boolean} Whether attachment preserves the environment boundary
+ */
+export const isLayerSentryNetworkCompatible = (
+  network = {},
+  workloadEnvironment = ''
+) => {
+  const networkEnvironment = getLayerSentryNetworkEnvironment(network)
+  const requested = normalized(workloadEnvironment).toUpperCase()
+
+  return (
+    workloadEnvironments.has(requested) &&
+    (networkEnvironment === requested || networkEnvironment === 'SHARED')
+  )
+}
+
 const networkMode = (network = {}) => {
   const mode = normalized(
     networkTemplate(network)?.LAYERSENTRY_NETWORK_MODE
@@ -393,6 +426,15 @@ export const applyLayerSentryCloudResources = (
   const authoritativeNetworkId = normalized(network?.ID)
   if (authoritativeNetworkId && requestedNetworkId !== authoritativeNetworkId) {
     throw new Error('Selected network no longer matches the provider network')
+  }
+
+  if (
+    authoritativeNetworkId &&
+    !isLayerSentryNetworkCompatible(network, resources.environment)
+  ) {
+    throw new Error(
+      'Selected network is not approved for this workload environment'
+    )
   }
 
   const staticIp =

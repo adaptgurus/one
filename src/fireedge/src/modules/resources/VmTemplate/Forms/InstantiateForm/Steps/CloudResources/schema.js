@@ -17,7 +17,10 @@ import { boolean, number, object, string } from 'yup'
 
 import { VnAPI } from '@FeaturesModule'
 import { INPUT_TYPES } from '@ConstantsModule'
-import { getValidationFromFields } from '@UtilsModule'
+import {
+  getValidationFromFields,
+  isLayerSentryNetworkCompatible,
+} from '@UtilsModule'
 
 const enabledType = (value) => (value ? INPUT_TYPES.TEXT : INPUT_TYPES.HIDDEN)
 const enabledSwitch = (value) =>
@@ -91,18 +94,28 @@ const NETWORK_ID = {
   tooltip: 'Choose the LayerSentry network for this VM.',
   type: INPUT_TYPES.AUTOCOMPLETE,
   optionsOnly: true,
-  values: () => {
+  dependOf: '$general.environment',
+  values: (environment) => {
     const { data: networks = [] } = VnAPI.useGetVNetworksQuery()
 
     return [
-      { text: 'Select a network', value: '' },
-      ...networks.map(({ ID, NAME }) => ({
-        text: NAME,
-        value: String(ID),
-      })),
+      {
+        text: environment
+          ? 'Select an approved network'
+          : 'Select an environment first',
+        value: '',
+      },
+      ...networks
+        .filter((network) =>
+          isLayerSentryNetworkCompatible(network, environment)
+        )
+        .map(({ ID, NAME }) => ({
+          text: NAME,
+          value: String(ID),
+        })),
     ]
   },
-  validation: string().trim().required('Select a network'),
+  validation: string().trim().required('Select an approved network'),
   grid: { md: 6 },
 }
 

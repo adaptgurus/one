@@ -296,10 +296,16 @@ test('cloud resource request creates only a simple data disk and selected networ
 test('LayerSentry leaves NIC METHOD to native OpenNebula network semantics', () => {
   const automatic = api.applyLayerSentryCloudResources(
     {},
-    { networkId: '0', ipAssignment: 'AUTO', networkQosEnabled: false },
+    {
+      networkId: '0',
+      ipAssignment: 'AUTO',
+      networkQosEnabled: false,
+      environment: 'DEV',
+    },
     {
       network: {
         ID: '0',
+        TEMPLATE: { LAYERSENTRY_ENVIRONMENT: 'DEV' },
         AR_POOL: { AR: { TYPE: 'IP4', IP: '10.10.10.100' } },
       },
     }
@@ -313,10 +319,12 @@ test('LayerSentry leaves NIC METHOD to native OpenNebula network semantics', () 
       ipAssignment: 'STATIC',
       staticIp: '10.10.10.141',
       networkQosEnabled: false,
+      environment: 'DEV',
     },
     {
       network: {
         ID: '0',
+        TEMPLATE: { LAYERSENTRY_ENVIRONMENT: 'DEV' },
         AR_POOL: { AR: { TYPE: 'IP4', IP: '10.10.10.100' } },
       },
     }
@@ -353,6 +361,7 @@ test('accelerated provider network becomes an automatic PCI NIC without raw PCI 
     ID: '9',
     NAME: 'LowLatency-LAN',
     TEMPLATE: {
+      LAYERSENTRY_ENVIRONMENT: 'PROD',
       LAYERSENTRY_NETWORK_MODE: 'SRIOV',
       LAYERSENTRY_PCI_CLASS: '0200',
       LAYERSENTRY_PCI_VENDOR: '15b3',
@@ -360,7 +369,12 @@ test('accelerated provider network becomes an automatic PCI NIC without raw PCI 
   }
   const result = api.applyLayerSentryCloudResources(
     {},
-    { networkId: '9', ipAssignment: 'AUTO', networkQosEnabled: false },
+    {
+      networkId: '9',
+      ipAssignment: 'AUTO',
+      networkQosEnabled: false,
+      environment: 'PROD',
+    },
     { network }
   )
 
@@ -372,7 +386,12 @@ test('accelerated provider network becomes an automatic PCI NIC without raw PCI 
     () =>
       api.applyLayerSentryCloudResources(
         {},
-        { networkId: '9', networkQosEnabled: true, networkSpeedMbps: 500 },
+        {
+          networkId: '9',
+          networkQosEnabled: true,
+          networkSpeedMbps: 500,
+          environment: 'PROD',
+        },
         { network }
       ),
     /not available on this accelerated network/
@@ -432,6 +451,36 @@ test('cloud resource request rejects invalid network and static IP values', () =
   )
 })
 
+test('network attachment requires authoritative matching environment metadata', () => {
+  const devNetwork = {
+    ID: '7',
+    NAME: 'dev_app_network',
+    TEMPLATE: { LAYERSENTRY_ENVIRONMENT: 'DEV' },
+  }
+  const sharedNetwork = {
+    ID: '8',
+    NAME: 'shared_services',
+    TEMPLATE: { LAYERSENTRY_ENVIRONMENT: 'SHARED' },
+  }
+
+  assert.equal(api.isLayerSentryNetworkCompatible(devNetwork, 'DEV'), true)
+  assert.equal(api.isLayerSentryNetworkCompatible(devNetwork, 'PROD'), false)
+  assert.equal(api.isLayerSentryNetworkCompatible(sharedNetwork, 'PROD'), true)
+  assert.equal(
+    api.isLayerSentryNetworkCompatible({ ID: '9', TEMPLATE: {} }, 'DEV'),
+    false
+  )
+  assert.throws(
+    () =>
+      api.applyLayerSentryCloudResources(
+        {},
+        { networkId: '7', environment: 'PROD' },
+        { network: devNetwork }
+      ),
+    /not approved for this workload environment/
+  )
+})
+
 test('cloud resource step gates qualified tuning behind a recoverable Advanced options toggle', () => {
   const content = readFileSync(
     resolve(
@@ -449,6 +498,8 @@ test('cloud resource step gates qualified tuning behind a recoverable Advanced o
   )
 
   assert.match(schema, /label: 'Advanced options'/)
+  assert.match(schema, /dependOf: '\$general\.environment'/)
+  assert.match(schema, /isLayerSentryNetworkCompatible/)
   assert.match(schema, /advanced: true/)
   assert.match(content, /advancedSection \? advanced : true/)
   assert.match(content, /Keep advanced settings/)
@@ -539,6 +590,7 @@ test('VM create review summarizes choices without rendering secrets', () => {
     'Memory',
     'Additional disk',
     'Network',
+    'Network environment',
     'IP assignment',
     'Protection',
     'GPU',

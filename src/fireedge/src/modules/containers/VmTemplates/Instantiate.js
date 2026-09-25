@@ -138,7 +138,10 @@ export function InstantiateVmTemplate() {
 
             filteredTemplate = applyLayerSentryCloudResources(
               filteredTemplate,
-              rawTemplate?.resources,
+              {
+                ...rawTemplate?.resources,
+                environment: rawTemplate?.general?.environment,
+              },
               {
                 storageIopsSupported,
                 sourceTemplate: apiTemplateData,

@@ -111,6 +111,10 @@ const Content = ({ vmTemplate }) => {
           }
         />
         <ReviewRow
+          label="Network environment"
+          value={selectedNetwork?.TEMPLATE?.LAYERSENTRY_ENVIRONMENT}
+        />
+        <ReviewRow
           label="IP assignment"
           value={
             resources.ipAssignment === 'STATIC'
