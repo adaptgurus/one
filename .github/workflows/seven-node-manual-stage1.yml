@@ -66,8 +66,21 @@ jobs:
           $script=Join-Path $env:GITHUB_WORKSPACE 'lab\seven-node\manual-foundation-stage1.sh'
           & scp.exe -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" $script "root@172.17.60.32:/root/layersentry-manual-stage1.sh"
           if($LASTEXITCODE -ne 0){ throw 'stage1 script transfer failed' }
-          ($env:LS_ROOT_PASSWORD + [Environment]::NewLine) | & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" root@172.17.60.32 "chmod 700 /root/layersentry-manual-stage1.sh; bash /root/layersentry-manual-stage1.sh ${{ github.run_id }}"
-          $rc=$LASTEXITCODE
+          $sshExe=(Get-Command ssh.exe -ErrorAction Stop).Source
+          $remoteCommand="chmod 700 /root/layersentry-manual-stage1.sh; bash /root/layersentry-manual-stage1.sh ${{ github.run_id }}"
+          $psi=New-Object System.Diagnostics.ProcessStartInfo
+          $psi.FileName=$sshExe
+          $psi.UseShellExecute=$false
+          $psi.RedirectStandardInput=$true
+          $psi.Arguments="-T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile=$known root@172.17.60.32 `"$remoteCommand`""
+          $proc=New-Object System.Diagnostics.Process
+          $proc.StartInfo=$psi
+          [void]$proc.Start()
+          $proc.StandardInput.Write($env:LS_ROOT_PASSWORD)
+          $proc.StandardInput.Write([char]10)
+          $proc.StandardInput.Close()
+          $proc.WaitForExit()
+          $rc=$proc.ExitCode
           Remove-Item Env:LS_ROOT_PASSWORD -ErrorAction SilentlyContinue
           Remove-Item $askpass -Force -ErrorAction SilentlyContinue
           if($rc -ne 0){ throw "stage1 remote execution failed rc=$rc" }
