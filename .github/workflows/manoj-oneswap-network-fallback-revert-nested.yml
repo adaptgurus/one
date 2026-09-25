@@ -1,0 +1,125 @@
+name: Manoj OneSwap Network Fallback Revert Nested
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-network-fallback-revert-nested.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-appliance-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Decide whether fallback repair is required
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST' -or $env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'Wrong Manoj runner'}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
+
+          $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          $cpu=Get-VMProcessor -VMName $vm.Name -ErrorAction Stop
+          $mem=Get-VMMemory -VMName $vm.Name -ErrorAction Stop
+          Write-Host "APPLIANCE_STATE=$($vm.State)"
+          Write-Host "APPLIANCE_EXPOSE_NESTED=$($cpu.ExposeVirtualizationExtensions)"
+          Write-Host "APPLIANCE_MEMORY_MB=$([math]::Round($mem.Startup/1MB))"
+
+          $tcp=New-Object Net.Sockets.TcpClient
+          $healthy=$false
+          try {
+            $ar=$tcp.BeginConnect('10.250.10.32',22,$null,$null)
+            $ok=$ar.AsyncWaitHandle.WaitOne(2000,$false)
+            if($ok -and $tcp.Connected){$tcp.EndConnect($ar);$healthy=$true}
+          } catch {} finally {$tcp.Close()}
+          Write-Host "APPLIANCE_SSH_HEALTHY=$healthy"
+          if($healthy){
+            "REPAIR_REQUIRED=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host 'NESTED_FALLBACK_NOT_REQUIRED=PASS'
+          } else {
+            "REPAIR_REQUIRED=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            Write-Host 'NESTED_FALLBACK_REQUIRED=true'
+          }
+
+      - name: Gracefully stop unreachable appliance
+        if: env.REPAIR_REQUIRED == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($vm.State -eq 'Running'){
+            $escaped=$vm.Name.Replace("'","''")
+            $cs=Get-CimInstance -Namespace root/virtualization/v2 -ClassName Msvm_ComputerSystem -Filter "ElementName='$escaped'" -ErrorAction Stop
+            $result=Invoke-CimMethod -InputObject $cs -MethodName RequestStateChange -Arguments @{RequestedState=[uint16]4} -ErrorAction Stop
+            Write-Host "FALLBACK_SHUTDOWN_RC=$($result.ReturnValue)"
+            if([int]$result.ReturnValue -notin @(0,4096)){throw "Graceful shutdown failed rc=$($result.ReturnValue)"}
+          }
+          $deadline=(Get-Date).AddMinutes(3)
+          do {
+            Start-Sleep -Seconds 3
+            $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+            Write-Host "FALLBACK_SHUTDOWN_STATE=$($vm.State)"
+          } while($vm.State -ne 'Off' -and (Get-Date) -lt $deadline)
+          if($vm.State -ne 'Off'){throw 'Fallback graceful shutdown did not complete; refusing hard power-off'}
+          Write-Host 'FALLBACK_GRACEFUL_SHUTDOWN=PASS'
+
+      - name: Revert nested exposure and keep 4GB recovery memory
+        if: env.REPAIR_REQUIRED == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw 'Appliance must be Off'}
+          Set-VMProcessor -VMName $vm.Name -ExposeVirtualizationExtensions $false -ErrorAction Stop
+          Set-VMMemory -VMName $vm.Name -DynamicMemoryEnabled $false -StartupBytes 4GB -ErrorAction Stop
+          $cpu=Get-VMProcessor -VMName $vm.Name
+          $mem=Get-VMMemory -VMName $vm.Name
+          Write-Host "FALLBACK_EXPOSE_NESTED=$($cpu.ExposeVirtualizationExtensions)"
+          Write-Host "FALLBACK_MEMORY_MB=$([math]::Round($mem.Startup/1MB))"
+          if($cpu.ExposeVirtualizationExtensions){throw 'Nested exposure did not revert'}
+          if($mem.Startup -ne 4GB){throw '4GB recovery memory not retained'}
+          Write-Host 'FALLBACK_CONFIG_REVERT=PASS'
+
+      - name: Restart and require original SSH endpoint
+        if: env.REPAIR_REQUIRED == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Start-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+          $deadline=(Get-Date).AddMinutes(8)
+          $ssh=$false
+          do {
+            Start-Sleep -Seconds 5
+            $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
+            $ips=@(Get-VMNetworkAdapter -VMName $vm.Name | ForEach-Object {$_.IPAddresses}) | Where-Object {$_}
+            Write-Host "FALLBACK_BOOT state=$($vm.State) heartbeat=$($vm.Heartbeat) ip=$($ips -join ',')"
+            $tcp=New-Object Net.Sockets.TcpClient
+            try {
+              $ar=$tcp.BeginConnect('10.250.10.32',22,$null,$null)
+              $ok=$ar.AsyncWaitHandle.WaitOne(1500,$false)
+              if($ok -and $tcp.Connected){$tcp.EndConnect($ar);$ssh=$true}
+            } catch {} finally {$tcp.Close()}
+          } while(-not $ssh -and (Get-Date) -lt $deadline)
+          if(-not $ssh){throw 'SSH endpoint did not recover after nested-exposure rollback'}
+          Write-Host 'FALLBACK_SSH_RECOVERED=PASS'
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($src.State -ne 'Off' -or $n -ne 0){throw 'Source invariant failed'}
+          Write-Host 'FALLBACK_SOURCE_INVARIANT=PASS'
