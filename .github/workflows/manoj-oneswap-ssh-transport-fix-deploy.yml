@@ -1,0 +1,125 @@
+name: Manoj OneSwap SSH Transport Fix Deploy
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-ssh-transport-fix-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-ssh-transport-fix-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind Manoj and require safe replay state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw 'Wrong runner'}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw 'Wrong host'}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected checkpoint'}
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-transport-fix.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Prove durable DELTA_CAPTURING state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          state=$(find /var/lib/layersentry-oneswap/reflink-work/oneswap-hyperv-hot -maxdepth 2 -type f -name state.json -path '*manoj-hv-ls-migration-source-test-20260924*' -print)
+          [ "$(printf '%s\n' "$state" | sed '/^$/d' | wc -l)" -eq 1 ]
+          python3 - "$state" <<'PY'
+          import json,os,sys
+          s=json.load(open(sys.argv[1]))
+          print("DEPLOY_STATE_PHASE="+str(s.get("phase")))
+          if s.get("phase")!="DELTA_CAPTURING": raise SystemExit("not DELTA_CAPTURING")
+          if s.get("delta_applied_at") or s.get("template_id") or s.get("imported_at"): raise SystemExit("later-phase evidence exists")
+          if s.get("image_imports"): raise SystemExit("image import evidence exists")
+          for i,d in enumerate(s.get("disks",[])):
+              p=d.get("prepared_raw_path","")
+              if not os.path.isfile(p): raise SystemExit(f"prepared disk {i} missing")
+              if os.path.getsize(p)!=int(d.get("virtual_size",-1)): raise SystemExit(f"prepared disk {i} size mismatch")
+          print("TRANSPORT_FIX_DEPLOY_STATE_GATE=PASS")
+          PY
+          '@
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'safe state gate failed'}
+
+      - name: Download and deploy repaired hyperv_helper
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $head='5e36c25b387a350fd465d8b0457a35fd2978dc89'
+          $src=Join-Path $env:RUNNER_TEMP 'hyperv_helper.transport-fix.rb'
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $src "https://raw.githubusercontent.com/adaptgurus/one-swap/$head/hyperv_helper.rb"
+          if($LASTEXITCODE -ne 0){throw 'download failed'}
+          $sha=(Get-FileHash -Algorithm SHA256 $src).Hash.ToLower()
+          Write-Host "TRANSPORT_FIX_SOURCE head=$head sha256=$sha"
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          & scp.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY $src "ci@10.250.10.32:/tmp/hyperv_helper.transport-fix.rb"
+          if($LASTEXITCODE -ne 0){throw 'scp failed'}
+          $script=@'
+          set -euo pipefail
+          src=/tmp/hyperv_helper.transport-fix.rb
+          dst=/usr/lib/one/ruby/cli/one_helper/hyperv_helper.rb
+          expected="__SHA__"
+          [ "$(sha256sum "$src" | awk '{print $1}')" = "$expected" ]
+          ruby -c "$src"
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          sudo cp -a "$dst" "$dst.before-transport-fix-$stamp"
+          sudo install -o root -g root -m 0644 "$src" "$dst"
+          sudo ruby -c "$dst"
+          [ "$(sudo sha256sum "$dst" | awk '{print $1}')" = "$expected" ]
+          rm -f "$src"
+          echo "TRANSPORT_FIX_RUNTIME_DEPLOY=PASS sha256=$expected"
+          '@
+          $script=$script.Replace('__SHA__',$sha)
+          $script=[regex]::Replace($script,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'runtime deploy failed'}
+
+      - name: Validate repaired OneSwap SSH transport
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $ruby=@'
+          require 'yaml'
+          require 'json'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
+          cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml')||{}
+          opts={}
+          cfg.each{|k,v| opts[k.to_s.sub(/^:/,'').to_sym]=v}
+          opts[:hyperv_connection]='manoj-qual'
+          p=OneSwapHyperV::ConnectionProfile.from_options(opts)
+          t=OneSwapHyperV::SSHTransport.new(p)
+          ps="[pscustomobject]@{Ok=\$true;Computer=\$env:COMPUTERNAME}|ConvertTo-Json -Compress"
+          result=t.powershell_json(ps, timeout: 30)
+          abort 'wrong computer' unless result['Computer'].to_s.casecmp('MANOJ-TEST-INST').zero?
+          puts JSON.generate(result)
+          '@
+          $ruby=[regex]::Replace($ruby,'\r','')
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($ruby))
+          & ssh.exe -o LogLevel=ERROR -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | timeout 60s sudo ruby"
+          if($LASTEXITCODE -ne 0){throw "repaired OneSwap SSH transport failed rc=$LASTEXITCODE"}
+          Write-Host 'ONESWAP_REPAIRED_SSH_TRANSPORT=PASS'
