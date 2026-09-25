@@ -157,9 +157,10 @@ jobs:
           # state.json stores the Windows path with a doubled separator after the drive
           # when surfaced through the Linux/Ruby layer. Normalize exactly that escaped
           # representation to the real Windows path before any filesystem access.
-          $remoteNorm=$remote.Replace('\\','\')
+          $remoteNorm=$remote.Trim()
+          while($remoteNorm.Contains('\\')){$remoteNorm=$remoteNorm.Replace('\\','\')}
           $expected='C:\LayerSentryMigration\layersentry-hot-manoj-hv-ls-migration-source-test-20260924'
-          if($remoteNorm -ne $expected){throw "Refusing unexpected remote export path: $remote"}
+          if(-not $remoteNorm.Equals($expected,[System.StringComparison]::OrdinalIgnoreCase)){throw "Refusing unexpected remote export path: raw=[$remote] normalized=[$remoteNorm] expected=[$expected]"}
           Write-Host "HYPERV_REMOTE_EXPORT_DIR=$remoteNorm"
           if(-not (Test-Path -LiteralPath $remoteNorm)){throw "Hyper-V remote export directory missing: $remoteNorm"}
           $files=@(Get-ChildItem -LiteralPath $remoteNorm -Recurse -File -ErrorAction Stop | Sort-Object FullName)
