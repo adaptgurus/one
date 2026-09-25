@@ -89,6 +89,28 @@ export const isLayerSentryNetworkBlueprint = (template = {}) => {
 }
 
 /**
+ * Match an approved native Security Group to the selected communication
+ * policy. Rule semantics remain owned by OpenNebula and the published group.
+ *
+ * @param {object} securityGroup - OpenNebula Security Group resource
+ * @param {string} isolationPolicy - Requested LayerSentry policy
+ * @returns {boolean} Whether the native group is an approved exact match
+ */
+export const isLayerSentrySecurityGroupCompatible = (
+  securityGroup = {},
+  isolationPolicy = ''
+) => {
+  const body = securityGroup?.TEMPLATE ?? {}
+  const policy = normalized(isolationPolicy).toUpperCase()
+
+  return (
+    isolationPolicies.has(policy) &&
+    normalized(body.LAYERSENTRY_APPROVED).toUpperCase() === 'YES' &&
+    normalized(body.LAYERSENTRY_ISOLATION_POLICY).toUpperCase() === policy
+  )
+}
+
+/**
  * Build a bounded overlay for native OpenNebula VNet-template instantiation.
  * Provider implementation fields remain owned by the approved blueprint.
  *
@@ -139,7 +161,9 @@ export const buildLayerSentryNetworkOverlay = (
 
   const securityGroupId = normalized(request.securityGroupId)
   const securityGroup = securityGroups.find(
-    ({ ID }) => normalized(ID) === securityGroupId
+    (candidate) =>
+      normalized(candidate?.ID) === securityGroupId &&
+      isLayerSentrySecurityGroupCompatible(candidate, isolation)
   )
   if (!/^\d+$/.test(securityGroupId) || !securityGroup) {
     throw new Error('Select an available firewall rule set')

@@ -38,6 +38,7 @@ import { jsonToXml } from '@UtilsModule'
 import {
   buildLayerSentryNetworkOverlay,
   isLayerSentryNetworkBlueprint,
+  isLayerSentrySecurityGroupCompatible,
 } from 'client/apps/layersentry/layersentryNetworkCreation'
 
 const initialDraft = {
@@ -109,6 +110,12 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
   const selectedBlueprint = approvedTemplates.find(
     ({ ID }) => `${ID}` === `${draft.blueprintId}`
   )
+  const compatibleSecurityGroups = securityGroups.filter((securityGroup) =>
+    isLayerSentrySecurityGroupCompatible(
+      securityGroup,
+      draft.isolationPolicy
+    )
+  )
 
   const update = (name) => (event) => {
     setDraft((current) => ({ ...current, [name]: event.target.value }))
@@ -128,7 +135,11 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
   const prepareReview = () => {
     try {
       setReview(
-        buildLayerSentryNetworkOverlay(draft, selectedBlueprint, securityGroups)
+        buildLayerSentryNetworkOverlay(
+          draft,
+          selectedBlueprint,
+          compatibleSecurityGroups
+        )
       )
       setError('')
     } catch (validationError) {
@@ -141,7 +152,7 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
       const request = buildLayerSentryNetworkOverlay(
         draft,
         selectedBlueprint,
-        securityGroups
+        compatibleSecurityGroups
       )
       const id = await instantiate({
         id: selectedBlueprint.ID,
@@ -230,6 +241,14 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
                 administrator must publish one before simple network creation.
               </Alert>
             )}
+            {compatibleSecurityGroups.length === 0 &&
+              !securityGroupsLoading && (
+                <Alert severity="warning">
+                  No approved Firewall Rules match the selected communication
+                  policy. An administrator must publish an exact native policy
+                  before this network can be created.
+                </Alert>
+              )}
             <Box
               sx={{
                 display: 'grid',
@@ -328,7 +347,7 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
                 disabled={securityGroupsLoading}
               >
                 <MenuItem value="">Select firewall rule set</MenuItem>
-                {securityGroups.map(({ ID, NAME }) => (
+                {compatibleSecurityGroups.map(({ ID, NAME }) => (
                   <MenuItem key={ID} value={`${ID}`}>
                     {NAME} (#{ID})
                   </MenuItem>

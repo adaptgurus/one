@@ -43,7 +43,16 @@ const blueprint = {
     BRIDGE: 'br0',
   },
 }
-const groups = [{ ID: '11', NAME: 'dev-isolated' }]
+const groups = [
+  {
+    ID: '11',
+    NAME: 'dev-isolated',
+    TEMPLATE: {
+      LAYERSENTRY_APPROVED: 'YES',
+      LAYERSENTRY_ISOLATION_POLICY: 'ISOLATED',
+    },
+  },
+]
 const request = {
   name: 'dev_app_network',
   description: 'Development application segment',
@@ -68,6 +77,24 @@ test('simple network creation accepts only provider-approved native blueprints',
     api.isLayerSentryNetworkBlueprint({
       TEMPLATE: { LAYERSENTRY_APPROVED: 'YES' },
     }),
+    false
+  )
+})
+
+test('communication policy requires an exact approved native Security Group', () => {
+  assert.equal(
+    api.isLayerSentrySecurityGroupCompatible(groups[0], 'ISOLATED'),
+    true
+  )
+  assert.equal(
+    api.isLayerSentrySecurityGroupCompatible(groups[0], 'SAME_ENVIRONMENT'),
+    false
+  )
+  assert.equal(
+    api.isLayerSentrySecurityGroupCompatible(
+      { ID: '12', TEMPLATE: { LAYERSENTRY_ISOLATION_POLICY: 'ISOLATED' } },
+      'ISOLATED'
+    ),
     false
   )
 })
