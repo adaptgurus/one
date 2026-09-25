@@ -1,0 +1,75 @@
+name: LayerSentry Platform Local Validation Probe
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/layersentry-platform-local-validation.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        slot: [1,2,3]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Bind target runner and locate platform clone
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            Write-Host 'NON_TARGET_RUNNER_HOLD'
+            Start-Sleep -Seconds 90
+            exit 0
+          }
+          $roots=@(
+            'C:\LayerSentryLab',
+            'C:\Users\Administrator',
+            'C:\src',
+            'C:\repos',
+            'C:\actions-runner\_work'
+          )
+          $candidates=@()
+          foreach($root in $roots){
+            if(-not (Test-Path $root)){ continue }
+            Get-ChildItem -LiteralPath $root -Directory -Force -ErrorAction SilentlyContinue -Depth 4 -Recurse |
+              Where-Object { $_.Name -eq 'layersentry-platform' } |
+              ForEach-Object {
+                if(Test-Path (Join-Path $_.FullName '.git')){
+                  $candidates += $_.FullName
+                }
+              }
+          }
+          $candidates=$candidates | Sort-Object -Unique
+          if(-not $candidates){ Write-Host 'PLATFORM_CLONE=NOT_FOUND'; exit 0 }
+          foreach($repo in $candidates){
+            Write-Host "::group::PLATFORM_CLONE $repo"
+            Push-Location $repo
+            try {
+              Write-Host ('PLATFORM_CLONE=' + $repo)
+              Write-Host ('HEAD=' + (& git rev-parse HEAD))
+              Write-Host ('BRANCH=' + (& git branch --show-current))
+              Write-Host ('STATUS=' + ((& git status --porcelain) -join ';'))
+              $remote=& git config --get remote.origin.url
+              if($remote -match 'github\.com[:/]adaptgurus/layersentry-platform(?:\.git)?$'){
+                Write-Host 'REMOTE_MATCH=YES'
+              } else {
+                Write-Host 'REMOTE_MATCH=NO'
+              }
+              if(Test-Path 'deploy\layersentry_deployer\provider_recovery.py'){
+                Write-Host 'HAS_RECOVERY_MODULE=YES'
+              }
+              if(Test-Path 'tests\test_provider_volumes.py'){
+                Write-Host 'HAS_VOLUME_TESTS=YES'
+              }
+            } finally { Pop-Location }
+            Write-Host "::endgroup::"
+          }
