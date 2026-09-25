@@ -1,4 +1,4 @@
-name: LayerSentry Physical Runner Probe
+name: LayerSentry Physical POC Stage 4B Deploy
 
 on:
   pull_request:
@@ -10,94 +10,97 @@ permissions:
   contents: read
 
 concurrency:
-  group: layersentry-physical-poc-probe-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: layersentry-physical-poc-stage4b-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 jobs:
-  demolayersentry1:
-    name: probe-demolayersentry1
+  deploy:
+    name: onedeploy-baseline
     runs-on: demolayersentry1
-    timeout-minutes: 7
+    timeout-minutes: 55
     steps:
-      - name: Identify runner
+      - name: Deploy OpenNebula baseline with OneDeploy
         shell: bash
         run: |
           set -euo pipefail
-          echo "runner_name=$RUNNER_NAME"
-          echo "hostname=$(hostname -f 2>/dev/null || hostname)"
-          echo "os=$RUNNER_OS arch=$RUNNER_ARCH"
-          id
-          hostnamectl 2>/dev/null || true
-          uname -a
-          cat /etc/os-release 2>/dev/null || true
-          echo "=== cpu/memory ==="
-          lscpu | sed -n '1,40p' || true
-          free -h || true
-          echo "=== network ==="
-          ip -br link || true
-          ip -br addr || true
-          ip route || true
-          bridge link 2>/dev/null || true
-          bridge vlan show 2>/dev/null || true
-          nmcli -t -f NAME,TYPE,DEVICE,STATE connection show 2>/dev/null || true
-          echo "=== block ==="
-          lsblk -e7 -o NAME,KNAME,TYPE,SIZE,FSTYPE,FSVER,LABEL,UUID,MOUNTPOINTS,MODEL,SERIAL,WWN,ROTA,TRAN || true
-          findmnt -R / || true
-          df -hT || true
-          sudo -n pvs 2>/dev/null || true
-          sudo -n vgs 2>/dev/null || true
-          sudo -n lvs -a -o+devices 2>/dev/null || true
-          echo "=== virtualization ==="
-          systemd-detect-virt || true
-          ls -l /dev/kvm 2>/dev/null || true
-          lsmod | grep -E '(^kvm|vfio|bridge|8021q)' || true
-          echo "=== services ==="
-          systemctl --no-pager --type=service --state=running | head -n 120 || true
-          echo "=== sudo ==="
-          if sudo -n true 2>/dev/null; then echo "sudo_noninteractive=yes"; else echo "sudo_noninteractive=no"; fi
-          echo "=== listeners ==="
-          sudo -n ss -lntup 2>/dev/null || ss -lnt 2>/dev/null || true
+          umask 077
+          exec sudo -n bash <<'ROOT'
+          set -euo pipefail
+          export PATH=/opt/layersentry-one-deploy-venv/bin:$PATH
+          export ANSIBLE_DISPLAY_ARGS_TO_STDOUT=false
+          export ANSIBLE_NOCOLOR=1
+          export PYTHONUNBUFFERED=1
 
-  demolayersentry2:
-    name: probe-demolayersentry2
-    runs-on: demolayersentry2
-    timeout-minutes: 7
-    steps:
-      - name: Identify runner
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "runner_name=$RUNNER_NAME"
-          echo "hostname=$(hostname -f 2>/dev/null || hostname)"
-          echo "os=$RUNNER_OS arch=$RUNNER_ARCH"
-          id
-          hostnamectl 2>/dev/null || true
-          uname -a
-          cat /etc/os-release 2>/dev/null || true
-          echo "=== cpu/memory ==="
-          lscpu | sed -n '1,40p' || true
-          free -h || true
-          echo "=== network ==="
-          ip -br link || true
-          ip -br addr || true
-          ip route || true
-          bridge link 2>/dev/null || true
-          bridge vlan show 2>/dev/null || true
-          nmcli -t -f NAME,TYPE,DEVICE,STATE connection show 2>/dev/null || true
-          echo "=== block ==="
-          lsblk -e7 -o NAME,KNAME,TYPE,SIZE,FSTYPE,FSVER,LABEL,UUID,MOUNTPOINTS,MODEL,SERIAL,WWN,ROTA,TRAN || true
-          findmnt -R / || true
-          df -hT || true
-          sudo -n pvs 2>/dev/null || true
-          sudo -n vgs 2>/dev/null || true
-          sudo -n lvs -a -o+devices 2>/dev/null || true
-          echo "=== virtualization ==="
-          systemd-detect-virt || true
-          ls -l /dev/kvm 2>/dev/null || true
-          lsmod | grep -E '(^kvm|vfio|bridge|8021q)' || true
-          echo "=== services ==="
-          systemctl --no-pager --type=service --state=running | head -n 120 || true
-          echo "=== sudo ==="
-          if sudo -n true 2>/dev/null; then echo "sudo_noninteractive=yes"; else echo "sudo_noninteractive=no"; fi
-          echo "=== listeners ==="
-          sudo -n ss -lntup 2>/dev/null || ss -lnt 2>/dev/null || true
+          DEPLOY_ROOT=/root/layersentry-poc
+          REPO="$DEPLOY_ROOT/one-deploy"
+          INV="$DEPLOY_ROOT/poc-inventory.yml"
+          LOGDIR="$DEPLOY_ROOT/logs"
+          mkdir -p "$LOGDIR"
+          LOG="$LOGDIR/stage4b-deploy-$(date -u +%Y%m%dT%H%M%SZ).log"
+          touch "$LOG"
+          chmod 0600 "$LOG"
+          exec > >(tee -a "$LOG") 2>&1
+
+          echo "=== STAGE4B_DEPLOY_BEGIN $(date -u +%FT%TZ) ==="
+          test -d "$REPO/.git"
+          test -s "$INV"
+          test -x /opt/layersentry-one-deploy-venv/bin/ansible-playbook
+          test -s "$DEPLOY_ROOT/one_pass"
+          test -s "$DEPLOY_ROOT/db_pass"
+
+          echo "--- target identity ---"
+          hostname -f || hostname
+          ip -4 -br addr show br0
+          ip -4 route show default
+          df -hT /home
+          test -d /home/layersentry/datastores
+          test -d /home/layersentry/images
+
+          cd "$REPO"
+          echo "--- inventory graph ---"
+          ansible-inventory -i "$INV" --graph
+          echo "--- connectivity gate ---"
+          ansible -i "$INV" all -m ping
+          ansible -i "$INV" all -b -m command -a 'id -u'
+
+          echo "--- OneDeploy pre ---"
+          make V= I="$INV" pre
+
+          echo "--- OneDeploy site ---"
+          make V= I="$INV" site
+
+          echo "--- service health ---"
+          systemctl --no-pager --full status opennebula opennebula-fireedge opennebula-gate opennebula-flow || true
+          systemctl is-active opennebula
+          systemctl is-active opennebula-fireedge
+          systemctl is-active opennebula-gate
+          systemctl is-active opennebula-flow
+
+          echo "--- OpenNebula API/CLI health ---"
+          sudo -u oneadmin bash -lc 'onezone list'
+          sudo -u oneadmin bash -lc 'onehost list'
+          sudo -u oneadmin bash -lc 'onedatastore list'
+          sudo -u oneadmin bash -lc 'onevnet list'
+
+          echo "--- web/API listeners ---"
+          ss -lntp | grep -E ':(2616|2633|5030|2474|2475|2476|9869|29876)\b' || true
+          for u in http://127.0.0.1:2616 http://127.0.0.1:2633; do
+            code=$(curl -k -sS -o /dev/null -w '%{http_code}' --connect-timeout 5 "$u" || true)
+            echo "$u => $code"
+          done
+
+          echo "--- peer host health ---"
+          ssh -i /root/.ssh/layersentry_poc_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 layersentry-deploy@192.168.1.122             'hostname; ip -4 -br addr show br0; sudo -n systemctl is-active libvirtd || sudo -n systemctl is-active virtqemud || true; sudo -n virsh nodeinfo | sed -n "1,12p"'
+
+          echo "deployment_log=$LOG"
+          echo "=== STAGE4B_DEPLOY_PASS $(date -u +%FT%TZ) ==="
+          ROOT
+
+      - name: Upload deployment journal
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: layersentry-physical-poc-stage4b-deploy
+          path: /root/layersentry-poc/logs/stage4b-deploy-*.log
+          if-no-files-found: warn
+          retention-days: 14
