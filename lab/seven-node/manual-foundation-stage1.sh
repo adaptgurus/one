@@ -46,12 +46,26 @@ git -C "$REPO" checkout --detach 13f8d02692dc415fa5efb3305699b3db42e7d6f9
 test "$(git -C "$REPO" rev-parse HEAD)" = "13f8d02692dc415fa5efb3305699b3db42e7d6f9"
 cd "$REPO"
 make requirements
+echo "ONEDEPLOY_REQUIREMENTS=PASS"
 
 : > "$ROOT/known_hosts"
 for ip in 172.17.60.30 172.17.60.31 172.17.60.32 172.17.60.33 172.17.60.34 172.17.60.35; do
-  ssh-keyscan -H "$ip" >> "$ROOT/known_hosts" 2>/dev/null
+  keyscan_ok=0
+  for attempt in 1 2 3; do
+    if ssh-keyscan -T 5 -H "$ip" >> "$ROOT/known_hosts" 2>/dev/null; then
+      keyscan_ok=1
+      echo "SSH_KEYSCAN=PASS ip=$ip attempt=$attempt"
+      break
+    fi
+    sleep 1
+  done
+  if [[ "$keyscan_ok" -ne 1 ]]; then
+    echo "SSH_KEYSCAN=FAIL ip=$ip" >&2
+    exit 31
+  fi
 done
 chmod 600 "$ROOT/known_hosts"
+echo "SSH_KNOWN_HOSTS=PASS"
 
 VAULT_PASS="$ROOT/vault-pass"
 VAULT_VARS="$ROOT/vault-vars.yml"
