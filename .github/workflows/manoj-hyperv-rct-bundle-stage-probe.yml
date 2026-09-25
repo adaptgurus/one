@@ -32,19 +32,19 @@ jobs:
 
           if(-not ('LayerSentry.RawDiskNativeProbe' -as [type])){
             Add-Type -TypeDefinition @"
-using System;
-using System.Runtime.InteropServices;
-using Microsoft.Win32.SafeHandles;
-namespace LayerSentry {
-  public static class RawDiskNativeProbe {
-    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern SafeFileHandle CreateFileW(
-      string lpFileName, uint dwDesiredAccess, uint dwShareMode,
-      IntPtr lpSecurityAttributes, uint dwCreationDisposition,
-      uint dwFlagsAndAttributes, IntPtr hTemplateFile);
-  }
-}
-"@
+          using System;
+          using System.Runtime.InteropServices;
+          using Microsoft.Win32.SafeHandles;
+          namespace LayerSentry {
+            public static class RawDiskNativeProbe {
+              [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+              public static extern SafeFileHandle CreateFileW(
+                string lpFileName, uint dwDesiredAccess, uint dwShareMode,
+                IntPtr lpSecurityAttributes, uint dwCreationDisposition,
+                uint dwFlagsAndAttributes, IntPtr hTemplateFile);
+            }
+          }
+          "@
           }
 
           $drives=@(Get-VMHardDiskDrive -VM $vm -ErrorAction Stop | Sort-Object ControllerNumber,ControllerLocation)
