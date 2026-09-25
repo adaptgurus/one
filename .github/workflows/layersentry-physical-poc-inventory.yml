@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 3C Controller Trust
+name: LayerSentry Physical POC Stage 3D Deploy Account
 
 on:
   pull_request:
@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  trust:
-    name: controller-trust-${{ matrix.slot }}
+  deploy_account:
+    name: deploy-account-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
@@ -24,7 +24,7 @@ jobs:
     runs-on: [self-hosted, Linux]
     timeout-minutes: 8
     steps:
-      - name: Authorize deployment controller key
+      - name: Create dedicated Ansible deployment account
         shell: bash
         run: |
           set -euo pipefail
@@ -35,17 +35,30 @@ jobs:
           esac
           LOG=/var/log/layersentry-poc/activity.log
           exec > >(tee -a "$LOG") 2>&1
-          echo "=== STAGE3C_CONTROLLER_TRUST_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE3D_DEPLOY_ACCOUNT_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
 
-          install -d -m 0700 /root/.ssh
-          touch /root/.ssh/authorized_keys
-          chmod 0600 /root/.ssh/authorized_keys
+          echo "--- preserve root SSH policy ---"
+          sshd -T | grep -Ei '^(permitrootlogin|pubkeyauthentication|passwordauthentication) ' || true
+
+          id layersentry-deploy >/dev/null 2>&1 || useradd -m -s /bin/bash layersentry-deploy
+          install -d -o layersentry-deploy -g layersentry-deploy -m 0700 /home/layersentry-deploy/.ssh
+          touch /home/layersentry-deploy/.ssh/authorized_keys
+          chown layersentry-deploy:layersentry-deploy /home/layersentry-deploy/.ssh/authorized_keys
+          chmod 0600 /home/layersentry-deploy/.ssh/authorized_keys
           PUBKEY='ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOSbO6o9GBtG2axbE4BKe05BbRcyxPHTsnX5uvOS/qIJ layersentry-poc-controller@demolayersentry1'
-          grep -qxF "$PUBKEY" /root/.ssh/authorized_keys || printf '%s\n' "$PUBKEY" >> /root/.ssh/authorized_keys
+          grep -qxF "$PUBKEY" /home/layersentry-deploy/.ssh/authorized_keys || printf '%s\n' "$PUBKEY" >> /home/layersentry-deploy/.ssh/authorized_keys
+          chown layersentry-deploy:layersentry-deploy /home/layersentry-deploy/.ssh/authorized_keys
+          restorecon -RF /home/layersentry-deploy/.ssh || true
+
+          cat >/etc/sudoers.d/layersentry-deploy <<'EOF'
+          layersentry-deploy ALL=(root) NOPASSWD: ALL
+          EOF
+          chmod 0440 /etc/sudoers.d/layersentry-deploy
+          visudo -cf /etc/sudoers.d/layersentry-deploy
 
           if [ "$RUNNER_NAME" = "demolayersentry1" ]; then
-            ssh -i /root/.ssh/layersentry_poc_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 root@192.168.1.121 'hostname; id -u'
-            ssh -i /root/.ssh/layersentry_poc_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 root@192.168.1.122 'hostname; id -u; ip -br addr show br0'
+            ssh -i /root/.ssh/layersentry_poc_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 layersentry-deploy@192.168.1.121 'hostname; id; sudo -n id -u'
+            ssh -i /root/.ssh/layersentry_poc_ed25519 -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 layersentry-deploy@192.168.1.122 'hostname; id; sudo -n id -u; ip -br addr show br0'
           fi
 
-          echo "=== STAGE3C_CONTROLLER_TRUST_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE3D_DEPLOY_ACCOUNT_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
