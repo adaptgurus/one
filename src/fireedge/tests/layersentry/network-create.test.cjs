@@ -183,6 +183,7 @@ test('network dialog uses typed template instantiation and authoritative readbac
   )
 
   assert.match(source, /useInstantiateVNTemplateMutation/)
+  assert.match(source, /useUpdateVNetMutation/)
   assert.match(source, /useLazyGetVNetworkQuery/)
   assert.match(source, /buildLayerSentryNetworkOverlay/)
   assert.match(source, /jsonToXml\(request\.template\)/)
@@ -190,6 +191,12 @@ test('network dialog uses typed template instantiation and authoritative readbac
   assert.match(source, /observed\?\.TEMPLATE\?\.SECURITY_GROUPS/)
   assert.match(source, /observed\?\.VN_MAD/)
   assert.match(source, /observed\?\.AR_POOL\?\.AR/)
-  assert.match(source, /disabled=\{instantiateState\.isLoading\}/)
+  assert.match(source, /A network with this name already exists/)
+  assert.match(source, /Do not submit another create request/)
+  assert.match(source, /SECURITY_GROUPS: request\.template\.SECURITY_GROUPS/)
+  assert.match(
+    source,
+    /disabled=\{instantiateState\.isLoading \|\| updateState\.isLoading\}/
+  )
   assert.doesNotMatch(source, /label="(?:VN_MAD|VLAN_ID|PHYDEV)"/)
 })

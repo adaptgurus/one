@@ -102,7 +102,12 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
     SecurityGroupAPI.useGetSecGroupsQuery(undefined, { skip: !open })
   const [instantiate, instantiateState] =
     VnTemplateAPI.useInstantiateVNTemplateMutation()
+  const [updateNetwork, updateState] = VnAPI.useUpdateVNetMutation()
   const [readNetwork] = VnAPI.useLazyGetVNetworkQuery()
+  const { data: existingNetworks = [] } = VnAPI.useGetVNetworksQuery(
+    undefined,
+    { skip: !open }
+  )
   const approvedTemplates = useMemo(
     () => templates.filter(isLayerSentryNetworkBlueprint),
     [templates]
@@ -148,18 +153,48 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
   }
 
   const submit = async () => {
+    let allocatedId
     try {
       const request = buildLayerSentryNetworkOverlay(
         draft,
         selectedBlueprint,
         compatibleSecurityGroups
       )
+      if (
+        existingNetworks.some(
+          ({ NAME }) => NAME?.trim().toLowerCase() === request.name.toLowerCase()
+        )
+      ) {
+        throw new Error('A network with this name already exists')
+      }
+
       const id = await instantiate({
         id: selectedBlueprint.ID,
         name: request.name,
         template: jsonToXml(request.template),
       }).unwrap()
-      const observed = await readNetwork({ id }).unwrap()
+      allocatedId = id
+      let observed = await readNetwork({ id }).unwrap()
+      const observedSecurityGroups = `${
+        observed?.TEMPLATE?.SECURITY_GROUPS ?? ''
+      }`
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean)
+      if (
+        observedSecurityGroups.length !== 1 ||
+        observedSecurityGroups[0] !== request.template.SECURITY_GROUPS
+      ) {
+        await updateNetwork({
+          id,
+          template: jsonToXml({
+            ...(observed?.TEMPLATE ?? {}),
+            SECURITY_GROUPS: request.template.SECURITY_GROUPS,
+          }),
+          replace: 0,
+        }).unwrap()
+        observed = await readNetwork({ id }).unwrap()
+      }
       const observedRanges = toArray(observed?.AR_POOL?.AR)
       const observedRange = observedRanges.find(
         ({ IP, SIZE }) =>
@@ -184,9 +219,11 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
       enqueueSuccess(`Network created - #${id} ${request.name}`)
     } catch (submitError) {
       setError(
-        submitError?.data?.message ??
-          submitError?.message ??
-          'LayerSentry could not create the network.'
+        allocatedId
+          ? `Network #${allocatedId} exists, but policy/readback reconciliation failed. Do not submit another create request; ask an administrator to reconcile this network.`
+          : submitError?.data?.message ??
+              submitError?.message ??
+              'LayerSentry could not create the network.'
       )
     }
   }
@@ -375,10 +412,12 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
         {!created && review && (
           <Button
             variant="contained"
-            disabled={instantiateState.isLoading}
+            disabled={instantiateState.isLoading || updateState.isLoading}
             onClick={submit}
           >
-            {instantiateState.isLoading ? 'Creating…' : 'Create network'}
+            {instantiateState.isLoading || updateState.isLoading
+              ? 'Creating…'
+              : 'Create network'}
           </Button>
         )}
       </DialogActions>
