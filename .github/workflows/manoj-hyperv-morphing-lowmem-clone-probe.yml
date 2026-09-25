@@ -1,0 +1,138 @@
+name: Manoj HyperV MORPHING Low-Memory Clone Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-morphing-lowmem-clone-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-morphing-lowmem-clone-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 45
+    steps:
+      - name: Bind Manoj and source invariant
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue)
+          if($src.State -ne 'Off'){throw "Source must remain Off: $($src.State)"}
+          if($snaps.Count -ne 0){throw 'Unexpected source checkpoint'}
+          if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
+          Write-Host 'LOWMEM_CLONE_SOURCE_GATE=PASS'
+
+      - name: Prepare appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-lowmem-clone.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Run virt-v2v-in-place at 768MB on reflink clones
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          op="manoj-hv-ls-migration-source-test-20260924"
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]; c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_"); suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$op")
+          root=$(dirname "$state")
+          testdir="$root/lowmem-clone-probe"
+          rm -rf "$testdir"
+          mkdir -m 700 "$testdir"
+          cleanup(){ rm -rf "$testdir"; }
+          trap cleanup EXIT
+
+          python3 - "$state" <<'PY'
+          import datetime,json,os,sys
+          s=json.load(open(sys.argv[1]))
+          if s.get("phase")!="MORPHING": raise SystemExit("expected MORPHING")
+          started=s.get("morph_prelaunch_recovery_started_at")
+          if not started or s.get("morph_prelaunch_recovery_completed_at"): raise SystemExit("unexpected recovery markers")
+          if s.get("delta_applied_at") or s.get("import_started_at") or s.get("template_id") or s.get("image_imports"): raise SystemExit("later-phase evidence exists")
+          ts=datetime.datetime.fromisoformat(started.replace("Z","+00:00")).timestamp()
+          for i,d in enumerate(s.get("disks") or []):
+              q=d["prepared_raw_path"]; st=os.stat(q)
+              if st.st_mtime>=ts: raise SystemExit(f"disk {i} changed after failed recovery started")
+          print("LOWMEM_CLONE_STATE_GATE=PASS")
+          PY
+
+          cp --reflink=always --sparse=always "$root/prepared-00.raw" "$testdir/prepared-00.raw"
+          cp --reflink=always --sparse=always "$root/prepared-01.raw" "$testdir/prepared-01.raw"
+          echo "LOWMEM_CLONE_REFLINK=PASS"
+          ls -lh "$testdir"/prepared-*.raw
+
+          cat >"$testdir/build_xml.rb" <<'RUBY'
+          require 'digest'
+          require 'json'
+          require 'yaml'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
+          op='manoj-hv-ls-migration-source-test-20260924'
+          cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml')||{}
+          normalized={}; cfg.each{|k,v| normalized[k.to_s.sub(/^:/,'').to_sym]=v}
+          normalized[:name]='ls-migration-source-test'
+          normalized[:format]='raw'
+          work=(cfg['work_dir']||cfg[:work_dir]||'/var/tmp').to_s
+          safe=op.gsub(/[^A-Za-z0-9_.-]/,'_'); suffix=Digest::SHA256.hexdigest(op)[0,16]
+          root=File.join(work,'oneswap-hyperv-hot',"#{safe}-#{suffix}")
+          s=JSON.parse(File.read(File.join(root,'state.json')))
+          paths=[File.join(root,'lowmem-clone-probe','prepared-00.raw'),File.join(root,'lowmem-clone-probe','prepared-01.raw')]
+          xml=OneSwapHyperV::Converter.new(normalized).libvirt_xml('ls-migration-source-test',s['metadata'],paths)
+          File.write(File.join(root,'lowmem-clone-probe','clone-libvirt.xml'),xml)
+          puts "LOWMEM_CLONE_XML_BYTES=#{xml.bytesize}"
+          RUBY
+          ruby "$testdir/build_xml.rb"
+
+          echo "LOWMEM_BEFORE:"
+          free -m
+          set +e
+          LIBGUESTFS_MEMSIZE=768 timeout --signal=TERM --kill-after=30s 1800s             virt-v2v-in-place -v --machine-readable -i libvirtxml "$testdir/clone-libvirt.xml" --root first             >"$testdir/v2v.out" 2>"$testdir/v2v.err"
+          rc=$?
+          set -e
+          cat "$testdir/v2v.out"
+          cat "$testdir/v2v.err" >&2
+          echo "LOWMEM_V2V_RC=$rc"
+          echo "LOWMEM_AFTER:"
+          free -m
+          if [ "$rc" -ne 0 ]; then exit "$rc"; fi
+          echo 'LOWMEM_CLONE_V2V=PASS memsize_mb=768'
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw "low-memory clone v2v probe failed rc=$LASTEXITCODE"}
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $src=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $snaps=@(Get-VMSnapshot -VMName $src.Name -ErrorAction SilentlyContinue)
+          Write-Host "FINAL_SOURCE_STATE=$($src.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$($snaps.Count)"
+          if($src.State -ne 'Off'){throw 'Probe changed source state'}
+          if($snaps.Count -ne 0){throw 'Unexpected source checkpoint'}
+          Write-Host 'LOWMEM_CLONE_SOURCE_INVARIANT=PASS'
