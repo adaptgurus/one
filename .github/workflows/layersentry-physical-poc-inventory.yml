@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 3A Package Preflight
+name: LayerSentry Physical POC Stage 3B Controller Bootstrap
 
 on:
   pull_request:
@@ -14,17 +14,17 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  packages:
-    name: packages-${{ matrix.slot }}
+  bootstrap:
+    name: controller-bootstrap-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
         slot: [1, 2, 3]
     runs-on: [self-hosted, Linux]
-    timeout-minutes: 15
+    timeout-minutes: 8
     steps:
-      - name: Enable signed OpenNebula 7.4 repository and list versions
+      - name: Prepare host identities and deployment controller key
         shell: bash
         run: |
           set -euo pipefail
@@ -33,29 +33,29 @@ jobs:
             demolayersentry1|demolayersentry2) ;;
             *) echo "GUARD_SKIP_NON_PHYSICAL_RUNNER"; exit 0 ;;
           esac
+
           LOG=/var/log/layersentry-poc/activity.log
           exec > >(tee -a "$LOG") 2>&1
-          echo "=== STAGE3A_PACKAGE_PREFLIGHT_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE3B_CONTROLLER_BOOTSTRAP_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
 
-          test "$(id -u)" -eq 0
-          dnf -y install dnf-plugins-core epel-release
-          dnf config-manager --set-enabled crb
+          grep -q '^192\.168\.1\.121[[:space:]]' /etc/hosts || echo '192.168.1.121 demolayersentry1 layersentry-fe1' >> /etc/hosts
+          grep -q '^192\.168\.1\.122[[:space:]]' /etc/hosts || echo '192.168.1.122 demolayersentry2 layersentry-kvm2' >> /etc/hosts
 
-          cat >/etc/yum.repos.d/opennebula.repo <<'EOF'
-          [opennebula]
-          name=OpenNebula Community Edition 7.4
-          baseurl=https://downloads.opennebula.io/repo/7.4/RedHat/$releasever/$basearch
-          enabled=1
-          gpgkey=https://downloads.opennebula.io/repo/repo2.key
-          gpgcheck=1
-          repo_gpgcheck=1
-          sslverify=1
-          EOF
-          chmod 0644 /etc/yum.repos.d/opennebula.repo
+          getent hosts demolayersentry1
+          getent hosts demolayersentry2
+          ping -c 2 -W 2 192.168.1.121
+          ping -c 2 -W 2 192.168.1.122
 
-          dnf -y makecache
-          echo "--- available packages ---"
-          dnf --showduplicates list opennebula opennebula-fireedge opennebula-gate opennebula-flow opennebula-node-kvm || true
-          echo "--- repo identity ---"
-          dnf repoinfo opennebula
-          echo "=== STAGE3A_PACKAGE_PREFLIGHT_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          if [ "$RUNNER_NAME" = "demolayersentry1" ]; then
+            install -d -m 0700 /root/.ssh
+            if [ ! -s /root/.ssh/layersentry_poc_ed25519 ]; then
+              ssh-keygen -q -t ed25519 -N '' -C 'layersentry-poc-controller@demolayersentry1' -f /root/.ssh/layersentry_poc_ed25519
+            fi
+            chmod 0600 /root/.ssh/layersentry_poc_ed25519
+            chmod 0644 /root/.ssh/layersentry_poc_ed25519.pub
+            echo "LAYERSENTRY_CONTROLLER_PUBLIC_KEY_BEGIN"
+            cat /root/.ssh/layersentry_poc_ed25519.pub
+            echo "LAYERSENTRY_CONTROLLER_PUBLIC_KEY_END"
+          fi
+
+          echo "=== STAGE3B_CONTROLLER_BOOTSTRAP_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
