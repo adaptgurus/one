@@ -9,6 +9,11 @@ permissions:
   contents: read
 jobs:
   probe:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        slot: [1, 2, 3]
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
@@ -16,7 +21,8 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){ exit 0 }
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){ Start-Sleep -Seconds 90; exit 0 }
           $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
           $key=Join-Path $dir 'deploy_ed25519'
           $known=Join-Path $dir 'known_hosts'
