@@ -81,8 +81,8 @@ jobs:
           print("LOWMEM_CLONE_STATE_GATE=PASS")
           PY
 
-          cp --reflink=always --sparse=always "$root/prepared-00.raw" "$testdir/prepared-00.raw"
-          cp --reflink=always --sparse=always "$root/prepared-01.raw" "$testdir/prepared-01.raw"
+          cp --reflink=always --sparse=auto "$root/prepared-00.raw" "$testdir/prepared-00.raw"
+          cp --reflink=always --sparse=auto "$root/prepared-01.raw" "$testdir/prepared-01.raw"
           echo "LOWMEM_CLONE_REFLINK=PASS"
           ls -lh "$testdir"/prepared-*.raw
 
