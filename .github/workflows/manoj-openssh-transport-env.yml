@@ -1,0 +1,33 @@
+name: Manoj OpenSSH Transport Environment
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-openssh-transport-env.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Inspect Windows OpenSSH transport environment
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          $version=& ssh.exe -V 2>&1
+          Write-Host "OPENSSH_CLIENT_VERSION=$version"
+          $reg=Get-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -ErrorAction SilentlyContinue
+          Write-Host "OPENSSH_DEFAULT_SHELL=$($reg.DefaultShell)"
+          Write-Host "OPENSSH_DEFAULT_SHELL_ARGS=$($reg.DefaultShellCommandOption)"
+          $svc=Get-Service sshd -ErrorAction SilentlyContinue
+          if($svc){Write-Host "SSHD_STATUS=$($svc.Status)"}
+          Write-Host 'OPENSSH_ENV_INSPECT=PASS'
