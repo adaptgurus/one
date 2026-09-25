@@ -34,6 +34,16 @@ module.exports = [
   { ...Commands[Actions.NAMESPACES], action: namespaces },
   { ...Commands[Actions.CREATE_NAMESPACE], action: createNamespace },
   { ...Commands[Actions.KUBECONFIG], action: kubeconfig },
+  { ...Commands[Actions.PROVISION_STATUS], action: provisionStatus },
+  { ...Commands[Actions.PROVISION], action: provision },
+  {
+    ...Commands[Actions.CONTROL_PLANE_RECONCILIATION_STATUS],
+    action: controlPlaneReconciliationStatus,
+  },
+  {
+    ...Commands[Actions.CONTROL_PLANE_RECONCILIATION],
+    action: controlPlaneReconciliation,
+  },
   { ...Commands[Actions.WORKER_RECONCILIATION], action: workerReconciliation },
   { ...Commands[Actions.RECONCILE_WORKERS], action: reconcileWorkers },
   { ...Commands[Actions.APPLICATIONS], action: applications },
