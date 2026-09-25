@@ -50,7 +50,19 @@ const ClusterManager = ({ cluster, profiles }) => {
     KubeOnePortalAPI.useCreateKubeOneNamespaceMutation()
   const [loadKubeconfig, kubeconfigState] =
     KubeOnePortalAPI.useLazyGetKubeOneKubeconfigQuery()
+  const workerJob = KubeOnePortalAPI.useGetKubeOneWorkerReconciliationQuery(
+    cluster.id,
+    { pollingInterval: 5000 }
+  )
+  const [reconcileWorkers, reconcileState] =
+    KubeOnePortalAPI.useReconcileKubeOneWorkersMutation()
   const selectedProfile = profiles.find(({ id }) => id === accelerator)
+  const workerPending = cluster.status.ready_nodes < cluster.expected_nodes
+  const controlPlaneHealthy =
+    cluster.status.api_ready &&
+    cluster.status.ready_control_planes === cluster.expected_control_planes &&
+    cluster.status.kube_system_non_ready === 0
+  const job = workerJob.data?.job
 
   const addNamespace = async () => {
     await createNamespace({ id: cluster.id, name: namespace }).unwrap()
@@ -62,6 +74,10 @@ const ClusterManager = ({ cluster, profiles }) => {
       cluster.id,
       typeof value === 'string' ? value : String(value || '')
     )
+  }
+  const addRegisteredWorker = async () => {
+    await reconcileWorkers(cluster.id).unwrap()
+    await workerJob.refetch()
   }
 
   return (
@@ -166,9 +182,9 @@ const ClusterManager = ({ cluster, profiles }) => {
       <Surface sx={{ p: 2 }}>
         <Typography variant="h6">Add worker</Typography>
         <Typography color="text.secondary" sx={{ mb: 2 }}>
-          GPU and vGPU choices are limited to provider-qualified profiles.
-          Worker provisioning remains disabled when no qualified profile or
-          typed worker lifecycle is published.
+          Join only workers already present in the provider-qualified KubeOne
+          topology. Arbitrary IP addresses, SSH commands, and unmanaged worker
+          definitions are not accepted.
         </Typography>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
           <FormControl size="small" sx={{ minWidth: 260 }}>
@@ -195,10 +211,45 @@ const ClusterManager = ({ cluster, profiles }) => {
             onChange={(event) => setCount(Number(event.target.value))}
             inputProps={{ min: 1, max: selectedProfile?.max_count || 1 }}
           />
-          <Button variant="contained" disabled>
+          <Button
+            variant="contained"
+            disabled={
+              !workerPending ||
+              !controlPlaneHealthy ||
+              reconcileState.isLoading ||
+              job?.status === 'RUNNING'
+            }
+            onClick={addRegisteredWorker}
+          >
             Add worker
           </Button>
         </Stack>
+        {!workerPending && (
+          <Alert severity="success" sx={{ mt: 2 }}>
+            Registered worker topology is converged ({cluster.status.ready_nodes}/
+            {cluster.expected_nodes} nodes Ready).
+          </Alert>
+        )}
+        {workerPending && !controlPlaneHealthy && (
+          <Alert severity="warning" sx={{ mt: 2 }}>
+            Worker reconciliation is blocked until control-plane quorum and
+            kube-system health are restored.
+          </Alert>
+        )}
+        {job && (
+          <Alert
+            severity={
+              job.status === 'SUCCEEDED'
+                ? 'success'
+                : job.status === 'RUNNING'
+                  ? 'info'
+                  : 'warning'
+            }
+            sx={{ mt: 2 }}
+          >
+            Worker reconciliation: {job.status}. {job.message || ''}
+          </Alert>
+        )}
         {profiles.length === 0 && (
           <Alert severity="info" sx={{ mt: 2 }}>
             This tester has no provider-qualified GPU or vGPU profile.

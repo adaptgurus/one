@@ -44,4 +44,14 @@ const kubeconfig = (res = {}, next = defaultEmptyFunction, { id } = {}, userData
   call(res, next, { method: 'GET', path: `/v1/kubernetes/clusters/${encodeURIComponent(id)}/kubeconfig` }, userData, oneConnection)
 }
 
-module.exports = { list, namespaces, createNamespace, kubeconfig }
+const workerReconciliation = (res = {}, next = defaultEmptyFunction, { id } = {}, userData = {}, oneConnection) => {
+  if (!validClusterID(id)) { res.locals.httpCode = httpResponse(badRequest, { error: 'Invalid cluster identity.' }); next(); return }
+  call(res, next, { method: 'GET', path: `/v1/kubernetes/clusters/${encodeURIComponent(id)}/worker-reconciliation` }, userData, oneConnection)
+}
+
+const reconcileWorkers = (res = {}, next = defaultEmptyFunction, { id } = {}, userData = {}, oneConnection) => {
+  if (!validClusterID(id)) { res.locals.httpCode = httpResponse(badRequest, { error: 'Invalid cluster identity.' }); next(); return }
+  call(res, next, { method: 'POST', path: `/v1/kubernetes/clusters/${encodeURIComponent(id)}/worker-reconciliation`, data: {} }, userData, oneConnection)
+}
+
+module.exports = { list, namespaces, createNamespace, kubeconfig, workerReconciliation, reconcileWorkers }
