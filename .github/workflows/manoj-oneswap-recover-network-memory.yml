@@ -44,7 +44,12 @@ jobs:
           $vm=Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop
           if($vm.State -eq 'Running'){
             Write-Host 'REQUESTING_APPLIANCE_GRACEFUL_SHUTDOWN'
-            Stop-VM -Name $vm.Name -Shutdown -ErrorAction Stop
+            $escaped=$vm.Name.Replace("'","''")
+            $cs=Get-CimInstance -Namespace root/virtualization/v2 -ClassName Msvm_ComputerSystem -Filter "ElementName='$escaped'" -ErrorAction Stop
+            if(-not $cs){throw 'Hyper-V computer system object not found for appliance'}
+            $result=Invoke-CimMethod -InputObject $cs -MethodName RequestStateChange -Arguments @{RequestedState=[uint16]4} -ErrorAction Stop
+            Write-Host "APPLIANCE_SHUTDOWN_REQUEST_RC=$($result.ReturnValue)"
+            if([int]$result.ReturnValue -notin @(0,4096)){throw "Graceful shutdown request failed rc=$($result.ReturnValue)"}
           }
           $deadline=(Get-Date).AddMinutes(3)
           do {
