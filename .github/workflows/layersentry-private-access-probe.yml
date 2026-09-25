@@ -1,0 +1,43 @@
+name: LayerSentry Private Repo Access Probe
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/layersentry-private-access-probe.yml'
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Probe authenticated tooling on exact runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){ exit 0 }
+          $gitCandidates=@(
+            'C:\Program Files\Git\cmd\git.exe',
+            'C:\Program Files\Git\bin\git.exe',
+            'C:\Program Files (x86)\Git\cmd\git.exe'
+          )
+          foreach($g in $gitCandidates){
+            if(Test-Path $g){
+              Write-Host ('GIT_FOUND=' + $g)
+              & $g --version
+            }
+          }
+          $gh=Get-Command gh.exe -ErrorAction SilentlyContinue
+          if($gh){
+            Write-Host ('GH_FOUND=' + $gh.Source)
+            & $gh.Source auth status 2>&1 | ForEach-Object {
+              $line=[string]$_
+              if($line -notmatch '(token|oauth_token|gh[pousr]_)'){ Write-Host $line }
+            }
+            & $gh.Source repo view adaptgurus/layersentry-platform --json nameWithOwner,viewerPermission,isPrivate 2>&1
+            Write-Host ('GH_REPO_VIEW_RC=' + $LASTEXITCODE)
+          } else { Write-Host 'GH_FOUND=NO' }
+          $git=(Get-Command git.exe -ErrorAction SilentlyContinue)
+          if($git){ Write-Host ('PATH_GIT=' + $git.Source) } else { Write-Host 'PATH_GIT=NO' }
