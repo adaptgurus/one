@@ -1,4 +1,4 @@
-name: LayerSentry Physical POC Stage 2D Bridge Host2
+name: LayerSentry Physical POC Stage 3A Package Preflight
 
 on:
   pull_request:
@@ -14,110 +14,48 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  bridge:
-    name: bridge-host2-${{ matrix.slot }}
+  packages:
+    name: packages-${{ matrix.slot }}
     strategy:
       fail-fast: false
       max-parallel: 3
       matrix:
         slot: [1, 2, 3]
     runs-on: [self-hosted, Linux]
-    timeout-minutes: 8
+    timeout-minutes: 15
     steps:
-      - name: Transactionally create and commit br0 on host2
+      - name: Enable signed OpenNebula 7.4 repository and list versions
         shell: bash
         run: |
           set -euo pipefail
           echo "runner_name=$RUNNER_NAME"
-          if [ "$RUNNER_NAME" != "demolayersentry2" ]; then
-            echo "GUARD_SKIP_NON_TARGET_RUNNER"
-            exit 0
-          fi
-
+          case "$RUNNER_NAME" in
+            demolayersentry1|demolayersentry2) ;;
+            *) echo "GUARD_SKIP_NON_PHYSICAL_RUNNER"; exit 0 ;;
+          esac
           LOG=/var/log/layersentry-poc/activity.log
           exec > >(tee -a "$LOG") 2>&1
-          echo "=== STAGE2D_BRIDGE_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          echo "=== STAGE3A_PACKAGE_PREFLIGHT_BEGIN $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
 
-          EXPECTED_IP=192.168.1.122
-          PEER_IP=192.168.1.121
-          GATEWAY=192.168.1.1
           test "$(id -u)" -eq 0
-          ip -4 -o addr show dev eno1 | grep -F "$EXPECTED_IP/24"
+          dnf -y install dnf-plugins-core epel-release
+          dnf config-manager --set-enabled crb
 
-          cat >/etc/layersentry-poc/network/br0-desired.yaml <<EOF
-          ---
-          interfaces:
-          - name: br0
-            type: linux-bridge
-            state: up
-            ipv4:
-              enabled: true
-              dhcp: false
-              address:
-              - ip: $EXPECTED_IP
-                prefix-length: 24
-            ipv6:
-              enabled: false
-            bridge:
-              options:
-                stp:
-                  enabled: false
-              port:
-              - name: eno1
-          - name: eno1
-            type: ethernet
-            state: up
-            ipv4:
-              enabled: false
-            ipv6:
-              enabled: false
-          routes:
-            config:
-            - destination: 0.0.0.0/0
-              next-hop-address: $GATEWAY
-              next-hop-interface: br0
-          dns-resolver:
-            config:
-              server:
-              - 8.8.8.8
-              - 1.1.1.1
+          cat >/etc/yum.repos.d/opennebula.repo <<'EOF'
+          [opennebula]
+          name=OpenNebula Community Edition 7.4
+          baseurl=https://downloads.opennebula.io/repo/7.4/RedHat/$releasever/$basearch
+          enabled=1
+          gpgkey=https://downloads.opennebula.io/repo/repo2.key
+          gpgcheck=1
+          repo_gpgcheck=1
+          sslverify=1
           EOF
-          chmod 0600 /etc/layersentry-poc/network/br0-desired.yaml
+          chmod 0644 /etc/yum.repos.d/opennebula.repo
 
-          CHECKPOINT=""
-          rollback_on_error() {
-            rc=$?
-            if [ -n "$CHECKPOINT" ]; then
-              echo "Validation failed; rolling back $CHECKPOINT"
-              nmstatectl rollback "$CHECKPOINT" || true
-            fi
-            exit "$rc"
-          }
-          trap rollback_on_error ERR
-
-          APPLY_OUTPUT=$(nmstatectl apply --no-commit --timeout 120 /etc/layersentry-poc/network/br0-desired.yaml 2>&1)
-          printf '%s\n' "$APPLY_OUTPUT"
-          CHECKPOINT=$(printf '%s\n' "$APPLY_OUTPUT" | grep -oE '/org/freedesktop/NetworkManager/Checkpoint/[0-9]+' | tail -n1)
-          test -n "$CHECKPOINT"
-          echo "checkpoint=$CHECKPOINT"
-
-          ip -4 -o addr show dev br0 | grep -F "$EXPECTED_IP/24"
-          ! ip -4 -o addr show dev eno1 | grep -q 'inet '
-          ip -4 route show default | grep -F "via $GATEWAY dev br0"
-          bridge link | grep -E 'eno1.*master br0'
-          ping -c 3 -W 2 "$GATEWAY"
-          ping -c 2 -W 2 "$PEER_IP"
-          curl -fsS --connect-timeout 5 --max-time 15 https://api.github.com/ >/dev/null
-
-          nmstatectl commit "$CHECKPOINT"
-          CHECKPOINT=""
-          trap - ERR
-
-          sleep 2
-          nmstatectl show br0
-          ip -br addr
-          ip -4 route
-          ping -c 2 -W 2 "$GATEWAY"
-          ping -c 2 -W 2 "$PEER_IP"
-          curl -fsS --connect-timeout 5 --max-time 15 https://api.github.com/ >/dev/null
-          echo "=== STAGE2D_BRIDGE_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
+          dnf -y makecache
+          echo "--- available packages ---"
+          dnf --showduplicates list opennebula opennebula-fireedge opennebula-gate opennebula-flow opennebula-node-kvm || true
+          echo "--- repo identity ---"
+          dnf repoinfo opennebula
+          echo "=== STAGE3A_PACKAGE_PREFLIGHT_PASS $(date -u +%FT%TZ) runner=$RUNNER_NAME ==="
