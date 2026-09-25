@@ -47,6 +47,46 @@ const kubeOnePortalApi = oneApi.injectEndpoints({
         showNotification: false,
       }),
     }),
+    getKubeOneProvisionStatus: builder.query({
+      query: (id) => ({
+        params: { id },
+        command: Commands[Actions.PROVISION_STATUS],
+        showNotification: false,
+      }),
+      providesTags: (_result, _error, id) => [
+        { type: 'KUBEONE_PORTAL', id: `provision-${id}` },
+      ],
+    }),
+    provisionKubeOneCluster: builder.mutation({
+      query: (id) => ({
+        params: { id },
+        command: Commands[Actions.PROVISION],
+      }),
+      invalidatesTags: (_result, _error, id) => [
+        'KUBEONE_PORTAL',
+        { type: 'KUBEONE_PORTAL', id: `provision-${id}` },
+      ],
+    }),
+    getKubeOneControlPlaneReconciliation: builder.query({
+      query: (id) => ({
+        params: { id },
+        command: Commands[Actions.CONTROL_PLANE_RECONCILIATION_STATUS],
+        showNotification: false,
+      }),
+      providesTags: (_result, _error, id) => [
+        { type: 'KUBEONE_PORTAL', id: `control-plane-reconciliation-${id}` },
+      ],
+    }),
+    reconcileKubeOneControlPlane: builder.mutation({
+      query: (id) => ({
+        params: { id },
+        command: Commands[Actions.CONTROL_PLANE_RECONCILIATION],
+      }),
+      invalidatesTags: (_result, _error, id) => [
+        'KUBEONE_PORTAL',
+        { type: 'KUBEONE_PORTAL', id: `control-plane-reconciliation-${id}` },
+      ],
+    }),
     getKubeOneWorkerReconciliation: builder.query({
       query: (id) => ({
         params: { id },
@@ -94,6 +134,10 @@ export const {
   useGetKubeOneNamespacesQuery,
   useCreateKubeOneNamespaceMutation,
   useLazyGetKubeOneKubeconfigQuery,
+  useGetKubeOneProvisionStatusQuery,
+  useProvisionKubeOneClusterMutation,
+  useGetKubeOneControlPlaneReconciliationQuery,
+  useReconcileKubeOneControlPlaneMutation,
   useGetKubeOneWorkerReconciliationQuery,
   useGetKubeOneApplicationsQuery,
   useInstallKubeOneApplicationMutation,
