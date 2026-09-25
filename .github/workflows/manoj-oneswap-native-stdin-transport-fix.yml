@@ -1,0 +1,105 @@
+name: Manoj OneSwap Native Stdin Transport Fix
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-native-stdin-transport-fix.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-native-stdin-transport-fix
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Bind Manoj and preserve migration state
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if($n -ne 0){throw 'Unexpected checkpoint'}
+          if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
+          Write-Host 'NATIVE_STDIN_SOURCE_GATE=PASS'
+
+      - name: Prepare restricted appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-native-stdin.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Download exact OneSwap transport source
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $head='5d207fcd89bfbe0a4e8fbdd915563b4c963f12c7'
+          $helper=Join-Path $env:RUNNER_TEMP 'hyperv_helper.native-stdin.rb'
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $helper "https://raw.githubusercontent.com/adaptgurus/one-swap/$head/hyperv_helper.rb"
+          if($LASTEXITCODE -ne 0){throw 'helper download failed'}
+          $text=Get-Content -LiteralPath $helper -Raw
+          if($text -notmatch "\['-Command', '-'\]"){throw 'native stdin command transport marker missing'}
+          if($text -match '\[Console\]::In\.ReadToEnd\(\)'){throw 'legacy ReadToEnd bootstrap still present'}
+          $sha=(Get-FileHash -Algorithm SHA256 $helper).Hash.ToLower()
+          Write-Host "NATIVE_STDIN_SOURCE_HEAD=$head"
+          Write-Host "NATIVE_STDIN_HELPER_SHA256=$sha"
+          "NATIVE_STDIN_HELPER=$helper" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "NATIVE_STDIN_SHA=$sha" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Deploy helper atomically to OneSwap appliance
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $common=@('-o','LogLevel=ERROR','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-o','ConnectTimeout=8','-i',$env:ONESWAP_TEMP_KEY)
+          & scp.exe @common $env:NATIVE_STDIN_HELPER "ci@10.250.10.32:/tmp/hyperv_helper.native-stdin.rb"
+          if($LASTEXITCODE -ne 0){throw 'helper scp failed'}
+          $script=@'
+          set -euo pipefail
+          src=/tmp/hyperv_helper.native-stdin.rb
+          dst=/usr/lib/one/ruby/cli/one_helper/hyperv_helper.rb
+          expected="__SHA__"
+          [ "$(sha256sum "$src" | awk '{print $1}')" = "$expected" ]
+          ruby -c "$src"
+          grep -F "['-Command', '-']" "$src" >/dev/null
+          ! grep -F '[Console]::In.ReadToEnd()' "$src" >/dev/null
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          sudo cp -a "$dst" "$dst.before-native-stdin-$stamp"
+          sudo install -o root -g root -m 0644 "$src" "$dst"
+          sudo ruby -c "$dst"
+          [ "$(sudo sha256sum "$dst" | awk '{print $1}')" = "$expected" ]
+          rm -f "$src"
+          echo "NATIVE_STDIN_RUNTIME_DEPLOY=PASS sha256=$expected"
+          '@
+          $script=$script.Replace('__SHA__',$env:NATIVE_STDIN_SHA)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe @common "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'native stdin helper deployment failed'}
+
+      - name: Re-prove source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($vm.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw 'Deployment changed source state'}
+          if($n -ne 0){throw 'Unexpected source checkpoint'}
