@@ -1,0 +1,168 @@
+name: Seven Node Root Baseline
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-root-baseline.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        slot: [1, 2, 3]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind target runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            Write-Host 'NON_TARGET_RUNNER_HOLD'
+            Start-Sleep -Seconds 90
+            "LS_TARGET_RUNNER=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            exit 0
+          }
+          "LS_TARGET_RUNNER=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Decrypt credential in memory
+        if: env.LS_TARGET_RUNNER == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $wrap=Join-Path $dir 'wrap-rsa.xml'
+          if(-not (Test-Path $wrap)){ throw 'Target-runner wrapping key missing' }
+          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
+          $rsa.FromXmlString((Get-Content $wrap -Raw))
+          $cipher='uOFG3EVKXJ2kWA5kyf2ahgyNAauS/9B3OlBCQqiz3tUXDzflxMH4AU34S1keokx1QZRJfnOmi3jVJ+ZGhWmFJV1nw8W8agEj167GQtyolsN3Zs+3are2CNJcvR4yvfqW4cDjqp7+toZpABZ2k/zim3pUnsLe2Sg/S7xWGHPF8otCRZGG/PFKKEfewBtFM2wkv/dGRpLLws59MXhawVkSAzpQ3rQmY5JosK4zYhBIdYcHbjNtpWvIwOVCSEWLEPt/hMpGOGfWW6kHUiX+ZMUyCwvv4O4s2ttkUzDgQtz3PKISVPiNAuHV51ePrfP5nlTHijRL7X0ecB9R+MYoB2w41OlJiLhnl/hIk/gLG9R07LiKhkOPaIRf1stDl/pMYeF/I1obty4i/r5A7Su7F4yOARuzFRStXIRIV4ZSbD9Qvw34tBHD7YP1BWiGEUZ71516VgyLJK/sDpcmLglxCf8MQ4Ij4BI6iLbQcR7XXvrVskbc+Ye7gaJT78u21yuJOHyQ'
+          $password=[Text.Encoding]::UTF8.GetString($rsa.Decrypt([Convert]::FromBase64String($cipher),$true))
+          if([string]::IsNullOrWhiteSpace($password)){ throw 'Credential decrypt failed' }
+          $env:LS_ROOT_PASSWORD=$password
+          $askpass=Join-Path $env:RUNNER_TEMP 'layersentry-baseline-askpass.exe'
+          $src=@'
+          using System;
+          public class AskPass {
+              public static void Main() {
+                  Console.Write(Environment.GetEnvironmentVariable("LS_ROOT_PASSWORD"));
+              }
+          }
+          '@
+          Add-Type -TypeDefinition $src -Language CSharp -OutputAssembly $askpass -OutputType ConsoleApplication
+          "LS_ASKPASS=$askpass" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $protected=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($password))
+          $secure=[Security.Cryptography.ProtectedData]::Protect([Convert]::FromBase64String($protected),$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)
+          [IO.File]::WriteAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'),$secure)
+          Remove-Item Env:LS_ROOT_PASSWORD
+          Write-Host 'CREDENTIAL_DECRYPTED_IN_MEMORY=PASS'
+
+      - name: Recover prior incomplete sudoers fragment
+        if: env.LS_TARGET_RUNNER == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $secure=[IO.File]::ReadAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'))
+          $raw=[Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($raw)
+          $env:SSH_ASKPASS=$env:LS_ASKPASS
+          $env:SSH_ASKPASS_REQUIRE='force'
+          $env:DISPLAY='LayerSentry'
+          $known='C:\ProgramData\LayerSentryLab\seven-node-bootstrap\known_hosts'
+          $script="set -e; if test -f /etc/sudoers.d/90-layersentry-deploy; then mv /etc/sudoers.d/90-layersentry-deploy /root/90-layersentry-deploy.invalid-bootstrap; fi; visudo -c >/dev/null; echo SUDOERS_RECOVERY=PASS"
+          & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" root@172.17.60.30 $script
+          if($LASTEXITCODE -ne 0){ throw 'sudoers recovery failed on layersentry1' }
+          Remove-Item Env:LS_ROOT_PASSWORD
+
+      - name: Collect seven-host inventory
+        if: env.LS_TARGET_RUNNER == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $secure=[IO.File]::ReadAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'))
+          $raw=[Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($raw)
+          $env:SSH_ASKPASS=$env:LS_ASKPASS
+          $env:SSH_ASKPASS_REQUIRE='force'
+          $env:DISPLAY='LayerSentry'
+          $known='C:\ProgramData\LayerSentryLab\seven-node-bootstrap\known_hosts'
+          $hosts=[ordered]@{
+            layersentry1='172.17.60.30'
+            layersentry2='172.17.60.31'
+            layersentry3='172.17.60.32'
+            layersentry4='172.17.60.33'
+            layersentry5='172.17.60.34'
+            layersentry6='172.17.60.35'
+            layersentryol7='172.17.60.36'
+          }
+          $script=@'
+          set -e
+          printf 'HOST='; hostname
+          . /etc/os-release
+          printf 'OS=%s %s\n' "$NAME" "$VERSION_ID"
+          printf 'KERNEL='; uname -r
+          printf 'ARCH='; uname -m
+          printf 'CPU_LOGICAL='; nproc
+          printf 'MEM_KB='; awk '/MemTotal/ {print $2}' /proc/meminfo
+          printf 'VIRT='; systemd-detect-virt 2>/dev/null || true
+          printf 'SELINUX='; getenforce 2>/dev/null || true
+          printf 'FIREWALLD='; systemctl is-enabled firewalld 2>/dev/null || true
+          echo '---IP---'; ip -br addr
+          echo '---ROUTE---'; ip route
+          echo '---BLOCK---'; lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS
+          echo '---DF---'; df -hT
+          echo '---KVM---'; test -e /dev/kvm && ls -l /dev/kvm || echo KVM_DEVICE_ABSENT
+          echo '---PACKAGES---'; rpm -qa 2>/dev/null | grep -Ei 'opennebula|qemu|libvirt|nfs-utils' | sort || true
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          foreach($e in $hosts.GetEnumerator()){
+            Write-Host "::group::$($e.Key) $($e.Value)"
+            $remote="printf '%s' '$b64' | base64 -d | bash"
+            & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" "root@$($e.Value)" $remote
+            if($LASTEXITCODE -ne 0){ throw "Inventory failed for $($e.Key)" }
+            Write-Host "::endgroup::"
+          }
+          Remove-Item Env:LS_ROOT_PASSWORD
+
+      - name: Discover NFS exports
+        if: env.LS_TARGET_RUNNER == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $secure=[IO.File]::ReadAllBytes((Join-Path $env:RUNNER_TEMP 'ls-root.dpapi'))
+          $raw=[Security.Cryptography.ProtectedData]::Unprotect($secure,$null,[Security.Cryptography.DataProtectionScope]::LocalMachine)
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($raw)
+          $env:SSH_ASKPASS=$env:LS_ASKPASS
+          $env:SSH_ASKPASS_REQUIRE='force'
+          $env:DISPLAY='LayerSentry'
+          $known='C:\ProgramData\LayerSentryLab\seven-node-bootstrap\known_hosts'
+          $script=@'
+          set -e
+          echo NFS_SERVER=172.17.60.210
+          if command -v showmount >/dev/null 2>&1; then
+            showmount -e 172.17.60.210
+          else
+            echo SHOWMOUNT_UNAVAILABLE
+          fi
+          if command -v rpcinfo >/dev/null 2>&1; then
+            rpcinfo -p 172.17.60.210 | head -40
+          else
+            echo RPCINFO_UNAVAILABLE
+          fi
+          timeout 4 bash -c '</dev/tcp/172.17.60.210/2049' && echo NFS_TCP_2049=PASS || echo NFS_TCP_2049=FAIL
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          $remote="printf '%s' '$b64' | base64 -d | bash"
+          & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" root@172.17.60.30 $remote
+          if($LASTEXITCODE -ne 0){ throw 'NFS discovery failed' }
+          Remove-Item Env:LS_ROOT_PASSWORD
+          Remove-Item (Join-Path $env:RUNNER_TEMP 'ls-root.dpapi') -Force -ErrorAction SilentlyContinue
+          Remove-Item $env:LS_ASKPASS -Force -ErrorAction SilentlyContinue
+          Write-Host 'PLAINTEXT_CREDENTIAL_PERSISTED=false'
