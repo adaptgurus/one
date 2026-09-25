@@ -1,0 +1,112 @@
+name: Three Node Current Hardware Probe
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/three-node-current-hardware-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        slot: [1,2,3,4,5,6,7,8]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Bind exact target runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            Write-Host 'NON_TARGET_HOLD'
+            Start-Sleep -Seconds 180
+            "LS_TARGET=false" | Out-File $env:GITHUB_ENV -Append
+            exit 0
+          }
+          "LS_TARGET=true" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Current read-only hardware probe
+        if: env.LS_TARGET == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $legacy = Get-Content '.github/workflows/seven-node-root-baseline.yml' -Raw
+          $m = [regex]::Match($legacy, "\$cipher='([^']+)'")
+          if(-not $m.Success){ throw 'Encrypted bootstrap payload is unavailable' }
+          $wrap='C:\ProgramData\LayerSentryLab\seven-node-bootstrap\wrap-rsa.xml'
+          if(-not (Test-Path $wrap)){ throw 'Runner-local wrapping key is unavailable' }
+          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
+          $rsa.FromXmlString((Get-Content $wrap -Raw))
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($rsa.Decrypt([Convert]::FromBase64String($m.Groups[1].Value),$true))
+          $askpass=Join-Path $env:RUNNER_TEMP 'ls-current-probe-askpass.exe'
+          $src=@'
+          using System;
+          public class AskPass {
+            public static void Main() { Console.Write(Environment.GetEnvironmentVariable("LS_ROOT_PASSWORD")); }
+          }
+          '@
+          Add-Type -TypeDefinition $src -Language CSharp -OutputAssembly $askpass -OutputType ConsoleApplication
+          $env:SSH_ASKPASS=$askpass
+          $env:SSH_ASKPASS_REQUIRE='force'
+          $env:DISPLAY='LayerSentry'
+          $known=Join-Path $env:RUNNER_TEMP 'known_hosts'
+          New-Item -ItemType File -Force -Path $known | Out-Null
+
+          $hosts=[ordered]@{
+            layersentry1='172.17.60.30'
+            layersentry2='172.17.60.31'
+            layersentry3='172.17.60.32'
+          }
+          $script=@'
+          set -u
+          printf 'OBSERVED_AT='; date -u +%FT%TZ
+          printf 'HOST='; hostname
+          . /etc/os-release; printf 'OS=%s %s\n' "$NAME" "$VERSION_ID"
+          printf 'CPU_LOGICAL='; nproc
+          printf 'MEM_BYTES='; awk '/MemTotal/ {printf "%.0f\n",$2*1024}' /proc/meminfo
+          printf 'KVM_DEVICE='; test -e /dev/kvm && echo yes || echo no
+          echo '---BLOCK---'
+          lsblk -e7 -b -o NAME,KNAME,TYPE,SIZE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL,WWN,ROTA,TRAN
+          echo '---LVM---'
+          pvs --noheadings -o pv_name,pv_size,vg_name 2>/dev/null || true
+          echo '---GPU-PCI---'
+          lspci -Dnnk -d 10de: 2>/dev/null || true
+          echo '---IOMMU-GROUPS---'
+          for p in /sys/bus/pci/devices/*; do
+            [ -e "$p/vendor" ] || continue
+            [ "$(cat "$p/vendor" 2>/dev/null)" = "0x10de" ] || continue
+            b=$(basename "$p")
+            g=$(readlink -f "$p/iommu_group" 2>/dev/null | xargs basename 2>/dev/null || true)
+            d=$(basename "$(readlink -f "$p/driver" 2>/dev/null)" 2>/dev/null || true)
+            echo "GPU_PCI=$b IOMMU_GROUP=$g DRIVER=$d"
+          done
+          echo '---NVIDIA-SMI---'
+          command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi --query-gpu=uuid,name,driver_version,memory.total --format=csv,noheader || echo NVIDIA_SMI_UNAVAILABLE
+          echo '---NETWORK---'
+          ip -br link
+          ip -br addr
+          '@
+          $script=$script -replace "`r`n","`n"
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          foreach($e in $hosts.GetEnumerator()){
+            Write-Host "::group::$($e.Key)"
+            $remote="printf '%s' '$b64' | base64 -d | bash"
+            & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" "root@$($e.Value)" $remote
+            if($LASTEXITCODE -ne 0){ throw "Probe failed for $($e.Key)" }
+            Write-Host "::endgroup::"
+          }
+          Remove-Item Env:LS_ROOT_PASSWORD -ErrorAction SilentlyContinue
+          Remove-Item $askpass -Force -ErrorAction SilentlyContinue
+          Write-Host 'CURRENT_HARDWARE_PROBE=PASS'
