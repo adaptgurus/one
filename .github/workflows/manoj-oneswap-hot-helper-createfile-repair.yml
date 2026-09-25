@@ -1,0 +1,220 @@
+name: Manoj OneSwap Hot Helper CreateFile Repair
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-oneswap-hot-helper-createfile-repair.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-oneswap-hot-helper-createfile-repair
+  cancel-in-progress: true
+
+jobs:
+  repair:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Bind Manoj and prepare restricted appliance key
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "SOURCE_BEFORE_STATE=$($vm.State)"
+          Write-Host "SOURCE_BEFORE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if($n -ne 0){throw 'Unexpected user-visible checkpoint'}
+          if((Get-VM -Name 'ls-appliance-qual' -ErrorAction Stop).State -ne 'Running'){throw 'OneSwap appliance not Running'}
+
+          $src='C:\LayerSentryLab\qualification\keys\oneswap_qual_ed25519'
+          $tmp=Join-Path $env:RUNNER_TEMP 'oneswap-hot-helper-repair.key'
+          Copy-Item -Force $src $tmp
+          & icacls.exe $tmp /inheritance:r | Out-Null
+          & icacls.exe $tmp /grant:r '*S-1-5-18:F' | Out-Null
+          & icacls.exe $tmp /setowner '*S-1-5-18' | Out-Null
+          & ssh-keygen.exe -y -f $tmp *> $null
+          if($LASTEXITCODE -ne 0){throw 'restricted appliance key invalid'}
+          "ONESWAP_TEMP_KEY=$tmp" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host 'HOT_HELPER_SOURCE_GATE=PASS'
+
+      - name: Prove durable replay-safe state and inspect current runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          operation="manoj-hv-ls-migration-source-test-20260924"
+          state=$(ruby -rdigest -ryaml -e '
+            op=ARGV[0]
+            c=YAML.load_file("/etc/layersentry/oneswap/manoj-qual.yaml")||{}
+            work=c["work_dir"]||c[:work_dir]||"/var/tmp"
+            safe=op.gsub(/[^A-Za-z0-9_.-]/,"_")
+            suffix=Digest::SHA256.hexdigest(op)[0,16]
+            puts File.join(work,"oneswap-hyperv-hot","#{safe}-#{suffix}","state.json")
+          ' "$operation")
+          python3 - "$state" <<'PY'
+          import json,os,sys
+          p=sys.argv[1]
+          s=json.load(open(p))
+          print("STATE_PATH="+p)
+          print("STATE_PHASE="+str(s.get("phase")))
+          print("STATE_DELTA_APPLIED_AT="+str(s.get("delta_applied_at")))
+          print("STATE_TEMPLATE_ID="+str(s.get("template_id")))
+          print("STATE_IMPORTED_AT="+str(s.get("imported_at")))
+          print("STATE_IMAGE_IMPORTS="+str(len(s.get("image_imports") or [])))
+          if s.get("phase")!="DELTA_CAPTURING": raise SystemExit("not replay-safe DELTA_CAPTURING")
+          if s.get("delta_applied_at") or s.get("template_id") is not None or s.get("imported_at"): raise SystemExit("later-phase evidence exists")
+          if s.get("image_imports"): raise SystemExit("image import evidence exists")
+          ds=s.get("disks") or []
+          if len(ds)!=2: raise SystemExit("prepared disk count mismatch")
+          for i,d in enumerate(ds):
+              q=d.get("prepared_raw_path") or ""
+              if not os.path.isfile(q): raise SystemExit(f"prepared disk {i} missing")
+              if os.path.getsize(q)!=int(d.get("virtual_size",-1)): raise SystemExit(f"prepared disk {i} size mismatch")
+          print("HOT_HELPER_REPLAY_STATE_GATE=PASS")
+          PY
+          echo "CURRENT_HOT_HELPER_SHA256=$(sha256sum /usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb | awk '{print $1}')"
+          if grep -Fq '[IO.File]::Open($rawPath' /usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb; then
+            echo 'CURRENT_HOT_HELPER_LEGACY_RAW_OPEN=true'
+          else
+            echo 'CURRENT_HOT_HELPER_LEGACY_RAW_OPEN=false'
+          fi
+          if grep -Fq 'CreateFileW' /usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb; then
+            echo 'CURRENT_HOT_HELPER_CREATEFILE=true'
+          else
+            echo 'CURRENT_HOT_HELPER_CREATEFILE=false'
+          fi
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'Replay-safe state inspection failed'}
+
+      - name: Deploy exact CreateFile hot helper atomically
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $head='4d4eaff422c2f038eb541d2db064ce9106d0ec71'
+          $src=Join-Path $env:RUNNER_TEMP 'hyperv_hot_helper.createfile.rb'
+          & curl.exe -L --fail --silent --show-error --connect-timeout 8 --max-time 45 -o $src "https://raw.githubusercontent.com/adaptgurus/one-swap/$head/hyperv_hot_helper.rb"
+          if($LASTEXITCODE -ne 0){throw 'hot helper download failed'}
+          $text=Get-Content -LiteralPath $src -Raw
+          foreach($marker in @('CreateFileW','SafeFileHandle','[IO.FileStream]::new($handle,[IO.FileAccess]::Read)','ONESWAP_HOT_STAGE=delta-generate')){
+            if(-not $text.Contains($marker)){throw "Required hot-helper marker missing: $marker"}
+          }
+          if($text.Contains('[IO.File]::Open($rawPath')){throw 'Legacy raw PhysicalDrive File.Open is still present in source'}
+          $sha=(Get-FileHash -Algorithm SHA256 $src).Hash.ToLower()
+          Write-Host "HOT_HELPER_SOURCE head=$head sha256=$sha"
+
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $common=@('-o','LogLevel=ERROR','-o','ServerAliveInterval=15','-o','ServerAliveCountMax=4','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o',"UserKnownHostsFile=$known",'-o','ConnectTimeout=8','-i',$env:ONESWAP_TEMP_KEY)
+          & scp.exe @common $src "ci@10.250.10.32:/tmp/hyperv_hot_helper.createfile.rb"
+          if($LASTEXITCODE -ne 0){throw 'hot helper scp failed'}
+
+          $script=@'
+          set -euo pipefail
+          src=/tmp/hyperv_hot_helper.createfile.rb
+          dst=/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper.rb
+          expected="__SHA__"
+          [ "$(sha256sum "$src" | awk '{print $1}')" = "$expected" ]
+          ruby -c "$src"
+          grep -Fq 'CreateFileW' "$src"
+          grep -Fq 'SafeFileHandle' "$src"
+          grep -Fq '[IO.FileStream]::new($handle,[IO.FileAccess]::Read)' "$src"
+          ! grep -Fq '[IO.File]::Open($rawPath' "$src"
+          stamp=$(date -u +%Y%m%dT%H%M%SZ)
+          sudo cp -a "$dst" "$dst.before-createfile-repair-$stamp"
+          sudo install -o root -g root -m 0644 "$src" "$dst"
+          sudo ruby -c "$dst"
+          [ "$(sudo sha256sum "$dst" | awk '{print $1}')" = "$expected" ]
+          sudo grep -Fq 'CreateFileW' "$dst"
+          sudo grep -Fq 'SafeFileHandle' "$dst"
+          sudo grep -Fq '[IO.FileStream]::new($handle,[IO.FileAccess]::Read)' "$dst"
+          ! sudo grep -Fq '[IO.File]::Open($rawPath' "$dst"
+          rm -f "$src"
+          echo "HOT_HELPER_RUNTIME_DEPLOY=PASS sha256=$expected"
+          '@
+          $script=$script.Replace('__SHA__',$sha)
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe @common "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw 'hot helper atomic deployment failed'}
+
+      - name: Validate exact disk0 RCT bundle and transfer with repaired runtime
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $known='C:\LayerSentryLab\qualification\oneswap-seed\known_hosts_appliance_v7'
+          $script=@'
+          set -euo pipefail
+          cat >/tmp/ls-hot-helper-repair-rct.rb <<'RUBY'
+          require 'digest'
+          require 'json'
+          require 'yaml'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_helper'
+          require '/usr/lib/one/ruby/cli/one_helper/hyperv_hot_helper'
+
+          cfg=YAML.load_file('/etc/layersentry/oneswap/manoj-qual.yaml') || {}
+          o={}
+          cfg.each{|k,v| o[k.to_s.sub(/^:/,'').to_sym]=v}
+          o[:hyperv_connection]='manoj-qual'
+          o[:hyperv_delta_timeout]=120
+          o[:hyperv_transfer_timeout]=120
+          op='manoj-hv-ls-migration-source-test-20260924'
+          work=(cfg['work_dir']||cfg[:work_dir]||'/var/tmp').to_s
+          safe=op.gsub(/[^A-Za-z0-9_.-]/,'_')
+          suffix=Digest::SHA256.hexdigest(op)[0,16]
+          state_path=File.join(work,'oneswap-hyperv-hot',"#{safe}-#{suffix}",'state.json')
+          state=JSON.parse(File.read(state_path))
+          raise "unsafe phase #{state['phase']}" unless state['phase']=='DELTA_CAPTURING'
+          raise 'later evidence exists' if state['delta_applied_at'] || state['template_id'] || state['imported_at'] || Array(state['image_imports']).any?
+
+          p=OneSwapHyperV::ConnectionProfile.from_options(o)
+          t=OneSwapHyperV::SSHTransport.new(p)
+          source=OneSwapHyperV::HotSource.new(t,o)
+          disk=state.fetch('disks').fetch(0)
+          start=Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          remote=source.send(:create_remote_delta_bundle!,state,disk,0)
+          gen=((Process.clock_gettime(Process::CLOCK_MONOTONIC)-start)*1000).round
+          puts "HOT_HELPER_RCT_REMOTE=#{JSON.generate(remote)}"
+          puts "HOT_HELPER_RCT_GENERATE_MS=#{gen}"
+          local='/tmp/ls-hot-helper-repair-delta.lshv'
+          File.delete(local) if File.exist?(local)
+          start=Process.clock_gettime(Process::CLOCK_MONOTONIC)
+          t.stream_file(remote.fetch('Path'),local,timeout:120)
+          xfer=((Process.clock_gettime(Process::CLOCK_MONOTONIC)-start)*1000).round
+          actual=Digest::SHA256.file(local).hexdigest
+          raise 'size mismatch' unless File.size(local)==Integer(remote.fetch('FileSize'))
+          raise 'sha mismatch' unless actual==remote.fetch('SHA256').to_s.downcase
+          puts "HOT_HELPER_RCT_TRANSFER_MS=#{xfer}"
+          puts "HOT_HELPER_RCT_BYTES=#{File.size(local)}"
+          puts "HOT_HELPER_RCT_SHA256=#{actual}"
+          puts 'HOT_HELPER_RCT_VALIDATION=PASS'
+          File.delete(local) if File.exist?(local)
+          RUBY
+          timeout --signal=TERM --kill-after=5s 300s sudo ruby /tmp/ls-hot-helper-repair-rct.rb
+          rc=$?
+          rm -f /tmp/ls-hot-helper-repair-rct.rb /tmp/ls-hot-helper-repair-delta.lshv
+          exit $rc
+          '@
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes(([regex]::Replace($script,'\r',''))))
+          & ssh.exe -o LogLevel=ERROR -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" -o ConnectTimeout=8 -i $env:ONESWAP_TEMP_KEY "ci@10.250.10.32" "echo $b64 | base64 -d | sudo bash"
+          if($LASTEXITCODE -ne 0){throw "Repaired hot-helper RCT validation failed rc=$LASTEXITCODE"}
+
+      - name: Final source invariant
+        if: always()
+        shell: powershell
+        run: |
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          $n=@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count
+          Write-Host "FINAL_SOURCE_STATE=$($vm.State)"
+          Write-Host "FINAL_SOURCE_CHECKPOINTS=$n"
+          if($vm.State -ne 'Off'){throw 'Hot-helper repair changed source state'}
+          if($n -ne 0){throw 'Unexpected source checkpoint'}
+          Write-Host 'HOT_HELPER_SOURCE_INVARIANT=PASS'
