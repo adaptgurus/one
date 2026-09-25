@@ -1,0 +1,125 @@
+name: Manoj HyperV RCT Raw Range Read Probe
+
+on:
+  push:
+    branches:
+      - qual/manoj-hyperv-migration-20260924
+    paths:
+      - '.github/workflows/manoj-hyperv-rct-raw-range-read-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manoj-hyperv-rct-raw-range-read-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 20
+    steps:
+      - name: Probe exact RCT ranges and raw PhysicalDrive reads
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          if($env:RUNNER_NAME -ine 'MANOJ-TEST-INST'){throw "Wrong runner: $env:RUNNER_NAME"}
+          if($env:COMPUTERNAME -ine 'MANOJ-TEST-INST'){throw "Wrong host: $env:COMPUTERNAME"}
+
+          $vm=Get-VM -Name 'ls-migration-source-test' -ErrorAction Stop
+          if($vm.State -ne 'Off'){throw "Source must remain Off: $($vm.State)"}
+          if(@(Get-VMSnapshot -VMName $vm.Name -ErrorAction SilentlyContinue).Count -ne 0){throw 'Unexpected user-visible checkpoint'}
+
+          $drives=@(Get-VMHardDiskDrive -VM $vm -ErrorAction Stop | Sort-Object ControllerNumber,ControllerLocation)
+          $rctIds=@(
+            'rctX:e0cf6beb:4aad:4f4d:a8c0:8e5ef750b639:00000006',
+            'rctX:be4c4f36:2e23:4921:8d22:3df2999feddf:00000000'
+          )
+          if($drives.Count -ne $rctIds.Count){throw 'Disk/RCT count mismatch'}
+
+          if(-not ('LayerSentry.RawDiskNative' -as [type])) {
+            Add-Type -TypeDefinition @"
+using System;
+using System.Runtime.InteropServices;
+using Microsoft.Win32.SafeHandles;
+namespace LayerSentry {
+    public static class RawDiskNative {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        public static extern SafeFileHandle CreateFileW(
+            string lpFileName,
+            uint dwDesiredAccess,
+            uint dwShareMode,
+            IntPtr lpSecurityAttributes,
+            uint dwCreationDisposition,
+            uint dwFlagsAndAttributes,
+            IntPtr hTemplateFile);
+    }
+}
+"@
+          }
+
+          $chunk=[Int64](512MB)
+          for($di=0;$di -lt $drives.Count;$di++){
+            $path=$drives[$di].Path
+            $vhd=Get-VHD -Path $path -ErrorAction Stop
+            $size=[Int64]$vhd.Size
+            $svc=Get-WmiObject -Namespace root/virtualization/v2 -Class Msvm_ImageManagementService
+            $ranges=New-Object System.Collections.Generic.List[object]
+            [Int64]$offset=0
+            $swQ=[Diagnostics.Stopwatch]::StartNew()
+            while($offset -lt $size){
+              [Int64]$remaining=$size-$offset
+              [Int64]$length=if($remaining -lt $chunk){$remaining}else{$chunk}
+              if($offset -eq 0 -and $length -eq $size -and $size -gt 1){$length=$size-1}
+              $res=$svc.GetVirtualDiskChanges($path,$rctIds[$di],'',$offset,$length)
+              if([int]$res.ReturnValue -ne 0){throw "GetVirtualDiskChanges rc=$($res.ReturnValue) disk=$di offset=$offset"}
+              foreach($i in 0..(@($res.ChangedByteOffsets).Count-1)){
+                if(@($res.ChangedByteOffsets).Count -eq 0){break}
+                $ranges.Add([pscustomobject]@{Offset=[Int64]$res.ChangedByteOffsets[$i];Length=[Int64]$res.ChangedByteLengths[$i]})
+              }
+              [Int64]$processed=$res.ProcessedByteLength
+              if($processed -le 0){throw "zero processed disk=$di offset=$offset"}
+              $offset += $processed
+            }
+            $swQ.Stop()
+            [Int64]$changedBytes=0
+            foreach($r in $ranges){$changedBytes += [Int64]$r.Length}
+            Write-Host "RCT_FULL_QUERY disk=$di ranges=$($ranges.Count) changed_bytes=$changedBytes elapsed_ms=$($swQ.ElapsedMilliseconds)"
+            foreach($r in $ranges){Write-Host "RCT_RANGE disk=$di offset=$($r.Offset) length=$($r.Length)"}
+
+            if($ranges.Count -eq 0){continue}
+
+            $mount=Mount-VHD -Path $path -ReadOnly -NoDriveLetter -Passthru -ErrorAction Stop
+            try {
+              $diskObj=$mount | Get-Disk -ErrorAction Stop
+              $rawPath='\\.\PhysicalDrive'+$diskObj.Number
+              Write-Host "RAW_PATH disk=$di path=$rawPath"
+              $handle=[LayerSentry.RawDiskNative]::CreateFileW($rawPath,[uint32]2147483648,[uint32]3,[IntPtr]::Zero,[uint32]3,[uint32]0,[IntPtr]::Zero)
+              if($handle.IsInvalid){
+                $err=[Runtime.InteropServices.Marshal]::GetLastWin32Error()
+                $handle.Dispose()
+                throw "CreateFileW failed path=$rawPath win32=$err"
+              }
+              $source=[IO.FileStream]::new($handle,[IO.FileAccess]::Read)
+              try {
+                $buffer=New-Object byte[] (1MB)
+                foreach($r in $ranges){
+                  $source.Seek([Int64]$r.Offset,[IO.SeekOrigin]::Begin) | Out-Null
+                  [Int64]$left=$r.Length
+                  [Int64]$readTotal=0
+                  $sw=[Diagnostics.Stopwatch]::StartNew()
+                  while($left -gt 0){
+                    $want=[int][Math]::Min([Int64]$buffer.Length,$left)
+                    $n=$source.Read($buffer,0,$want)
+                    if($n -le 0){throw "unexpected EOF disk=$di offset=$($r.Offset) read=$readTotal"}
+                    $left-=$n
+                    $readTotal+=$n
+                    if($sw.Elapsed.TotalSeconds -gt 60){throw "RAW_RANGE_READ_TIMEOUT disk=$di offset=$($r.Offset) length=$($r.Length) read=$readTotal"}
+                  }
+                  $sw.Stop()
+                  Write-Host "RAW_RANGE_READ=PASS disk=$di offset=$($r.Offset) length=$($r.Length) read=$readTotal elapsed_ms=$($sw.ElapsedMilliseconds)"
+                }
+              } finally {$source.Dispose()}
+            } finally {Dismount-VHD -Path $path -ErrorAction SilentlyContinue}
+          }
+          Write-Host 'RCT_RAW_RANGE_READ_PROBE=PASS'
