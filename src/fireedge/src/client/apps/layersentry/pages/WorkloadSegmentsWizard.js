@@ -356,9 +356,7 @@ const WorkloadSegmentsWizard = () => {
   }
 
   const removeSegment = (key) => {
-    setSegments((current) =>
-      current.filter((segment) => segment.key !== key)
-    )
+    setSegments((current) => current.filter((segment) => segment.key !== key))
   }
 
   const addSegment = () => {
