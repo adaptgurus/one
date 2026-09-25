@@ -40,12 +40,19 @@ jobs:
           $candidates=@()
           foreach($root in $roots){
             if(-not (Test-Path $root)){ continue }
-            Get-ChildItem -LiteralPath $root -Directory -Force -ErrorAction SilentlyContinue -Depth 4 -Recurse |
-              Where-Object { $_.Name -eq 'layersentry-platform' } |
+            Get-ChildItem -LiteralPath $root -File -Force -ErrorAction SilentlyContinue -Depth 6 -Recurse |
+              Where-Object { $_.Name -eq 'config' -and $_.Directory.Name -eq '.git' } |
               ForEach-Object {
-                if(Test-Path (Join-Path $_.FullName '.git')){
-                  $candidates += $_.FullName
+                $cfg=Get-Content $_.FullName -Raw -ErrorAction SilentlyContinue
+                if($cfg -match 'adaptgurus/layersentry-platform'){
+                  $candidates += $_.Directory.Parent.FullName
                 }
+              }
+            Get-ChildItem -LiteralPath $root -File -Force -ErrorAction SilentlyContinue -Depth 6 -Recurse |
+              Where-Object { $_.Name -eq 'provider_recovery.py' -and $_.FullName -match 'layersentry_deployer' } |
+              ForEach-Object {
+                $repo=$_.Directory.Parent.Parent.Parent.FullName
+                if(Test-Path (Join-Path $repo '.git')){ $candidates += $repo }
               }
           }
           $candidates=$candidates | Sort-Object -Unique
