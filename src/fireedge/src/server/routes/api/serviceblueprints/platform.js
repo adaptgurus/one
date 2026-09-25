@@ -158,11 +158,28 @@ const getControlplaneConfig = () => {
   const caFile = String(
     appConfig.layersentry_controlplane_ca_file || ''
   ).trim()
-  if (caFile) {
+  const certFile = String(
+    appConfig.layersentry_controlplane_client_cert_file || ''
+  ).trim()
+  const keyFile = String(
+    appConfig.layersentry_controlplane_client_key_file || ''
+  ).trim()
+  if (baseURL.startsWith('https://')) {
+    if (!caFile || !certFile || !keyFile) {
+      throw new Error(
+        'LayerSentry control-plane HTTPS requires CA, client certificate, and client key files.'
+      )
+    }
     httpsAgent = new https.Agent({
       ca: readFileSync(caFile),
+      cert: readFileSync(certFile),
+      key: readFileSync(keyFile),
       rejectUnauthorized: true,
     })
+  } else if (caFile || certFile || keyFile) {
+    throw new Error(
+      'LayerSentry control-plane TLS files require an https:// control-plane URL.'
+    )
   }
 
   return { baseURL, gatewayToken, timeout, httpsAgent }
