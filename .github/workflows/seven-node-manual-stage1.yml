@@ -1,0 +1,112 @@
+name: Seven Node Manual Foundation Stage1
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-manual-stage1.yml'
+      - 'lab/seven-node/manual-foundation-stage1.sh'
+
+permissions:
+  contents: read
+
+jobs:
+  run:
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        slot: [1, 2, 3]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+
+      - name: Bind target runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            Start-Sleep -Seconds 180
+            "LS_TARGET=false" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            exit 0
+          }
+          "LS_TARGET=true" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Execute Stage 1
+        if: env.LS_TARGET == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
+          $rsa.FromXmlString((Get-Content (Join-Path $dir 'wrap-rsa.xml') -Raw))
+          $cipher='uOFG3EVKXJ2kWA5kyf2ahgyNAauS/9B3OlBCQqiz3tUXDzflxMH4AU34S1keokx1QZRJfnOmi3jVJ+ZGhWmFJV1nw8W8agEj167GQtyolsN3Zs+3are2CNJcvR4yvfqW4cDjqp7+toZpABZ2k/zim3pUnsLe2Sg/S7xWGHPF8otCRZGG/PFKKEfewBtFM2wkv/dGRpLLws59MXhawVkSAzpQ3rQmY5JosK4zYhBIdYcHbjNtpWvIwOVCSEWLEPt/hMpGOGfWW6kHUiX+ZMUyCwvv4O4s2ttkUzDgQtz3PKISVPiNAuHV51ePrfP5nlTHijRL7X0ecB9R+MYoB2w41OlJiLhnl/hIk/gLG9R07LiKhkOPaIRf1stDl/pMYeF/I1obty4i/r5A7Su7F4yOARuzFRStXIRIV4ZSbD9Qvw34tBHD7YP1BWiGEUZ71516VgyLJK/sDpcmLglxCf8MQ4Ij4BI6iLbQcR7XXvrVskbc+Ye7gaJT78u21yuJOHyQ'
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($rsa.Decrypt([Convert]::FromBase64String($cipher),$true))
+          if([string]::IsNullOrWhiteSpace($env:LS_ROOT_PASSWORD)){ throw 'Credential decrypt failed' }
+          $askpass=Join-Path $env:RUNNER_TEMP 'layersentry-manual-stage1-askpass.exe'
+          $src=@'
+          using System;
+          public class Stage1AskPass {
+              public static void Main() {
+                  Console.Write(Environment.GetEnvironmentVariable("LS_ROOT_PASSWORD"));
+              }
+          }
+          '@
+          Add-Type -TypeDefinition $src -Language CSharp -OutputAssembly $askpass -OutputType ConsoleApplication
+          $env:SSH_ASKPASS=$askpass
+          $env:SSH_ASKPASS_REQUIRE='force'
+          $env:DISPLAY='LayerSentry'
+          $known=Join-Path $dir 'known_hosts'
+          $script=Join-Path $env:GITHUB_WORKSPACE 'lab\seven-node\manual-foundation-stage1.sh'
+          & scp.exe -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" $script "root@172.17.60.32:/root/layersentry-manual-stage1.sh"
+          if($LASTEXITCODE -ne 0){ throw 'stage1 script transfer failed' }
+          ($env:LS_ROOT_PASSWORD + [Environment]::NewLine) | & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" root@172.17.60.32 "chmod 700 /root/layersentry-manual-stage1.sh; bash /root/layersentry-manual-stage1.sh ${{ github.run_id }}"
+          $rc=$LASTEXITCODE
+          Remove-Item Env:LS_ROOT_PASSWORD -ErrorAction SilentlyContinue
+          Remove-Item $askpass -Force -ErrorAction SilentlyContinue
+          if($rc -ne 0){ throw "stage1 remote execution failed rc=$rc" }
+
+      - name: Collect Stage 1 evidence
+        if: always() && env.LS_TARGET == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
+          $rsa.FromXmlString((Get-Content (Join-Path $dir 'wrap-rsa.xml') -Raw))
+          $cipher='uOFG3EVKXJ2kWA5kyf2ahgyNAauS/9B3OlBCQqiz3tUXDzflxMH4AU34S1keokx1QZRJfnOmi3jVJ+ZGhWmFJV1nw8W8agEj167GQtyolsN3Zs+3are2CNJcvR4yvfqW4cDjqp7+toZpABZ2k/zim3pUnsLe2Sg/S7xWGHPF8otCRZGG/PFKKEfewBtFM2wkv/dGRpLLws59MXhawVkSAzpQ3rQmY5JosK4zYhBIdYcHbjNtpWvIwOVCSEWLEPt/hMpGOGfWW6kHUiX+ZMUyCwvv4O4s2ttkUzDgQtz3PKISVPiNAuHV51ePrfP5nlTHijRL7X0ecB9R+MYoB2w41OlJiLhnl/hIk/gLG9R07LiKhkOPaIRf1stDl/pMYeF/I1obty4i/r5A7Su7F4yOARuzFRStXIRIV4ZSbD9Qvw34tBHD7YP1BWiGEUZ71516VgyLJK/sDpcmLglxCf8MQ4Ij4BI6iLbQcR7XXvrVskbc+Ye7gaJT78u21yuJOHyQ'
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($rsa.Decrypt([Convert]::FromBase64String($cipher),$true))
+          $askpass=Join-Path $env:RUNNER_TEMP 'layersentry-stage1-evidence-askpass.exe'
+          $src=@'
+          using System;
+          public class Stage1EvidenceAskPass {
+              public static void Main() {
+                  Console.Write(Environment.GetEnvironmentVariable("LS_ROOT_PASSWORD"));
+              }
+          }
+          '@
+          Add-Type -TypeDefinition $src -Language CSharp -OutputAssembly $askpass -OutputType ConsoleApplication
+          $env:SSH_ASKPASS=$askpass
+          $env:SSH_ASKPASS_REQUIRE='force'
+          $env:DISPLAY='LayerSentry'
+          $known=Join-Path $dir 'known_hosts'
+          $out=Join-Path $env:RUNNER_TEMP 'seven-node-stage1-evidence'
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          & scp.exe -r -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" "root@172.17.60.32:/srv/layersentry/nfs/images/evidence/seven-node-foundation/${{ github.run_id }}/*" "$out\"
+          Remove-Item Env:LS_ROOT_PASSWORD -ErrorAction SilentlyContinue
+          Remove-Item $askpass -Force -ErrorAction SilentlyContinue
+          exit 0
+
+      - name: Upload Stage 1 evidence
+        if: always() && env.LS_TARGET == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: seven-node-stage1-${{ github.run_id }}
+          path: ${{ runner.temp }}/seven-node-stage1-evidence
+          if-no-files-found: warn
+          retention-days: 90
