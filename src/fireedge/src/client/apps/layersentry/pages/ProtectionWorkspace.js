@@ -117,6 +117,7 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
     error: '',
     editable: false,
     customAllowed: false,
+    allowedDatastoreIds: [],
   })
   const [datastoreDrafts, setDatastoreDrafts] = useState({})
   const [cloneDrafts, setCloneDrafts] = useState({})
@@ -148,6 +149,9 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
         error: '',
         editable: responseData?.editable === true,
         customAllowed: responseData?.customAllowed === true,
+        allowedDatastoreIds: Array.isArray(responseData?.allowedDatastoreIds)
+          ? responseData.allowedDatastoreIds
+          : [],
       })
       setDatastoreDrafts((current) => {
         const next = { ...current }
@@ -304,6 +308,15 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
   }
 
   const allowMutations = catalog.editable === true && canManagePlans === true
+  const allowedDatastoreIds = new Set(
+    (catalog.allowedDatastoreIds ?? []).map((id) => String(id))
+  )
+  const qualifiedDatastores =
+    allowedDatastoreIds.size > 0
+      ? backupDatastores.filter((datastore) =>
+          allowedDatastoreIds.has(String(datastore.ID))
+        )
+      : backupDatastores
 
   return (
     <Box>
@@ -317,7 +330,7 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
           {mutation.success}
         </Alert>
       )}
-      {allowMutations && backupDatastores.length === 0 && (
+      {allowMutations && qualifiedDatastores.length === 0 && (
         <Alert severity="warning" sx={{ mb: 1 }}>
           No qualified Backup Storage is available for plan selection or
           cloning.
@@ -338,7 +351,7 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
                 ? plan.sourceBackupDatastoreId
                 : '')
           )
-          const currentDatastoreVisible = backupDatastores.some(
+          const currentDatastoreVisible = qualifiedDatastores.some(
             (datastore) =>
               String(datastore.ID) === String(plan.sourceBackupDatastoreId)
           )
@@ -415,7 +428,7 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
                           {`Current #${plan.sourceBackupDatastoreId} (not available)`}
                         </MenuItem>
                       )}
-                    {backupDatastores.map((datastore) => (
+                    {qualifiedDatastores.map((datastore) => (
                       <MenuItem key={datastore.ID} value={String(datastore.ID)}>
                         {backupDatastoreLabel(datastore)}
                       </MenuItem>
@@ -434,7 +447,7 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
                       variant="outlined"
                       disabled={
                         busyDatastore ||
-                        backupDatastores.length === 0 ||
+                        qualifiedDatastores.length === 0 ||
                         selectedDatastore === '' ||
                         selectedDatastore ===
                           String(plan.sourceBackupDatastoreId)
@@ -448,7 +461,7 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
                         size="small"
                         variant="outlined"
                         data-layersentry-clone-backup-plan={plan.id}
-                        disabled={busyClone || backupDatastores.length === 0}
+                        disabled={busyClone || qualifiedDatastores.length === 0}
                         onClick={() => openClone(plan)}
                       >
                         Clone plan
@@ -494,7 +507,7 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
                         <MenuItem value="" disabled>
                           Choose Backup Storage
                         </MenuItem>
-                        {backupDatastores.map((datastore) => (
+                        {qualifiedDatastores.map((datastore) => (
                           <MenuItem
                             key={datastore.ID}
                             value={String(datastore.ID)}
@@ -510,7 +523,7 @@ const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
                           disabled={
                             busyClone ||
                             !String(cloneDraft.name ?? '').trim() ||
-                            backupDatastores.length === 0
+                            qualifiedDatastores.length === 0
                           }
                           onClick={() => clonePlan(plan)}
                         >
@@ -701,7 +714,7 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
         isAdmin &&
         canConfigureBackupStorage &&
         !datastoresQuery.isLoading &&
-        backupDatastores.length === 0 ? (
+        qualifiedDatastores.length === 0 ? (
           <Button
             variant="contained"
             onClick={() => history.push(PRODUCT_PATHS.INFRA_BACKUP_STORAGE)}
@@ -746,7 +759,7 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
           </Surface>
         ))}
       </Box>
-      {isAdmin && backupDatastores.length === 0 && !datastoresQuery.isLoading && (
+      {isAdmin && qualifiedDatastores.length === 0 && !datastoresQuery.isLoading && (
         <Alert
           severity="warning"
           sx={{ mt: 2 }}
