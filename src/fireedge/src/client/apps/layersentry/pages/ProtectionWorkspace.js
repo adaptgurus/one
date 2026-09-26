@@ -107,10 +107,10 @@ const formatPlanInterval = (seconds) => {
   return `Every ${minutes} minute${minutes === 1 ? '' : 's'}`
 }
 
-const BackupPlanCatalogInventory = ({
-  backupDatastores,
-  canManagePlans,
-}) => {
+const backupDatastoreLabel = (datastore = {}) =>
+  `${datastore.NAME ?? `Backup Storage ${datastore.ID}`} (#${datastore.ID})`
+
+const BackupPlanCatalogInventory = ({ backupDatastores, canManagePlans }) => {
   const [catalog, setCatalog] = useState({
     status: 'loading',
     items: [],
@@ -140,9 +140,7 @@ const BackupPlanCatalogInventory = ({
           responseData?.error || 'The backup-plan catalog is unavailable.'
         )
       }
-      const items = Array.isArray(responseData?.items)
-        ? responseData.items
-        : []
+      const items = Array.isArray(responseData?.items) ? responseData.items : []
 
       setCatalog({
         status: 'ready',
@@ -261,11 +259,7 @@ const BackupPlanCatalogInventory = ({
     const draft = cloneDrafts[plan.id] ?? {}
     const name = String(draft.name ?? '').trim()
     const datastoreId = Number(draft.sourceBackupDatastoreId)
-    if (
-      !name ||
-      !Number.isInteger(datastoreId) ||
-      datastoreId < 0
-    ) {
+    if (!name || !Number.isInteger(datastoreId) || datastoreId < 0) {
       setMutation({
         key: '',
         error: 'Clone name and Backup Storage are required.',
@@ -309,8 +303,7 @@ const BackupPlanCatalogInventory = ({
     )
   }
 
-  const allowMutations =
-    catalog.editable === true && canManagePlans === true
+  const allowMutations = catalog.editable === true && canManagePlans === true
 
   return (
     <Box>
@@ -419,13 +412,12 @@ const BackupPlanCatalogInventory = ({
                           value={String(plan.sourceBackupDatastoreId)}
                           disabled
                         >
-                          Current #{plan.sourceBackupDatastoreId} (not available)
+                          {`Current #${plan.sourceBackupDatastoreId} (not available)`}
                         </MenuItem>
                       )}
                     {backupDatastores.map((datastore) => (
                       <MenuItem key={datastore.ID} value={String(datastore.ID)}>
-                        {datastore.NAME ?? `Backup Storage ${datastore.ID}`} (#
-                        {datastore.ID})
+                        {backupDatastoreLabel(datastore)}
                       </MenuItem>
                     ))}
                   </TextField>
@@ -507,9 +499,7 @@ const BackupPlanCatalogInventory = ({
                             key={datastore.ID}
                             value={String(datastore.ID)}
                           >
-                            {datastore.NAME ??
-                              `Backup Storage ${datastore.ID}`}{' '}
-                            (#{datastore.ID})
+                            {backupDatastoreLabel(datastore)}
                           </MenuItem>
                         ))}
                       </TextField>
