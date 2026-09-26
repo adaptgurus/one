@@ -80,8 +80,55 @@ jobs:
         if: steps.bind.outputs.target == 'true'
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - name: Install durable deployment trust
+      - name: Try existing durable helper trust
         if: steps.bind.outputs.target == 'true'
+        id: trykey
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $key=Join-Path $dir 'deploy_ed25519'
+          $known=Join-Path $dir 'known_hosts'
+          if(-not (Test-Path $key) -or -not (Test-Path $known)){
+            Write-Host 'EXISTING_HELPER_TRUST=UNAVAILABLE'
+            "complete=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+          $public=(Get-Content (Join-Path $env:RUNNER_TEMP 'layersentryol7-public-key\authorized_key.pub') -Raw).Trim()
+          $script=@'
+          set -euo pipefail
+          u=layersentry-deploy
+          h=$(getent passwd "$u" | cut -d: -f6)
+          test -n "$h"
+          sudo -n install -d -m 700 -o "$u" -g "$u" "$h/.ssh"
+          k='__PUBLIC_KEY__'
+          sudo -n touch "$h/.ssh/authorized_keys"
+          sudo -n grep -qxF "$k" "$h/.ssh/authorized_keys" || printf '%s\n' "$k" | sudo -n tee -a "$h/.ssh/authorized_keys" >/dev/null
+          sudo -n chown -R "$u:$u" "$h/.ssh"
+          sudo -n chmod 600 "$h/.ssh/authorized_keys"
+          sudo -n restorecon -RF "$h/.ssh" 2>/dev/null || true
+          echo EXISTING_HELPER_KEY_INSTALL=PASS
+          '@
+          $script=$script.Replace('__PUBLIC_KEY__',$public).Replace("`r`n","`n")
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          $failed=@()
+          foreach($hostIp in @('172.17.60.30','172.17.60.31','172.17.60.32','172.17.60.33','172.17.60.34','172.17.60.35','172.17.60.36')){
+            $remote="printf '%s' '$b64' | base64 -d | bash"
+            & ssh.exe -T -i $key -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "layersentry-deploy@$hostIp" $remote
+            if($LASTEXITCODE -ne 0){ $failed += $hostIp; Write-Host "EXISTING_HELPER_TRUST=$hostIp`:FAIL" }
+            else { Write-Host "EXISTING_HELPER_TRUST=$hostIp`:PASS" }
+          }
+          if($failed.Count -eq 0){
+            "complete=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Host 'EXISTING_HELPER_TRUST_ALL=PASS'
+          } else {
+            "complete=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Host ('EXISTING_HELPER_TRUST_INCOMPLETE=' + ($failed -join ','))
+          }
+          exit 0
+
+      - name: Install durable deployment trust
+        if: steps.bind.outputs.target == 'true' && steps.trykey.outputs.complete != 'true'
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
