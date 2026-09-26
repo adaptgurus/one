@@ -1,0 +1,118 @@
+name: Seven Node KVM Network Storage Diagnostic
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-kvm-network-storage-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostic:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 12
+    steps:
+      - name: Bind layersentryol7 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_NAME=$RUNNER_NAME SLOT=${{ matrix.slot }}"
+          if test "$RUNNER_NAME" != layersentryol7; then
+            echo 'NON_TARGET_RUNNER_HOLD'
+            echo 'LS_TARGET=false' >>"$GITHUB_ENV"
+            sleep 90
+            exit 0
+          fi
+          echo 'LS_TARGET=true' >>"$GITHUB_ENV"
+          test -f /root/.ssh/layersentry_lab_ed25519
+
+      - name: Collect focused read-only diagnostics
+        if: env.LS_TARGET == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/seven-node-kvm-network-storage-diagnostic"
+          install -d -m 700 "$out/hosts"
+          key=/root/.ssh/layersentry_lab_ed25519
+          known="$out/known_hosts"
+          : >"$known"
+          for ip in 172.17.60.30 172.17.60.31 172.17.60.32 172.17.60.33 172.17.60.34 172.17.60.35; do
+            timeout 10 ssh-keyscan -T 5 -t ed25519,ecdsa,rsa "$ip" >>"$known" 2>/dev/null
+          done
+          chmod 600 "$known"
+
+          cat >"$out/probe.sh" <<'PROBE'
+          set -u
+          echo '--- IDENTITY ---'
+          hostname -f 2>/dev/null || hostname
+          cat /sys/class/dmi/id/product_name 2>/dev/null || true
+          cat /sys/class/dmi/id/product_uuid 2>/dev/null || true
+          cat /sys/class/dmi/id/sys_vendor 2>/dev/null || true
+          echo '--- CPU ---'
+          lscpu 2>&1
+          printf 'VMX_FLAG_COUNT='; grep -Eoc '(^| )vmx( |$)' /proc/cpuinfo || true
+          printf 'SVM_FLAG_COUNT='; grep -Eoc '(^| )svm( |$)' /proc/cpuinfo || true
+          grep -m1 '^flags' /proc/cpuinfo 2>/dev/null || true
+          echo '--- KVM ---'
+          test -e /dev/kvm && stat -c '%F %a %U:%G' /dev/kvm || echo KVM_DEVICE_ABSENT
+          lsmod | grep -E '^kvm' || true
+          modprobe -n -v kvm 2>&1 || true
+          modprobe -n -v kvm_intel 2>&1 || true
+          modprobe -n -v kvm_amd 2>&1 || true
+          dmesg 2>/dev/null | grep -Ei 'kvm|vmx|svm|virtualization' | tail -80 || true
+          command -v virt-host-validate >/dev/null 2>&1 && virt-host-validate qemu 2>&1 || echo VIRT_HOST_VALIDATE_UNAVAILABLE
+          echo '--- NETWORK ---'
+          ip -br link 2>&1
+          ip -br addr 2>&1
+          ip route 2>&1
+          nmcli -t -f GENERAL.DEVICE,GENERAL.TYPE,GENERAL.STATE,GENERAL.CONNECTION device show 2>&1 || true
+          nmcli -t -f NAME,UUID,TYPE,DEVICE connection show 2>&1 || true
+          for nic in $(ls /sys/class/net 2>/dev/null | grep -v '^lo$'); do
+            echo "NIC=$nic"
+            ethtool -i "$nic" 2>&1 || true
+            ethtool "$nic" 2>&1 | grep -E 'Speed:|Duplex:|Link detected:' || true
+          done
+          echo '--- STORAGE ---'
+          lsblk -o NAME,KNAME,TYPE,SIZE,FSTYPE,WWN,SERIAL,MOUNTPOINTS 2>&1
+          test -r /etc/iscsi/initiatorname.iscsi && sed -n 's/^InitiatorName=/InitiatorName=/p' /etc/iscsi/initiatorname.iscsi || echo ISCSI_INITIATOR_UNAVAILABLE
+          multipath -ll 2>&1 || true
+          findmnt -t nfs,nfs4 2>&1 || true
+          command -v showmount >/dev/null 2>&1 && timeout 10 showmount -e 172.17.60.210 2>&1 || echo SHOWMOUNT_UNAVAILABLE_OR_FAILED
+          for endpoint in 172.17.60.210:2049 172.17.60.213:3260 172.17.60.214:3260; do
+            host=${endpoint%:*}; port=${endpoint#*:}
+            timeout 4 bash -c "</dev/tcp/$host/$port" 2>/dev/null && echo "TCP_${host}_${port}=PASS" || echo "TCP_${host}_${port}=FAIL"
+          done
+          PROBE
+          chmod 700 "$out/probe.sh"
+
+          failures=0
+          for entry in layersentry1=172.17.60.30 layersentry2=172.17.60.31 layersentry3=172.17.60.32 layersentry4=172.17.60.33 layersentry5=172.17.60.34 layersentry6=172.17.60.35; do
+            name=${entry%%=*}
+            ip=${entry#*=}
+            if timeout 30 ssh -T -i "$key" -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "layersentry-deploy@$ip" 'sudo -n bash -s' <"$out/probe.sh" >"$out/hosts/$name.txt" 2>"$out/hosts/$name.stderr"; then
+              echo "DIAGNOSTIC_$name=PASS"
+            else
+              echo "DIAGNOSTIC_$name=FAIL"
+              failures=$((failures + 1))
+            fi
+          done > >(tee "$out/result.txt")
+          rm -f "$out/probe.sh" "$known"
+          echo "DIAGNOSTIC_FAILURES=$failures" | tee -a "$out/result.txt"
+          test "$failures" -eq 0
+
+      - name: Upload sanitized diagnostics
+        if: always() && env.LS_TARGET == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: seven-node-kvm-network-storage-diagnostic
+          path: ${{ runner.temp }}/seven-node-kvm-network-storage-diagnostic
+          if-no-files-found: error
+          retention-days: 7
