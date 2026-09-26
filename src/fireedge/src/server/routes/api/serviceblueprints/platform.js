@@ -78,6 +78,104 @@ const validatePlatformUrl = (value) => {
  *
  * @returns {object} validated platform connection settings
  */
+const readGatewayToken = (inlineValue, fileValue, label) => {
+  const inlineToken = String(inlineValue || '').trim()
+  const tokenFile = String(fileValue || '').trim()
+
+  if (inlineToken && tokenFile) {
+    throw new Error(
+      `LayerSentry ${label} gateway token must use either inline or file configuration, not both.`
+    )
+  }
+
+  const gatewayToken = tokenFile
+    ? String(readFileSync(tokenFile, 'utf8')).trim()
+    : inlineToken
+
+  if (gatewayToken.length < 32) {
+    throw new Error(
+      `LayerSentry ${label} gateway token is not configured or is too short.`
+    )
+  }
+
+  return gatewayToken
+}
+
+/**
+ * Read the optional dedicated Protection API connection.
+ *
+ * When no protection-specific settings are present, Protection shares the
+ * normal LayerSentry platform connection. A dedicated loopback endpoint is
+ * useful when the protection module is deployed independently while preserving
+ * the VM-service/Kubernetes control-plane connection.
+ *
+ * @returns {object} validated protection connection settings
+ */
+const getProtectionConfig = () => {
+  const appConfig = getFireedgeConfig()
+  const hasDedicatedProtection = Boolean(
+    appConfig.layersentry_protection_url ||
+      appConfig.layersentry_protection_gateway_token ||
+      appConfig.layersentry_protection_gateway_token_file ||
+      appConfig.layersentry_protection_ca_file ||
+      appConfig.layersentry_protection_client_cert_file ||
+      appConfig.layersentry_protection_client_key_file
+  )
+
+  if (!hasDedicatedProtection) return getPlatformConfig()
+
+  const baseURL = validatePlatformUrl(appConfig.layersentry_protection_url)
+    .toString()
+    .replace(/\/$/, '')
+  const gatewayToken = readGatewayToken(
+    appConfig.layersentry_protection_gateway_token,
+    appConfig.layersentry_protection_gateway_token_file,
+    'protection'
+  )
+
+  const configuredTimeout = Number(appConfig.layersentry_protection_timeout_ms)
+  const timeout =
+    Number.isInteger(configuredTimeout) && configuredTimeout > 0
+      ? configuredTimeout
+      : DEFAULT_PLATFORM_TIMEOUT_MS
+
+  const caFile = String(appConfig.layersentry_protection_ca_file || '').trim()
+  const clientCertFile = String(
+    appConfig.layersentry_protection_client_cert_file || ''
+  ).trim()
+  const clientKeyFile = String(
+    appConfig.layersentry_protection_client_key_file || ''
+  ).trim()
+
+  if (Boolean(clientCertFile) !== Boolean(clientKeyFile)) {
+    throw new Error(
+      'LayerSentry protection client certificate and key must be configured together.'
+    )
+  }
+
+  let httpsAgent
+  if (baseURL.startsWith('https:')) {
+    httpsAgent = new https.Agent({
+      ...(caFile ? { ca: readFileSync(caFile) } : {}),
+      ...(clientCertFile
+        ? {
+            cert: readFileSync(clientCertFile),
+            key: readFileSync(clientKeyFile),
+          }
+        : {}),
+      rejectUnauthorized: true,
+      minVersion: 'TLSv1.2',
+    })
+  }
+
+  return {
+    baseURL,
+    gatewayToken,
+    timeout,
+    httpsAgent,
+  }
+}
+
 const getPlatformConfig = () => {
   const appConfig = getFireedgeConfig()
   const baseURL = validatePlatformUrl(
@@ -295,6 +393,7 @@ module.exports = {
   GATEWAY_ADMIN_HEADER,
   buildPlatformRequest,
   getPlatformConfig,
+  getProtectionConfig,
   platformCapabilities,
   platformRequest,
   resolvePlatformActor,
