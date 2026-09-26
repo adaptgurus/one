@@ -1,6 +1,7 @@
 name: Seven Node Storage Qualification
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - lab/seven-node-foundation-20260926
@@ -58,16 +59,31 @@ jobs:
           mountpoint=/mnt/layersentry-authorized-nfs-readonly
           install -d -m 700 "$mountpoint"
           if findmnt -rn "$mountpoint" >/dev/null 2>&1; then umount "$mountpoint"; fi
-          timeout 20 mount -t nfs -o ro,hard,tcp,vers=4.2,timeo=600,retrans=2 "$nfs_server:$nfs_export" "$mountpoint"
+          timeout 20 mount -t nfs -o rw,hard,tcp,vers=4.2,timeo=600,retrans=2 "$nfs_server:$nfs_export" "$mountpoint"
           findmnt -n -o SOURCE,FSTYPE,OPTIONS,TARGET "$mountpoint"
           df -B1 --output=source,fstype,size,used,avail,pcent,target "$mountpoint"
           test "$(findmnt -n -o SOURCE "$mountpoint")" = "$nfs_server:$nfs_export"
-          touch_rc=0
-          touch "$mountpoint/.layersentry-readonly-negative-probe" 2>/dev/null || touch_rc=$?
-          test "$touch_rc" -ne 0
+          probe_root="$mountpoint/.layersentry-qualification"
+          probe="$probe_root/$(hostname)-${GITHUB_RUN_ID:-manual}-${GITHUB_RUN_ATTEMPT:-1}"
+          cleanup_nfs_probe() {
+            rm -f "$probe/payload" 2>/dev/null || true
+            rmdir "$probe" 2>/dev/null || true
+            rmdir "$probe_root" 2>/dev/null || true
+            findmnt -rn "$mountpoint" >/dev/null 2>&1 && umount "$mountpoint" || true
+            rmdir "$mountpoint" 2>/dev/null || true
+          }
+          trap cleanup_nfs_probe EXIT
+          install -d -m 700 "$probe"
+          printf 'layersentry-authorized-nfs-probe\n' >"$probe/payload"
+          sync -f "$probe/payload"
+          test "$(sha256sum "$probe/payload" | awk '{print $1}')" = '12b081509c0b2af330e38e5407be52ec65e86ccdd1d8bce10cfb35a58df83c47'
+          rm -f "$probe/payload"
+          rmdir "$probe"
+          rmdir "$probe_root" 2>/dev/null || true
           umount "$mountpoint"
           rmdir "$mountpoint"
-          echo NFS_V42_READONLY_QUALIFICATION=PASS
+          trap - EXIT
+          echo NFS_V42_BOUNDED_RW_SYNC_DELETE_QUALIFICATION=PASS
 
           portal1=172.17.60.213:3260
           portal2=172.17.60.214:3260
@@ -110,6 +126,27 @@ jobs:
             wipefs -n "$resolved" 2>&1 || true
             blkid -p "$resolved" 2>&1 || true
           done
+          echo '--- MULTIPATH_OWNERSHIP_GATE ---'
+          ownership_failures=0
+          for map in /dev/mapper/mpath*; do
+            test -b "$map" || continue
+            map_name=$(basename "$map")
+            wwid=$(multipathd show maps raw format '%n %w' 2>/dev/null | awk -v name="$map_name" '$1 == name {print $2; exit}')
+            size=$(blockdev --getsize64 "$map")
+            echo "MULTIPATH_MAP=$map WWID=${wwid:-UNKNOWN} SIZE_BYTES=$size"
+            lsblk -o NAME,KNAME,TYPE,SIZE,FSTYPE,UUID,WWN,SERIAL,MOUNTPOINTS "$map" 2>&1 || true
+            signatures=$(wipefs -n "$map" 2>&1 || true)
+            printf '%s\n' "$signatures"
+            blkid -p "$map" 2>&1 || true
+            holders=$(find "/sys/class/block/$map_name/holders" -mindepth 1 -maxdepth 1 -printf '%f ' 2>/dev/null || true)
+            mounts=$(lsblk -nr -o MOUNTPOINTS "$map" | sed '/^$/d' || true)
+            pv=$(pvs --readonly --noheadings -o pv_name 2>/dev/null | awk '{$1=$1};1' | grep -Fx "$map" || true)
+            echo "OWNERSHIP_READBACK map=$map_name holders=${holders:-NONE} mounts=${mounts:-NONE} lvm_pv=${pv:-NONE} signatures=$([ -n "$signatures" ] && echo PRESENT || echo NONE)"
+            if test -n "$holders" || test -n "$mounts" || test -n "$pv" || test -n "$signatures"; then
+              ownership_failures=$((ownership_failures + 1))
+            fi
+          done
+          echo "MULTIPATH_OWNERSHIP_FAILURES=$ownership_failures"
           echo ISCSI_READONLY_QUALIFICATION=PASS
           REMOTE
           chmod 700 "$out/qualify.sh"
