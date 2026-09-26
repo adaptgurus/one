@@ -15,13 +15,29 @@
  * ------------------------------------------------------------------------- */
 
 const { Actions, Commands } = require('server/routes/api/backupplans/routes')
-const { list } = require('server/routes/api/backupplans/functions')
+const {
+  list,
+  updateDatastore,
+  clone,
+} = require('server/routes/api/backupplans/functions')
 
-const { BACKUP_PLANS_LIST } = Actions
+const {
+  BACKUP_PLANS_LIST,
+  BACKUP_PLANS_DATASTORE,
+  BACKUP_PLANS_CLONE,
+} = Actions
 
 module.exports = [
   {
     ...Commands[BACKUP_PLANS_LIST],
     action: list,
+  },
+  {
+    ...Commands[BACKUP_PLANS_DATASTORE],
+    action: updateDatastore,
+  },
+  {
+    ...Commands[BACKUP_PLANS_CLONE],
+    action: clone,
   },
 ]
