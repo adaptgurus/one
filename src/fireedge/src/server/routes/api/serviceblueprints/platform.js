@@ -103,10 +103,30 @@ const getPlatformConfig = () => {
 
   let httpsAgent
   const caFile = String(appConfig.layersentry_platform_ca_file || '').trim()
-  if (caFile) {
+  const clientCertFile = String(
+    appConfig.layersentry_platform_client_cert_file || ''
+  ).trim()
+  const clientKeyFile = String(
+    appConfig.layersentry_platform_client_key_file || ''
+  ).trim()
+
+  if (Boolean(clientCertFile) !== Boolean(clientKeyFile)) {
+    throw new Error(
+      'LayerSentry platform client certificate and key must be configured together.'
+    )
+  }
+
+  if (baseURL.protocol === 'https:') {
     httpsAgent = new https.Agent({
-      ca: readFileSync(caFile),
+      ...(caFile ? { ca: readFileSync(caFile) } : {}),
+      ...(clientCertFile
+        ? {
+            cert: readFileSync(clientCertFile),
+            key: readFileSync(clientKeyFile),
+          }
+        : {}),
       rejectUnauthorized: true,
+      minVersion: 'TLSv1.2',
     })
   }
 
