@@ -176,6 +176,11 @@ const getProtectionConfig = () => {
   }
 }
 
+/**
+ * Read and validate the primary server-only platform connection settings.
+ *
+ * @returns {object} validated platform connection settings
+ */
 const getPlatformConfig = () => {
   const appConfig = getFireedgeConfig()
   const baseURL = validatePlatformUrl(
