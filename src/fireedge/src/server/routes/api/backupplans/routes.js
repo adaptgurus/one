@@ -14,14 +14,24 @@
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 
-const { httpMethod } = require('../../../utils/constants/defaults')
+const {
+  httpMethod,
+  from: fromData,
+} = require('../../../utils/constants/defaults')
 
-const { GET } = httpMethod
+const { GET, POST } = httpMethod
+const { postBody } = fromData
 
 const basepath = '/v1/backup-plans'
 const BACKUP_PLANS_LIST = 'backupplans.list'
+const BACKUP_PLANS_DATASTORE = 'backupplans.datastore'
+const BACKUP_PLANS_CLONE = 'backupplans.clone'
 
-const Actions = { BACKUP_PLANS_LIST }
+const Actions = {
+  BACKUP_PLANS_LIST,
+  BACKUP_PLANS_DATASTORE,
+  BACKUP_PLANS_CLONE,
+}
 
 module.exports = {
   Actions,
@@ -31,6 +41,27 @@ module.exports = {
       httpMethod: GET,
       auth: true,
       params: {},
+    },
+    [BACKUP_PLANS_DATASTORE]: {
+      path: `${basepath}/datastore`,
+      httpMethod: POST,
+      auth: true,
+      params: {
+        planId: { from: postBody },
+        version: { from: postBody },
+        sourceBackupDatastoreId: { from: postBody },
+      },
+    },
+    [BACKUP_PLANS_CLONE]: {
+      path: `${basepath}/clone`,
+      httpMethod: POST,
+      auth: true,
+      params: {
+        sourcePlanId: { from: postBody },
+        name: { from: postBody },
+        sourceBackupDatastoreId: { from: postBody },
+        requestId: { from: postBody },
+      },
     },
   },
 }
