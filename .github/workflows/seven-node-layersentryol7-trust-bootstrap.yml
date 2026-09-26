@@ -1,0 +1,180 @@
+name: Seven Node layersentryol7 Trust Bootstrap
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-layersentryol7-trust-bootstrap.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seven-node-layersentryol7-trust-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  prepare-runner-key:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Create bounded deployment key on layersentryol7
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = layersentryol7
+          install -d -m 700 /root/.ssh
+          key=/root/.ssh/layersentry_lab_ed25519
+          if ! test -f "$key"; then
+            ssh-keygen -q -t ed25519 -N '' -C layersentryol7-lab-runner -f "$key"
+          fi
+          chmod 600 "$key"
+          chmod 644 "$key.pub"
+          install -d -m 700 "$RUNNER_TEMP/layersentryol7-public-key"
+          cp "$key.pub" "$RUNNER_TEMP/layersentryol7-public-key/authorized_key.pub"
+          ssh-keygen -lf "$key.pub"
+          echo 'PRIVATE_KEY_EXPORTED=false'
+
+      - name: Upload public key only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: layersentryol7-public-key
+          path: ${{ runner.temp }}/layersentryol7-public-key/authorized_key.pub
+          if-no-files-found: error
+          retention-days: 1
+
+  bootstrap-targets:
+    needs: prepare-runner-key
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind credential-bearing helper runner
+        id: bind
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC'){
+            Write-Host 'NON_TARGET_RUNNER_HOLD'
+            Start-Sleep -Seconds 90
+            "target=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+          "target=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      - name: Download layersentryol7 public key
+        if: steps.bind.outputs.target == 'true'
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: layersentryol7-public-key
+          path: ${{ runner.temp }}/layersentryol7-public-key
+
+      - name: Checkout lab workflow source
+        if: steps.bind.outputs.target == 'true'
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Install durable deployment trust
+        if: steps.bind.outputs.target == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $wrap=Join-Path $dir 'wrap-rsa.xml'
+          $known=Join-Path $dir 'known_hosts'
+          if(-not (Test-Path $wrap)){ throw 'Target-runner wrapping key missing' }
+          if(-not (Test-Path $known)){ throw 'Pinned known_hosts missing' }
+
+          $workflow=Join-Path $env:RUNNER_TEMP 'seven-node-ssh-bootstrap.yml'
+          $repoWorkflow='${{ github.workspace }}\.github\workflows\seven-node-ssh-bootstrap.yml'
+          if(Test-Path $repoWorkflow){ Copy-Item $repoWorkflow $workflow -Force }
+          if(-not (Test-Path $workflow)){
+            git -C '${{ github.workspace }}' show '${{ github.sha }}:.github/workflows/seven-node-ssh-bootstrap.yml' | Set-Content -Encoding UTF8 $workflow
+          }
+          $text=Get-Content $workflow -Raw
+          $match=[regex]::Match($text,"\$cipher='([^']+)'")
+          if(-not $match.Success){ throw 'Wrapped credential payload unavailable' }
+          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
+          $rsa.FromXmlString((Get-Content $wrap -Raw))
+          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($rsa.Decrypt([Convert]::FromBase64String($match.Groups[1].Value),$true))
+          if([string]::IsNullOrWhiteSpace($env:LS_ROOT_PASSWORD)){ throw 'Credential decrypt failed' }
+
+          $public=(Get-Content (Join-Path $env:RUNNER_TEMP 'layersentryol7-public-key\authorized_key.pub') -Raw).Trim()
+          if($public -notmatch '^ssh-ed25519 [A-Za-z0-9+/=]+ layersentryol7-lab-runner$'){ throw 'Unexpected public key format' }
+
+          $askpass=Join-Path $env:RUNNER_TEMP 'layersentryol7-bootstrap-askpass.exe'
+          $src=@'
+          using System;
+          public class AskPass {
+              public static void Main() {
+                  Console.Write(Environment.GetEnvironmentVariable("LS_ROOT_PASSWORD"));
+              }
+          }
+          '@
+          Add-Type -TypeDefinition $src -Language CSharp -OutputAssembly $askpass -OutputType ConsoleApplication
+          $env:SSH_ASKPASS=$askpass
+          $env:SSH_ASKPASS_REQUIRE='force'
+          $env:DISPLAY='LayerSentry'
+
+          $script=@'
+          set -euo pipefail
+          u=layersentry-deploy
+          id "$u" >/dev/null 2>&1 || useradd -m -s /bin/bash "$u"
+          h=$(getent passwd "$u" | cut -d: -f6)
+          install -d -m 700 -o "$u" -g "$u" "$h/.ssh"
+          k='__PUBLIC_KEY__'
+          touch "$h/.ssh/authorized_keys"
+          grep -qxF "$k" "$h/.ssh/authorized_keys" || printf '%s\n' "$k" >>"$h/.ssh/authorized_keys"
+          chown -R "$u:$u" "$h/.ssh"
+          chmod 600 "$h/.ssh/authorized_keys"
+          restorecon -RF "$h/.ssh" 2>/dev/null || true
+          printf 'layersentry-deploy ALL=(ALL) NOPASSWD:ALL\n' >/etc/sudoers.d/90-layersentry-deploy
+          chmod 440 /etc/sudoers.d/90-layersentry-deploy
+          visudo -cf /etc/sudoers.d/90-layersentry-deploy
+          echo DURABLE_TRUST_INSTALL=PASS
+          '@
+          $script=$script.Replace('__PUBLIC_KEY__',$public).Replace("`r`n","`n")
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          $failed=@()
+          try {
+            foreach($hostIp in @('172.17.60.30','172.17.60.31','172.17.60.32','172.17.60.33','172.17.60.34','172.17.60.35','172.17.60.36')){
+              $remote="printf '%s' '$b64' | base64 -d | bash"
+              & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "root@$hostIp" $remote
+              if($LASTEXITCODE -ne 0){ $failed += $hostIp; Write-Host "DURABLE_TRUST=$hostIp`:FAIL" }
+              else { Write-Host "DURABLE_TRUST=$hostIp`:PASS" }
+            }
+          } finally {
+            Remove-Item Env:LS_ROOT_PASSWORD -ErrorAction SilentlyContinue
+            Remove-Item $askpass -Force -ErrorAction SilentlyContinue
+          }
+          if($failed.Count -gt 0){ throw ('Trust bootstrap failed for: ' + ($failed -join ',')) }
+          Write-Host 'PLAINTEXT_CREDENTIAL_PERSISTED=false'
+
+  verify-from-layersentryol7:
+    needs: bootstrap-targets
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 8
+    steps:
+      - name: Verify durable key and sudo on all seven targets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = layersentryol7
+          key=/root/.ssh/layersentry_lab_ed25519
+          test -f "$key"
+          known="$RUNNER_TEMP/known_hosts"
+          : >"$known"
+          for ip in 172.17.60.30 172.17.60.31 172.17.60.32 172.17.60.33 172.17.60.34 172.17.60.35 172.17.60.36; do
+            timeout 10 ssh-keyscan -T 5 -t ed25519,ecdsa,rsa "$ip" >>"$known" 2>/dev/null
+          done
+          chmod 600 "$known"
+          for ip in 172.17.60.30 172.17.60.31 172.17.60.32 172.17.60.33 172.17.60.34 172.17.60.35 172.17.60.36; do
+            timeout 20 ssh -T -i "$key" -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "layersentry-deploy@$ip" 'sudo -n true && hostname' | sed "s/^/VERIFY_$ip=/"
+          done
+          echo 'LAYERENTRYOL7_DURABLE_TRUST_ALL=PASS'

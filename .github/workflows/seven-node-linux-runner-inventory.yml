@@ -126,7 +126,9 @@ jobs:
             scan="$out/hosts/${name}-hostkeys.txt"
             if timeout 10 ssh-keyscan -T 5 -t ed25519,ecdsa,rsa "$ip" >"$scan" 2>"$out/hosts/${name}-hostkeys.stderr" && test -s "$scan"; then
               cat "$scan" >>"$known"
-              ssh-keygen -lf "$scan" >"$out/hosts/${name}-fingerprints.txt" 2>&1 || true
+            awk '{print $2, $3}' "$scan" | while read -r key comment; do
+              printf '%s %s\n' "$key" "$comment" | ssh-keygen -lf -
+            done >"$out/hosts/${name}-fingerprints.txt" 2>&1 || true
               printf 'HOSTKEY_%s=CAPTURED_UNCONFIRMED\n' "$name"
             else
               printf 'HOSTKEY_%s=FAILED\n' "$name"
@@ -144,7 +146,7 @@ jobs:
               printf 'ROOT_KEY_AUTH_%s=FAIL\n' "$name"
               failures=$((failures + 1))
             fi
-          done | tee "$out/result.txt"
+          done > >(tee "$out/result.txt")
 
           rm -f "$out/probe.sh" "$known"
           printf 'REMOTE_FAILURES=%s\n' "$failures" | tee -a "$out/result.txt"
