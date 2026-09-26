@@ -44,6 +44,7 @@ const upload = multer(optsMulter)
 
 const routes = [
   '2fa',
+  'backupplans',
   'auth',
   'cluster',
   'host',
