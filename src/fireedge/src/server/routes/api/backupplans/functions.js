@@ -62,15 +62,7 @@ const list = (
       next()
     })
 }
-
-
-const proxyMutation = (
-  res,
-  next,
-  request,
-  userData,
-  oneConnection
-) => {
+const proxyMutation = (res, next, request, userData, oneConnection) => {
   platformRequest(request, userData, oneConnection)
     .then((payload = {}) => {
       res.locals.httpCode = httpResponse(ok, payload)
@@ -102,6 +94,15 @@ const proxyMutation = (
     })
 }
 
+/**
+ * Update the datastore selected by one persisted LayerSentry backup plan.
+ *
+ * @param {object} res - HTTP response
+ * @param {Function} next - Express stepper
+ * @param {object} params - plan id, version and datastore id
+ * @param {object} userData - authenticated FireEdge user data
+ * @param {Function} oneConnection - OpenNebula XML-RPC connection factory
+ */
 const updateDatastore = (
   res = {},
   next = defaultEmptyFunction,
@@ -141,6 +142,15 @@ const updateDatastore = (
   )
 }
 
+/**
+ * Clone one LayerSentry backup plan into a custom plan.
+ *
+ * @param {object} res - HTTP response
+ * @param {Function} next - Express stepper
+ * @param {object} params - clone source, name, datastore and request id
+ * @param {object} userData - authenticated FireEdge user data
+ * @param {Function} oneConnection - OpenNebula XML-RPC connection factory
+ */
 const clone = (
   res = {},
   next = defaultEmptyFunction,
