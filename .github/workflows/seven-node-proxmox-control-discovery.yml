@@ -1,0 +1,61 @@
+name: Seven Node Proxmox Control Discovery
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  discover:
+    runs-on: WIN-GK6MO7T7OPC
+    timeout-minutes: 8
+    steps:
+      - name: Discover authorized Proxmox control path
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            throw "Wrong runner: $env:RUNNER_NAME / $env:COMPUTERNAME"
+          }
+          Write-Host 'OPERATION_ID=smart-installer-proxmox-control-discovery-20260926'
+          Write-Host '--- ROUTES ---'
+          Get-NetRoute -AddressFamily IPv4 |
+            Sort-Object DestinationPrefix,RouteMetric |
+            Select-Object DestinationPrefix,NextHop,InterfaceAlias,RouteMetric |
+            Format-Table -AutoSize
+          Write-Host '--- DNS ---'
+          Get-DnsClientServerAddress -AddressFamily IPv4 |
+            Select-Object InterfaceAlias,ServerAddresses |
+            Format-Table -AutoSize
+          $names=@('LSM1','LSM2','LSM4','LSM5','LSM6','lsm1','lsm2','lsm4','lsm5','lsm6')
+          foreach($name in $names){
+            $addresses=@(Resolve-DnsName -Name $name -Type A -ErrorAction SilentlyContinue |
+              Select-Object -ExpandProperty IPAddress -Unique)
+            if($addresses.Count -eq 0){
+              Write-Host "PROXMOX_NAME name=$name state=UNRESOLVED"
+              continue
+            }
+            foreach($address in $addresses){
+              $ssh=Test-NetConnection -ComputerName $address -Port 22 -InformationLevel Quiet -WarningAction SilentlyContinue
+              $api=Test-NetConnection -ComputerName $address -Port 8006 -InformationLevel Quiet -WarningAction SilentlyContinue
+              Write-Host "PROXMOX_NAME name=$name ip=$address ssh22=$ssh api8006=$api"
+            }
+          }
+          Write-Host '--- NEIGHBORS ---'
+          Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+            Where-Object State -notin @('Unreachable','Incomplete') |
+            Sort-Object IPAddress |
+            Select-Object IPAddress,LinkLayerAddress,State,InterfaceAlias |
+            Format-Table -AutoSize
+          Write-Host '--- AUTHORIZED CONTROL MATERIAL METADATA ---'
+          $roots=@("$env:USERPROFILE\.ssh",'C:\ProgramData\LayerSentryLab','C:\LayerSentryLab')
+          foreach($root in $roots){
+            if(Test-Path $root){
+              Get-ChildItem -Path $root -Force -File -Recurse -ErrorAction SilentlyContinue |
+                Where-Object Name -Match 'proxmox|pve|known_hosts|config|\.pub$' |
+                Select-Object FullName,Length,LastWriteTime |
+                Format-Table -AutoSize
+            }
+          }
+          Write-Host 'PROXMOX_CONTROL_DISCOVERY=COMPLETE'
