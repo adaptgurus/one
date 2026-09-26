@@ -38,26 +38,6 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $legacyUri="https://raw.githubusercontent.com/$env:GITHUB_REPOSITORY/$env:GITHUB_SHA/.github/workflows/seven-node-root-baseline.yml"
-          $legacy=(Invoke-WebRequest -UseBasicParsing -Uri $legacyUri).Content
-          $m = [regex]::Match($legacy, "\$cipher='([^']+)'")
-          if(-not $m.Success){ throw 'Encrypted bootstrap payload is unavailable' }
-          $wrap='C:\ProgramData\LayerSentryLab\seven-node-bootstrap\wrap-rsa.xml'
-          if(-not (Test-Path $wrap)){ throw 'Runner-local wrapping key is unavailable' }
-          $rsa=New-Object System.Security.Cryptography.RSACryptoServiceProvider 3072
-          $rsa.FromXmlString((Get-Content $wrap -Raw))
-          $env:LS_ROOT_PASSWORD=[Text.Encoding]::UTF8.GetString($rsa.Decrypt([Convert]::FromBase64String($m.Groups[1].Value),$true))
-          $askpass=Join-Path $env:RUNNER_TEMP 'ls-current-probe-askpass.exe'
-          $src=@'
-          using System;
-          public class AskPass {
-            public static void Main() { Console.Write(Environment.GetEnvironmentVariable("LS_ROOT_PASSWORD")); }
-          }
-          '@
-          Add-Type -TypeDefinition $src -Language CSharp -OutputAssembly $askpass -OutputType ConsoleApplication
-          $env:SSH_ASKPASS=$askpass
-          $env:SSH_ASKPASS_REQUIRE='force'
-          $env:DISPLAY='LayerSentry'
           $known=Join-Path $env:RUNNER_TEMP 'known_hosts'
           New-Item -ItemType File -Force -Path $known | Out-Null
 
@@ -101,19 +81,10 @@ jobs:
           nfs_server='172.17.60.210'
           nfs_export='/Pool_NVME1/Backup_NVME_DATA/NFS_shared_Mountpoint'
           timeout 8 bash -c "exec 3<>/dev/tcp/${nfs_server}/2049"
-          nfs_probe=$(mktemp -d /tmp/layersentry-nfs-probe.XXXXXX)
-          cleanup_nfs_probe() {
-            mountpoint -q "$nfs_probe" && umount "$nfs_probe" || true
-            rmdir "$nfs_probe" 2>/dev/null || true
-          }
-          trap cleanup_nfs_probe EXIT
-          mount -t nfs4 -o ro,vers=4.2,proto=tcp,timeo=50,retrans=1,nosuid,nodev,noexec \
-            "${nfs_server}:${nfs_export}" "$nfs_probe"
-          findmnt -rn -T "$nfs_probe" -o SOURCE,FSTYPE,OPTIONS
-          test "$(stat -f -c %T "$nfs_probe")" = 'nfs'
-          umount "$nfs_probe"
-          rmdir "$nfs_probe"
-          trap - EXIT
+          command -v showmount >/dev/null 2>&1
+          nfs_exports=$(timeout 8 showmount -e "$nfs_server")
+          printf '%s\n' "$nfs_exports"
+          printf '%s\n' "$nfs_exports" | awk -v expected="$nfs_export" '$1 == expected { found=1 } END { exit !found }'
           echo 'NFS_AUTHORIZED_EXPORT_REACHABLE=yes'
           '@
           $script=$script -replace "`r`n","`n"
@@ -121,10 +92,8 @@ jobs:
           foreach($e in $hosts.GetEnumerator()){
             Write-Host "::group::$($e.Key)"
             $remote="printf '%s' '$b64' | base64 -d | bash"
-            & ssh.exe -T -o BatchMode=no -o PubkeyAuthentication=no -o PreferredAuthentications=password -o NumberOfPasswordPrompts=1 -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" "root@$($e.Value)" $remote
+            & ssh.exe -T -o BatchMode=yes -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=8 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$known" "layersentry-deploy@$($e.Value)" $remote
             if($LASTEXITCODE -ne 0){ throw "Probe failed for $($e.Key)" }
             Write-Host "::endgroup::"
           }
-          Remove-Item Env:LS_ROOT_PASSWORD -ErrorAction SilentlyContinue
-          Remove-Item $askpass -Force -ErrorAction SilentlyContinue
           Write-Host 'CURRENT_HARDWARE_PROBE=PASS'
