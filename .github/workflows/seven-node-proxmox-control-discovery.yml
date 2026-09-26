@@ -63,6 +63,30 @@ jobs:
               Write-Host "PROXMOX_NAME name=$name ip=$address ssh22=$ssh api8006=$api"
             }
           }
+          Write-Host '--- BOUNDED PROXMOX API DISCOVERY ---'
+          $candidateIps=@()
+          foreach($prefix in @('192.168.14','172.17.60')){
+            1..254 | ForEach-Object { $candidateIps += "$prefix.$_" }
+          }
+          129..158 | ForEach-Object { $candidateIps += "172.17.30.$_" }
+          $checks=@()
+          foreach($address in $candidateIps){
+            $client=[System.Net.Sockets.TcpClient]::new()
+            $checks += [pscustomobject]@{
+              Address=$address
+              Client=$client
+              Connect=$client.BeginConnect($address,8006,$null,$null)
+            }
+          }
+          foreach($check in $checks){
+            $open=$check.Connect.AsyncWaitHandle.WaitOne(800)
+            if($open -and $check.Client.Connected){
+              try { $check.Client.EndConnect($check.Connect) } catch {}
+              $ssh=Test-NetConnection -ComputerName $check.Address -Port 22 -InformationLevel Quiet -WarningAction SilentlyContinue
+              Write-Host "PROXMOX_API_CANDIDATE ip=$($check.Address) api8006=True ssh22=$ssh"
+            }
+            $check.Client.Dispose()
+          }
           Write-Host '--- NEIGHBORS ---'
           Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
             Where-Object State -notin @('Unreachable','Incomplete') |
@@ -79,4 +103,13 @@ jobs:
                 Format-Table -AutoSize
             }
           }
+          foreach($known in @("$env:USERPROFILE\.ssh\known_hosts",'C:\ProgramData\LayerSentryLab\seven-node-bootstrap\known_hosts')){
+            if(Test-Path $known){
+              Get-Content $known | Where-Object { $_ -and -not $_.StartsWith('#') } | ForEach-Object {
+                $hostField=($_ -split ' ')[0]
+                Write-Host "KNOWN_HOSTS_TARGET file=$known target=$hostField"
+              }
+            }
+          }
+          cmdkey.exe /list | Select-String -Pattern 'proxmox|pve|LSM' -CaseSensitive:$false
           Write-Host 'PROXMOX_CONTROL_DISCOVERY=COMPLETE'
