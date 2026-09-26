@@ -14,15 +14,19 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  tester-preflight:
+  source:
     runs-on: layersentry-deployer-testser
-    timeout-minutes: 15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src/fireedge
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       - name: Bind tester and source
+        working-directory: .
         shell: bash
         run: |
           set -euo pipefail
@@ -30,8 +34,31 @@ jobs:
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           echo "TESTER_HOST=$(hostname)"
           echo "SOURCE_HEAD=$(git rev-parse HEAD)"
+          node --version
+          npm --version
 
-      - name: Read-only runtime inventory
+      - name: Locked install
+        shell: bash
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Focused protection regression
+        shell: bash
+        run: node --test tests/layersentry/protection-integration.test.cjs tests/layersentry/protection.test.cjs
+
+      - name: Complete LayerSentry regression
+        shell: bash
+        run: node --test tests/layersentry/*.test.cjs
+
+      - name: FireEdge lint
+        shell: bash
+        run: npm run lint
+
+      - name: Production build
+        shell: bash
+        run: npm run build
+
+      - name: Read-only tester runtime inventory
+        working-directory: .
         shell: bash
         run: |
           set -euo pipefail
@@ -41,14 +68,8 @@ jobs:
           ss -ltnp 2>/dev/null | grep -E ':(2616|9444)\b' || true
           echo '--- control-plane process ---'
           pgrep -a -f 'layersentry-controlplane' || true
-          echo '--- FireEdge process ---'
-          pgrep -a -f 'fireedge|node.*2616' || true
           echo '--- backup datastore 100 ---'
-          if command -v onedatastore >/dev/null 2>&1; then
-            sudo -u oneadmin onedatastore show 100 2>&1 | sed -n '1,120p' || true
-          else
-            echo 'onedatastore CLI unavailable'
-          fi
+          sudo -u oneadmin onedatastore show 100 2>&1 | sed -n '1,120p' || true
           echo '--- platform health ---'
           curl -ksS --max-time 5 -o /tmp/layersentry-health -w 'HTTP=%{http_code}\n' https://127.0.0.1:9444/health/live || true
           head -c 1000 /tmp/layersentry-health 2>/dev/null || true
