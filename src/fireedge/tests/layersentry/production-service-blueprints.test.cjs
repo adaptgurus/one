@@ -1649,6 +1649,19 @@ test('private platform bridge uses immutable OpenNebula UID and keeps mutation f
       defaultsSource,
       /\[appName\]: \['layersentry_platform_gateway_token'\]/
     )
+
+    const bridgeSource = fs.readFileSync(
+      path.join(
+        fireedgeRoot,
+        'src/server/routes/api/serviceblueprints/platform.js'
+      ),
+      'utf8'
+    )
+    assert.match(bridgeSource, /layersentry_platform_client_cert_file/)
+    assert.match(bridgeSource, /layersentry_platform_client_key_file/)
+    assert.match(bridgeSource, /client certificate and key must be configured together/)
+    assert.match(bridgeSource, /minVersion: 'TLSv1\.2'/)
+    assert.match(bridgeSource, /\[GATEWAY_TENANT_HEADER\]: actor\.uid/)
   } finally {
     process.env.NODE_PATH = previousNodePath
     Module._initPaths()
