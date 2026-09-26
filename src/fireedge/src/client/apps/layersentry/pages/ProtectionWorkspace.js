@@ -199,7 +199,9 @@ const BackupPlanCatalogInventory = () => {
           <Typography
             sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
           >
-            {plan.enabled ? 'Available for assignment' : 'Disabled by administrator'}
+            {plan.enabled
+              ? 'Available for assignment'
+              : 'Disabled by administrator'}
             {plan.system ? ' · LayerSentry preset' : ' · Custom plan'}
           </Typography>
         </Box>
