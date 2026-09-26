@@ -14,7 +14,12 @@ permissions:
 
 jobs:
   qualify:
-    runs-on: [self-hosted, Linux, layersentry-deployer-testser]
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix:
+        slot: [1, 2, 3, 4, 5, 6]
+    runs-on: [self-hosted, Linux]
     timeout-minutes: 60
     defaults:
       run:
@@ -22,28 +27,41 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Bind TESTSER runner
+        id: bind
         shell: bash
         run: |
           set -euo pipefail
-          echo "RUNNER_NAME=$RUNNER_NAME"
-          test "$RUNNER_NAME" = "TESTSER-TWOSITE-ONE"
+          echo "RUNNER_NAME=$RUNNER_NAME slot=${{ matrix.slot }}"
+          if [ "$RUNNER_NAME" != "TESTSER-TWOSITE-ONE" ]; then
+            echo "execute=false" >> "$GITHUB_OUTPUT"
+            sleep 60
+            exit 0
+          fi
+          echo "execute=true" >> "$GITHUB_OUTPUT"
       - name: Runtime versions
+        if: steps.bind.outputs.execute == 'true'
         shell: bash
         run: |
           set -euo pipefail
           node --version
           npm --version
       - name: Locked install
+        if: steps.bind.outputs.execute == 'true'
         run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Backup-plan focused regression
+        if: steps.bind.outputs.execute == 'true'
         run: node --test tests/layersentry/protection-integration.test.cjs tests/layersentry/production-service-blueprints.test.cjs
       - name: Full LayerSentry regression
+        if: steps.bind.outputs.execute == 'true'
         run: node --test tests/layersentry/*.test.cjs
       - name: FireEdge lint
+        if: steps.bind.outputs.execute == 'true'
         run: npm run lint
       - name: Full FireEdge production build
+        if: steps.bind.outputs.execute == 'true'
         run: npm run build
       - name: Verify catalog bundle strings
+        if: steps.bind.outputs.execute == 'true'
         shell: bash
         run: |
           set -euo pipefail
