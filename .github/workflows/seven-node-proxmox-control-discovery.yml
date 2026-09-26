@@ -2,6 +2,11 @@ name: Seven Node Proxmox Control Discovery
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-proxmox-control-discovery.yml'
 
 permissions:
   contents: read
