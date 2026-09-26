@@ -93,7 +93,17 @@ test('backup plan FireEdge API proxies the authenticated LayerSentry control-pla
 
   assert.match(routes, /basepath = '\/v1\/backup-plans'/)
   assert.match(routes, /auth: true/)
+  assert.match(routes, /backupplans\.datastore/)
+  assert.match(routes, /backupplans\.clone/)
+  assert.match(routes, /sourceBackupDatastoreId/)
   assert.match(functions, /path: '\/v1\/protection\/backup-plans'/)
+  assert.match(functions, /path: '\/v1\/protection\/backup-plans\/datastore'/)
+  assert.match(functions, /path: '\/v1\/protection\/backup-plans\/clone'/)
+  assert.match(functions, /planId, version, sourceBackupDatastoreId/)
+  assert.match(
+    functions,
+    /sourcePlanId, name, sourceBackupDatastoreId, requestId/
+  )
   assert.match(functions, /platformRequest/)
   assert.match(apiIndex, /'backupplans'/)
   assert.match(platform, /X-LayerSentry-Tenant/)
