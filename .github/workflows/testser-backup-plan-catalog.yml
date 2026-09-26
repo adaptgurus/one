@@ -1,0 +1,52 @@
+name: TESTSER Backup Plan Catalog UI Qualification
+
+on:
+  push:
+    branches:
+      - qual/testser-backup-plan-catalog-20260926
+    paths:
+      - '.github/workflows/testser-backup-plan-catalog.yml'
+      - 'src/fireedge/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: [self-hosted, Linux, layersentry-deployer-testser]
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: src/fireedge
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bind TESTSER runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_NAME=$RUNNER_NAME"
+          test "$RUNNER_NAME" = "TESTSER-TWOSITE-ONE"
+      - name: Runtime versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --version
+          npm --version
+      - name: Locked install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Backup-plan focused regression
+        run: node --test tests/layersentry/protection-integration.test.cjs tests/layersentry/production-service-blueprints.test.cjs
+      - name: Full LayerSentry regression
+        run: node --test tests/layersentry/*.test.cjs
+      - name: FireEdge lint
+        run: npm run lint
+      - name: Full FireEdge production build
+        run: npm run build
+      - name: Verify catalog bundle strings
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R -q "Pre-baked plan templates" dist
+          grep -R -q "Native backup jobs" dist
+          echo TESTSER_BACKUP_PLAN_UI_QUALIFICATION=PASS
