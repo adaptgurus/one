@@ -40,6 +40,8 @@ import {
 } from 'client/apps/layersentry/components/Primitives'
 import { colors } from 'client/apps/layersentry/theme/tokens'
 
+const BACKUP_PLAN_CATALOG_API = '/api/v1/backup-plans'
+
 const toArray = (value) =>
   value === undefined || value === null || value === ''
     ? []
@@ -84,7 +86,129 @@ const formatBackupSize = (value) => {
   return `${Math.max(1, Math.ceil(sizeMb / 1024))} GB`
 }
 
-const BackupPlanInventory = () => {
+const formatPlanInterval = (seconds) => {
+  const value = Number(seconds)
+  if (!Number.isFinite(value) || value <= 0) return 'Schedule unavailable'
+  if (value % 86400 === 0) {
+    const days = value / 86400
+
+    return `Every ${days} day${days === 1 ? '' : 's'}`
+  }
+  if (value % 3600 === 0) {
+    const hours = value / 3600
+
+    return `Every ${hours} hour${hours === 1 ? '' : 's'}`
+  }
+
+  const minutes = Math.max(1, Math.round(value / 60))
+
+  return `Every ${minutes} minute${minutes === 1 ? '' : 's'}`
+}
+
+const BackupPlanCatalogInventory = () => {
+  const [catalog, setCatalog] = useState({
+    status: 'loading',
+    items: [],
+    error: '',
+  })
+
+  useEffect(() => {
+    let active = true
+
+    fetch(BACKUP_PLAN_CATALOG_API, {
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error('catalog unavailable')
+
+        return response.json()
+      })
+      .then((payload) => {
+        if (!active) return
+        const responseData = payload?.data ?? payload
+        const items = Array.isArray(responseData?.items)
+          ? responseData.items
+          : []
+
+        setCatalog({ status: 'ready', items, error: '' })
+      })
+      .catch(() => {
+        if (!active) return
+        setCatalog({
+          status: 'error',
+          items: [],
+          error:
+            'Could not load the LayerSentry backup-plan catalog. The control plane or backup-storage configuration may be unavailable.',
+        })
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
+
+  if (catalog.status === 'loading') return <LinearProgress />
+
+  if (catalog.status === 'error') {
+    return <Alert severity="error">{catalog.error}</Alert>
+  }
+
+  if (catalog.items.length === 0) {
+    return (
+      <Alert severity="warning">
+        No LayerSentry plan templates are configured. Configure qualified Backup
+        Storage before assigning a protection plan.
+      </Alert>
+    )
+  }
+
+  return (
+    <Box
+      data-layersentry-backup-plan-catalog
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', lg: 'repeat(3, 1fr)' },
+        gap: 1,
+      }}
+    >
+      {catalog.items.map((plan) => (
+        <Box
+          key={plan.id}
+          data-layersentry-backup-plan-template={plan.id}
+          sx={{
+            p: 1.5,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 1.5,
+          }}
+        >
+          <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+            {plan.name}
+          </Typography>
+          <Typography sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}>
+            {formatPlanInterval(plan.intervalSeconds)} · Backup Storage #
+            {plan.sourceBackupDatastoreId}
+          </Typography>
+          <Typography
+            sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
+          >
+            Retention: {plan.sourceSnapshotsPerVm} source /{' '}
+            {plan.recoverySnapshotsPerVm} recovery points ·{' '}
+            {plan.incrementMode || 'qualified backend'}
+          </Typography>
+          <Typography
+            sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
+          >
+            {plan.enabled ? 'Available for assignment' : 'Disabled by administrator'}
+            {plan.system ? ' · LayerSentry preset' : ' · Custom plan'}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  )
+}
+
+const NativeBackupJobInventory = () => {
   const query = BackupJobAPI.useGetBackupJobsQuery()
   const plans = toArray(query.data)
 
@@ -93,7 +217,7 @@ const BackupPlanInventory = () => {
   if (query.isError) {
     return (
       <Alert severity="error">
-        Could not load backup plans from the LayerSentry API.
+        Could not load native backup jobs from the OpenNebula API.
       </Alert>
     )
   }
@@ -101,7 +225,8 @@ const BackupPlanInventory = () => {
   if (plans.length === 0) {
     return (
       <Alert severity="info">
-        No backup plans are visible to this account.
+        No native backup jobs are assigned yet. The plan templates above remain
+        available for selection.
       </Alert>
     )
   }
@@ -121,7 +246,7 @@ const BackupPlanInventory = () => {
           }}
         >
           <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
-            {plan.NAME ?? `Backup plan ${plan.ID}`}
+            {plan.NAME ?? `Backup job ${plan.ID}`}
           </Typography>
           <Typography sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}>
             #{plan.ID} · {getBackupPlanState(plan)} · {countBackupVms(plan)} VM
@@ -233,7 +358,7 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
   return (
     <PageFrame
       title="Protection"
-      description="Read-only backup plans and recovery points; create, run, restore and delete remain separately qualified."
+      description="LayerSentry plan templates, native backup jobs and recovery points; execution and restore remain capability-gated."
       actions={
         isAdmin &&
         canConfigureBackupStorage &&
@@ -320,7 +445,20 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
         <Tab label="Recovery Points" />
       </Tabs>
       <Surface sx={{ mt: 2, p: 2 }}>
-        {tab === 0 ? <BackupPlanInventory /> : <RecoveryPointInventory />}
+        {tab === 0 ? (
+          <Box>
+            <Typography sx={{ mb: 1, fontSize: 12, fontWeight: 800 }}>
+              Pre-baked plan templates
+            </Typography>
+            <BackupPlanCatalogInventory />
+            <Typography sx={{ mt: 2.5, mb: 1, fontSize: 12, fontWeight: 800 }}>
+              Native backup jobs
+            </Typography>
+            <NativeBackupJobInventory />
+          </Box>
+        ) : (
+          <RecoveryPointInventory />
+        )}
       </Surface>
     </PageFrame>
   )
