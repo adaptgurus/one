@@ -1,6 +1,7 @@
 name: Seven Node KVM Network Storage Diagnostic
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - lab/seven-node-foundation-20260926
@@ -12,19 +13,14 @@ permissions:
 
 jobs:
   diagnostic:
-    strategy:
-      fail-fast: false
-      max-parallel: 2
-      matrix:
-        slot: [1, 2]
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
     timeout-minutes: 12
     steps:
       - name: Bind layersentryol7 runner
         shell: bash
         run: |
           set -euo pipefail
-          echo "RUNNER_NAME=$RUNNER_NAME SLOT=${{ matrix.slot }}"
+          echo "RUNNER_NAME=$RUNNER_NAME"
           if test "$RUNNER_NAME" != layersentryol7; then
             echo 'NON_TARGET_RUNNER_HOLD'
             echo 'LS_TARGET=false' >>"$GITHUB_ENV"
