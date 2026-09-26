@@ -20,10 +20,6 @@ jobs:
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
-        with:
-          persist-credentials: false
-
       - name: Bind exact target runner
         shell: powershell
         run: |
@@ -42,7 +38,8 @@ jobs:
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          $legacy = Get-Content '.github/workflows/seven-node-root-baseline.yml' -Raw
+          $legacyUri="https://raw.githubusercontent.com/$env:GITHUB_REPOSITORY/$env:GITHUB_SHA/.github/workflows/seven-node-root-baseline.yml"
+          $legacy=(Invoke-WebRequest -UseBasicParsing -Uri $legacyUri).Content
           $m = [regex]::Match($legacy, "\$cipher='([^']+)'")
           if(-not $m.Success){ throw 'Encrypted bootstrap payload is unavailable' }
           $wrap='C:\ProgramData\LayerSentryLab\seven-node-bootstrap\wrap-rsa.xml'
