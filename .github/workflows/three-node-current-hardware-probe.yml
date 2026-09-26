@@ -70,10 +70,11 @@ jobs:
             layersentry3='172.17.60.32'
           }
           $script=@'
-          set -u
+          set -euo pipefail
           printf 'OBSERVED_AT='; date -u +%FT%TZ
           printf 'HOST='; hostname
           . /etc/os-release; printf 'OS=%s %s\n' "$NAME" "$VERSION_ID"
+          printf 'KERNEL='; uname -r
           printf 'CPU_LOGICAL='; nproc
           printf 'MEM_BYTES='; awk '/MemTotal/ {printf "%.0f\n",$2*1024}' /proc/meminfo
           printf 'KVM_DEVICE='; test -e /dev/kvm && echo yes || echo no
@@ -97,6 +98,26 @@ jobs:
           echo '---NETWORK---'
           ip -br link
           ip -br addr
+          echo '---ROUTES---'
+          ip -4 route show table main
+          echo '---AUTHORIZED-NFS---'
+          nfs_server='172.17.60.210'
+          nfs_export='/Pool_NVME1/Backup_NVME_DATA/NFS_shared_Mountpoint'
+          timeout 8 bash -c "exec 3<>/dev/tcp/${nfs_server}/2049"
+          nfs_probe=$(mktemp -d /tmp/layersentry-nfs-probe.XXXXXX)
+          cleanup_nfs_probe() {
+            mountpoint -q "$nfs_probe" && umount "$nfs_probe" || true
+            rmdir "$nfs_probe" 2>/dev/null || true
+          }
+          trap cleanup_nfs_probe EXIT
+          mount -t nfs4 -o ro,vers=4.2,proto=tcp,timeo=50,retrans=1,nosuid,nodev,noexec \
+            "${nfs_server}:${nfs_export}" "$nfs_probe"
+          findmnt -rn -T "$nfs_probe" -o SOURCE,FSTYPE,OPTIONS
+          test "$(stat -f -c %T "$nfs_probe")" = 'nfs'
+          umount "$nfs_probe"
+          rmdir "$nfs_probe"
+          trap - EXIT
+          echo 'NFS_AUTHORIZED_EXPORT_REACHABLE=yes'
           '@
           $script=$script -replace "`r`n","`n"
           $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
