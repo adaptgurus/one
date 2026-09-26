@@ -1,0 +1,47 @@
+name: TESTSER Backup Plan Datastore Clone Qualification
+
+on:
+  push:
+    branches:
+      - qual/testser-backup-plan-datastore-clone-20260926
+    paths:
+      - '.github/workflows/testser-backup-plan-datastore-clone.yml'
+      - 'src/fireedge/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: [self-hosted, Linux, layersentry-deployer-testser]
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: src/fireedge
+    steps:
+      - uses: actions/checkout@v6
+      - name: Bind exact TESTSER runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_NAME=$RUNNER_NAME"
+          test "$RUNNER_NAME" = "TESTSER-TWOSITE-ONE"
+      - name: Locked install
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Focused protection regression
+        run: node --test tests/layersentry/protection-integration.test.cjs
+      - name: Full LayerSentry regression
+        run: node --test tests/layersentry/*.test.cjs
+      - name: FireEdge lint
+        run: npm run lint
+      - name: Full FireEdge production build
+        run: npm run build
+      - name: Assert datastore and clone UI in build
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -R -q "Save datastore" dist
+          grep -R -q "Clone plan" dist
+          grep -R -q "Create clone" dist
+          echo TESTSER_BACKUP_PLAN_DATASTORE_CLONE_UI=PASS
