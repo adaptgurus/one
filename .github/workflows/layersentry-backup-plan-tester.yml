@@ -1,0 +1,55 @@
+name: LayerSentry Backup Plan Tester Qualification
+
+on:
+  push:
+    branches:
+      - fix/layersentry-backup-plan-catalog-20260926
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-backup-plan-tester-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tester-preflight:
+    runs-on: layersentry-deployer-testser
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Bind tester and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(hostname)" = "testser"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          echo "TESTER_HOST=$(hostname)"
+          echo "SOURCE_HEAD=$(git rev-parse HEAD)"
+
+      - name: Read-only runtime inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '--- LayerSentry/OpenNebula services ---'
+          systemctl list-units --type=service --all --no-pager | grep -Ei 'layersentry|opennebula|fireedge' || true
+          echo '--- listeners ---'
+          ss -ltnp 2>/dev/null | grep -E ':(2616|9444)\b' || true
+          echo '--- control-plane process ---'
+          pgrep -a -f 'layersentry-controlplane' || true
+          echo '--- FireEdge process ---'
+          pgrep -a -f 'fireedge|node.*2616' || true
+          echo '--- backup datastore 100 ---'
+          if command -v onedatastore >/dev/null 2>&1; then
+            sudo -u oneadmin onedatastore show 100 2>&1 | sed -n '1,120p' || true
+          else
+            echo 'onedatastore CLI unavailable'
+          fi
+          echo '--- platform health ---'
+          curl -ksS --max-time 5 -o /tmp/layersentry-health -w 'HTTP=%{http_code}\n' https://127.0.0.1:9444/health/live || true
+          head -c 1000 /tmp/layersentry-health 2>/dev/null || true
+          echo
