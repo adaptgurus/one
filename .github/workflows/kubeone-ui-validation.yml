@@ -1,0 +1,51 @@
+name: KubeOne UI Validation
+
+on:
+  push:
+    branches:
+      - feat/kubeone-applications-ui-20260925
+    paths:
+      - 'src/fireedge/src/client/apps/layersentry/pages/KubernetesWorkspace.js'
+      - 'src/fireedge/src/modules/features/OneApi/kubeOnePortal.js'
+      - 'src/fireedge/src/server/routes/api/kubeoneportal/**'
+      - 'src/fireedge/tests/layersentry/kubeone-portal.test.cjs'
+      - '.github/workflows/kubeone-ui-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+      - name: Install locked dependencies
+        working-directory: src/fireedge
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: KubeOne portal regression
+        working-directory: src/fireedge
+        run: node --test tests/layersentry/kubeone-portal.test.cjs
+      - name: Focused lint
+        working-directory: src/fireedge
+        run: |
+          npx eslint \
+            src/client/apps/layersentry/pages/KubernetesWorkspace.js \
+            src/modules/features/OneApi/kubeOnePortal.js \
+            src/server/routes/api/kubeoneportal/routes.js \
+            src/server/routes/api/kubeoneportal/functions.js \
+            src/server/routes/api/kubeoneportal/index.js
+      - name: Production build
+        working-directory: src/fireedge
+        run: |
+          npm run build
+          test -s dist/index.js
+          test -s dist/client/bundle.layersentry.js
+          test "$(find dist/modules -type f -name remoteEntry.js | wc -l)" -eq 10
+          sha256sum dist/index.js dist/client/bundle.layersentry.js
