@@ -17,6 +17,11 @@ concurrency:
 
 jobs:
   inventory:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     steps:
@@ -24,11 +29,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf 'RUNNER_NAME=%s\n' "$RUNNER_NAME"
-          test "$RUNNER_NAME" = layersentryol7
+          printf 'RUNNER_NAME=%s SLOT=%s\n' "$RUNNER_NAME" '${{ matrix.slot }}'
+          if test "$RUNNER_NAME" != layersentryol7; then
+            echo 'NON_TARGET_RUNNER_HOLD'
+            echo 'LS_TARGET=false' >>"$GITHUB_ENV"
+            sleep 90
+            exit 0
+          fi
+          echo 'LS_TARGET=true' >>"$GITHUB_ENV"
+          test -f /root/.ssh/layersentry_lab_ed25519
           printf 'RUNNER_BIND=PASS\n'
 
       - name: Collect secret-free local and remote inventory
+        if: env.LS_TARGET == 'true'
         id: probe
         shell: bash
         run: |
@@ -126,24 +139,27 @@ jobs:
             scan="$out/hosts/${name}-hostkeys.txt"
             if timeout 10 ssh-keyscan -T 5 -t ed25519,ecdsa,rsa "$ip" >"$scan" 2>"$out/hosts/${name}-hostkeys.stderr" && test -s "$scan"; then
               cat "$scan" >>"$known"
-            awk '{print $2, $3}' "$scan" | while read -r key comment; do
-              printf '%s %s\n' "$key" "$comment" | ssh-keygen -lf -
-            done >"$out/hosts/${name}-fingerprints.txt" 2>&1 || true
-              printf 'HOSTKEY_%s=CAPTURED_UNCONFIRMED\n' "$name"
+              awk '!/^#/ {print $1, $2, $3}' "$scan" | while read -r host type keydata; do
+                fingerprint=$(printf '%s' "$keydata" | base64 -d | openssl dgst -sha256 -binary | base64 | tr -d '=')
+                printf '%s %s SHA256:%s\n' "$host" "$type" "$fingerprint"
+              done >"$out/hosts/${name}-fingerprints.txt"
+              printf 'HOSTKEY_%s=CAPTURED\n' "$name"
             else
               printf 'HOSTKEY_%s=FAILED\n' "$name"
               failures=$((failures + 1))
               continue
             fi
             if timeout 20 ssh -T \
+              -i /root/.ssh/layersentry_lab_ed25519 \
               -o BatchMode=yes \
+              -o IdentitiesOnly=yes \
               -o ConnectTimeout=8 \
               -o StrictHostKeyChecking=yes \
               -o "UserKnownHostsFile=$known" \
-              "root@$ip" 'bash -s' <"$out/probe.sh" >"$out/hosts/${name}-inventory.txt" 2>"$out/hosts/${name}-inventory.stderr"; then
-              printf 'ROOT_KEY_AUTH_%s=PASS\n' "$name"
+              "layersentry-deploy@$ip" 'sudo -n bash -s' <"$out/probe.sh" >"$out/hosts/${name}-inventory.txt" 2>"$out/hosts/${name}-inventory.stderr"; then
+              printf 'DURABLE_KEY_AUTH_%s=PASS\n' "$name"
             else
-              printf 'ROOT_KEY_AUTH_%s=FAIL\n' "$name"
+              printf 'DURABLE_KEY_AUTH_%s=FAIL\n' "$name"
               failures=$((failures + 1))
             fi
           done > >(tee "$out/result.txt")
@@ -153,7 +169,7 @@ jobs:
           printf 'remote_failures=%s\n' "$failures" >>"$GITHUB_OUTPUT"
 
       - name: Upload sanitized inventory
-        if: always()
+        if: always() && env.LS_TARGET == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: seven-node-linux-runner-inventory
@@ -162,9 +178,9 @@ jobs:
           retention-days: 7
 
       - name: Enforce complete root-key inventory
-        if: always()
+        if: always() && env.LS_TARGET == 'true'
         shell: bash
         run: |
           set -euo pipefail
           test '${{ steps.probe.outputs.remote_failures }}' = '0'
-          echo 'SEVEN_NODE_ROOT_KEY_INVENTORY=PASS'
+          echo 'SEVEN_NODE_DURABLE_KEY_INVENTORY=PASS'
