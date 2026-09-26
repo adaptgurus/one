@@ -155,7 +155,10 @@ const BackupPlanCatalogInventory = ({
         const next = { ...current }
         items.forEach((plan) => {
           if (next[plan.id] === undefined) {
-            next[plan.id] = String(plan.sourceBackupDatastoreId)
+            next[plan.id] =
+              Number(plan.sourceBackupDatastoreId) >= 0
+                ? String(plan.sourceBackupDatastoreId)
+                : ''
           }
         })
 
@@ -235,7 +238,10 @@ const BackupPlanCatalogInventory = ({
         open: true,
         name: `${plan.name} Copy`,
         sourceBackupDatastoreId: String(
-          datastoreDrafts[plan.id] ?? plan.sourceBackupDatastoreId
+          datastoreDrafts[plan.id] ??
+            (Number(plan.sourceBackupDatastoreId) >= 0
+              ? plan.sourceBackupDatastoreId
+              : '')
         ),
       },
     }))
@@ -334,7 +340,10 @@ const BackupPlanCatalogInventory = ({
       >
         {catalog.items.map((plan) => {
           const selectedDatastore = String(
-            datastoreDrafts[plan.id] ?? plan.sourceBackupDatastoreId
+            datastoreDrafts[plan.id] ??
+              (Number(plan.sourceBackupDatastoreId) >= 0
+                ? plan.sourceBackupDatastoreId
+                : '')
           )
           const currentDatastoreVisible = backupDatastores.some(
             (datastore) =>
@@ -360,8 +369,10 @@ const BackupPlanCatalogInventory = ({
               <Typography
                 sx={{ mt: 0.35, fontSize: 11, color: colors.text.muted }}
               >
-                {formatPlanInterval(plan.intervalSeconds)} · Backup Storage #
-                {plan.sourceBackupDatastoreId}
+                {formatPlanInterval(plan.intervalSeconds)} ·{' '}
+                {Number(plan.sourceBackupDatastoreId) >= 0
+                  ? `Backup Storage #${plan.sourceBackupDatastoreId}`
+                  : 'Backup Storage not assigned'}
               </Typography>
               <Typography
                 sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
@@ -399,14 +410,18 @@ const BackupPlanCatalogInventory = ({
                     }
                     sx={{ mt: 1.25 }}
                   >
-                    {!currentDatastoreVisible && (
-                      <MenuItem
-                        value={String(plan.sourceBackupDatastoreId)}
-                        disabled
-                      >
-                        Current #{plan.sourceBackupDatastoreId} (not available)
-                      </MenuItem>
-                    )}
+                    <MenuItem value="" disabled>
+                      Choose Backup Storage
+                    </MenuItem>
+                    {!currentDatastoreVisible &&
+                      Number(plan.sourceBackupDatastoreId) >= 0 && (
+                        <MenuItem
+                          value={String(plan.sourceBackupDatastoreId)}
+                          disabled
+                        >
+                          Current #{plan.sourceBackupDatastoreId} (not available)
+                        </MenuItem>
+                      )}
                     {backupDatastores.map((datastore) => (
                       <MenuItem key={datastore.ID} value={String(datastore.ID)}>
                         {datastore.NAME ?? `Backup Storage ${datastore.ID}`} (#
@@ -428,6 +443,7 @@ const BackupPlanCatalogInventory = ({
                       disabled={
                         busyDatastore ||
                         backupDatastores.length === 0 ||
+                        selectedDatastore === '' ||
                         selectedDatastore ===
                           String(plan.sourceBackupDatastoreId)
                       }
@@ -472,7 +488,9 @@ const BackupPlanCatalogInventory = ({
                         label="Clone Backup Storage"
                         value={String(
                           cloneDraft.sourceBackupDatastoreId ??
-                            plan.sourceBackupDatastoreId
+                            (Number(plan.sourceBackupDatastoreId) >= 0
+                              ? plan.sourceBackupDatastoreId
+                              : '')
                         )}
                         onChange={(event) =>
                           updateCloneDraft(plan.id, {
@@ -481,6 +499,9 @@ const BackupPlanCatalogInventory = ({
                         }
                         sx={{ mt: 1 }}
                       >
+                        <MenuItem value="" disabled>
+                          Choose Backup Storage
+                        </MenuItem>
                         {backupDatastores.map((datastore) => (
                           <MenuItem
                             key={datastore.ID}
