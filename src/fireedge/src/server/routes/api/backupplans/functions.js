@@ -17,6 +17,7 @@
 const { defaults, httpCodes } = require('server/utils/constants')
 const { httpResponse } = require('server/utils/server')
 const {
+  getProtectionConfig,
   platformRequest,
 } = require('server/routes/api/serviceblueprints/platform')
 
@@ -44,7 +45,8 @@ const list = (
       path: '/v1/protection/backup-plans',
     },
     userData,
-    oneConnection
+    oneConnection,
+    getProtectionConfig()
   )
     .then((payload = {}) => {
       res.locals.httpCode = httpResponse(ok, payload)
@@ -63,7 +65,12 @@ const list = (
     })
 }
 const proxyMutation = (res, next, request, userData, oneConnection) => {
-  platformRequest(request, userData, oneConnection)
+  platformRequest(
+    request,
+    userData,
+    oneConnection,
+    getProtectionConfig()
+  )
     .then((payload = {}) => {
       res.locals.httpCode = httpResponse(ok, payload)
       next()
