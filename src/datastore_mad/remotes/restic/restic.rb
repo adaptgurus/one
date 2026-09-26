@@ -110,8 +110,35 @@ class Restic
 
         @restic_bin = RESTIC_BIN_PATHS[@host_type]
 
-        passwd_s = @doc.elements["#{@prefix}TEMPLATE/RESTIC_PASSWORD"]
-        @passwd  = passwd_s.text.sub(/\A['"](.*)['"]\z/, '\1')
+        passwd_s      = @doc.elements["#{@prefix}TEMPLATE/RESTIC_PASSWORD"]
+        passwd_file_s = @doc.elements["#{@prefix}TEMPLATE/RESTIC_PASSWORD_FILE"]
+
+        if passwd_s && passwd_file_s
+            raise StandardError, 'Use RESTIC_PASSWORD or RESTIC_PASSWORD_FILE, not both'
+        end
+
+        if passwd_file_s
+            passwd_file = passwd_file_s.text.to_s.strip
+
+            raise StandardError, 'RESTIC_PASSWORD_FILE must be an absolute path' \
+                unless Pathname.new(passwd_file).absolute?
+            raise StandardError, 'RESTIC_PASSWORD_FILE does not exist' unless File.file?(passwd_file)
+
+            mode = File.stat(passwd_file).mode & 0o777
+
+            raise StandardError, 'RESTIC_PASSWORD_FILE must not be group/world accessible' \
+                unless (mode & 0o077).zero?
+
+            @passwd = File.read(passwd_file).strip
+
+            raise StandardError, 'RESTIC_PASSWORD_FILE is empty' if @passwd.empty?
+        elsif passwd_s
+            @passwd = passwd_s.text.to_s.sub(/\A['"](.*)['"]\z/, '\\1')
+
+            raise StandardError, 'RESTIC_PASSWORD is empty' if @passwd.empty?
+        else
+            raise StandardError, 'RESTIC_PASSWORD or RESTIC_PASSWORD_FILE is required'
+        end
 
         @bwlimit = safe_get("#{@prefix}TEMPLATE/RESTIC_BWLIMIT", -1)
         @maxproc = Integer(safe_get("#{@prefix}TEMPLATE/RESTIC_MAXPROC", -1))

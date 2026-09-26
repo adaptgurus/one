@@ -66,3 +66,51 @@ test('cloud protection copy explicitly says backup and DR remain request-based',
   assert.match(source, /Backup and DR are request-based/i)
   assert.match(source, /protection backend validates/i)
 })
+
+
+test('backup plan page consumes the LayerSentry catalog and keeps native jobs distinct', () => {
+  const page = text('src/client/apps/layersentry/pages/ProtectionWorkspace.js')
+  assert.match(page, /BACKUP_PLAN_CATALOG_API = '\/api\/v1\/backup-plans'/)
+  assert.match(page, /fetch\(BACKUP_PLAN_CATALOG_API/)
+  assert.match(page, /data-layersentry-backup-plan-catalog/)
+  assert.match(page, /Pre-baked plan templates/)
+  assert.match(page, /Native backup jobs/)
+  assert.match(page, /LayerSentry preset/)
+  assert.match(page, /data-layersentry-backup-datastore-select/)
+  assert.match(page, /Save datastore/)
+  assert.match(page, /data-layersentry-clone-backup-plan/)
+  assert.match(page, /Clone plan/)
+  assert.match(page, /Create clone/)
+  assert.match(page, /useGetBackupJobsQuery\(\)/)
+  assert.doesNotMatch(page, /No backup plans are visible to this account/)
+})
+
+test('backup plan FireEdge API proxies the authenticated LayerSentry control-plane catalog', () => {
+  const routes = text('src/server/routes/api/backupplans/routes.js')
+  const functions = text('src/server/routes/api/backupplans/functions.js')
+  const apiIndex = text('src/server/routes/api/index.js')
+  const platform = text('src/server/routes/api/serviceblueprints/platform.js')
+
+  assert.match(routes, /basepath = '\/v1\/backup-plans'/)
+  assert.match(routes, /auth: true/)
+  assert.match(routes, /backupplans\.datastore/)
+  assert.match(routes, /backupplans\.clone/)
+  assert.match(routes, /sourceBackupDatastoreId/)
+  assert.match(functions, /path: '\/v1\/protection\/backup-plans'/)
+  assert.match(functions, /path: '\/v1\/protection\/backup-plans\/datastore'/)
+  assert.match(functions, /path: '\/v1\/protection\/backup-plans\/clone'/)
+  assert.match(functions, /planId, version, sourceBackupDatastoreId/)
+  assert.match(
+    functions,
+    /sourcePlanId, name, sourceBackupDatastoreId, requestId/
+  )
+  assert.match(functions, /getProtectionConfig/)
+  assert.match(functions, /platformRequest/)
+  assert.match(apiIndex, /'backupplans'/)
+  assert.match(platform, /X-LayerSentry-Tenant/)
+  assert.match(platform, /\[GATEWAY_TENANT_HEADER\]: actor\.uid/)
+  assert.match(platform, /layersentry_protection_url/)
+  assert.match(platform, /layersentry_protection_gateway_token_file/)
+  assert.match(platform, /const getProtectionConfig =/)
+  assert.match(platform, /if \(!hasDedicatedProtection\) return getPlatformConfig\(\)/)
+})
