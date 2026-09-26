@@ -21,11 +21,8 @@ const {
   clone,
 } = require('server/routes/api/backupplans/functions')
 
-const {
-  BACKUP_PLANS_LIST,
-  BACKUP_PLANS_DATASTORE,
-  BACKUP_PLANS_CLONE,
-} = Actions
+const { BACKUP_PLANS_LIST, BACKUP_PLANS_DATASTORE, BACKUP_PLANS_CLONE } =
+  Actions
 
 module.exports = [
   {
