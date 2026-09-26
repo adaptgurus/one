@@ -84,6 +84,76 @@ const formatBackupSize = (value) => {
   return `${Math.max(1, Math.ceil(sizeMb / 1024))} GB`
 }
 
+const PREBAKED_BACKUP_PLANS = Object.freeze([
+  {
+    id: 'essential',
+    name: 'Essential',
+    description: 'Baseline scheduled protection with short retention.',
+  },
+  {
+    id: 'business',
+    name: 'Business',
+    description: 'More frequent protection with longer retention.',
+  },
+  {
+    id: 'critical',
+    name: 'Critical',
+    description: 'High-frequency protection with stronger retention.',
+  },
+  {
+    id: 'custom',
+    name: 'Custom',
+    description: 'Administrator-defined schedule, retention and destination.',
+  },
+])
+
+const PreBakedBackupPlans = ({ hasBackupStorage }) => (
+  <Box data-layersentry-prebaked-backup-plans>
+    <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+      Protection plan templates
+    </Typography>
+    <Typography sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}>
+      Built-in LayerSentry templates are always visible. Assignment remains
+      capability-gated and requires qualified backup storage.
+    </Typography>
+    <Box
+      sx={{
+        display: 'grid',
+        gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)' },
+        gap: 1,
+        mt: 1.25,
+      }}
+    >
+      {PREBAKED_BACKUP_PLANS.map((plan) => (
+        <Box
+          key={plan.id}
+          sx={{
+            p: 1.5,
+            border: `1px solid ${colors.border}`,
+            borderRadius: 1.5,
+          }}
+        >
+          <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+            {plan.name}
+          </Typography>
+          <Typography sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}>
+            {plan.description}
+          </Typography>
+          <Typography sx={{ mt: 0.6, fontSize: 11, color: colors.text.muted }}>
+            {hasBackupStorage
+              ? 'Available for qualified assignment'
+              : 'Unavailable until Backup Storage is configured'}
+          </Typography>
+        </Box>
+      ))}
+    </Box>
+  </Box>
+)
+
+PreBakedBackupPlans.propTypes = {
+  hasBackupStorage: PropTypes.bool.isRequired,
+}
+
 const BackupPlanInventory = () => {
   const query = BackupJobAPI.useGetBackupJobsQuery()
   const plans = toArray(query.data)
@@ -101,7 +171,7 @@ const BackupPlanInventory = () => {
   if (plans.length === 0) {
     return (
       <Alert severity="info">
-        No backup plans are visible to this account.
+        No active backup jobs are visible to this account.
       </Alert>
     )
   }
@@ -320,7 +390,24 @@ const ProtectionWorkspace = ({ endpoints, initialTab = 0 }) => {
         <Tab label="Recovery Points" />
       </Tabs>
       <Surface sx={{ mt: 2, p: 2 }}>
-        {tab === 0 ? <BackupPlanInventory /> : <RecoveryPointInventory />}
+        {tab === 0 ? (
+          <>
+            <PreBakedBackupPlans hasBackupStorage={backupDatastores.length > 0} />
+            <Box sx={{ mt: 2 }}>
+              <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
+                Active backup jobs
+              </Typography>
+              <Typography
+                sx={{ mt: 0.35, mb: 1, fontSize: 11, color: colors.text.secondary }}
+              >
+                Native provider jobs created from assigned protection policies.
+              </Typography>
+              <BackupPlanInventory />
+            </Box>
+          </>
+        ) : (
+          <RecoveryPointInventory />
+        )}
       </Surface>
     </PageFrame>
   )
