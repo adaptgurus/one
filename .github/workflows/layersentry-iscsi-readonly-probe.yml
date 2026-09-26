@@ -1,0 +1,85 @@
+name: LayerSentry iSCSI Read-Only Probe
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/layersentry-iscsi-readonly-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Probe exact hosts and portals without iSCSI login
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            Write-Host 'NON_TARGET_HOLD'
+            Start-Sleep -Seconds 90
+            exit 0
+          }
+
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $key=Join-Path $dir 'deploy_ed25519'
+          $known=Join-Path $dir 'known_hosts'
+          if(-not (Test-Path $key)){ throw 'Deployment SSH key is unavailable' }
+          if(-not (Test-Path $known)){ throw 'Pinned SSH known_hosts is unavailable' }
+
+          $script=@'
+          set -u
+          printf 'OBSERVED_AT='; date -u +%FT%TZ
+          printf 'HOST='; hostname
+          printf 'INITIATOR='; sed -n 's/^InitiatorName=//p' /etc/iscsi/initiatorname.iscsi 2>/dev/null || true
+          for pkg in iscsi-initiator-utils device-mapper-multipath; do
+            rpm -q "$pkg" 2>/dev/null || echo "PACKAGE_MISSING=$pkg"
+          done
+          for svc in iscsid iscsi multipathd; do
+            printf 'SERVICE=%s ENABLED=' "$svc"; systemctl is-enabled "$svc" 2>/dev/null || true
+            printf 'SERVICE=%s ACTIVE=' "$svc"; systemctl is-active "$svc" 2>/dev/null || true
+          done
+          for portal in 172.17.60.213 172.17.60.214; do
+            if timeout 5 bash -c "exec 3<>/dev/tcp/${portal}/3260"; then
+              echo "PORTAL=${portal}:3260 TCP=PASS"
+            else
+              echo "PORTAL=${portal}:3260 TCP=FAIL"
+            fi
+          done
+          echo '---EXISTING-DISCOVERY-DB---'
+          iscsiadm -m discoverydb 2>&1 || true
+          echo '---EXISTING-NODES---'
+          iscsiadm -m node 2>&1 || true
+          echo '---EXISTING-SESSIONS---'
+          iscsiadm -m session 2>&1 || true
+          echo '---MULTIPATH---'
+          multipath -ll 2>&1 || true
+          echo 'ISCSI_READONLY_PROBE=PASS'
+          '@
+          $script=$script -replace "`r`n","`n"
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          $failed=@()
+          foreach($hostIp in @('172.17.60.31','172.17.60.32')){
+            Write-Host "::group::$hostIp"
+            $remote="printf '%s' '$b64' | base64 -d | sudo -n bash"
+            & ssh.exe -T -i $key -o BatchMode=yes -o PubkeyAuthentication=yes -o PreferredAuthentications=publickey -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "layersentry-deploy@$hostIp" $remote
+            if($LASTEXITCODE -ne 0){
+              Write-Host "HOST_PROBE=$hostIp`:FAILED_RC_$LASTEXITCODE"
+              $failed += $hostIp
+            } else {
+              Write-Host "HOST_PROBE=$hostIp`:PASS"
+            }
+            Write-Host '::endgroup::'
+          }
+          if($failed.Count -gt 0){ throw ('Host probes failed: ' + ($failed -join ',')) }
+          Write-Host 'ISCSI_DUAL_HOST_READONLY_PROBE=PASS'
