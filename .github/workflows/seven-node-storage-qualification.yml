@@ -1,0 +1,136 @@
+name: Seven Node Storage Qualification
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-storage-qualification.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seven-node-storage-qualification
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 30
+    steps:
+      - name: Bind exact runner and durable trust
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = layersentryol7
+          test -f /root/.ssh/layersentry_lab_ed25519
+          echo 'RUNNER_BIND=PASS'
+
+      - name: Prepare NFS and perform bounded read-only iSCSI qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/seven-node-storage-qualification"
+          install -d -m 700 "$out/hosts"
+          key=/root/.ssh/layersentry_lab_ed25519
+          known="$out/known_hosts"
+          : >"$known"
+          for ip in 172.17.60.30 172.17.60.31 172.17.60.32 172.17.60.33 172.17.60.34 172.17.60.35; do
+            timeout 10 ssh-keyscan -T 5 -t ed25519,ecdsa,rsa "$ip" >>"$known" 2>/dev/null
+          done
+          chmod 600 "$known"
+
+          cat >"$out/qualify.sh" <<'REMOTE'
+          set -euo pipefail
+          echo "HOST=$(hostname)"
+          dnf -y install nfs-utils iscsi-initiator-utils device-mapper-multipath >/tmp/layersentry-storage-packages.log
+          echo STORAGE_PACKAGES=PASS
+          systemctl enable --now iscsid
+          if test ! -f /etc/multipath.conf; then
+            mpathconf --enable
+          fi
+          systemctl enable --now multipathd
+          echo STORAGE_SERVICES=PASS
+
+          nfs_server=172.17.60.210
+          nfs_export=/Pool_NVME1/Backup_NVME_DATA/NFS_shared_Mountpoint
+          mountpoint=/mnt/layersentry-authorized-nfs-readonly
+          install -d -m 700 "$mountpoint"
+          if findmnt -rn "$mountpoint" >/dev/null 2>&1; then umount "$mountpoint"; fi
+          timeout 20 mount -t nfs -o ro,hard,tcp,vers=4.2,timeo=600,retrans=2 "$nfs_server:$nfs_export" "$mountpoint"
+          findmnt -n -o SOURCE,FSTYPE,OPTIONS,TARGET "$mountpoint"
+          df -B1 --output=source,fstype,size,used,avail,pcent,target "$mountpoint"
+          test "$(findmnt -n -o SOURCE "$mountpoint")" = "$nfs_server:$nfs_export"
+          touch_rc=0
+          touch "$mountpoint/.layersentry-readonly-negative-probe" 2>/dev/null || touch_rc=$?
+          test "$touch_rc" -ne 0
+          umount "$mountpoint"
+          rmdir "$mountpoint"
+          echo NFS_V42_READONLY_QUALIFICATION=PASS
+
+          portal1=172.17.60.213:3260
+          portal2=172.17.60.214:3260
+          p1=/tmp/layersentry-iscsi-p1.txt
+          p2=/tmp/layersentry-iscsi-p2.txt
+          timeout 20 iscsiadm -m discovery -t sendtargets -p "$portal1" | sort -u | tee "$p1"
+          timeout 20 iscsiadm -m discovery -t sendtargets -p "$portal2" | sort -u | tee "$p2"
+          awk '{print $2}' "$p1" | sort -u >/tmp/layersentry-iscsi-p1-iqn.txt
+          awk '{print $2}' "$p2" | sort -u >/tmp/layersentry-iscsi-p2-iqn.txt
+          comm -12 /tmp/layersentry-iscsi-p1-iqn.txt /tmp/layersentry-iscsi-p2-iqn.txt >/tmp/layersentry-iscsi-common-iqn.txt
+          common_count=$(wc -l </tmp/layersentry-iscsi-common-iqn.txt)
+          echo "ISCSI_COMMON_TARGET_COUNT=$common_count"
+          cat /tmp/layersentry-iscsi-common-iqn.txt
+          test "$common_count" -eq 1
+          iqn=$(cat /tmp/layersentry-iscsi-common-iqn.txt)
+          echo "ISCSI_QUALIFIED_TARGET_IQN=$iqn"
+          iscsiadm -m node -T "$iqn" -p "$portal1" --login || iscsiadm -m session | grep -Fq "$portal1"
+          iscsiadm -m node -T "$iqn" -p "$portal2" --login || iscsiadm -m session | grep -Fq "$portal2"
+          udevadm settle
+          multipath -r
+          sleep 3
+          echo '--- ISCSI_SESSIONS ---'
+          iscsiadm -m session -P 3
+          echo '--- ISCSI_BY_PATH ---'
+          find /dev/disk/by-path -maxdepth 1 -type l -name '*iscsi*' -printf '%f -> %l\n' | sort
+          echo '--- MULTIPATH ---'
+          multipath -ll
+          echo '--- BLOCK_IDENTITY ---'
+          lsblk -o NAME,KNAME,TYPE,SIZE,FSTYPE,WWN,SERIAL,HCTL,MOUNTPOINTS
+          echo '--- EXISTING_LVM_READBACK ---'
+          pvs --readonly --noheadings -o pv_name,pv_uuid,vg_name 2>&1 || true
+          vgs --readonly --noheadings -o vg_name,vg_uuid,pv_count 2>&1 || true
+          echo '--- NONDESTRUCTIVE_SIGNATURES ---'
+          for dev in $(find /dev/disk/by-path -maxdepth 1 -type l -name '*iscsi*' -printf '%p\n' | sort -u); do
+            resolved=$(readlink -f "$dev")
+            echo "ISCSI_PATH=$dev DEVICE=$resolved"
+            wipefs -n "$resolved" 2>&1 || true
+            blkid -p "$resolved" 2>&1 || true
+          done
+          echo ISCSI_READONLY_QUALIFICATION=PASS
+          REMOTE
+          chmod 700 "$out/qualify.sh"
+
+          failures=0
+          for entry in layersentry1=172.17.60.30 layersentry2=172.17.60.31 layersentry3=172.17.60.32 layersentry4=172.17.60.33 layersentry5=172.17.60.34 layersentry6=172.17.60.35; do
+            name=${entry%%=*}
+            ip=${entry#*=}
+            if timeout 240 ssh -T -i "$key" -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "layersentry-deploy@$ip" 'sudo -n bash -s' <"$out/qualify.sh" >"$out/hosts/$name.txt" 2>"$out/hosts/$name.stderr"; then
+              echo "STORAGE_QUALIFICATION_$name=PASS"
+            else
+              echo "STORAGE_QUALIFICATION_$name=FAIL"
+              failures=$((failures + 1))
+            fi
+          done > >(tee "$out/result.txt")
+          rm -f "$out/qualify.sh" "$known"
+          echo "STORAGE_QUALIFICATION_FAILURES=$failures" | tee -a "$out/result.txt"
+          test "$failures" -eq 0
+
+      - name: Upload sanitized storage evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: seven-node-storage-qualification
+          path: ${{ runner.temp }}/seven-node-storage-qualification
+          if-no-files-found: error
+          retention-days: 7
