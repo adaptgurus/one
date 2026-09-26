@@ -217,7 +217,7 @@ const NativeBackupJobInventory = () => {
   if (query.isError) {
     return (
       <Alert severity="error">
-        Could not load native backup jobs from the OpenNebula API.
+        Could not load native backup jobs from the LayerSentry backup provider.
       </Alert>
     )
   }
