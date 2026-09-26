@@ -1,0 +1,39 @@
+name: LayerSentry Deploy Public Key
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/layersentry-deploy-public-key.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  public-key:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 4
+    steps:
+      - name: Read provisioned public key on exact runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            Write-Host 'NON_TARGET_HOLD'
+            Start-Sleep -Seconds 90
+            exit 0
+          }
+          $key='C:\ProgramData\LayerSentryLab\seven-node-bootstrap\deploy_ed25519'
+          if(-not (Test-Path $key)){ throw 'Deployment SSH key is unavailable' }
+          $public=(& ssh-keygen.exe -y -f $key).Trim()
+          if($public -notmatch '^ssh-ed25519 [A-Za-z0-9+/=]+$'){ throw 'Unexpected public key format' }
+          Write-Host ('DEPLOY_PUBLIC_KEY=' + $public)
+          & ssh-keygen.exe -lf $key
+          Write-Host 'DEPLOY_PUBLIC_KEY_READ=PASS'
