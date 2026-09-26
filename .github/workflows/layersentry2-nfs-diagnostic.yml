@@ -1,0 +1,69 @@
+name: LayerSentry2 NFS Diagnostic
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/layersentry2-nfs-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 4
+    steps:
+      - name: Diagnose exact authorized NFS path from layersentry2
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            Write-Host 'NON_TARGET_HOLD'
+            Start-Sleep -Seconds 90
+            exit 0
+          }
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $key=Join-Path $dir 'deploy_ed25519'
+          $known=Join-Path $dir 'known_hosts'
+          $script=@'
+          set -u
+          server=172.17.60.210
+          expected='/Pool_NVME1/Backup_NVME_DATA/NFS_shared_Mountpoint'
+          printf 'OBSERVED_AT='; date -u +%FT%TZ
+          printf 'HOST='; hostname
+          ip route get "$server" || true
+          ping -c 2 -W 2 "$server" || true
+          for port in 111 2049; do
+            if timeout 5 bash -c "exec 3<>/dev/tcp/${server}/${port}"; then
+              echo "NFS_SERVER=${server} TCP_${port}=PASS"
+            else
+              echo "NFS_SERVER=${server} TCP_${port}=FAIL"
+            fi
+          done
+          command -v rpcinfo >/dev/null 2>&1 && timeout 8 rpcinfo -p "$server" || echo RPCINFO_FAILED
+          if command -v showmount >/dev/null 2>&1; then
+            exports=$(timeout 8 showmount -e "$server" 2>&1) || true
+            printf '%s\n' "$exports"
+            if printf '%s\n' "$exports" | awk -v expected="$expected" '$1 == expected {found=1} END {exit !found}'; then
+              echo NFS_AUTHORIZED_EXPORT_REACHABLE=yes
+            else
+              echo NFS_AUTHORIZED_EXPORT_REACHABLE=no
+            fi
+          else
+            echo SHOWMOUNT_UNAVAILABLE
+          fi
+          '@
+          $script=$script -replace "`r`n","`n"
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          $remote="printf '%s' '$b64' | base64 -d | sudo -n bash"
+          & ssh.exe -T -i $key -o BatchMode=yes -o PreferredAuthentications=publickey -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" layersentry-deploy@172.17.60.31 $remote
+          if($LASTEXITCODE -ne 0){ throw 'LayerSentry2 NFS diagnostic transport failed' }
+          Write-Host 'LAYERSENTRY2_NFS_DIAGNOSTIC=PASS'
