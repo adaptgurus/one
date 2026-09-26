@@ -2,6 +2,11 @@ name: Seven Node Linux Runner Inventory
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/seven-node-linux-runner-inventory.yml'
 
 permissions:
   contents: read
