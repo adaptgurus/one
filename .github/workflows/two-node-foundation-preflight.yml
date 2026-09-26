@@ -1,0 +1,65 @@
+name: Two Node Foundation Preflight
+
+on:
+  push:
+    branches:
+      - lab/seven-node-foundation-20260926
+    paths:
+      - '.github/workflows/two-node-foundation-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 5
+    steps:
+      - name: Inspect exact Foundation targets without mutation
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Stop'
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
+          if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
+            Write-Host 'NON_TARGET_HOLD'
+            Start-Sleep -Seconds 90
+            exit 0
+          }
+          $dir='C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $key=Join-Path $dir 'deploy_ed25519'
+          $known=Join-Path $dir 'known_hosts'
+          $script=@'
+          set -u
+          printf 'HOST='; hostname
+          echo '---OPENNEBULA-PACKAGES---'
+          rpm -qa | grep -E '^opennebula' | sort || true
+          echo '---FOUNDATION-SERVICES---'
+          for svc in opennebula opennebula-sunstone opennebula-fireedge libvirtd mariadb; do
+            printf 'SERVICE=%s ENABLED=' "$svc"; systemctl is-enabled "$svc" 2>/dev/null || true
+            printf 'SERVICE=%s ACTIVE=' "$svc"; systemctl is-active "$svc" 2>/dev/null || true
+          done
+          echo '---MOUNTS---'
+          findmnt -rn -t nfs,nfs4 || true
+          echo '---AUTHORIZED-EXPORT---'
+          timeout 8 showmount -e 172.17.60.210 | awk '$1 == "/Pool_NVME1/Backup_NVME_DATA/NFS_shared_Mountpoint" {print; found=1} END {exit !found}'
+          echo '---EXISTING-FOUNDATION-STATE---'
+          for path in /etc/one /var/lib/one /srv/layersentry /root/layersentry-manual-deploy; do
+            if test -e "$path"; then du -sh "$path" 2>/dev/null || echo "PRESENT=$path"; else echo "ABSENT=$path"; fi
+          done
+          echo FOUNDATION_PREFLIGHT_HOST=PASS
+          '@
+          $script=$script -replace "`r`n","`n"
+          $b64=[Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($script))
+          foreach($hostIp in @('172.17.60.30','172.17.60.31')){
+            Write-Host "::group::$hostIp"
+            $remote="printf '%s' '$b64' | base64 -d | sudo -n bash"
+            & ssh.exe -T -i $key -o BatchMode=yes -o PreferredAuthentications=publickey -o ConnectTimeout=8 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" "layersentry-deploy@$hostIp" $remote
+            if($LASTEXITCODE -ne 0){ throw "Foundation preflight failed for $hostIp" }
+            Write-Host '::endgroup::'
+          }
+          Write-Host TWO_NODE_FOUNDATION_PREFLIGHT=PASS
