@@ -77,15 +77,18 @@ jobs:
           timeout 20 iscsiadm -m discovery -t sendtargets -p "$portal2" | sort -u | tee "$p2"
           awk '{print $2}' "$p1" | sort -u >/tmp/layersentry-iscsi-p1-iqn.txt
           awk '{print $2}' "$p2" | sort -u >/tmp/layersentry-iscsi-p2-iqn.txt
-          comm -12 /tmp/layersentry-iscsi-p1-iqn.txt /tmp/layersentry-iscsi-p2-iqn.txt >/tmp/layersentry-iscsi-common-iqn.txt
-          common_count=$(wc -l </tmp/layersentry-iscsi-common-iqn.txt)
-          echo "ISCSI_COMMON_TARGET_COUNT=$common_count"
-          cat /tmp/layersentry-iscsi-common-iqn.txt
-          test "$common_count" -eq 1
-          iqn=$(cat /tmp/layersentry-iscsi-common-iqn.txt)
-          echo "ISCSI_QUALIFIED_TARGET_IQN=$iqn"
-          iscsiadm -m node -T "$iqn" -p "$portal1" --login || iscsiadm -m session | grep -Fq "$portal1"
-          iscsiadm -m node -T "$iqn" -p "$portal2" --login || iscsiadm -m session | grep -Fq "$portal2"
+          p1_count=$(wc -l </tmp/layersentry-iscsi-p1-iqn.txt)
+          p2_count=$(wc -l </tmp/layersentry-iscsi-p2-iqn.txt)
+          echo "ISCSI_PORTAL1_TARGET_COUNT=$p1_count"
+          echo "ISCSI_PORTAL2_TARGET_COUNT=$p2_count"
+          test "$p1_count" -eq 1
+          test "$p2_count" -eq 1
+          iqn1=$(cat /tmp/layersentry-iscsi-p1-iqn.txt)
+          iqn2=$(cat /tmp/layersentry-iscsi-p2-iqn.txt)
+          echo "ISCSI_PORTAL1_TARGET_IQN=$iqn1"
+          echo "ISCSI_PORTAL2_TARGET_IQN=$iqn2"
+          iscsiadm -m node -T "$iqn1" -p "$portal1" --login || iscsiadm -m session | grep -Fq "$portal1"
+          iscsiadm -m node -T "$iqn2" -p "$portal2" --login || iscsiadm -m session | grep -Fq "$portal2"
           udevadm settle
           multipath -r
           sleep 3
