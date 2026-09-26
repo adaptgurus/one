@@ -104,8 +104,13 @@ test('backup plan FireEdge API proxies the authenticated LayerSentry control-pla
     functions,
     /sourcePlanId, name, sourceBackupDatastoreId, requestId/
   )
+  assert.match(functions, /getProtectionConfig/)
   assert.match(functions, /platformRequest/)
   assert.match(apiIndex, /'backupplans'/)
   assert.match(platform, /X-LayerSentry-Tenant/)
   assert.match(platform, /\[GATEWAY_TENANT_HEADER\]: actor\.uid/)
+  assert.match(platform, /layersentry_protection_url/)
+  assert.match(platform, /layersentry_protection_gateway_token_file/)
+  assert.match(platform, /const getProtectionConfig =/)
+  assert.match(platform, /if \(!hasDedicatedProtection\) return getPlatformConfig\(\)/)
 })
