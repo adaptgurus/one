@@ -34,13 +34,6 @@ import {
   useModalsApi,
   useViews,
 } from '@FeaturesModule'
-import { Backups as BackupsResource } from '@ResourcesModule'
-import {
-  getBackupDiskIds,
-  getBackupIncrements,
-  getBackupRestoreOptions,
-  getBackupVmIds,
-} from '@ModelsModule'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import {
   CAPABILITY_IDS,
@@ -210,7 +203,21 @@ const RecoveryPointInventory = ({ canRestore }) => {
   const { showModal } = useModalsApi()
   const [restore] = ImageAPI.useRestoreBackupMutation()
 
-  const restorePoint = (backup) => {
+  const restorePoint = async (backup) => {
+    // Keep the large Resources/Models federation remotes out of the initial
+    // LayerSentry bootstrap graph. Loading them eagerly here made the whole
+    // client wait for restore-only code and could trip the bounded bootstrap
+    // timeout on a cold cache.
+    const [{ Backups: BackupsResource }, backupModels] = await Promise.all([
+      import('@ResourcesModule'),
+      import('@ModelsModule'),
+    ])
+    const {
+      getBackupDiskIds,
+      getBackupIncrements,
+      getBackupRestoreOptions,
+      getBackupVmIds,
+    } = backupModels
     const increments = getBackupIncrements(backup)
     const backupDiskIds = getBackupDiskIds(backup)
     const vmsId = getBackupVmIds(backup)

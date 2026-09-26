@@ -91,10 +91,13 @@ test('product navigation covers customer and administrator workspaces', () => {
 test('creation pages expose consistent guided workflow stages', () => {
   const page = read('src/client/apps/layersentry/pages/CreatePage.js')
   const portal = read('src/client/apps/layersentry/Portal.js')
+  const backupPlan = read(
+    'src/client/apps/layersentry/pages/BackupPlanCreateWizard.js'
+  )
   assert.match(page, /data-layersentry-workflow-steps/)
   assert.match(portal, /Operating System/)
   assert.match(portal, /Control Plane/)
-  assert.match(portal, /Retention/)
+  assert.match(backupPlan, /Retention/)
   assert.match(portal, /Protocol & Port/)
 })
 

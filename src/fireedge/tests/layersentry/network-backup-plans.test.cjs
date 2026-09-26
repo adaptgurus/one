@@ -233,4 +233,8 @@ test("portal uses dedicated RBAC-gated Network and Backup Plan flows", () => {
   assert.match(protection, /useRetryBackupJobMutation/);
   assert.match(protection, /useRestoreBackupMutation/);
   assert.match(protection, /timestamp \* 1000/);
+  assert.doesNotMatch(protection, /^import .* from ['"]@ResourcesModule['"]/m);
+  assert.doesNotMatch(protection, /^import .* from ['"]@ModelsModule['"]/m);
+  assert.match(protection, /import\(['"]@ResourcesModule['"]\)/);
+  assert.match(protection, /import\(['"]@ModelsModule['"]\)/);
 });
