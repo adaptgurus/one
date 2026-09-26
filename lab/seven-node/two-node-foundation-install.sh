@@ -48,6 +48,25 @@ for ip in 172.17.60.30 172.17.60.31; do
 done
 echo SSH_KNOWN_HOSTS=PASS
 
+# The pinned OneDeploy revision rejects Rocky Linux before package deployment.
+# Fail before making any further target-side changes instead of retrying an
+# already-proven unsupported platform tuple.
+for ip in 172.17.60.30 172.17.60.31; do
+  target_os="$({ ssh -q -i "$KEY" -o BatchMode=yes -o IdentitiesOnly=yes \
+    -o PasswordAuthentication=no -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile="$KNOWN" layersentry-deploy@"$ip" \
+    '. /etc/os-release; printf "%s:%s\n" "$ID" "$VERSION_ID"'; } 2>/dev/null)"
+  case "$target_os" in
+    almalinux:9*|rhel:9*) ;;
+    *)
+      echo "ONEDEPLOY_PLATFORM_UNSUPPORTED=$ip:$target_os"
+      echo "PINNED_ONEDEPLOY_SUPPORTED_TARGETS=almalinux:9,rhel:9"
+      exit 42
+      ;;
+  esac
+done
+echo ONEDEPLOY_PLATFORM_PREFLIGHT=PASS
+
 if [[ ! -s "$VAULT_PASS" ]]; then
   openssl rand -hex 24 > "$VAULT_PASS"
 fi
@@ -169,4 +188,3 @@ cp "$ROOT/logs/pre-$RUN_ID.log" "$EVIDENCE/"
 cp "$ROOT/logs/site-$RUN_ID.log" "$EVIDENCE/"
 sed -E 's#ansible_ssh_private_key_file: .*#ansible_ssh_private_key_file: REDACTED#' "$INVENTORY" > "$EVIDENCE/inventory.sanitized.yml"
 sha256sum "$EVIDENCE"/* > "$EVIDENCE/SHA256SUMS"
-
