@@ -65,12 +65,7 @@ const list = (
     })
 }
 const proxyMutation = (res, next, request, userData, oneConnection) => {
-  platformRequest(
-    request,
-    userData,
-    oneConnection,
-    getProtectionConfig()
-  )
+  platformRequest(request, userData, oneConnection, getProtectionConfig())
     .then((payload = {}) => {
       res.locals.httpCode = httpResponse(ok, payload)
       next()
