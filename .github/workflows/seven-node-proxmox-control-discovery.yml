@@ -70,6 +70,7 @@ jobs:
           }
           129..158 | ForEach-Object { $candidateIps += "172.17.30.$_" }
           $checks=@()
+          $proxmoxCandidates=@()
           foreach($address in $candidateIps){
             $client=[System.Net.Sockets.TcpClient]::new()
             $checks += [pscustomobject]@{
@@ -84,8 +85,34 @@ jobs:
               try { $check.Client.EndConnect($check.Connect) } catch {}
               $ssh=Test-NetConnection -ComputerName $check.Address -Port 22 -InformationLevel Quiet -WarningAction SilentlyContinue
               Write-Host "PROXMOX_API_CANDIDATE ip=$($check.Address) api8006=True ssh22=$ssh"
+              $proxmoxCandidates += $check.Address
             }
             $check.Client.Dispose()
+          }
+          Write-Host '--- PROXMOX NODE IDENTITY AND ACCESS ---'
+          ssh-add.exe -l 2>&1
+          Get-ChildItem "$env:USERPROFILE\.ssh" -Force -File -ErrorAction SilentlyContinue |
+            Select-Object Name,Length,LastWriteTime |
+            Format-Table -AutoSize
+          foreach($address in $proxmoxCandidates){
+            try {
+              $tcp=[System.Net.Sockets.TcpClient]::new($address,8006)
+              $ssl=[System.Net.Security.SslStream]::new($tcp.GetStream(),$false,{$true})
+              $ssl.AuthenticateAsClient($address)
+              $cert=[System.Security.Cryptography.X509Certificates.X509Certificate2]::new($ssl.RemoteCertificate)
+              Write-Host "PROXMOX_CERT ip=$address subject=$($cert.Subject) issuer=$($cert.Issuer) thumbprint=$($cert.Thumbprint)"
+              $ssl.Dispose(); $tcp.Dispose()
+            } catch {
+              Write-Host "PROXMOX_CERT ip=$address state=FAILED type=$($_.Exception.GetType().Name)"
+            }
+            $scan=Join-Path $env:RUNNER_TEMP "pve-$($address.Replace('.','-')).known"
+            ssh-keyscan.exe -T 4 -t ed25519,ecdsa,rsa $address 2>$null | Set-Content -Encoding ascii $scan
+            if((Test-Path $scan) -and (Get-Item $scan).Length -gt 0){
+              $hostout=& ssh.exe -T -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$scan" "root@$address" 'hostname; pveversion 2>/dev/null || true' 2>&1
+              Write-Host "PROXMOX_SSH ip=$address rc=$LASTEXITCODE output=$(($hostout | Out-String).Trim())"
+              $global:LASTEXITCODE=0
+            }
+            Remove-Item $scan -Force -ErrorAction SilentlyContinue
           }
           Write-Host '--- NEIGHBORS ---'
           Get-NetNeighbor -AddressFamily IPv4 -ErrorAction SilentlyContinue |
