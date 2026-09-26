@@ -1,0 +1,163 @@
+name: Seven Node Linux Runner Inventory
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seven-node-linux-runner-inventory
+  cancel-in-progress: false
+
+jobs:
+  inventory:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind layersentryol7 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf 'RUNNER_NAME=%s\n' "$RUNNER_NAME"
+          test "$RUNNER_NAME" = layersentryol7
+          printf 'RUNNER_BIND=PASS\n'
+
+      - name: Collect secret-free local and remote inventory
+        id: probe
+        shell: bash
+        run: |
+          set -uo pipefail
+          out="$RUNNER_TEMP/seven-node-linux-runner-inventory"
+          mkdir -p "$out/hosts"
+          chmod 700 "$out"
+
+          {
+            printf 'RUNNER_NAME=%s\n' "$RUNNER_NAME"
+            printf 'RUNNER_OS=%s\n' "$RUNNER_OS"
+            printf 'RUNNER_ARCH=%s\n' "$RUNNER_ARCH"
+            printf 'EXECUTION_HOST='; hostname
+            printf 'EXECUTION_USER='; id -un
+            printf 'EXECUTION_UID='; id -u
+            printf 'SUDO_NONINTERACTIVE='; if sudo -n true 2>/dev/null; then echo PASS; else echo UNAVAILABLE; fi
+            printf 'SSH_AGENT_IDENTITIES='; ssh-add -l 2>&1 || true
+          } >"$out/runner.txt"
+
+          cat >"$out/probe.sh" <<'PROBE'
+          set -u
+          printf 'HOST='; hostname -f 2>/dev/null || hostname
+          if test -r /etc/os-release; then
+            . /etc/os-release
+            printf 'OS_ID=%s\n' "${ID:-UNKNOWN}"
+            printf 'OS_VERSION_ID=%s\n' "${VERSION_ID:-UNKNOWN}"
+            printf 'OS_PRETTY=%s\n' "${PRETTY_NAME:-UNKNOWN}"
+          fi
+          printf 'KERNEL='; uname -r
+          printf 'ARCH='; uname -m
+          printf 'CPU_LOGICAL='; nproc
+          printf 'CPU_VIRTUALIZATION_FLAGS='; awk -F: '/^flags/ {for (i=1;i<=NF;i++) if ($i ~ /(^| )(vmx|svm)( |$)/) {print "PRESENT"; exit}} END {if (NR && !found) {}}' /proc/cpuinfo | head -1
+          printf 'MEM_KB='; awk '/MemTotal/ {print $2}' /proc/meminfo
+          printf 'VIRT='; systemd-detect-virt 2>/dev/null || true
+          printf 'KVM_DEVICE='; if test -e /dev/kvm; then stat -c '%F %a %U:%G' /dev/kvm; else echo ABSENT; fi
+          printf 'SELINUX='; getenforce 2>/dev/null || echo UNKNOWN
+          printf 'FIREWALLD_ENABLED='; systemctl is-enabled firewalld 2>/dev/null || true
+          printf 'FIREWALLD_ACTIVE='; systemctl is-active firewalld 2>/dev/null || true
+          printf 'TIMESYNC='; timedatectl show -p NTPSynchronized --value 2>/dev/null || echo UNKNOWN
+          echo '--- IP_LINK ---'; ip -br link 2>&1
+          echo '--- IP_ADDR ---'; ip -br addr 2>&1
+          echo '--- IP_ROUTE ---'; ip route 2>&1
+          echo '--- BLOCK ---'; lsblk -o NAME,KNAME,TYPE,SIZE,FSTYPE,WWN,SERIAL,MOUNTPOINTS 2>&1
+          echo '--- ROOT_FS ---'; df -hT / 2>&1
+          echo '--- PCI_NETWORK_STORAGE_GPU ---'; lspci -nn 2>/dev/null | grep -Ei 'ethernet|network|fibre|raid|storage|scsi|non-volatile|vga|3d|display' || true
+          echo '--- PACKAGES ---'; rpm -qa 2>/dev/null | grep -Ei '^(opennebula|qemu|libvirt|nfs-utils|iscsi-initiator-utils|device-mapper-multipath|nmstate)' | sort || true
+          echo '--- SERVICES ---'; systemctl is-active libvirtd virtqemud multipathd iscsid chronyd 2>/dev/null || true
+          for endpoint in 172.17.60.210:2049 172.17.60.213:3260 172.17.60.214:3260; do
+            host=${endpoint%:*}; port=${endpoint#*:}
+            if timeout 4 bash -c "</dev/tcp/$host/$port" 2>/dev/null; then
+              echo "TCP_${host}_${port}=PASS"
+            else
+              echo "TCP_${host}_${port}=FAIL"
+            fi
+          done
+          if command -v showmount >/dev/null 2>&1; then
+            echo '--- NFS_EXPORTS ---'
+            timeout 10 showmount -e 172.17.60.210 2>&1 || true
+          else
+            echo 'SHOWMOUNT=UNAVAILABLE'
+          fi
+          if command -v multipath >/dev/null 2>&1; then
+            echo '--- MULTIPATH_EXISTING_READBACK ---'
+            multipath -ll 2>&1 || true
+          else
+            echo 'MULTIPATH=UNAVAILABLE'
+          fi
+          if command -v iscsiadm >/dev/null 2>&1; then
+            echo '--- ISCSI_EXISTING_SESSIONS ---'
+            iscsiadm -m session -P 1 2>&1 || true
+          else
+            echo 'ISCSIADM=UNAVAILABLE'
+          fi
+          PROBE
+          chmod 700 "$out/probe.sh"
+
+          bash "$out/probe.sh" >"$out/hosts/layersentryol7-local.txt" 2>&1
+
+          hosts=(
+            'layersentry1=172.17.60.30'
+            'layersentry2=172.17.60.31'
+            'layersentry3=172.17.60.32'
+            'layersentry4=172.17.60.33'
+            'layersentry5=172.17.60.34'
+            'layersentry6=172.17.60.35'
+            'layersentryol7=172.17.60.36'
+          )
+          known="$out/known_hosts"
+          : >"$known"
+          failures=0
+          for entry in "${hosts[@]}"; do
+            name=${entry%%=*}
+            ip=${entry#*=}
+            printf 'TARGET=%s IP=%s\n' "$name" "$ip"
+            scan="$out/hosts/${name}-hostkeys.txt"
+            if timeout 10 ssh-keyscan -T 5 -t ed25519,ecdsa,rsa "$ip" >"$scan" 2>"$out/hosts/${name}-hostkeys.stderr" && test -s "$scan"; then
+              cat "$scan" >>"$known"
+              ssh-keygen -lf "$scan" >"$out/hosts/${name}-fingerprints.txt" 2>&1 || true
+              printf 'HOSTKEY_%s=CAPTURED_UNCONFIRMED\n' "$name"
+            else
+              printf 'HOSTKEY_%s=FAILED\n' "$name"
+              failures=$((failures + 1))
+              continue
+            fi
+            if timeout 20 ssh -T \
+              -o BatchMode=yes \
+              -o ConnectTimeout=8 \
+              -o StrictHostKeyChecking=yes \
+              -o "UserKnownHostsFile=$known" \
+              "root@$ip" 'bash -s' <"$out/probe.sh" >"$out/hosts/${name}-inventory.txt" 2>"$out/hosts/${name}-inventory.stderr"; then
+              printf 'ROOT_KEY_AUTH_%s=PASS\n' "$name"
+            else
+              printf 'ROOT_KEY_AUTH_%s=FAIL\n' "$name"
+              failures=$((failures + 1))
+            fi
+          done | tee "$out/result.txt"
+
+          rm -f "$out/probe.sh" "$known"
+          printf 'REMOTE_FAILURES=%s\n' "$failures" | tee -a "$out/result.txt"
+          printf 'remote_failures=%s\n' "$failures" >>"$GITHUB_OUTPUT"
+
+      - name: Upload sanitized inventory
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: seven-node-linux-runner-inventory
+          path: ${{ runner.temp }}/seven-node-linux-runner-inventory
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Enforce complete root-key inventory
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test '${{ steps.probe.outputs.remote_failures }}' = '0'
+          echo 'SEVEN_NODE_ROOT_KEY_INVENTORY=PASS'
