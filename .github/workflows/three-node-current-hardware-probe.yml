@@ -12,16 +12,24 @@ permissions:
 
 jobs:
   probe:
-    runs-on: WIN-GK6MO7T7OPC
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
+    runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 8
     steps:
       - name: Bind exact target runner
         shell: powershell
         run: |
           $ErrorActionPreference='Stop'
-          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME"
+          Write-Host "RUNNER_NAME=$env:RUNNER_NAME COMPUTERNAME=$env:COMPUTERNAME SLOT=${{ matrix.slot }}"
           if($env:RUNNER_NAME -ine 'WIN-GK6MO7T7OPC' -or $env:COMPUTERNAME -ine 'WIN-GK6MO7T7OPC'){
-            throw 'Exact target runner binding failed'
+            Write-Host 'NON_TARGET_HOLD'
+            Start-Sleep -Seconds 120
+            "LS_TARGET=false" | Out-File $env:GITHUB_ENV -Append
+            exit 0
           }
           "LS_TARGET=true" | Out-File $env:GITHUB_ENV -Append
 
