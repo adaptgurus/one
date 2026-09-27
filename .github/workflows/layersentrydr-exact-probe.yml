@@ -1,7 +1,6 @@
 name: LayerSentry DR Runner Probe
 on:
-  push:
-    branches: [ops/layersentrydr-probe-20260927]
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
