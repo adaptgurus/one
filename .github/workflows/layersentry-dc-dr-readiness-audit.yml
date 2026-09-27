@@ -1,0 +1,96 @@
+name: LayerSentry DC-DR readiness audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ops/layersentrydr-probe-20260927]
+    paths: [.github/workflows/layersentry-dc-dr-readiness-audit.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-dc-dr-readiness-audit
+  cancel-in-progress: false
+
+jobs:
+  dc-readonly:
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 10
+    steps:
+      - name: Bind job to the exact DC candidate
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner=${RUNNER_NAME:-unknown}"
+          echo "hostname=$(hostname -s)"
+          echo "uid=$(id -u)"
+          ip -4 -o addr show
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(id -u)" = 0
+          if ! ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'; then
+            echo "Exact DC address 172.17.60.30/26 is absent; refusing inventory." >&2
+            exit 41
+          fi
+
+      - name: Read-only OpenNebula and replication inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "TARGET_DC_OK runner=${RUNNER_NAME} host=$(hostname -s) uid=$(id -u)"
+          echo "OPENNEBULA_VERSION"
+          oneversion || true
+          echo "HOSTS"
+          onehost list || true
+          echo "VMS"
+          onevm list || true
+          echo "VM_SECURITY_PROFILE"
+          ids="$(onevm list --no-header -x ID 2>/dev/null || true)"
+          for id in ${ids}; do
+            xml="$(mktemp)"
+            onevm show "${id}" --xml >"${xml}"
+            python3 - "${xml}" <<'PY'
+          import sys
+          import xml.etree.ElementTree as ET
+
+          root = ET.parse(sys.argv[1]).getroot()
+          def value(path):
+              node = root.find(path)
+              return "" if node is None or node.text is None else node.text.strip()
+
+          selected = {
+              "id": value("ID"),
+              "name": value("NAME"),
+              "state": value("STATE"),
+              "lcm_state": value("LCM_STATE"),
+              "host": value("HISTORY_RECORDS/HISTORY/HOSTNAME"),
+              "hypervisor": value("TEMPLATE/HYPERVISOR"),
+              "firmware": value("TEMPLATE/OS/FIRMWARE"),
+              "firmware_secure": value("TEMPLATE/OS/FIRMWARE_SECURE"),
+              "tpm_type": value("TEMPLATE/TPM/TYPE"),
+              "tpm_model": value("TEMPLATE/TPM/MODEL"),
+          }
+          print(" ".join(f"{key}={item!r}" for key, item in selected.items()))
+          PY
+            rm -f "${xml}"
+          done
+          echo "LAYERSENTRY_UNITS"
+          systemctl list-unit-files --no-pager | grep -Ei 'layersentry|replication' || true
+          echo "LISTENERS"
+          ss -lntp | grep -E ':(2616|2617|9443|945[0-9]|946[0-9])([[:space:]]|$)' || true
+          echo "DR_CAPABILITY_HTTP"
+          for url in \
+            http://127.0.0.1:2616/v1/dr/capabilities \
+            http://127.0.0.1:2616/fireedge/api/v1/dr/capabilities; do
+            code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "${url}" || true)"
+            echo "${code} ${url}"
+          done
+
+      - name: Reassert no workload mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          echo "READ_ONLY_AUDIT_COMPLETE"
