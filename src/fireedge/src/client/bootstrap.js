@@ -303,13 +303,16 @@ const loadClient = async () => {
   // eslint-disable-next-line no-undef
   await __webpack_init_sharing__('default')
 
-  const isLayerSentry = window.location.pathname
+  const requestedApp = window.location.pathname
     .split('/')
     .filter(Boolean)
-    .includes('layersentry')
-  const { default: initApp } = isLayerSentry
-    ? await import('client/layersentry')
-    : await import('client/sunstone')
+    .find((segment) => segment === 'layersentry' || segment === 'sunstone')
+  // LayerSentry is the safe/default product surface. An absent, stale or
+  // malformed app segment must never fall through to the native interface.
+  const { default: initApp } =
+    requestedApp === 'sunstone'
+      ? await import('client/sunstone')
+      : await import('client/layersentry')
   initApp()
   await waitForClientMount()
 }

@@ -106,11 +106,53 @@ test('creation pages expose consistent guided workflow stages', () => {
 
 test('bare FireEdge redirects to LayerSentry and native Sunstone is not the default', () => {
   const server = read('src/server/index.js')
+  const entrypoint = read('src/server/routes/entrypoints/App.js')
+  const bootstrap = read('src/client/bootstrap.js')
+  const appRoot = read('src/client/apps/layersentry/AppRoot.js')
   assert.match(server, /res\.redirect\(`\/\$\{defaultAppName\}\/layersentry`\)/)
   assert.doesNotMatch(
     server,
     /res\.redirect\(`\/\$\{defaultAppName\}\/sunstone`\)/
   )
+  assert.match(entrypoint, /requestedAppName \|\| 'layersentry'/)
+  assert.match(bootstrap, /requestedApp === 'sunstone'/)
+  assert.match(bootstrap, /import\('client\/layersentry'\)/)
+  assert.match(appRoot, /safeProductRedirect/)
+  assert.match(appRoot, /includes\('undefined'\)/)
+})
+
+test('normal Settings never links to a provider-native portal', () => {
+  const settings = read('src/client/apps/layersentry/pages/Settings.js')
+
+  assert.doesNotMatch(settings, /\/sunstone|Open native interface/)
+  assert.match(settings, /Password & TOTP/)
+  assert.match(settings, /Identity Providers/)
+  assert.match(settings, /Time & Locale/)
+  assert.match(settings, /Proxy & Notifications/)
+  assert.match(settings, /data-layersentry-native-console-hidden/)
+})
+
+test('shipped capability profile exposes qualified core read inventories', () => {
+  const config = read('etc/sunstone/sunstone-server.conf')
+
+  for (const capability of [
+    'COMPUTE',
+    'STORAGE',
+    'NETWORK',
+    'BACKUP_RECOVERY',
+    'OPERATIONS',
+    'INFRA_HOSTS',
+    'INFRA_CLUSTERS',
+    'INFRA_STORAGE',
+    'INFRA_ZONES',
+    'ACCESS_PROJECTS',
+    'ACCESS_LIMITS',
+    'ACCESS_RULES',
+  ]) {
+    assert.match(config, new RegExp(`^  ${capability}:`, 'm'))
+  }
+  assert.match(config, /BACKUP_RECOVERY:[\s\S]*?dataSafety: true/)
+  assert.doesNotMatch(config, /^ {2}SITE_RECOVERY_DR:/m)
 })
 
 test('non-Kubernetes workspaces have dedicated LayerSentry product surfaces', () => {
@@ -161,14 +203,8 @@ test('LayerSentry presents the native admin view as Super Admin', () => {
 test('compute summary reports OpenNebula VCPU before CPU share', () => {
   const compute = read('src/client/apps/layersentry/pages/ComputeWorkspace.js')
 
-  assert.match(
-    compute,
-    /TEMPLATE\?\.VCPU \?\? vm\?\.TEMPLATE\?\.CPU/
-  )
-  assert.doesNotMatch(
-    compute,
-    /TEMPLATE\?\.CPU \?\? vm\?\.TEMPLATE\?\.VCPU/
-  )
+  assert.match(compute, /TEMPLATE\?\.VCPU \?\? vm\?\.TEMPLATE\?\.CPU/)
+  assert.doesNotMatch(compute, /TEMPLATE\?\.CPU \?\? vm\?\.TEMPLATE\?\.VCPU/)
   assert.match(compute, /label="Allocated vCPU"/)
 })
 

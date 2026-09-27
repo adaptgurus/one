@@ -15,9 +15,7 @@
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
-import { Box, Button, Typography } from '@mui/material'
-import { ArrowTrSquare } from 'iconoir-react'
-import { APP_URL } from '@ConstantsModule'
+import { Alert, Grid, Typography } from '@mui/material'
 import { useViews } from '@FeaturesModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
@@ -30,66 +28,99 @@ import { colors } from 'client/apps/layersentry/theme/tokens'
 const SettingsPage = ({ endpoints }) => {
   const { view } = useViews()
   const isPlatformAdmin = view === 'admin'
-  const openNative = () =>
-    window.open(
-      `${window.location.origin}${APP_URL}/sunstone/dashboard?native=1`,
-      '_blank',
-      'noopener,noreferrer'
-    )
+
+  const settings = [
+    {
+      title: 'Password & TOTP',
+      description:
+        'Change your password and manage mandatory interactive-login verification through the authorized account workflow below.',
+      status: 'Account scoped',
+    },
+    {
+      title: 'Time & Locale',
+      description:
+        'Display timestamps in your selected timezone. Durable operation and audit timestamps remain stored in UTC.',
+      status: 'User preference',
+    },
+    ...(isPlatformAdmin
+      ? [
+          {
+            title: 'Identity Providers',
+            description:
+              'AD/LDAP and trusted-gateway OIDC remain unavailable until their TLS, mapping, logout and IDOR gates are qualified.',
+            status: 'Qualification required',
+          },
+          {
+            title: 'Proxy & Notifications',
+            description:
+              'Site proxy credentials and notification delivery require secret-safe server configuration and connectivity validation.',
+            status: 'Qualification required',
+          },
+        ]
+      : []),
+  ]
 
   return (
     <PageFrame
       title="Settings"
       description="Account preferences and LayerSentry product settings."
     >
-      <Surface sx={{ mt: 3, p: 2 }}>
+      <Grid container spacing={2} sx={{ mt: 1 }}>
+        {settings.map(({ title, description, status }) => (
+          <Grid item xs={12} md={6} key={title}>
+            <Surface sx={{ height: '100%', p: 2.5 }}>
+              <Typography
+                sx={{
+                  fontSize: 15,
+                  fontWeight: 750,
+                  color: colors.text.primary,
+                }}
+              >
+                {title}
+              </Typography>
+              <Typography
+                sx={{ mt: 0.75, fontSize: 13, color: colors.text.secondary }}
+              >
+                {description}
+              </Typography>
+              <Typography
+                sx={{
+                  mt: 1.5,
+                  fontSize: 11,
+                  fontWeight: 750,
+                  color: colors.text.muted,
+                }}
+              >
+                {status.toUpperCase()}
+              </Typography>
+            </Surface>
+          </Grid>
+        ))}
+      </Grid>
+
+      <Surface sx={{ mt: 2, p: 2 }}>
+        <SectionHeader
+          title="Account preferences"
+          description="Only controls authorized for this account and deployment are rendered."
+        />
         <ResourceBridge endpoints={endpoints} legacyPath="/settings" />
       </Surface>
 
       {isPlatformAdmin && (
         <Surface sx={{ mt: 2, p: 2.5 }}>
           <SectionHeader
-            title="Advanced tools"
-            description="Use the native LayerSentry administration interface only for advanced troubleshooting."
+            title="Advanced administration"
+            description="Provider-native consoles are not part of the normal LayerSentry product surface."
           />
-          <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 2,
-            }}
+          <Alert
+            severity="info"
+            data-layersentry-native-console-hidden
+            sx={{ color: colors.text.primary }}
           >
-            <Box>
-              <Typography
-                sx={{
-                  fontSize: 13,
-                  fontWeight: 700,
-                  color: colors.text.primary,
-                }}
-              >
-                Advanced infrastructure console
-              </Typography>
-              <Typography
-                sx={{ fontSize: 12, color: colors.text.secondary, mt: 0.25 }}
-              >
-                Opens in a separate tab. This option is hidden from normal
-                customer roles.
-              </Typography>
-            </Box>
-            <Button
-              variant="outlined"
-              endIcon={<ArrowTrSquare width={17} height={17} />}
-              onClick={openNative}
-              sx={{
-                textTransform: 'none',
-                borderColor: colors.borderStrong,
-                color: colors.text.primary,
-              }}
-            >
-              Open native interface
-            </Button>
-          </Box>
+            Use the owning LayerSentry Infrastructure, Access, Protection and
+            Operations workspaces. Engineering recovery access is intentionally
+            outside this customer/admin portal.
+          </Alert>
         </Surface>
       )}
     </PageFrame>

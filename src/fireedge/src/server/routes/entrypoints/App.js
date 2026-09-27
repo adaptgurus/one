@@ -67,10 +67,11 @@ router.get('*', async (req, res) => {
     ...(['remote', 'x509'].includes(appConfig?.auth) && { remote: true }),
   }
 
-  const appName = parse(req.url)
+  const requestedAppName = parse(req.url)
     .pathname.split(/\//gi)
     .filter((sub) => sub?.length > 0)
     .find((resource) => APP_NAMES.includes(resource))
+  const appName = requestedAppName || 'layersentry'
 
   const PRELOAD_STATE = {}
 

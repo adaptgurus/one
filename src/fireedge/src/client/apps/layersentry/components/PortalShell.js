@@ -717,7 +717,10 @@ const PortalShell = ({ children, endpoints }) => {
             <Button
               size="small"
               variant="text"
-              onClick={() => logout()}
+              onClick={async () => {
+                await logout()
+                history.replace('/')
+              }}
               sx={{
                 display: { xs: 'none', xl: 'inline-flex' },
                 textTransform: 'none',

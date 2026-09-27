@@ -38,6 +38,19 @@ import {
 
 export const APP_NAME = _APPS.layersentry
 
+export const safeProductRedirect = (value) => {
+  if (typeof value !== 'string') return '/overview'
+  const candidate = value.trim()
+  if (!candidate.startsWith('/') || candidate.startsWith('//')) {
+    return '/overview'
+  }
+  if (candidate.split(/[/?#]/).filter(Boolean).includes('undefined')) {
+    return '/overview'
+  }
+
+  return candidate
+}
+
 const showSupportTab = (routes = [], find = true) => {
   if (find === true) return routes
   const supportTab = routes.findIndex((route) => route?.path === '/support')
@@ -109,7 +122,7 @@ const LayerSentryApp = () => {
     () => isDisabledLayoutRoute(pathname, endpoints),
     [endpoints, pathname]
   )
-  const redirectWhenAuth = externalRedirect || '/overview'
+  const redirectWhenAuth = safeProductRedirect(externalRedirect)
 
   return (
     <AuthLayout
