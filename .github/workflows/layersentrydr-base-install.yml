@@ -1,26 +1,21 @@
-name: LayerSentry DR Base Install
-
+name: LayerSentry DR Base Repair and Qualification
 on:
   push:
     branches: [ops/layersentrydr-probe-20260927]
-    paths:
-      - .github/workflows/layersentrydr-base-install.yml
-
+    paths: [.github/workflows/layersentrydr-base-install.yml]
 permissions:
   contents: read
-
 concurrency:
   group: layersentrydr-base-install
   cancel-in-progress: false
-
 jobs:
-  install:
+  qualify:
     strategy:
       fail-fast: false
       matrix:
         attempt: [1, 2, 3, 4]
     runs-on: [self-hosted, linux]
-    timeout-minutes: 60
+    timeout-minutes: 20
     steps:
       - name: Bind exact DR runner
         id: bind
@@ -29,99 +24,69 @@ jobs:
           set -euo pipefail
           if [ "${RUNNER_NAME:-}" != "layersentrydr" ]; then
             echo "target=false" >> "$GITHUB_OUTPUT"
-            echo "SAFE_SKIP_WRONG_RUNNER=${RUNNER_NAME:-unknown}"
-            echo 'NOT_EXECUTED: this job is not DR deployment evidence.' >> "$GITHUB_STEP_SUMMARY"
+            echo 'NOT_EXECUTED: wrong runner, not deployment evidence.' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
+          test "$(id -u)" -eq 0
+          ip -4 addr show | grep -qE '(^|[[:space:]])172\.17\.60\.40/'
           echo "target=true" >> "$GITHUB_OUTPUT"
-
-      - name: Bind exact DR host and preflight
+      - name: Repair and individually verify installed base services
         if: steps.bind.outputs.target == 'true'
         shell: bash
-        run: |
-          set -euo pipefail
-          ip -4 addr show | grep -qE '(^|[[:space:]])172\.17\.60\.40/' || { echo "BLOCKED_WRONG_HOST"; exit 42; }
-          test "$(id -u)" -eq 0 || { echo "BLOCKED_NOT_ROOT"; exit 43; }
-          . /etc/os-release
-          test "$ID" = "almalinux" && [[ "$VERSION_ID" == 9.* ]] || { echo "BLOCKED_UNSUPPORTED_OS"; exit 44; }
-          test -c /dev/kvm || { echo "BLOCKED_NO_KVM"; exit 45; }
-          virsh -r -c qemu:///system capabilities >/dev/null
-          for b in br-cluster br-migrate br-backup br-storage br-vm; do
-            ip link show "$b" >/dev/null || { echo "BLOCKED_MISSING_BRIDGE:$b"; exit 46; }
-          done
-          findmnt -n -T /var/lib/one/datastores -o FSTYPE,SIZE,AVAIL,TARGET
-          AVAIL_GB=$(df -BG --output=avail /var/lib/one/datastores | tail -1 | tr -dc '0-9')
-          test "${AVAIL_GB:-0}" -ge 800 || { echo "BLOCKED_DATASTORE_CAPACITY"; exit 47; }
-          echo "DR_PREFLIGHT=PASS"
-
-      - name: Install LayerSentry OpenNebula base with pinned OneDeploy
-        if: steps.bind.outputs.target == 'true'
-        shell: bash
-        env:
-          ONE_DEPLOY_SHA: 361df79c154b691aaf8a89cbcfe1864d75543ec0
         run: |
           set -euo pipefail
           umask 077
-          export PATH="/usr/local/bin:$PATH"
-          mkdir -p /var/lib/layersentry /var/log/layersentrydr
           exec 9>/var/lock/layersentry-dr-base-install.lock
-          flock -n 9 || { echo "BLOCKED_INSTALL_ALREADY_RUNNING"; exit 48; }
-          if [ -f /var/lib/layersentry/.dr-base-install-complete ]; then
-            echo "BASE_INSTALL_ALREADY_COMPLETE_REVERIFY_REQUIRED"
-            exit 0
-          fi
-          mkdir -p /opt/layersentry /etc/layersentry /root/.layersentry-secrets
-          chmod 700 /root/.layersentry-secrets
-          if [ ! -d /opt/layersentry/one-deploy/.git ]; then
-            echo "BLOCKED_EXPECTED_PINNED_CHECKOUT_MISSING"
-            exit 49
-          fi
-          cd /opt/layersentry/one-deploy
-          test "$(git rev-parse HEAD)" = "$ONE_DEPLOY_SHA" || { echo "BLOCKED_SOURCE_DRIFT"; exit 50; }
-          test -z "$(git status --porcelain --untracked-files=no)" || { echo "BLOCKED_TRACKED_SOURCE_CHANGES"; exit 51; }
-          test -s /etc/layersentry/dr-poc.yml
-          test -s /root/.layersentry-secrets/ansible-extra.yml
-          # The local collection path in ansible.cfg hid dependencies installed under /root.
-          # Use an isolated compatible override and retain both native and existing collection roots.
-          export ANSIBLE_COLLECTIONS_PATH="$PWD/.dr-collections:$PWD/ansible_collections:/root/.ansible/collections:/usr/share/ansible/collections"
-          export ANSIBLE_HOST_KEY_CHECKING=True
-          ansible --version
-          ansible-galaxy collection install 'community.general:==10.7.0' -p "$PWD/.dr-collections"
-          ansible-doc -t module ansible.posix.authorized_key >/dev/null
-          ansible-doc -t module community.mysql.mysql_db >/dev/null
-          ansible-playbook --syntax-check -i /etc/layersentry/dr-poc.yml -e @/root/.layersentry-secrets/ansible-extra.yml opennebula.deploy.main
-          echo "ANSIBLE_COLLECTION_AND_SYNTAX_PREFLIGHT=PASS"
-          # Keep raw task output local; it can contain generated credentials.
-          LOG="/var/log/layersentrydr/base-${GITHUB_RUN_ID}-${GITHUB_JOB}.log"
-          set +e
-          ansible-playbook -i /etc/layersentry/dr-poc.yml -e @/root/.layersentry-secrets/ansible-extra.yml opennebula.deploy.main >"$LOG" 2>&1
-          rc=$?
-          set -e
-          LOG_PATH="$LOG" python3 - <<'PY'
-          import os,re,pathlib,yaml
-          text=pathlib.Path(os.environ['LOG_PATH']).read_text(errors='replace')
-          secrets=yaml.safe_load(pathlib.Path('/root/.layersentry-secrets/ansible-extra.yml').read_text()) or {}
-          for value in secrets.values():
-              if isinstance(value,str) and len(value)>4:
-                  text=text.replace(value,'[REDACTED]')
-          text=re.sub(r'(?i)(password|token|secret|one_pass)([\s\"\x27:=]+)[^\s,}\"\x27]+',r'\1\2[REDACTED]',text)
-          print('\n'.join(text.splitlines()[-70:]))
+          flock -n 9 || { echo 'BLOCKED_CONCURRENT_INSTALL'; exit 48; }
+          mkdir -p /var/log/layersentrydr /var/lib/layersentry
+          rpm -q opennebula opennebula-node-kvm opennebula-fireedge
+          failed=0
+          for unit in opennebula opennebula-scheduler opennebula-fireedge opennebula-flow opennebula-gate; do
+            echo "SERVICE=$unit"
+            systemctl show "$unit" -p LoadState -p ActiveState -p SubState -p Result
+            if ! systemctl is-active --quiet "$unit"; then
+              systemctl start "$unit" || failed=1
+            fi
+            # is-active on multiple units succeeds when ANY unit is active; test each separately.
+            if systemctl is-active --quiet "$unit"; then
+              echo "$unit=ACTIVE"
+            else
+              echo "$unit=FAILED"
+              failed=1
+            fi
+            journalctl -u "$unit" -n 40 --no-pager > "/var/log/layersentrydr/${unit}-startup.log"
+          done
+          python3 - <<'PY'
+          import pathlib,re
+          values=[]
+          for p in pathlib.Path('/root/.layersentry-secrets').glob('*.pw'):
+              v=p.read_text(errors='replace').strip()
+              if len(v)>4: values.append(v)
+          for p in pathlib.Path('/var/log/layersentrydr').glob('*-startup.log'):
+              text=p.read_text(errors='replace')
+              for v in values: text=text.replace(v,'[REDACTED]')
+              text=re.sub(r'(?i)(password|token|secret|one_pass)([\s\"\x27:=]+)[^\s,}\"\x27]+',r'\1\2[REDACTED]',text)
+              print('LOG='+p.name)
+              print('\n'.join(text.splitlines()[-18:]))
           PY
-          test "$rc" -eq 0 || { echo "BASE_INSTALL_FAILED_RC=$rc"; exit "$rc"; }
-
-      - name: Verify base deployment
-        if: steps.bind.outputs.target == 'true'
+          test "$failed" -eq 0 || { echo 'BASE_HEALTH=FAILED'; exit 52; }
+          # Verify again after all starts; avoid one service masking another failure.
+          for unit in opennebula opennebula-scheduler opennebula-fireedge opennebula-flow opennebula-gate; do
+            systemctl is-active --quiet "$unit" || exit 53
+          done
+          su - oneadmin -s /bin/bash -c 'onehost list; onevm list; oneimage list; onevnet list'
+          curl --fail --silent --show-error --max-time 15 -o /dev/null http://127.0.0.1:2616/fireedge/
+          test "$(getenforce)" = Enforcing
+          touch /var/lib/layersentry/.dr-base-services-verified
+          echo 'DR_BASE_SERVICES=LIVE_VERIFIED'
+      - name: Discover existing installer and image inputs without reading credentials
+        if: always() && steps.bind.outputs.target == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          rpm -qa | grep '^opennebula' | sort
-          systemctl is-active opennebula opennebula-scheduler opennebula-fireedge opennebula-flow opennebula-gate
-          su - oneadmin -s /bin/bash -c 'onehost list'
-          su - oneadmin -s /bin/bash -c 'onecluster list'
-          su - oneadmin -s /bin/bash -c 'onedatastore list'
-          su - oneadmin -s /bin/bash -c 'onevnet list'
+          ip -4 -br addr
+          ip -4 route
           virsh -r -c qemu:///system list --all
-          getenforce
-          touch /var/lib/layersentry/.dr-base-install-complete
-          echo "LAYERSENTRY_DR_BASE=LIVE_VERIFIED"
-          echo 'Base services verified on layersentrydr only. Six-VM Raft/MySQL topology and production qualification remain separate pending gates.' >> "$GITHUB_STEP_SUMMARY"
+          find /opt /srv /root -maxdepth 4 -type d \( -name layersentry-platform -o -name codexagentlogic -o -name one-deploy \) -print 2>/dev/null || true
+          find /opt /var/lib/one /root -maxdepth 4 -type f \( -name '*.qcow2' -o -name '*cloud*.img' -o -name '*installer*.tar.gz' \) -printf '%p %s bytes\n' 2>/dev/null | head -40 || true
+          echo 'SIX_VM_TOPOLOGY=NOT_CREATED_BY_THIS_WORKFLOW'
