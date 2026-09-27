@@ -1,0 +1,96 @@
+name: LayerSentry Live Runtime Audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/private-cloud-ux-completion-20260927
+    paths:
+      - '.github/workflows/layersentry-live-runtime-audit.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-live-runtime-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 15
+    steps:
+      - name: Bind runner and inspect deployed FireEdge
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = layersentryol7
+          key=/root/.ssh/layersentry_lab_ed25519
+          test -f "$key"
+          audit_dir="$RUNNER_TEMP/layersentry-live-runtime-audit"
+          install -d -m 700 "$audit_dir"
+          known="$audit_dir/known_hosts"
+          ssh-keyscan -T 8 -t ed25519,ecdsa,rsa 172.17.60.30 >"$known" 2>/dev/null
+          chmod 600 "$known"
+          remote="$audit_dir/runtime-audit.sh"
+          cat >"$remote" <<'REMOTE'
+          set -euo pipefail
+          echo '=== HOST ==='
+          hostnamectl --static
+          uname -srmo
+          date -u +%FT%TZ
+          echo '=== FIREEDGE_SERVICE ==='
+          systemctl show opennebula-fireedge.service \
+            -p Id -p ActiveState -p SubState -p FragmentPath -p ExecMainStartTimestamp -p MainPID -p ExecStart \
+            --no-pager 2>/dev/null || true
+          pid=$(systemctl show opennebula-fireedge.service -p MainPID --value 2>/dev/null || true)
+          if test -n "$pid" && test "$pid" != 0 && test -d "/proc/$pid"; then
+            printf 'PROCESS_EXE='; readlink -f "/proc/$pid/exe"
+            printf 'PROCESS_CWD='; readlink -f "/proc/$pid/cwd"
+            printf 'PROCESS_CMD='; tr '\0' ' ' <"/proc/$pid/cmdline"; echo
+          fi
+          echo '=== LISTENER ==='
+          ss -lntp '( sport = :2616 )' || true
+          echo '=== PACKAGES ==='
+          rpm -qa --qf '%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' | grep -Ei 'opennebula|fireedge|sunstone' | sort || true
+          echo '=== CONFIG_HASHES ==='
+          for cfg in /etc/one/fireedge-server.conf /etc/one/sunstone-server.conf /etc/one/oned.conf; do
+            if test -f "$cfg"; then sha256sum "$cfg"; fi
+          done
+          echo '=== DEPLOYED_FILES ==='
+          roots=(/usr/lib/one/fireedge /usr/share/one/fireedge /var/lib/one/fireedge)
+          for root in "${roots[@]}"; do
+            test -d "$root" || continue
+            printf 'DEPLOY_ROOT=%s\n' "$root"
+            find "$root" -maxdepth 4 -type f \
+              \( -name 'bundle*.js' -o -name 'index.js' -o -name 'package.json' -o -name 'yarn.lock' -o -name '*.map' \) \
+              -print0 | sort -z | xargs -0 -r sha256sum
+          done
+          echo '=== SOURCE_BINDING ==='
+          for repo in /root/one /opt/one /opt/layersentry/one /var/lib/one/one; do
+            test -d "$repo/.git" || continue
+            printf 'SOURCE_REPO=%s\n' "$repo"
+            git -C "$repo" status --short --branch
+            git -C "$repo" rev-parse HEAD
+            git -C "$repo" remote get-url origin 2>/dev/null || true
+          done
+          echo '=== HTTP_ROUTES ==='
+          for route in /fireedge /fireedge/ /fireedge/layersentry /fireedge/layersentry/ /fireedge/undefined/; do
+            code=$(curl -sS -o /tmp/layersentry-route-body -D /tmp/layersentry-route-headers \
+              --max-time 10 -w '%{http_code}' "http://127.0.0.1:2616$route" || true)
+            location=$(awk 'BEGIN{IGNORECASE=1} /^Location:/{sub(/\r$/,""); print $2}' /tmp/layersentry-route-headers | tail -1)
+            content_type=$(awk 'BEGIN{IGNORECASE=1} /^Content-Type:/{sub(/\r$/,""); $1=""; sub(/^ /,""); print}' /tmp/layersentry-route-headers | tail -1)
+            body_hash=$(sha256sum /tmp/layersentry-route-body | awk '{print $1}')
+            printf 'ROUTE=%s CODE=%s LOCATION=%s CONTENT_TYPE=%s BODY_SHA256=%s\n' \
+              "$route" "$code" "${location:-NONE}" "${content_type:-NONE}" "$body_hash"
+            grep -Eo 'src="[^"]+|href="[^"]+' /tmp/layersentry-route-body | sed -n '1,30p' || true
+          done
+          echo '=== CAPABILITY_FILES ==='
+          find /etc/one /var/lib/one /usr/lib/one/fireedge -maxdepth 5 -type f \
+            \( -iname '*capabilit*' -o -iname '*layersentry*' \) -print 2>/dev/null | sort | sed -n '1,160p'
+          REMOTE
+          chmod 700 "$remote"
+          scp -q -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            "$remote" root@172.17.60.30:/tmp/layersentry-live-runtime-audit.sh
+          ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            root@172.17.60.30 'bash /tmp/layersentry-live-runtime-audit.sh; rc=$?; rm -f /tmp/layersentry-live-runtime-audit.sh /tmp/layersentry-route-body /tmp/layersentry-route-headers; exit $rc'
