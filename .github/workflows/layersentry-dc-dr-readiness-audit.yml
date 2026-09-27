@@ -303,8 +303,9 @@ jobs:
           prefix="$(python3 -c 'import ipaddress,sys; print(ipaddress.IPv4Network("0.0.0.0/"+sys.argv[1]).prefixlen)' "$network_mask")"
           test "$prefix" -ge 8 && test "$prefix" -le 30
           qga_stage=hypervisor_guest_exec
+          gateway_arg="${gateway:-__LAYERSENTRY_NO_GATEWAY__}"
           sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" 'bash -s --' \
-            "$deploy_id" "$vm_ip" "$prefix" "$network_mask" "$gateway" "$guest_pub_b64" <<'HYPERVISOR_REPAIR'
+            "$deploy_id" "$vm_ip" "$prefix" "$network_mask" "$gateway_arg" "$guest_pub_b64" <<'HYPERVISOR_REPAIR'
           set -euo pipefail
           hypervisor_stage=domain_check
           trap 'echo "HYPERVISOR_QGA_FAIL_STAGE=$hypervisor_stage" >&2' ERR
@@ -313,6 +314,7 @@ jobs:
           prefix="$3"
           network_mask="$4"
           gateway="$5"
+          test "$gateway" != __LAYERSENTRY_NO_GATEWAY__ || gateway=''
           guest_pub_b64="$6"
           virsh -c qemu:///system dominfo "$domain" | grep -q '^State:[[:space:]]*running$'
           hypervisor_stage=guest_exec_submit
