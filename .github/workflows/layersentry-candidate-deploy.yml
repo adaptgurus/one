@@ -1,0 +1,139 @@
+name: LayerSentry Candidate Deploy
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feat/private-cloud-ux-completion-20260927
+    paths:
+      - '.github/workflows/layersentry-candidate-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-candidate-deploy
+  cancel-in-progress: false
+
+jobs:
+  build-deploy-verify:
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.23.3'
+          cache: npm
+          cache-dependency-path: src/fireedge/package-lock.json
+
+      - name: Test and build the exact candidate
+        working-directory: src/fireedge
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = layersentryol7
+          npm ci --ignore-scripts
+          node --test tests/layersentry/*.test.cjs
+          npm run build
+          sha256sum dist/client/bundle.layersentry.js dist/index.js | tee "$RUNNER_TEMP/candidate-hashes.txt"
+
+      - name: Stage candidate on the LayerSentry runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          key=/root/.ssh/layersentry_lab_ed25519
+          known="$RUNNER_TEMP/layersentry-known-hosts"
+          ssh-keyscan -T 8 -t ed25519,ecdsa,rsa 172.17.60.30 >"$known" 2>/dev/null
+          chmod 600 "$known"
+          stage="/var/tmp/layersentry-deploy-$GITHUB_SHA"
+          ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            layersentry-deploy@172.17.60.30 "sudo -n install -d -m 700 '$stage'"
+          tar -C src/fireedge -cf - dist etc/sunstone/sunstone-server.conf | \
+            ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+              layersentry-deploy@172.17.60.30 "sudo -n tar -C '$stage' -xf -"
+
+      - name: Deploy atomically with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          key=/root/.ssh/layersentry_lab_ed25519
+          known="$RUNNER_TEMP/layersentry-known-hosts"
+          bundle_hash=$(sha256sum src/fireedge/dist/client/bundle.layersentry.js | awk '{print $1}')
+          server_hash=$(sha256sum src/fireedge/dist/index.js | awk '{print $1}')
+          remote="$RUNNER_TEMP/layersentry-deploy.sh"
+          cat >"$remote" <<'REMOTE'
+          set -euo pipefail
+          candidate_sha=$1
+          expected_bundle=$2
+          expected_server=$3
+          stage="/var/tmp/layersentry-deploy-$candidate_sha"
+          target=/usr/lib/one/fireedge
+          config=/etc/one/sunstone-server.conf
+          backup="/var/backups/layersentry-fireedge/$candidate_sha"
+          test "$candidate_sha" = "${candidate_sha#*[!0-9a-f]}"
+          test ${#candidate_sha} -eq 40
+          test -d "$stage/dist/client"
+          test "$(sha256sum "$stage/dist/client/bundle.layersentry.js" | awk '{print $1}')" = "$expected_bundle"
+          test "$(sha256sum "$stage/dist/index.js" | awk '{print $1}')" = "$expected_server"
+          test ! -e "$backup"
+          install -d -m 700 "$backup"
+          cp -a "$target/dist" "$backup/dist"
+          cp -a "$config" "$backup/sunstone-server.conf"
+
+          rollback() {
+            trap - ERR
+            systemctl stop opennebula-fireedge.service || true
+            rm -rf "$target/dist"
+            cp -a "$backup/dist" "$target/dist"
+            install -o root -g oneadmin -m 640 "$backup/sunstone-server.conf" "$config"
+            systemctl start opennebula-fireedge.service || true
+          }
+          trap rollback ERR
+
+          ruby -ryaml -e '
+            source = YAML.safe_load_file(ARGV[0], aliases: true)
+            target = YAML.safe_load_file(ARGV[1], aliases: true)
+            profile = source.fetch("layersentry_capabilities")
+            target["layersentry_capabilities"] = profile
+            File.write(ARGV[2], YAML.dump(target))
+          ' "$stage/etc/sunstone/sunstone-server.conf" "$config" "$stage/sunstone-server.conf"
+
+          systemctl stop opennebula-fireedge.service
+          rm -rf "$target/dist"
+          cp -a "$stage/dist" "$target/dist"
+          chown -R root:root "$target/dist"
+          install -o root -g oneadmin -m 640 "$stage/sunstone-server.conf" "$config"
+          printf '%s\n' "$candidate_sha" >"$target/dist/LAYERSENTRY_SOURCE_COMMIT"
+          systemctl start opennebula-fireedge.service
+          systemctl is-active --quiet opennebula-fireedge.service
+          test "$(sha256sum "$target/dist/client/bundle.layersentry.js" | awk '{print $1}')" = "$expected_bundle"
+          test "$(sha256sum "$target/dist/index.js" | awk '{print $1}')" = "$expected_server"
+          test "$(cat "$target/dist/LAYERSENTRY_SOURCE_COMMIT")" = "$candidate_sha"
+          for route in /fireedge /fireedge/layersentry /fireedge/layersentry/compute /fireedge/layersentry/infrastructure/hosts /fireedge/undefined/; do
+            code=$(curl -sS -o /dev/null --max-time 15 -w '%{http_code}' "http://127.0.0.1:2616$route")
+            case "$route:$code" in
+              /fireedge:302|/fireedge/undefined/:302|*:200) ;;
+              *) echo "unexpected route status $route $code" >&2; exit 1 ;;
+            esac
+          done
+          trap - ERR
+          echo "DEPLOYED_SOURCE_COMMIT=$candidate_sha"
+          echo "DEPLOYED_LAYER_SENTRY_BUNDLE_SHA256=$expected_bundle"
+          echo "DEPLOYED_SERVER_SHA256=$expected_server"
+          REMOTE
+          chmod 700 "$remote"
+          ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            layersentry-deploy@172.17.60.30 \
+            "sudo -n bash -s -- '$GITHUB_SHA' '$bundle_hash' '$server_hash'" <"$remote"
+
+      - name: Real-browser anonymous routing and branding smoke
+        working-directory: src/fireedge
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save --ignore-scripts playwright@1.55.0
+          npx playwright install chromium
+          node tests/layersentry/live-browser-smoke.cjs http://172.17.60.30:2616/fireedge
+
