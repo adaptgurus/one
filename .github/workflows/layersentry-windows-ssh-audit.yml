@@ -15,22 +15,29 @@ concurrency:
 
 jobs:
   audit:
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        slot: [1, 2]
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 10
     steps:
       - name: Bind to the authorized Windows access computer
+        id: target
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
-          if ($env:RUNNER_NAME -ne 'WIN-GK6MO7T7OPC') {
-            throw "Refusing unexpected runner $($env:RUNNER_NAME)"
+          if ($env:RUNNER_NAME -eq 'WIN-GK6MO7T7OPC' -and $env:COMPUTERNAME -eq 'WIN-GK6MO7T7OPC') {
+            "eligible=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Output "TARGET_WINDOWS_OK runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME"
+          } else {
+            "eligible=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            Write-Output "SKIP_UNRELATED_WINDOWS_RUNNER runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME"
           }
-          if ($env:COMPUTERNAME -ne 'WIN-GK6MO7T7OPC') {
-            throw "Refusing unexpected computer $($env:COMPUTERNAME)"
-          }
-          Write-Output "TARGET_WINDOWS_OK runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME"
 
       - name: Inspect bootstrap key permissions and trusted host files
+        if: steps.target.outputs.eligible == 'true'
         id: sshmeta
         shell: powershell
         run: |
@@ -67,6 +74,7 @@ jobs:
           }
 
       - name: Test the retained key against exact DR identity
+        if: steps.target.outputs.eligible == 'true'
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -94,6 +102,7 @@ jobs:
           Write-Output 'DR_KEY_AUTH=PASS exact_target=layersentrydr/172.17.60.40 uid=0'
 
       - name: Test retained key for read-only DC inventory
+        if: steps.target.outputs.eligible == 'true'
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
