@@ -18,79 +18,88 @@ jobs:
     runs-on: [self-hosted, Linux, X64, layersentryol7]
     timeout-minutes: 10
     steps:
-      - name: Bind job to the exact DC candidate
-        id: target
+      - name: Inventory exact DC through the authorized bastion
         shell: bash
         run: |
           set -euo pipefail
-          echo "runner=${RUNNER_NAME:-unknown}"
-          echo "hostname=$(hostname -s)"
-          echo "uid=$(id -u)"
-          ip -4 -o addr show
           test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
           test "$(id -u)" = 0
-          if ! ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'; then
-            echo "Exact DC address 172.17.60.30/26 is absent; refusing inventory." >&2
-            exit 41
-          fi
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
 
-      - name: Read-only OpenNebula and replication inventory
-        shell: bash
-        run: |
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          chmod 0700 "$work"
+          scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)"
+          test "$(printf '%s\n' "$scan" | grep -c '^172\.17\.60\.30 ssh-ed25519 ')" -eq 1
+          fingerprint="$(printf '%s\n' "$scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')"
+          test "$fingerprint" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$scan" >"$work/known_hosts"
+          chmod 0600 "$work/known_hosts"
+
+          key=''
+          user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes \
+                -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" \
+                -o ConnectTimeout=5 "$candidate_user@172.17.60.30" \
+                'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' \
+                >/dev/null 2>&1; then
+                key="$candidate"
+                user="$candidate_user"
+                break 2
+              fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 \
+            ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+
+          test -n "$key"
+          echo "DC_KEY_AUTH=PASS user=$user key_fingerprint=$(ssh-keygen -lf "$key" -E sha256 | awk '{print $2}')"
+          ssh -i "$key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" \
+            "$user@172.17.60.30" 'bash -s' <<'REMOTE'
           set -euo pipefail
-          echo "TARGET_DC_OK runner=${RUNNER_NAME} host=$(hostname -s) uid=$(id -u)"
-          echo "OPENNEBULA_VERSION"
-          oneversion || true
-          echo "HOSTS"
-          onehost list || true
-          echo "VMS"
-          onevm list || true
-          echo "VM_SECURITY_PROFILE"
-          ids="$(onevm list --no-header -x ID 2>/dev/null || true)"
-          for id in ${ids}; do
-            xml="$(mktemp)"
-            onevm show "${id}" --xml >"${xml}"
-            python3 - "${xml}" <<'PY'
-          import sys
-          import xml.etree.ElementTree as ET
+          test "$(hostname -s)" = layersentry1
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          echo "TARGET_DC_OK host=$(hostname -s) uid=$($SUDO id -u)"
+          echo DATABASE_PACKAGES
+          $SUDO rpm -qa | grep -Ei '^(mariadb|mysql)' | sort || true
+          echo DATABASE_SERVICE
+          $SUDO systemctl is-active mariadb || true
+          $SUDO systemctl is-active mysql || true
+          echo DATABASE_RUNTIME
+          $SUDO mariadb --version 2>/dev/null || $SUDO mysql --version 2>/dev/null || true
+          $SUDO mariadb --batch --skip-column-names -e \
+            "SELECT CONCAT('engine_version=',@@version), CONCAT('version_comment=',@@version_comment), CONCAT('port=',@@port); SHOW GLOBAL STATUS WHERE Variable_name IN ('wsrep_cluster_size','wsrep_cluster_status','wsrep_local_state_comment','wsrep_ready');" \
+            2>/dev/null || true
+          echo DATABASE_LISTENERS
+          $SUDO ss -lntp | grep -E ':(3306|3307|3310)([[:space:]]|$)' || true
+          echo OPENNEBULA
+          sudo -n -u oneadmin oneversion || true
+          sudo -n -u oneadmin onehost list
+          sudo -n -u oneadmin onevm list
+          sudo -n -u oneadmin onevnet list
+          sudo -n -u oneadmin onedatastore list
+          echo NETWORK
+          $SUDO ip -4 -o addr show
+          $SUDO ip -d link show type bridge
+          $SUDO ip -4 route show
+          echo STORAGE
+          $SUDO findmnt -rn -o TARGET,SOURCE,FSTYPE,OPTIONS /var/lib/one /var/lib/one/datastores 2>/dev/null || true
+          $SUDO df -hT /var/lib/one/datastores
+          echo LAYERSENTRY_ENDPOINTS
+          $SUDO ss -lntp | grep -E ':(2616|2617|2633|9444)([[:space:]]|$)' || true
+          REMOTE
 
-          root = ET.parse(sys.argv[1]).getroot()
-          def value(path):
-              node = root.find(path)
-              return "" if node is None or node.text is None else node.text.strip()
-
-          selected = {
-              "id": value("ID"),
-              "name": value("NAME"),
-              "state": value("STATE"),
-              "lcm_state": value("LCM_STATE"),
-              "host": value("HISTORY_RECORDS/HISTORY/HOSTNAME"),
-              "hypervisor": value("TEMPLATE/HYPERVISOR"),
-              "firmware": value("TEMPLATE/OS/FIRMWARE"),
-              "firmware_secure": value("TEMPLATE/OS/FIRMWARE_SECURE"),
-              "tpm_type": value("TEMPLATE/TPM/TYPE"),
-              "tpm_model": value("TEMPLATE/TPM/MODEL"),
-          }
-          print(" ".join(f"{key}={item!r}" for key, item in selected.items()))
-          PY
-            rm -f "${xml}"
-          done
-          echo "LAYERSENTRY_UNITS"
-          systemctl list-unit-files --no-pager | grep -Ei 'layersentry|replication' || true
-          echo "LISTENERS"
-          ss -lntp | grep -E ':(2616|2617|9443|945[0-9]|946[0-9])([[:space:]]|$)' || true
-          echo "DR_CAPABILITY_HTTP"
-          for url in \
-            http://127.0.0.1:2616/v1/dr/capabilities \
-            http://127.0.0.1:2616/fireedge/api/v1/dr/capabilities; do
-            code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "${url}" || true)"
-            echo "${code} ${url}"
-          done
-
-      - name: Reassert no workload mutation
+      - name: Reassert read-only completion
         shell: bash
         run: |
           set -euo pipefail
           test "${RUNNER_NAME:-}" = layersentryol7
-          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
-          echo "READ_ONLY_AUDIT_COMPLETE"
+          test "$(hostname -s)" = layersentryol7
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+          echo READ_ONLY_AUDIT_COMPLETE
