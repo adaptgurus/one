@@ -15,9 +15,9 @@ jobs:
       matrix:
         attempt: [1, 2, 3, 4]
     runs-on: [self-hosted, linux]
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
-      - name: Bind exact DR runner
+      - name: Bind exact DR runner and host
         id: bind
         shell: bash
         run: |
@@ -30,7 +30,7 @@ jobs:
           test "$(id -u)" -eq 0
           ip -4 addr show | grep -qE '(^|[[:space:]])172\.17\.60\.40/'
           echo "target=true" >> "$GITHUB_OUTPUT"
-      - name: Repair and individually verify installed base services
+      - name: Repair and qualify version-matched base
         if: steps.bind.outputs.target == 'true'
         shell: bash
         run: |
@@ -40,53 +40,61 @@ jobs:
           flock -n 9 || { echo 'BLOCKED_CONCURRENT_INSTALL'; exit 48; }
           mkdir -p /var/log/layersentrydr /var/lib/layersentry
           rpm -q opennebula opennebula-node-kvm opennebula-fireedge
-          failed=0
-          for unit in opennebula opennebula-scheduler opennebula-fireedge opennebula-flow opennebula-gate; do
-            echo "SERVICE=$unit"
-            systemctl show "$unit" -p LoadState -p ActiveState -p SubState -p Result
-            if ! systemctl is-active --quiet "$unit"; then
-              systemctl start "$unit" || failed=1
-            fi
-            # is-active on multiple units succeeds when ANY unit is active; test each separately.
-            if systemctl is-active --quiet "$unit"; then
-              echo "$unit=ACTIVE"
-            else
-              echo "$unit=FAILED"
-              failed=1
-            fi
-            journalctl -u "$unit" -n 40 --no-pager > "/var/log/layersentrydr/${unit}-startup.log"
+          test "$(rpm -q --qf '%{VERSION}' opennebula)" = '7.4.1'
+          # OpenNebula 7.x has no separate opennebula-scheduler.service.
+          for unit in opennebula opennebula-fireedge opennebula-flow opennebula-gate; do
+            systemctl enable "$unit"
+            if ! systemctl is-active --quiet "$unit"; then systemctl start "$unit"; fi
           done
-          python3 - <<'PY'
+          ready=0
+          for attempt in 1 2 3 4 5 6; do
+            if systemctl is-active --quiet opennebula-fireedge && curl --silent --fail --max-time 5 -o /dev/null http://127.0.0.1:2616/fireedge/; then ready=1; break; fi
+            sleep 5
+          done
+          # Require per-service status, persistence, and an HTTP response, not just systemd startup acceptance.
+          for unit in opennebula opennebula-fireedge opennebula-flow opennebula-gate; do
+            systemctl show "$unit" -p ActiveState -p SubState -p Result -p UnitFileState
+            systemctl is-active --quiet "$unit" || ready=0
+            systemctl is-enabled --quiet "$unit" || ready=0
+          done
+          if [ "$ready" -ne 1 ]; then
+            journalctl -u opennebula-fireedge -n 50 --no-pager > /var/log/layersentrydr/fireedge-qualification-journal.log
+            echo 'FIREEDGE_LOCAL_DIAGNOSTICS'
+            python3 - <<'PY'
           import pathlib,re
           values=[]
           for p in pathlib.Path('/root/.layersentry-secrets').glob('*.pw'):
               v=p.read_text(errors='replace').strip()
               if len(v)>4: values.append(v)
-          for p in pathlib.Path('/var/log/layersentrydr').glob('*-startup.log'):
-              text=p.read_text(errors='replace')
+          paths=[pathlib.Path('/var/log/layersentrydr/fireedge-qualification-journal.log')]
+          paths.extend(pathlib.Path('/var/log/one').glob('fireedge*'))
+          for p in paths:
+              if not p.is_file(): continue
+              with p.open('rb') as f:
+                  f.seek(0,2); f.seek(max(0,f.tell()-12000)); text=f.read().decode(errors='replace')
               for v in values: text=text.replace(v,'[REDACTED]')
               text=re.sub(r'(?i)(password|token|secret|one_pass)([\s\"\x27:=]+)[^\s,}\"\x27]+',r'\1\2[REDACTED]',text)
-              print('LOG='+p.name)
-              print('\n'.join(text.splitlines()[-18:]))
+              print('LOG='+p.name); print('\n'.join(text.splitlines()[-30:]))
           PY
-          test "$failed" -eq 0 || { echo 'BASE_HEALTH=FAILED'; exit 52; }
-          # Verify again after all starts; avoid one service masking another failure.
-          for unit in opennebula opennebula-scheduler opennebula-fireedge opennebula-flow opennebula-gate; do
-            systemctl is-active --quiet "$unit" || exit 53
-          done
-          su - oneadmin -s /bin/bash -c 'onehost list; onevm list; oneimage list; onevnet list'
-          curl --fail --silent --show-error --max-time 15 -o /dev/null http://127.0.0.1:2616/fireedge/
+            echo 'BASE_HEALTH=FAILED'
+            exit 52
+          fi
+          su - oneadmin -s /bin/bash -c 'set -e; onehost list; onevm list; oneimage list; onevnet list'
           test "$(getenforce)" = Enforcing
           touch /var/lib/layersentry/.dr-base-services-verified
           echo 'DR_BASE_SERVICES=LIVE_VERIFIED'
-      - name: Discover existing installer and image inputs without reading credentials
+          echo 'Base services only verified. Customer LayerSentry UI, 3 Raft VMs and 3 MySQL VMs remain pending.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Discover configured private installer access and cached sources
         if: always() && steps.bind.outputs.target == 'true'
         shell: bash
+        env:
+          GIT_TERMINAL_PROMPT: '0'
         run: |
           set -euo pipefail
-          ip -4 -br addr
-          ip -4 route
-          virsh -r -c qemu:///system list --all
           find /opt /srv /root -maxdepth 4 -type d \( -name layersentry-platform -o -name codexagentlogic -o -name one-deploy \) -print 2>/dev/null || true
-          find /opt /var/lib/one /root -maxdepth 4 -type f \( -name '*.qcow2' -o -name '*cloud*.img' -o -name '*installer*.tar.gz' \) -printf '%p %s bytes\n' 2>/dev/null | head -40 || true
-          echo 'SIX_VM_TOPOLOGY=NOT_CREATED_BY_THIS_WORKFLOW'
+          if timeout 15 git ls-remote https://github.com/adaptgurus/layersentry-platform.git HEAD >/var/log/layersentrydr/private-installer-access.log 2>&1; then
+            echo 'EXISTING_PRIVATE_INSTALLER_READ_ACCESS=AVAILABLE'
+          else
+            echo 'EXISTING_PRIVATE_INSTALLER_READ_ACCESS=UNAVAILABLE'
+          fi
+          virsh -r -c qemu:///system list --all
