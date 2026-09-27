@@ -180,7 +180,6 @@ jobs:
           trap 'test -z "$image_template" || rm -f -- "$image_template"; test -z "$vm_template" || rm -f -- "$vm_template"' EXIT
           data_name=ls-dr-v2-qual-20260928-data
           vm_name=ls-dr-v2-qual-20260928
-          template_name=ls-dr-v2-qual-20260928-template
           base_image_id=3
           sudo -n -u oneadmin oneimage show "$base_image_id" --xml >/dev/null
           data_id="$(sudo -n -u oneadmin oneimage list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("IMAGE") if (x.findtext("NAME") or "")==n),""))' "$data_name")"
@@ -208,7 +207,7 @@ jobs:
           if test -z "$vm_id"; then
             vm_template="$(mktemp)"
             cat >"$vm_template" <<VM
-          NAME = "$template_name"
+          NAME = "$vm_name"
           CPU = "2"
           VCPU = "2"
           MEMORY = "4096"
@@ -220,8 +219,7 @@ jobs:
           CONTEXT = [ NETWORK = "YES", NETCFG_TYPE = "nm", SET_HOSTNAME = "$vm_name", GROW_FS = "/", SSH_PUBLIC_KEY = "$guest_pub" ]
           VM
             chmod 0644 "$vm_template"
-            template_id="$(sudo -n -u oneadmin onetemplate create "$vm_template" | awk '{print $NF}')"
-            vm_id="$(sudo -n -u oneadmin onetemplate instantiate "$template_id" --name "$vm_name" | awk '{print $NF}')"
+            vm_id="$(sudo -n -u oneadmin onevm create "$vm_template" | awk '{print $NF}')"
           fi
           for _ in $(seq 1 180); do
             read -r state lcm ip < <(sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("STATE") or "",r.findtext("LCM_STATE") or "",r.findtext("TEMPLATE/NIC/IP") or "")')
