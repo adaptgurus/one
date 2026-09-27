@@ -43,6 +43,7 @@ jobs:
             test -f "$candidate" || continue
             test "$(stat -c '%a' "$candidate")" -le 600 || continue
             ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
             for candidate_user in layersentry-deploy root; do
               if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes \
                 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" \
@@ -141,6 +142,7 @@ jobs:
             test -f "$candidate" || continue
             test "$(stat -c '%a' "$candidate")" -le 600 || continue
             ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
             for candidate_user in layersentry-deploy root; do
               if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes \
                 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
