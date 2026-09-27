@@ -193,7 +193,7 @@ jobs:
           DESCRIPTION = "Disposable LayerSentry Replication v2 qualification data disk"
           IMAGE
             chmod 0644 "$image_template"
-            data_id="$(sudo -n -u oneadmin oneimage create -d 1 "$image_template")"
+            data_id="$(sudo -n -u oneadmin oneimage create -d 1 "$image_template" | awk '{print $NF}')"
           fi
           for _ in $(seq 1 120); do
             state="$(sudo -n -u oneadmin oneimage show "$data_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE") or "")')"
@@ -218,8 +218,8 @@ jobs:
           CONTEXT = [ NETWORK = "YES", NETCFG_TYPE = "nm", SET_HOSTNAME = "$vm_name", GROW_FS = "/", SSH_PUBLIC_KEY = "$guest_pub" ]
           VM
             chmod 0644 "$vm_template"
-            template_id="$(sudo -n -u oneadmin onetemplate create "$vm_template")"
-            vm_id="$(sudo -n -u oneadmin onetemplate instantiate "$template_id" --name "$vm_name")"
+            template_id="$(sudo -n -u oneadmin onetemplate create "$vm_template" | awk '{print $NF}')"
+            vm_id="$(sudo -n -u oneadmin onetemplate instantiate "$template_id" --name "$vm_name" | awk '{print $NF}')"
           fi
           for _ in $(seq 1 180); do
             read -r state lcm ip < <(sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("STATE") or "",r.findtext("LCM_STATE") or "",r.findtext("TEMPLATE/NIC/IP") or "")')
