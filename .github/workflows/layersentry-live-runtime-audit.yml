@@ -54,7 +54,7 @@ jobs:
           echo '=== PACKAGES ==='
           rpm -qa --qf '%{NAME}\t%{EPOCHNUM}:%{VERSION}-%{RELEASE}.%{ARCH}\n' | grep -Ei 'opennebula|fireedge|sunstone' | sort || true
           echo '=== CONFIG_HASHES ==='
-          for cfg in /etc/one/fireedge-server.conf /etc/one/sunstone-server.conf /etc/one/oned.conf; do
+          for cfg in /etc/one/fireedge-server.conf /etc/one/fireedge/sunstone/sunstone-server.conf /etc/one/fireedge/sunstone/tab-manifest.yaml /etc/one/oned.conf; do
             if test -f "$cfg"; then sha256sum "$cfg"; fi
           done
           echo '=== DEPLOYED_FILES ==='

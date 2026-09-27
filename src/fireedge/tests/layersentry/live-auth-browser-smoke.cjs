@@ -50,8 +50,27 @@ const assertProductPage = async (page, label) => {
 
   await page.goto(`${baseUrl}/layersentry`, { waitUntil: 'networkidle' })
   await assertProductPage(page, 'login')
-  await page.locator('[name="user"]').fill(username)
-  await page.locator('[name="token"]').fill(password)
+  const userInput = page.locator('input[placeholder="Enter username"]')
+  try {
+    await userInput.waitFor({ state: 'visible', timeout: 15000 })
+  } catch (error) {
+    const fields = await page.locator('input').evaluateAll((inputs) =>
+      inputs.map(({ name, type, placeholder }) => ({
+        name,
+        type,
+        placeholder,
+      }))
+    )
+    throw new Error(
+      `LayerSentry login fields unavailable: ${
+        error.message
+      }; fields=${JSON.stringify(fields)}; body=${JSON.stringify(
+        (await page.locator('body').innerText()).slice(0, 1200)
+      )}`
+    )
+  }
+  await userInput.fill(username)
+  await page.locator('input[placeholder="Enter password"]').fill(password)
   await page.locator('[data-cy="login-button"]').click()
   await page.getByText('Overview', { exact: true }).first().waitFor()
   const overview = await assertProductPage(page, `${role} overview`)

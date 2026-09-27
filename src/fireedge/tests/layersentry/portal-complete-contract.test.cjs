@@ -173,6 +173,21 @@ test('shipped capability profile exposes qualified core read inventories', () =>
   assert.doesNotMatch(config, /^ {2}SITE_RECOVERY_DR:/m)
 })
 
+test('candidate deployment updates the FireEdge runtime config and matching view manifests', () => {
+  const workflow = read(
+    '../../.github/workflows/layersentry-candidate-deploy.yml'
+  )
+
+  assert.match(
+    workflow,
+    /config_root=\/etc\/one\/fireedge\/sunstone/
+  )
+  assert.doesNotMatch(workflow, /config=\/etc\/one\/sunstone-server\.conf/)
+  assert.match(workflow, /etc\/sunstone\/tab-manifest\.yaml/)
+  assert.match(workflow, /etc\/sunstone\/views/)
+  assert.match(workflow, /grep -q 'layersentry_capabilities'/)
+})
+
 test('non-Kubernetes workspaces have dedicated LayerSentry product surfaces', () => {
   const portal = read('src/client/apps/layersentry/Portal.js')
   for (const component of [

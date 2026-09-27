@@ -51,7 +51,12 @@ jobs:
           stage="/var/tmp/layersentry-deploy-$GITHUB_SHA"
           ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
             layersentry-deploy@172.17.60.30 "sudo -n install -d -m 700 '$stage'"
-          tar -C src/fireedge -cf - dist etc/sunstone/sunstone-server.conf | \
+          tar -C src/fireedge -cf - \
+            dist \
+            etc/sunstone/sunstone-server.conf \
+            etc/sunstone/tab-manifest.yaml \
+            etc/sunstone/tabs \
+            etc/sunstone/views | \
             ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
               layersentry-deploy@172.17.60.30 "sudo -n tar -C '$stage' -xf -"
 
@@ -71,7 +76,8 @@ jobs:
           expected_server=$3
           stage="/var/tmp/layersentry-deploy-$candidate_sha"
           target=/usr/lib/one/fireedge
-          config=/etc/one/sunstone-server.conf
+          config_root=/etc/one/fireedge/sunstone
+          config="$config_root/sunstone-server.conf"
           backup="/var/backups/layersentry-fireedge/$candidate_sha"
           test "$candidate_sha" = "${candidate_sha#*[!0-9a-f]}"
           test ${#candidate_sha} -eq 40
@@ -82,6 +88,9 @@ jobs:
           install -d -m 700 "$backup"
           cp -a "$target/dist" "$backup/dist"
           cp -a "$config" "$backup/sunstone-server.conf"
+          cp -a "$config_root/tab-manifest.yaml" "$backup/tab-manifest.yaml"
+          cp -a "$config_root/tabs" "$backup/tabs"
+          cp -a "$config_root/views" "$backup/views"
 
           rollback() {
             trap - ERR
@@ -89,6 +98,10 @@ jobs:
             rm -rf "$target/dist"
             cp -a "$backup/dist" "$target/dist"
             install -o root -g oneadmin -m 640 "$backup/sunstone-server.conf" "$config"
+            install -o root -g oneadmin -m 640 "$backup/tab-manifest.yaml" "$config_root/tab-manifest.yaml"
+            rm -rf "$config_root/tabs" "$config_root/views"
+            cp -a "$backup/tabs" "$config_root/tabs"
+            cp -a "$backup/views" "$config_root/views"
             systemctl start opennebula-fireedge.service || true
           }
           trap rollback ERR
@@ -106,6 +119,11 @@ jobs:
           cp -a "$stage/dist" "$target/dist"
           chown -R root:root "$target/dist"
           install -o root -g oneadmin -m 640 "$stage/sunstone-server.conf" "$config"
+          install -o root -g oneadmin -m 640 "$stage/etc/sunstone/tab-manifest.yaml" "$config_root/tab-manifest.yaml"
+          rm -rf "$config_root/tabs" "$config_root/views"
+          cp -a "$stage/etc/sunstone/tabs" "$config_root/tabs"
+          cp -a "$stage/etc/sunstone/views" "$config_root/views"
+          chown -R root:oneadmin "$config_root/tabs" "$config_root/views"
           printf '%s\n' "$candidate_sha" >"$target/dist/LAYERSENTRY_SOURCE_COMMIT"
           systemctl start opennebula-fireedge.service
           systemctl is-active --quiet opennebula-fireedge.service
@@ -121,6 +139,11 @@ jobs:
             sleep 1
           done
           test "$ready" = true
+          curl -fsS http://127.0.0.1:2616/fireedge/layersentry | grep -q 'layersentry_capabilities'
+          ruby -ryaml -e '
+            config = YAML.safe_load_file(ARGV[0], aliases: true)
+            abort "missing LayerSentry capability profile" unless config.dig("layersentry_capabilities", "COMPUTE", "enabled") == true
+          ' "$config"
           for route in /fireedge /fireedge/layersentry /fireedge/layersentry/compute /fireedge/layersentry/infrastructure/hosts /fireedge/undefined/; do
             code=$(curl -sS -o /dev/null --max-time 15 -w '%{http_code}' "http://127.0.0.1:2616$route")
             case "$route:$code" in
@@ -156,10 +179,11 @@ jobs:
           username="ls-ci-${GITHUB_SHA:0:10}"
           password=$(openssl rand -hex 24)
           echo "::add-mask::$password"
-          user_id=$(ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+          user_output=$(ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
             layersentry-deploy@172.17.60.30 \
             "sudo -n -u oneadmin oneuser create '$username' '$password' --driver core")
-          test "$user_id" = "${user_id#*[!0-9]}"
+          user_id=${user_output##*: }
+          [[ "$user_id" =~ ^[0-9]+$ ]]
           {
             printf 'LAYERSENTRY_TEST_USERNAME=%q\n' "$username"
             printf 'LAYERSENTRY_TEST_PASSWORD=%q\n' "$password"
