@@ -284,7 +284,7 @@ jobs:
             test -n "$network_mask" || network_mask="${network_fields[0]}"
             test -n "$gateway" || gateway="${network_fields[1]}"
           fi
-          test -n "$network_mask" && test -n "$gateway"
+          test -n "$network_mask"
           prefix="$(python3 -c 'import ipaddress,sys; print(ipaddress.IPv4Network("0.0.0.0/"+sys.argv[1]).prefixlen)' "$network_mask")"
           test "$prefix" -ge 8 && test "$prefix" -le 30
           sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" 'bash -s --' \
@@ -297,7 +297,13 @@ jobs:
           gateway="$5"
           guest_pub_b64="$6"
           virsh -c qemu:///system dominfo "$domain" | grep -q '^State:[[:space:]]*running$'
-          command="set -eu; ip link set eth0 up; ip addr flush dev eth0 scope global || true; ip addr add $vm_ip/$prefix dev eth0; ip route replace default via $gateway dev eth0; mkdir -p /etc/network /root/.ssh; printf 'auto lo\\niface lo inet loopback\\n\\nauto eth0\\niface eth0 inet static\\n  address $vm_ip\\n  netmask $network_mask\\n  gateway $gateway\\n' > /etc/network/interfaces; printf '%s' '$guest_pub_b64' | base64 -d > /root/.ssh/authorized_keys; chmod 0700 /root/.ssh; chmod 0600 /root/.ssh/authorized_keys; command -v rc-service >/dev/null 2>&1 && rc-service sshd restart || true; sync"
+          route_command=''
+          gateway_config=''
+          if test -n "$gateway"; then
+            route_command="ip route replace default via $gateway dev eth0;"
+            gateway_config="  gateway $gateway\\n"
+          fi
+          command="set -eu; ip link set eth0 up; ip addr flush dev eth0 scope global || true; ip addr add $vm_ip/$prefix dev eth0; $route_command mkdir -p /etc/network /root/.ssh; printf 'auto lo\\niface lo inet loopback\\n\\nauto eth0\\niface eth0 inet static\\n  address $vm_ip\\n  netmask $network_mask\\n$gateway_config' > /etc/network/interfaces; printf '%s' '$guest_pub_b64' | base64 -d > /root/.ssh/authorized_keys; chmod 0700 /root/.ssh; chmod 0600 /root/.ssh/authorized_keys; command -v rc-service >/dev/null 2>&1 && rc-service sshd restart || true; sync"
           request="$(python3 -c 'import json,sys; print(json.dumps({"execute":"guest-exec","arguments":{"path":"/bin/sh","arg":["-c",sys.argv[1]],"capture-output":True}}))' "$command")"
           response="$(virsh -c qemu:///system qemu-agent-command "$domain" "$request")"
           pid="$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["return"]["pid"])')"
