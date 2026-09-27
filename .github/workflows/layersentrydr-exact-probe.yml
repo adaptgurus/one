@@ -9,7 +9,7 @@ concurrency:
   cancel-in-progress: true
 jobs:
   probe:
-    runs-on: layersentrydr
+    runs-on: [self-hosted, linux]
     timeout-minutes: 10
     steps:
       - name: Bind runner and DR host
