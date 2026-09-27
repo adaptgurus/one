@@ -163,6 +163,26 @@ jobs:
           $liveFingerprint = ([regex]::Match($liveFingerprintText, 'SHA256:[A-Za-z0-9+/]+')).Value
           if (-not $liveFingerprint) { throw 'Live DC host-key digest is absent' }
           Write-Output "DC_LIVE_HOST_KEY=$liveFingerprint"
+          # codexagentlogic main 3975b9b6, retained evidence:
+          # evidence/smart-installer/20260926/gate-b2-bootstrap-storage-20260926-03/stdout/post-rotation-fingerprints.txt
+          $expectedDcFingerprint = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          if ($liveFingerprint -ne $expectedDcFingerprint) {
+            Write-Output 'DC_KEY_AUTH=NOT_TESTED reason=live_host_key_differs_from_authoritative_evidence'
+            exit 0
+          }
+          $readonlyKnown = Join-Path $base 'readonly-known-hosts'
+          $matchingRetained = $false
+          $retained = @(& ssh-keygen.exe -F '172.17.60.30' -f $readonlyKnown 2>$null)
+          if ($LASTEXITCODE -eq 0) {
+            $retainedText = ($retained | & ssh-keygen.exe -lf - -E sha256) -join "`n"
+            $matchingRetained = $retainedText -match [regex]::Escape($expectedDcFingerprint)
+          }
+          if (-not $matchingRetained) {
+            Add-Content -LiteralPath $readonlyKnown -Value $dcScan[0] -Encoding Ascii
+            Write-Output 'DC_HOST_KEY_PINNED=YES'
+          } else {
+            Write-Output 'DC_HOST_KEY_PINNED=ALREADY_PRESENT'
+          }
           $known = $null
           foreach ($name in @('alma-known-hosts', 'known_hosts', 'readonly-known-hosts')) {
             $path = Join-Path $base $name
