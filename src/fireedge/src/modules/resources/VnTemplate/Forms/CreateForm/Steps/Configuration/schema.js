@@ -64,7 +64,7 @@ export const SCHEMA = (
     ))
   isEnabled('clusters') && (schema = schema.concat(CLUSTER_SCHEMA))
   isEnabled('context') &&
-    (schema = schema.concat(CONTEXT_SCHEMA(oneConfig, adminGroup)))
+    (schema = schema.concat(CONTEXT_SCHEMA(oneConfig, adminGroup, isVnet)))
   isEnabled('qos') &&
     (schema = schema.concat(QOS_SCHEMA(oneConfig, adminGroup)))
   isEnabled('addresses') && (schema = schema.concat(AR_SCHEMA))

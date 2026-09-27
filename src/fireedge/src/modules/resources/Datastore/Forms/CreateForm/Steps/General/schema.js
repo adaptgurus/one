@@ -35,7 +35,7 @@ const getStorageBackendsFromDStype = (type) =>
 /** @type {Field} Toggle select type image */
 const TYPE = {
   name: 'TYPE',
-  label: T.DatastoreType,
+  label: 'Storage Type',
   type: INPUT_TYPES.TOGGLE,
   values: arrayToOptions(Object.values(DATASTORE_TYPES), {
     addEmpty: false,
@@ -83,7 +83,7 @@ const STORAGE_BACKEND = {
 
 const DS_MAD = {
   name: 'DS_MAD',
-  label: T.Datastore,
+  label: 'Storage Driver',
   type: INPUT_TYPES.AUTOCOMPLETE,
   optionsOnly: true,
   dependOf: STORAGE_BACKEND.name,

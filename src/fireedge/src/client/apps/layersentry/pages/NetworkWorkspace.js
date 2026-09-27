@@ -87,6 +87,7 @@ const NetworkInventory = () => {
     >
       {networks.map((network) => {
         const ranges = toArray(network?.AR_POOL?.AR)
+        const template = network?.TEMPLATE ?? {}
         const allocatedLeases = ranges.reduce(
           (total, range) => total + toArray(range?.LEASES?.LEASE).length,
           0
@@ -110,6 +111,27 @@ const NetworkInventory = () => {
               #{network.ID} · {ranges.length} address range
               {ranges.length === 1 ? '' : 's'} · {allocatedLeases} allocated
               lease{allocatedLeases === 1 ? '' : 's'}
+            </Typography>
+            <Typography
+              sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
+            >
+              {template.LAYERSENTRY_ENVIRONMENT ?? 'Unclassified'} /{' '}
+              {template.LAYERSENTRY_TIER ?? 'unclassified'} ·{' '}
+              {template.NETWORK_ADDRESS && template.NETWORK_MASK
+                ? `${template.NETWORK_ADDRESS} (${template.NETWORK_MASK})`
+                : 'CIDR unavailable'}
+            </Typography>
+            <Typography
+              sx={{ mt: 0.35, fontSize: 11, color: colors.text.secondary }}
+            >
+              {template.VLAN_ID ? `VLAN ${template.VLAN_ID}` : 'Untagged'} ·{' '}
+              {template.LAYERSENTRY_IP_MODE ?? template.METHOD ?? 'Native IP'} ·{' '}
+              {template.LAYERSENTRY_ISOLATION_POLICY ??
+                template.LAYERSENTRY_COMMUNICATION_POLICY ??
+                'Custom policy'}
+              {template.SECURITY_GROUPS
+                ? ` · firewall groups ${template.SECURITY_GROUPS}`
+                : ''}
             </Typography>
           </Box>
         )

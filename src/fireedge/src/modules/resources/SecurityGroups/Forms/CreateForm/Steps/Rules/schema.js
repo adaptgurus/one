@@ -30,6 +30,8 @@ import {
   ICMP_V6_STRING,
 } from '@ConstantsModule'
 
+const LAYERSENTRY_VIRTUAL_NETWORK = 'LayerSentry Network'
+
 /** @type {Field} Rule type field */
 export const RULE_TYPE = {
   name: 'RULE_TYPE',
@@ -184,7 +186,7 @@ export const TARGET = {
   type: INPUT_TYPES.AUTOCOMPLETE,
   optionsOnly: true,
   values: arrayToOptions(
-    [T.AnyNetwork, T.ManualNetwork, T.OpennebulaVirtualNetwork],
+    [T.AnyNetwork, T.ManualNetwork, LAYERSENTRY_VIRTUAL_NETWORK],
     {
       addEmpty: false,
     }
@@ -238,7 +240,7 @@ const NETWORK_ID = {
   type: INPUT_TYPES.TABLE,
   dependOf: TARGET.name,
   htmlType: (range) =>
-    range !== T.OpennebulaVirtualNetwork && INPUT_TYPES.HIDDEN,
+    range !== LAYERSENTRY_VIRTUAL_NETWORK && INPUT_TYPES.HIDDEN,
   model: {
     ...vnTable,
     columns: () =>
@@ -256,8 +258,8 @@ const NETWORK_ID = {
   },
   singleSelect: true,
   isRefreshTable: true,
-  validation: mixed().when(RANGE.name, {
-    is: (protocol) => protocol === T.OpennebulaVirtualNetwork,
+  validation: mixed().when(TARGET.name, {
+    is: (target) => target === LAYERSENTRY_VIRTUAL_NETWORK,
     then: (schema) => schema.required(),
     otherwise: (schema) => schema.notRequired().nullable(),
   }),

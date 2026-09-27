@@ -45,7 +45,7 @@ const systemDatastoreTable = {
 
 const COMPATIBLE_SYSTEM_DATASTORES = {
   name: 'COMPATIBLE_SYSTEM_DATASTORES',
-  label: T.CompatibleSystemDatastores,
+  label: 'Compatible System Storage Pools',
   tooltip: T.CompatibleSystemDatastoresConcept,
   type: INPUT_TYPES.TABLE,
   model: systemDatastoreTable,

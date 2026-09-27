@@ -14,7 +14,6 @@
  * limitations under the License.                                            *
  * ------------------------------------------------------------------------- */
 import { FormWithSchema } from '@ComponentsModule'
-import { T } from '@ConstantsModule'
 import { Step } from '@UtilsModule'
 import {
   DATASTORE_FIELD,
@@ -36,7 +35,7 @@ const Content = () => (
  */
 const DatastoresStep = () => ({
   id: STEP_ID,
-  label: T.SelectDatastores,
+  label: 'Backup Storage',
   resolver: SCHEMA,
   optionsValidate: { abortEarly: false },
   content: Content,

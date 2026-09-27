@@ -198,10 +198,10 @@ MetricCard.propTypes = {
 
 export const StatusPill = ({ label, tone = 'info' }) => {
   const palette = {
-    success: [colors.status.success, colors.status.successSoft],
-    warning: [colors.status.warning, colors.status.warningSoft],
-    danger: [colors.status.danger, colors.status.dangerSoft],
-    info: [colors.status.info, colors.status.infoSoft],
+    success: [colors.status.successText, colors.status.successSoft],
+    warning: [colors.status.warningText, colors.status.warningSoft],
+    danger: [colors.status.dangerText, colors.status.dangerSoft],
+    info: [colors.status.infoText, colors.status.infoSoft],
   }
   const [foreground, background] = palette[tone] ?? palette.info
 

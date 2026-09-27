@@ -37,6 +37,8 @@ import ManagedServicesWorkspace from 'client/apps/layersentry/pages/ManagedServi
 import ProductionServiceWizard from 'client/apps/layersentry/pages/ProductionServiceWizard'
 import SiteRecoveryWorkspace from 'client/apps/layersentry/pages/SiteRecoveryWorkspace'
 import BackupStorageWorkspace from 'client/apps/layersentry/pages/BackupStorageWorkspace'
+import NetworkCreateWizard from 'client/apps/layersentry/pages/NetworkCreateWizard'
+import BackupPlanCreateWizard from 'client/apps/layersentry/pages/BackupPlanCreateWizard'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 
 const area = (props) => <AreaPage {...props} />
@@ -147,21 +149,7 @@ const Portal = ({ endpoints }) => {
           render={() => <KubernetesWorkspace endpoints={endpoints} />}
         />
 
-        <Route
-          exact
-          path="/network/create"
-          render={() =>
-            create({
-              endpoints,
-              title: 'Create Network',
-              description:
-                'Define an isolated private, public or routed network using customer-friendly settings.',
-              legacyPath: '/virtual-network/create',
-              returnTo: PRODUCT_PATHS.NETWORK,
-              steps: ['Type', 'Address', 'Isolation', 'Security', 'Review'],
-            })
-          }
-        />
+        <Route exact path="/network/create" component={NetworkCreateWizard} />
         <Route
           exact
           path={PRODUCT_PATHS.NETWORK}
@@ -264,23 +252,7 @@ const Portal = ({ endpoints }) => {
         <Route
           exact
           path="/protection/create"
-          render={() =>
-            create({
-              endpoints,
-              title: 'Create Backup Plan',
-              description:
-                'Choose resources, schedule, retention and storage before enabling protection.',
-              legacyPath: '/backupjobs/create',
-              returnTo: PRODUCT_PATHS.PROTECTION_BACKUP_PLANS,
-              steps: [
-                'Resources',
-                'Schedule',
-                'Retention',
-                'Storage',
-                'Review',
-              ],
-            })
-          }
+          component={BackupPlanCreateWizard}
         />
         <Route
           exact
@@ -437,7 +409,7 @@ const Portal = ({ endpoints }) => {
                 endpoints,
                 title: 'Create Backup Storage',
                 description:
-                  'Create a LayerSentry Backup Datastore using a qualified Restic, Rsync or custom backup backend.',
+                  'Create LayerSentry backup storage using a qualified Restic, Rsync or custom backup backend.',
                 legacyPath: '/datastore/create',
                 returnTo: PRODUCT_PATHS.INFRA_BACKUP_STORAGE,
                 steps: ['Type', 'Backend', 'Capacity', 'Validation', 'Review'],

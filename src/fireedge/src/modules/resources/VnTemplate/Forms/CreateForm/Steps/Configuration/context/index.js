@@ -95,12 +95,12 @@ const CustomAttributes = () => {
   )
 }
 
-const ContextContent = ({ oneConfig, adminGroup }) => (
+const ContextContent = ({ oneConfig, adminGroup, isVnet }) => (
   <>
     <FormWithSchema
       id={EXTRA_ID}
       cy="context"
-      fields={FIELDS(oneConfig, adminGroup)}
+      fields={FIELDS(oneConfig, adminGroup, isVnet)}
     />
     <CustomAttributes />
   </>
@@ -109,6 +109,7 @@ const ContextContent = ({ oneConfig, adminGroup }) => (
 ContextContent.propTypes = {
   oneConfig: PropTypes.object,
   adminGroup: PropTypes.bool,
+  isVnet: PropTypes.bool,
 }
 
 /** @type {object} */

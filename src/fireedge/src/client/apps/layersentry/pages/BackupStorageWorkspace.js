@@ -39,7 +39,7 @@ const BackupStorageWorkspace = () => {
   return (
     <PageFrame
       title="Backup Storage"
-      description="LayerSentry Backup Datastores used by VM backups and Backup Plans."
+      description="LayerSentry backup storage used by VM backups and Backup Plans."
       actions={
         <Button
           variant="contained"
@@ -60,9 +60,9 @@ const BackupStorageWorkspace = () => {
         }}
       >
         <MetricCard
-          label="Backup Datastores"
+          label="Backup Storage"
           value={query.isLoading ? '…' : stores.length}
-          detail="Only TYPE=BACKUP_DS is counted"
+          detail="Qualified backup storage pools only"
           icon={Archive}
           accent={stores.length ? colors.status.success : colors.status.warning}
         />
@@ -86,16 +86,16 @@ const BackupStorageWorkspace = () => {
 
       {!query.isLoading && stores.length === 0 && (
         <Alert severity="warning" sx={{ mt: 2 }}>
-          No Backup Datastore is configured. Normal image, file and system
-          datastores are intentionally excluded from this page because they
-          cannot satisfy the Backup Job storage prerequisite.
+          No backup storage is configured. Normal image, file and system storage
+          pools are intentionally excluded from this page because they cannot
+          satisfy the Backup Job storage prerequisite.
         </Alert>
       )}
 
       <Surface sx={{ mt: 2, p: 2.5 }}>
         <SectionHeader
           title="Configured backup storage"
-          description="Capacity and backend information for real LayerSentry Backup Datastores only."
+          description="Capacity and backend information for configured LayerSentry backup storage."
         />
         <Box sx={{ display: 'grid', gap: 1 }}>
           {stores.map((store) => (
@@ -113,7 +113,7 @@ const BackupStorageWorkspace = () => {
             >
               <Box>
                 <Typography sx={{ fontSize: 13, fontWeight: 750 }}>
-                  {store.NAME || `Backup Datastore ${store.ID}`}
+                  {store.NAME || `Backup Storage ${store.ID}`}
                 </Typography>
                 <Typography sx={{ fontSize: 11, color: colors.text.muted }}>
                   {store.DS_MAD || store.TEMPLATE?.DS_MAD || 'Backup driver'} ·
@@ -131,7 +131,7 @@ const BackupStorageWorkspace = () => {
           ))}
           {!query.isLoading && stores.length === 0 && (
             <Typography sx={{ fontSize: 12, color: colors.text.secondary }}>
-              No Backup Datastore is available yet.
+              No backup storage is available yet.
             </Typography>
           )}
         </Box>
