@@ -90,7 +90,5 @@ jobs:
             \( -iname '*capabilit*' -o -iname '*layersentry*' \) -print 2>/dev/null | sort | sed -n '1,160p'
           REMOTE
           chmod 700 "$remote"
-          scp -q -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
-            "$remote" root@172.17.60.30:/tmp/layersentry-live-runtime-audit.sh
           ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
-            root@172.17.60.30 'bash /tmp/layersentry-live-runtime-audit.sh; rc=$?; rm -f /tmp/layersentry-live-runtime-audit.sh /tmp/layersentry-route-body /tmp/layersentry-route-headers; exit $rc'
+            root@172.17.60.30 'bash -s; rc=$?; rm -f /tmp/layersentry-route-body /tmp/layersentry-route-headers; exit $rc' <"$remote"
