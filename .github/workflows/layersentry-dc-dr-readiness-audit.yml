@@ -199,11 +199,11 @@ jobs:
           fi
           for _ in $(seq 1 120); do
             state="$(sudo -n -u oneadmin oneimage show "$data_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE") or "")')"
-            test "$state" = 2 && break
+            { test "$state" = 1 || test "$state" = 2; } && break
             test "$state" = 5 && { echo DATA_IMAGE_ERROR >&2; exit 51; }
             sleep 2
           done
-          test "$state" = 2
+          test "$state" = 1 || test "$state" = 2
           vm_id="$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")==n),""))' "$vm_name")"
           if test -z "$vm_id"; then
             vm_template="$(mktemp)"
