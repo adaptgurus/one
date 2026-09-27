@@ -274,6 +274,21 @@ jobs:
           if timeout 3 bash -c "</dev/tcp/$vm_ip/22" >/dev/null 2>&1; then echo DC_TO_GUEST_TCP22=PASS; else echo DC_TO_GUEST_TCP22=FAIL; fi
           sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","STATE","LCM_STATE","DEPLOY_ID","HISTORY_RECORDS/HISTORY/HID","TEMPLATE/NIC/IP","TEMPLATE/CONTEXT/NETWORK","TEMPLATE/CONTEXT/TARGET","TEMPLATE/CONTEXT/SSH_PUBLIC_KEY"); print(" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
           sudo -n -u oneadmin oneimage show 3 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","STATE","TEMPLATE/FORMAT","TEMPLATE/DEV_PREFIX","TEMPLATE/DRIVER","TEMPLATE/SIZE","TEMPLATE/OS_DISTRIBUTION","TEMPLATE/OS_VERSION","TEMPLATE/USERNAME"); print("BASE_IMAGE "+" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
+          read -r deploy_id hypervisor < <(sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("DEPLOY_ID") or "",r.findtext("HISTORY_RECORDS/HISTORY/HOSTNAME") or "")')
+          test -n "$deploy_id" && test -n "$hypervisor"
+          sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" 'bash -s --' "$deploy_id" "$vm_id" <<'HYPERVISOR'
+          set -euo pipefail
+          deploy_id="$1"
+          vm_id="$2"
+          domain="$deploy_id"
+          virsh dominfo "$domain" >/dev/null 2>&1 || domain="one-$vm_id"
+          echo "HYPERVISOR_DOMAIN=$domain"
+          virsh domiflist "$domain"
+          virsh domifaddr "$domain" --source agent 2>/dev/null || true
+          virsh domifaddr "$domain" --source lease 2>/dev/null || true
+          virsh domifaddr "$domain" --source arp 2>/dev/null || true
+          virsh domblklist "$domain" --details
+          HYPERVISOR
           DIAG
             exit 61
           fi
