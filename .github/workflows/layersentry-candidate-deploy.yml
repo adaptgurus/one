@@ -238,18 +238,18 @@ jobs:
             "sudo -n -u oneadmin onetemplate instantiate 0 --hold --name '$vm_name'")
           vm_id=${vm_output##*: }
           [[ "$vm_id" =~ ^[0-9]+$ ]]
-          ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
-            layersentry-deploy@172.17.60.30 \
-            "sudo -n -u oneadmin onevm show '$vm_id' --json" | \
-            ruby -rjson -e '
-              vm = JSON.parse(STDIN.read).fetch("VM")
-              abort "VM create readback mismatch" unless vm.fetch("ID") == ARGV[0] && vm.fetch("NAME") == ARGV[1]
-              abort "qualification VM was not held" unless vm.fetch("STATE") == "2"
-            ' "$vm_id" "$vm_name"
           {
             printf 'LAYERSENTRY_TEST_VM_ID=%q\n' "$vm_id"
             printf 'LAYERSENTRY_TEST_VM_NAME=%q\n' "$vm_name"
           } >>"$RUNNER_TEMP/layersentry-auth.env"
+          ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            layersentry-deploy@172.17.60.30 \
+            "sudo -n -u oneadmin onevm show '$vm_id' --json" | \
+            node -e '
+              const vm = JSON.parse(require("node:fs").readFileSync(0, "utf8")).VM
+              if (vm.ID !== process.argv[1] || vm.NAME !== process.argv[2]) throw new Error("VM create readback mismatch")
+              if (vm.STATE !== "2") throw new Error("qualification VM was not held")
+            ' "$vm_id" "$vm_name"
 
       - name: Restart persistence and exact deployment recheck
         shell: bash
@@ -279,10 +279,10 @@ jobs:
           ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
             layersentry-deploy@172.17.60.30 \
             "sudo -n -u oneadmin onevm show '$LAYERSENTRY_TEST_VM_ID' --json" | \
-            ruby -rjson -e '
-              vm = JSON.parse(STDIN.read).fetch("VM")
-              abort "VM restart-persistence readback mismatch" unless vm.fetch("ID") == ARGV[0] && vm.fetch("NAME") == ARGV[1]
-              abort "qualification VM left HOLD" unless vm.fetch("STATE") == "2"
+            node -e '
+              const vm = JSON.parse(require("node:fs").readFileSync(0, "utf8")).VM
+              if (vm.ID !== process.argv[1] || vm.NAME !== process.argv[2]) throw new Error("VM restart-persistence readback mismatch")
+              if (vm.STATE !== "2") throw new Error("qualification VM left HOLD")
             ' "$LAYERSENTRY_TEST_VM_ID" "$LAYERSENTRY_TEST_VM_NAME"
           node src/fireedge/tests/layersentry/live-auth-browser-smoke.cjs \
             http://172.17.60.30:2616/fireedge \
@@ -306,7 +306,7 @@ jobs:
               state=$(ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
                 layersentry-deploy@172.17.60.30 \
                 "sudo -n -u oneadmin onevm show '$LAYERSENTRY_TEST_VM_ID' --json" | \
-                ruby -rjson -e 'puts JSON.parse(STDIN.read).dig("VM", "STATE")')
+                node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync(0, "utf8")).VM.STATE)')
               test "$state" = 6 && break
               sleep 2
             done
