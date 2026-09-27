@@ -23,8 +23,8 @@ groups:
         - user
         - cloud
 default:
-    - user
     - cloud
+    - user
 
 # Name and description of each view.
 #

@@ -35,6 +35,25 @@ test('capabilities fail closed on the full production gate chain', () => {
   assert.match(source, /mutation-safe read-only presentation/)
 })
 
+test('qualified customer read inventories have mutation-safe visible surfaces', () => {
+  const source = read('src/client/apps/layersentry/capabilities.js')
+  const readOnlySafe = source.match(
+    /const READ_ONLY_SAFE = new Set\(\[([\s\S]*?)\]\)/
+  )?.[1]
+
+  for (const capability of [
+    'STORAGE_IMAGES',
+    'STORAGE_FILES',
+    'NETWORK_TEMPLATES',
+    'VIRTUAL_ROUTERS',
+    'FIREWALL_RULES',
+    'BACKUP_RECOVERY',
+    'OPERATIONS',
+  ]) {
+    assert.match(readOnlySafe, new RegExp(`CAPABILITY_IDS\\.${capability}`))
+  }
+})
+
 test('all backend-backed normal navigation entries carry a capability', () => {
   const navigation = read('src/client/apps/layersentry/navigation.js')
 
