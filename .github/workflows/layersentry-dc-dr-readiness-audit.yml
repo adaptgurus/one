@@ -247,6 +247,62 @@ jobs:
           if timeout 3 bash -c "</dev/tcp/$1/22" >/dev/null 2>&1; then printf PASS; else printf FAIL; fi
           PROBE
           )"
+          if test "$guest_tcp" = FAIL; then
+            ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+              "$dc_user@172.17.60.30" 'bash -s --' "$vm_id" "$vm_ip" "$guest_pub_b64" <<'QGAREPAIR'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          vm_id="$1"
+          vm_ip="$2"
+          guest_pub_b64="$3"
+          read -r observed_name observed_state observed_lcm observed_ip deploy_id hypervisor network_mask gateway < <(
+            sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",r.findtext("LCM_STATE") or "",r.findtext("TEMPLATE/NIC/IP") or "",r.findtext("DEPLOY_ID") or "",r.findtext("HISTORY_RECORDS/HISTORY/HOSTNAME") or "",r.findtext("TEMPLATE/NIC/NETWORK_MASK") or "",r.findtext("TEMPLATE/NIC/GATEWAY") or "")'
+          )
+          test "$observed_name" = ls-dr-v2-qual-alpine-20260928
+          test "$observed_state" = 3 && test "$observed_lcm" = 3
+          test "$observed_ip" = "$vm_ip"
+          test -n "$deploy_id" && test -n "$hypervisor" && test -n "$network_mask" && test -n "$gateway"
+          prefix="$(python3 -c 'import ipaddress,sys; print(ipaddress.IPv4Network("0.0.0.0/"+sys.argv[1]).prefixlen)' "$network_mask")"
+          test "$prefix" -ge 8 && test "$prefix" -le 30
+          sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" 'bash -s --' \
+            "$deploy_id" "$vm_ip" "$prefix" "$network_mask" "$gateway" "$guest_pub_b64" <<'HYPERVISOR_REPAIR'
+          set -euo pipefail
+          domain="$1"
+          vm_ip="$2"
+          prefix="$3"
+          network_mask="$4"
+          gateway="$5"
+          guest_pub_b64="$6"
+          virsh -c qemu:///system dominfo "$domain" | grep -q '^State:[[:space:]]*running$'
+          command="set -eu; ip link set eth0 up; ip addr flush dev eth0 scope global || true; ip addr add $vm_ip/$prefix dev eth0; ip route replace default via $gateway dev eth0; mkdir -p /etc/network /root/.ssh; printf 'auto lo\\niface lo inet loopback\\n\\nauto eth0\\niface eth0 inet static\\n  address $vm_ip\\n  netmask $network_mask\\n  gateway $gateway\\n' > /etc/network/interfaces; printf '%s' '$guest_pub_b64' | base64 -d > /root/.ssh/authorized_keys; chmod 0700 /root/.ssh; chmod 0600 /root/.ssh/authorized_keys; command -v rc-service >/dev/null 2>&1 && rc-service sshd restart || true; sync"
+          request="$(python3 -c 'import json,sys; print(json.dumps({"execute":"guest-exec","arguments":{"path":"/bin/sh","arg":["-c",sys.argv[1]],"capture-output":True}}))' "$command")"
+          response="$(virsh -c qemu:///system qemu-agent-command "$domain" "$request")"
+          pid="$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["return"]["pid"])')"
+          test "$pid" -ge 1
+          for _ in $(seq 1 30); do
+            status="$(virsh -c qemu:///system qemu-agent-command "$domain" "{\"execute\":\"guest-exec-status\",\"arguments\":{\"pid\":$pid}}")"
+            read -r exited exitcode < <(printf '%s' "$status" | python3 -c 'import json,sys; r=json.load(sys.stdin)["return"]; print(str(bool(r.get("exited"))).lower(),r.get("exitcode",-1))')
+            test "$exited" = true && break
+            sleep 1
+          done
+          test "$exited" = true && test "$exitcode" = 0
+          HYPERVISOR_REPAIR
+          QGAREPAIR
+            for _ in $(seq 1 30); do
+              guest_tcp="$(ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+                -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+                "$dc_user@172.17.60.30" 'bash -s --' "$vm_ip" <<'PROBE_AFTER_REPAIR'
+              if timeout 3 bash -c "</dev/tcp/$1/22" >/dev/null 2>&1; then printf PASS; else printf FAIL; fi
+              PROBE_AFTER_REPAIR
+              )"
+              test "$guest_tcp" = PASS && break
+              sleep 2
+            done
+          fi
           if test "$guest_tcp" = PASS; then
             for candidate_user in root layersentry-deploy rocky cloud-user almalinux centos; do
               if timeout 8 ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
