@@ -241,9 +241,15 @@ jobs:
           test -n "$vm_ip"
           proxy="ssh -i $dc_key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$work/dc_known_hosts -W %h:%p $dc_user@172.17.60.30"
           guest_user=''
-          for _ in $(seq 1 3); do
+          guest_tcp="$(ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+            "$dc_user@172.17.60.30" 'bash -s --' "$vm_ip" <<'PROBE'
+          if timeout 3 bash -c "</dev/tcp/$1/22" >/dev/null 2>&1; then printf PASS; else printf FAIL; fi
+          PROBE
+          )"
+          if test "$guest_tcp" = PASS; then
             for candidate_user in layersentry-deploy rocky cloud-user almalinux centos root; do
-              if ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              if timeout 8 ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
                 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$work/guest_known_hosts" \
                 -o "ProxyCommand=$proxy" -o ConnectTimeout=5 "$candidate_user@$vm_ip" \
                 'sudo -n true' >/dev/null 2>&1; then
@@ -251,8 +257,7 @@ jobs:
                 break 2
               fi
             done
-            sleep 4
-          done
+          fi
           if test -z "$guest_user"; then
             echo "GUEST_SSH_NOT_READY VM_ID=$vm_id IP=$vm_ip" >&2
             set +e
