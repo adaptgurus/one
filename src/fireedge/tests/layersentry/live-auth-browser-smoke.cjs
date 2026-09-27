@@ -23,10 +23,16 @@ assert.ok(baseUrl && username && password, 'base URL and credentials required')
 
 const forbiddenBrand = /OpenNebula|Sunstone|KubeOne|OneKS/i
 const errors = []
+let expectingExpiry = false
 let browser
 
 const assertProductPage = async (page, label) => {
   await page.locator('#root > *').first().waitFor({ state: 'visible' })
+  await page.waitForFunction(
+    () => (document.body?.innerText ?? '').trim().length > 20,
+    undefined,
+    { timeout: 30000 }
+  )
   const text = (await page.locator('body').innerText()).trim()
   assert.ok(text.length > 20, `${label} rendered a blank page`)
   assert.doesNotMatch(text, forbiddenBrand, `${label} leaked provider branding`)
@@ -45,10 +51,13 @@ const assertProductPage = async (page, label) => {
   const page = await context.newPage()
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`))
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`)
+    if (message.type() !== 'error') return
+    if (expectingExpiry && /401 \(Unauthorized\)/.test(message.text())) return
+    const source = message.location()?.url
+    errors.push(`console: ${message.text()}${source ? ` at ${source}` : ''}`)
   })
 
-  await page.goto(`${baseUrl}/layersentry`, { waitUntil: 'networkidle' })
+  await page.goto(`${baseUrl}/layersentry`, { waitUntil: 'domcontentloaded' })
   await assertProductPage(page, 'login')
   const userInput = page.locator('input[placeholder="Enter username"]')
   try {
@@ -80,6 +89,11 @@ const assertProductPage = async (page, label) => {
   assert.match(overview, /Network/)
   assert.match(overview, /Protection/)
   assert.match(overview, /Operations/)
+  // The anonymous login bootstrap probes /api/user/info and receives the
+  // expected 401 before credentials are submitted. Qualification below starts
+  // from the authenticated overview and treats every later browser error as a
+  // failure until the explicit session-expiry phase.
+  errors.length = 0
 
   for (const path of [
     '/layersentry/compute',
@@ -89,21 +103,27 @@ const assertProductPage = async (page, label) => {
     '/layersentry/operations',
     '/layersentry/settings',
   ]) {
-    await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' })
+    await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' })
     await assertProductPage(page, `${role} ${path}`)
   }
 
   if (role === 'customer') {
     await page.goto(`${baseUrl}/layersentry/infrastructure/hosts/0`, {
-      waitUntil: 'networkidle',
+      waitUntil: 'domcontentloaded',
     })
     const text = await assertProductPage(page, 'customer IDOR route')
     assert.doesNotMatch(text, /Host Detail|Storage & Devices/)
   }
 
+  assert.deepEqual(
+    errors,
+    [],
+    `unexpected authenticated browser errors:\n${errors.join('\n')}`
+  )
+  expectingExpiry = true
   await context.clearCookies()
   await page.goto(`${baseUrl}/layersentry/compute`, {
-    waitUntil: 'networkidle',
+    waitUntil: 'domcontentloaded',
   })
   const expired = await assertProductPage(page, `${role} session expiry`)
   assert.match(expired, /Sign in/i)
