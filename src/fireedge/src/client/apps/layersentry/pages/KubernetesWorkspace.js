@@ -41,6 +41,11 @@ import {
   PageFrame,
   Surface,
 } from 'client/apps/layersentry/components/Primitives'
+import {
+  CAPABILITY_IDS,
+  getCapabilityModel,
+  isCapabilityEnabled,
+} from 'client/apps/layersentry/capabilities'
 
 const downloadText = (name, value) => {
   const url = URL.createObjectURL(
@@ -55,7 +60,7 @@ const downloadText = (name, value) => {
   URL.revokeObjectURL(url)
 }
 
-const ClusterManager = ({ cluster, profiles }) => {
+const ClusterManager = ({ cluster, profiles, canMutate }) => {
   const [namespace, setNamespace] = useState('')
   const [accelerator, setAccelerator] = useState('')
   const [count, setCount] = useState(1)
@@ -220,7 +225,9 @@ const ClusterManager = ({ cluster, profiles }) => {
               variant="contained"
               startIcon={<Plus />}
               disabled={
-                provisionState.isLoading || createJob?.status === 'RUNNING'
+                !canMutate ||
+                provisionState.isLoading ||
+                createJob?.status === 'RUNNING'
               }
               onClick={createCluster}
             >
@@ -259,6 +266,7 @@ const ClusterManager = ({ cluster, profiles }) => {
             variant="contained"
             startIcon={<Plus />}
             disabled={
+              !canMutate ||
               !cluster.self_service_lifecycle ||
               !controlPlanePending ||
               !existingControlPlaneHealthy ||
@@ -321,6 +329,7 @@ const ClusterManager = ({ cluster, profiles }) => {
               variant="contained"
               startIcon={<Plus />}
               disabled={
+                !canMutate ||
                 !/^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/.test(namespace) ||
                 createState.isLoading
               }
@@ -438,6 +447,7 @@ const ClusterManager = ({ cluster, profiles }) => {
                           size="small"
                           variant={installed ? 'outlined' : 'contained'}
                           disabled={
+                            !canMutate ||
                             installed ||
                             running ||
                             missing.length > 0 ||
@@ -498,6 +508,7 @@ const ClusterManager = ({ cluster, profiles }) => {
             <Button
               variant="contained"
               disabled={
+                !canMutate ||
                 !cluster.self_service_lifecycle ||
                 !workerPending ||
                 !controlPlaneHealthy ||
@@ -551,10 +562,15 @@ const ClusterManager = ({ cluster, profiles }) => {
 ClusterManager.propTypes = {
   cluster: PropTypes.object.isRequired,
   profiles: PropTypes.arrayOf(PropTypes.object).isRequired,
+  canMutate: PropTypes.bool.isRequired,
 }
 
-const KubernetesWorkspace = () => {
+const KubernetesWorkspace = ({ endpoints }) => {
   const query = KubeOnePortalAPI.useGetKubeOneClustersQuery()
+  const canCreate = isCapabilityEnabled(
+    CAPABILITY_IDS.KUBERNETES_CREATE,
+    getCapabilityModel(endpoints)
+  )
   const [selected, setSelected] = useState('')
   const clusters = query.data?.clusters || []
   const activeID = selected || clusters[0]?.id || ''
@@ -603,16 +619,34 @@ const KubernetesWorkspace = () => {
               ))}
             </Select>
           </FormControl>
-          {cluster && (
-            <ClusterManager
-              cluster={cluster}
-              profiles={query.data?.accelerator_profiles || []}
-            />
-          )}
+          {cluster &&
+            (canCreate ? (
+              <ClusterManager
+                cluster={cluster}
+                profiles={query.data?.accelerator_profiles || []}
+                canMutate
+              />
+            ) : (
+              <>
+                <Alert severity="info">
+                  Kubernetes lifecycle changes are not enabled and qualified for
+                  this role. Inventory and health remain read-only.
+                </Alert>
+                <ClusterManager
+                  cluster={cluster}
+                  profiles={query.data?.accelerator_profiles || []}
+                  canMutate={false}
+                />
+              </>
+            ))}
         </Stack>
       )}
     </PageFrame>
   )
+}
+
+KubernetesWorkspace.propTypes = {
+  endpoints: PropTypes.array,
 }
 
 export default KubernetesWorkspace

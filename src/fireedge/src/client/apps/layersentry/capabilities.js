@@ -281,7 +281,7 @@ const CAPABILITY_ENDPOINT_REQUIREMENTS = Object.freeze({
   [CAPABILITY_IDS.AFFINITY]: ['/vm-group'],
   [CAPABILITY_IDS.AFFINITY_CREATE]: ['/vm-group/create'],
   // KubeOne management is authorized by the LayerSentry capability profile and
-  // the tenant-bound portal API. It does not depend on a legacy OpenNebula tab
+  // the tenant-bound portal API. It does not depend on a legacy substrate tab
   // endpoint being present in the Sunstone endpoint manifest.
   [CAPABILITY_IDS.KUBERNETES_CREATE]: ['/kubernetes/create'],
   [CAPABILITY_IDS.APPLICATIONS_ONEFLOW]: ['/service', '/service-template'],

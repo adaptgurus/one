@@ -45,6 +45,7 @@ import {
   Surface,
 } from 'client/apps/layersentry/components/Primitives'
 import { colors } from 'client/apps/layersentry/theme/tokens'
+import GuardianInsight from 'client/apps/layersentry/components/GuardianInsight'
 
 const toArray = (value) =>
   value === undefined || value === null || value === ''
@@ -179,6 +180,16 @@ const BackupPlanInventory = ({ canMutate }) => {
               ? 'Native readback reconciled'
               : 'Native plan'}
           </Typography>
+          <Box sx={{ mt: 1 }}>
+            <GuardianInsight
+              scope="backup"
+              evidence={
+                plan.GUARDIAN ??
+                plan.TEMPLATE?.GUARDIAN ??
+                plan.TEMPLATE?.LAYERSENTRY_GUARDIAN
+              }
+            />
+          </Box>
           {canMutate && getBackupPlanState(plan) === 'Error' && (
             <Button
               size="small"

@@ -68,7 +68,7 @@ const SettingsPage = ({ endpoints }) => {
                   color: colors.text.primary,
                 }}
               >
-                Native Sunstone
+                Advanced infrastructure console
               </Typography>
               <Typography
                 sx={{ fontSize: 12, color: colors.text.secondary, mt: 0.25 }}

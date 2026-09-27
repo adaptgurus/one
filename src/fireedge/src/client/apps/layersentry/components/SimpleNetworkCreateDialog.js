@@ -86,6 +86,11 @@ Field.propTypes = {
   children: PropTypes.node,
 }
 
+/**
+ * @param root0
+ * @param root0.open
+ * @param root0.onClose
+ */
 const SimpleNetworkCreateDialog = ({ open, onClose }) => {
   const [draft, setDraft] = useState(initialDraft)
   const [review, setReview] = useState()
@@ -182,7 +187,7 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
         {created ? (
           <Alert severity="success">
             Network {created.NAME} (#{created.ID}) is present in authoritative
-            OpenNebula state.
+            authoritative infrastructure state.
           </Alert>
         ) : review ? (
           <Stack gap={1.25}>
@@ -209,7 +214,7 @@ const SimpleNetworkCreateDialog = ({ open, onClose }) => {
             </Typography>
             <Alert severity="info">
               Driver, bridge/uplink, VLAN and spoofing controls remain owned by
-              the approved OpenNebula network blueprint.
+              the approved LayerSentry network blueprint.
             </Alert>
           </Stack>
         ) : (

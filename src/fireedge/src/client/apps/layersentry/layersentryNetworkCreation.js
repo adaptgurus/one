@@ -76,7 +76,7 @@ const assertInside = (value, cidr, label) => {
  * VLAN and spoofing policy. Only explicitly published templates enter the
  * LayerSentry simple workflow.
  *
- * @param {object} template - OpenNebula VNet template resource
+ * @param {object} template - native VNet template resource
  * @returns {boolean} Whether the template is approved for simple creation
  */
 export const isLayerSentryNetworkBlueprint = (template = {}) => {
@@ -90,10 +90,11 @@ export const isLayerSentryNetworkBlueprint = (template = {}) => {
 
 /**
  * Match an approved native Security Group to the selected communication
- * policy. Rule semantics remain owned by OpenNebula and the published group.
+ * policy. Rule semantics remain owned by the infrastructure service and the published group.
  *
- * @param {object} securityGroup - OpenNebula Security Group resource
+ * @param {object} securityGroup - native Security Group resource
  * @param {string} isolationPolicy - Requested LayerSentry policy
+ * @param environment
  * @returns {boolean} Whether the native group is an approved exact match
  */
 export const isLayerSentrySecurityGroupCompatible = (
@@ -143,13 +144,13 @@ export const isLayerSentrySecurityGroupCompatible = (
 }
 
 /**
- * Build a bounded overlay for native OpenNebula VNet-template instantiation.
+ * Build a bounded overlay for native VNet-template instantiation.
  * Provider implementation fields remain owned by the approved blueprint.
  *
  * @param {object} request - Customer-facing network request
- * @param {object} blueprint - Authoritative OpenNebula VNet template
+ * @param {object} blueprint - Authoritative native VNet template
  * @param {object[]} securityGroups - Security groups visible to the actor
- * @returns {object} Strict OpenNebula template overlay
+ * @returns {object} Strict native template overlay
  */
 export const buildLayerSentryNetworkOverlay = (
   request = {},
@@ -195,11 +196,7 @@ export const buildLayerSentryNetworkOverlay = (
   const securityGroup = securityGroups.find(
     (candidate) =>
       normalized(candidate?.ID) === securityGroupId &&
-      isLayerSentrySecurityGroupCompatible(
-        candidate,
-        isolation,
-        environment
-      )
+      isLayerSentrySecurityGroupCompatible(candidate, isolation, environment)
   )
   if (!/^\d+$/.test(securityGroupId) || !securityGroup) {
     throw new Error('Select an available firewall rule set')

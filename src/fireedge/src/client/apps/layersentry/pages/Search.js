@@ -20,7 +20,7 @@ import { useHistory, useLocation } from 'react-router-dom'
 import {
   BackupJobAPI,
   ImageAPI,
-  OneKsAPI,
+  KubeOnePortalAPI,
   ServiceAPI,
   VmAPI,
   VmTemplateAPI,
@@ -44,7 +44,7 @@ const SearchPage = () => {
   const query = new URLSearchParams(location.search).get('q')?.trim() ?? ''
   const vms = VmAPI.useGetVmsQuery({ extended: false })
   const vmTemplates = VmTemplateAPI.useGetTemplatesQuery()
-  const kubernetes = OneKsAPI.useGetOneKsClustersQuery()
+  const kubernetes = KubeOnePortalAPI.useGetKubeOneClustersQuery()
   const networks = VnAPI.useGetVNetworksQuery()
   const services = ServiceAPI.useGetServicesQuery()
   const images = ImageAPI.useGetImagesQuery()
@@ -69,12 +69,11 @@ const SearchPage = () => {
           path: PRODUCT_PATHS.COMPUTE_BLUEPRINTS,
         })
     })
-    ;(kubernetes.data ?? []).forEach((entry) => {
-      const cluster = entry?.DOCUMENT ?? entry
-      if (includes(cluster?.NAME, query))
+    ;(kubernetes.data?.clusters ?? []).forEach((cluster) => {
+      if (includes(cluster?.name ?? cluster?.id, query))
         items.push({
           type: 'Kubernetes',
-          name: cluster.NAME,
+          name: cluster.name ?? cluster.id,
           path: PRODUCT_PATHS.KUBERNETES,
         })
     })

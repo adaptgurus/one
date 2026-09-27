@@ -24,118 +24,131 @@ import {
   Select,
   TextField,
   Typography,
-} from '@mui/material'
-import { useEffect, useMemo, useState } from 'react'
-import { VmAPI } from '@FeaturesModule'
+} from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import { VmAPI } from "@FeaturesModule";
 import {
   MetricCard,
   PageFrame,
   SectionHeader,
   Surface,
-} from 'client/apps/layersentry/components/Primitives'
-import { colors } from 'client/apps/layersentry/theme/tokens'
-import { replicationAPI } from 'client/apps/layersentry/replicationV2'
-import DRProductPanel from 'client/apps/layersentry/components/DRProductPanel'
+} from "client/apps/layersentry/components/Primitives";
+import { colors } from "client/apps/layersentry/theme/tokens";
+import { replicationAPI } from "client/apps/layersentry/replicationV2";
+import DRProductPanel from "client/apps/layersentry/components/DRProductPanel";
+import GuardianInsight from "client/apps/layersentry/components/GuardianInsight";
 
-const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
+const toArray = (value) =>
+  Array.isArray(value) ? value : value ? [value] : [];
 
 const vmDisks = (vm = {}) =>
   toArray(vm?.TEMPLATE?.DISK)
     .filter((disk) => disk && disk.DISK_ID !== undefined)
     .filter(
       (disk) =>
-        !['CDROM', 'SWAP'].includes(String(disk.TYPE || '').toUpperCase())
+        !["CDROM", "SWAP"].includes(String(disk.TYPE || "").toUpperCase())
     )
     .map((disk) => ({
       id: String(disk.DISK_ID),
-      source_ref: '',
-      target_ref: '',
+      source_ref: "",
+      target_ref: "",
       virtual_bytes:
-        Math.max(1, Number(disk.SIZE || disk.ORIGINAL_SIZE || 1)) *
-        1024 *
-        1024,
+        Math.max(1, Number(disk.SIZE || disk.ORIGINAL_SIZE || 1)) * 1024 * 1024,
       label:
-        disk.IMAGE ||
-        disk.IMAGE_ID ||
-        disk.TARGET ||
-        `Disk ${disk.DISK_ID}`,
-    }))
+        disk.IMAGE || disk.IMAGE_ID || disk.TARGET || `Disk ${disk.DISK_ID}`,
+    }));
 
 const backendLabel = {
-  CEPH_RBD: 'Ceph RBD — fastest recovery',
-  LVM_THIN: 'Generic block / SAN — LVM Thin',
-  FILE_COW: 'NFS / shared filesystem — COW checkpoints',
-}
+  CEPH_RBD: "Ceph RBD — fastest recovery",
+  LVM_THIN: "Generic block / SAN — LVM Thin",
+  FILE_COW: "NFS / shared filesystem — COW checkpoints",
+};
 
 const recommendedBackend = (caps = {}, allowed = [], catalogBound = false) => {
   const available = (kind) =>
-    catalogBound ? allowed.includes(kind) : caps[kind.toLowerCase()] === true
+    catalogBound ? allowed.includes(kind) : caps[kind.toLowerCase()] === true;
 
-  if (available('CEPH_RBD')) return 'CEPH_RBD'
-  if (available('LVM_THIN')) return 'LVM_THIN'
-  if (available('FILE_COW')) return 'FILE_COW'
+  if (available("CEPH_RBD")) return "CEPH_RBD";
+  if (available("LVM_THIN")) return "LVM_THIN";
+  if (available("FILE_COW")) return "FILE_COW";
 
-  return ''
-}
+  return "";
+};
 
 const secondsToText = (seconds) => {
-  const value = Number(seconds)
-  if (!Number.isFinite(value) || value < 0) return '—'
-  if (value >= 3600) return `${Math.round(value / 360) / 10} h`
-  if (value >= 60) return `${Math.round(value / 6) / 10} min`
-  return `${Math.round(value)} sec`
-}
+  const value = Number(seconds);
+  if (!Number.isFinite(value) || value < 0) return "—";
+  if (value >= 3600) return `${Math.round(value / 360) / 10} h`;
+  if (value >= 60) return `${Math.round(value / 6) / 10} min`;
+  return `${Math.round(value)} sec`;
+};
 
 const durationToText = (nanoseconds) =>
-  secondsToText(Number(nanoseconds || 0) / 1e9)
+  secondsToText(Number(nanoseconds || 0) / 1e9);
 
 const bytesToText = (bytes) => {
-  const value = Number(bytes)
-  if (!Number.isFinite(value) || value < 0) return '—'
-  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GiB`
-  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MiB`
-  if (value >= 1024) return `${(value / 1024).toFixed(1)} KiB`
-  return `${Math.round(value)} B`
-}
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value < 0) return "—";
+  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GiB`;
+  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MiB`;
+  if (value >= 1024) return `${(value / 1024).toFixed(1)} KiB`;
+  return `${Math.round(value)} B`;
+};
 
 const dateText = (value) => {
-  if (!value) return '—'
-  const parsed = new Date(value)
-  return Number.isNaN(parsed.getTime()) ? '—' : parsed.toLocaleString()
-}
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "—" : parsed.toLocaleString();
+};
+
+const firstDefined = (...values) =>
+  values.find((value) => value !== undefined && value !== null && value !== "");
+
+const percentText = (value) => {
+  const number = Number(value);
+  if (!Number.isFinite(number) || number < 0) return "—";
+  return `${
+    number <= 1 ? Math.round(number * 1000) / 10 : Math.round(number * 10) / 10
+  }%`;
+};
+
+const checkpointRecoveryManifest = (checkpoint) =>
+  checkpoint?.recovery_manifest ??
+  checkpoint?.native_points?.find((point) => point?.recovery_manifest)
+    ?.recovery_manifest;
 
 const ReplicationV2Workspace = () => {
-  const vmQuery = VmAPI.useGetVmsQuery({ extended: true })
-  const vms = toArray(vmQuery.data)
+  const vmQuery = VmAPI.useGetVmsQuery({ extended: true });
+  const vms = toArray(vmQuery.data);
 
-  const [capabilities, setCapabilities] = useState({})
-  const [localSiteId, setLocalSiteId] = useState('')
-  const [targetSites, setTargetSites] = useState([])
-  const [targetBackends, setTargetBackends] = useState({})
-  const [sessions, setSessions] = useState([])
-  const [details, setDetails] = useState({})
-  const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [actionBusy, setActionBusy] = useState('')
-  const [vmId, setVmId] = useState('')
-  const [targetSite, setTargetSite] = useState('')
-  const [backendChoice, setBackendChoice] = useState('AUTO')
-  const [checkpointSeconds, setCheckpointSeconds] = useState(300)
-  const [retention, setRetention] = useState(288)
-  const [consistency, setConsistency] = useState('CRASH_CONSISTENT')
-  const [protectionGroupId, setProtectionGroupId] = useState('')
-  const [groupId, setGroupId] = useState('')
-  const [groupName, setGroupName] = useState('')
-  const [groupMembers, setGroupMembers] = useState([])
-  const [groupConsistency, setGroupConsistency] = useState('CRASH_CONSISTENT')
-  const [groupDependencies, setGroupDependencies] = useState('{}')
-  const [groupCheckpoints, setGroupCheckpoints] = useState([])
+  const [capabilities, setCapabilities] = useState({});
+  const [localSiteId, setLocalSiteId] = useState("");
+  const [targetSites, setTargetSites] = useState([]);
+  const [targetBackends, setTargetBackends] = useState({});
+  const [sessions, setSessions] = useState([]);
+  const [details, setDetails] = useState({});
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [actionBusy, setActionBusy] = useState("");
+  const [vmId, setVmId] = useState("");
+  const [targetSite, setTargetSite] = useState("");
+  const [backendChoice, setBackendChoice] = useState("AUTO");
+  const [checkpointSeconds, setCheckpointSeconds] = useState(300);
+  const [retention, setRetention] = useState(288);
+  const [consistency, setConsistency] = useState("CRASH_CONSISTENT");
+  const [protectionGroupId, setProtectionGroupId] = useState("");
+  const [groupId, setGroupId] = useState("");
+  const [groupName, setGroupName] = useState("");
+  const [groupMembers, setGroupMembers] = useState([]);
+  const [groupConsistency, setGroupConsistency] = useState("CRASH_CONSISTENT");
+  const [groupDependencies, setGroupDependencies] = useState("{}");
+  const [groupCheckpoints, setGroupCheckpoints] = useState([]);
 
   const loadSessionDetails = async (sessionList) => {
     const entries = await Promise.all(
       sessionList.map(async (session) => {
-        const id = session.id
+        const id = session.id;
         const [health, backendHealth, checkpointPayload] = await Promise.all([
           replicationAPI.health(id).catch((reason) => ({
             unavailable: true,
@@ -150,7 +163,7 @@ const ReplicationV2Workspace = () => {
             unavailable: true,
             error: reason.message,
           })),
-        ])
+        ]);
         return [
           id,
           {
@@ -159,89 +172,85 @@ const ReplicationV2Workspace = () => {
             checkpoints: checkpointPayload?.checkpoints || [],
             checkpointError: checkpointPayload?.error,
           },
-        ]
+        ];
       })
-    )
-    setDetails(Object.fromEntries(entries))
-  }
+    );
+    setDetails(Object.fromEntries(entries));
+  };
 
   const refresh = async () => {
     const [caps, sessionPayload] = await Promise.all([
       replicationAPI.capabilities(),
       replicationAPI.sessions(),
-    ])
-    const sessionList = sessionPayload?.sessions || []
-    setCapabilities(caps?.capabilities || {})
-    setLocalSiteId(caps?.local_site_id || '')
-    setTargetSites(caps?.target_site_ids || [])
-    setTargetBackends(caps?.target_backends || {})
-    setSessions(sessionList)
-    await loadSessionDetails(sessionList)
-  }
+    ]);
+    const sessionList = sessionPayload?.sessions || [];
+    setCapabilities(caps?.capabilities || {});
+    setLocalSiteId(caps?.local_site_id || "");
+    setTargetSites(caps?.target_site_ids || []);
+    setTargetBackends(caps?.target_backends || {});
+    setSessions(sessionList);
+    await loadSessionDetails(sessionList);
+  };
 
   useEffect(() => {
-    let active = true
+    let active = true;
     Promise.all([replicationAPI.capabilities(), replicationAPI.sessions()])
       .then(async ([caps, sessionPayload]) => {
-        if (!active) return
-        const sessionList = sessionPayload?.sessions || []
-        setCapabilities(caps?.capabilities || {})
-        setLocalSiteId(caps?.local_site_id || '')
-        setTargetSites(caps?.target_site_ids || [])
-        setTargetBackends(caps?.target_backends || {})
-        setSessions(sessionList)
-        await loadSessionDetails(sessionList)
+        if (!active) return;
+        const sessionList = sessionPayload?.sessions || [];
+        setCapabilities(caps?.capabilities || {});
+        setLocalSiteId(caps?.local_site_id || "");
+        setTargetSites(caps?.target_site_ids || []);
+        setTargetBackends(caps?.target_backends || {});
+        setSessions(sessionList);
+        await loadSessionDetails(sessionList);
       })
       .catch((reason) => {
-        if (active) setError(reason.message)
-      })
+        if (active) setError(reason.message);
+      });
     return () => {
-      active = false
-    }
-  }, [])
+      active = false;
+    };
+  }, []);
 
   const selectedVm = useMemo(
     () => vms.find(({ ID }) => String(ID) === String(vmId)),
     [vms, vmId]
-  )
-  const disks = useMemo(() => vmDisks(selectedVm), [selectedVm])
+  );
+  const disks = useMemo(() => vmDisks(selectedVm), [selectedVm]);
   const targetBackendCatalogBound =
     Boolean(targetSite) &&
-    Object.prototype.hasOwnProperty.call(targetBackends, targetSite)
+    Object.prototype.hasOwnProperty.call(targetBackends, targetSite);
   const allowedTargetBackends = targetBackendCatalogBound
     ? toArray(targetBackends[targetSite])
-    : []
+    : [];
   const backendAllowed = (kind) =>
     targetBackendCatalogBound
       ? allowedTargetBackends.includes(kind)
-      : capabilities[kind.toLowerCase()] === true
+      : capabilities[kind.toLowerCase()] === true;
   const multiWorkloadGroups =
-    capabilities.multi_workload_protection_groups === true
-  const filesystemConsistency =
-    capabilities.filesystem_consistency === true
-  const applicationConsistency =
-    capabilities.application_consistency === true
-  const groupModeQualified =
-    groupMembers.length <= 1 ||
-    multiWorkloadGroups
+    capabilities.multi_workload_protection_groups === true;
+  const filesystemConsistency = capabilities.filesystem_consistency === true;
+  const applicationConsistency = capabilities.application_consistency === true;
+  const groupModeQualified = groupMembers.length <= 1 || multiWorkloadGroups;
   const groupConsistencyQualified =
-    groupConsistency === 'CRASH_CONSISTENT' ||
-    (groupConsistency === 'FILESYSTEM_CONSISTENT' && filesystemConsistency) ||
-    (groupConsistency === 'APPLICATION_CONSISTENT' && applicationConsistency)
+    groupConsistency === "CRASH_CONSISTENT" ||
+    (groupConsistency === "FILESYSTEM_CONSISTENT" && filesystemConsistency) ||
+    (groupConsistency === "APPLICATION_CONSISTENT" && applicationConsistency);
 
   const selectedBackend =
-    backendChoice === 'AUTO'
+    backendChoice === "AUTO"
       ? recommendedBackend(
           capabilities,
           allowedTargetBackends,
           targetBackendCatalogBound
         )
       : backendAllowed(backendChoice)
-        ? backendChoice
-        : ''
+      ? backendChoice
+      : "";
 
   const request = useMemo(() => {
-    if (!selectedVm || !targetSite || !selectedBackend) return null
+    if (!selectedVm || !targetSite || !selectedBackend) return null;
     return {
       id: `vm-${selectedVm.ID}-to-${targetSite}`,
       protection_group_id: protectionGroupId.trim() || `vm-${selectedVm.ID}`,
@@ -256,8 +265,8 @@ const ReplicationV2Workspace = () => {
       max_backlog_bytes: 100 * 1024 * 1024 * 1024,
       retain_checkpoints: Number(retention),
       consistency,
-      compression: 'AUTO',
-    }
+      compression: "AUTO",
+    };
   }, [
     checkpointSeconds,
     consistency,
@@ -268,72 +277,76 @@ const ReplicationV2Workspace = () => {
     selectedBackend,
     selectedVm,
     targetSite,
-  ])
+  ]);
 
   const createProtection = async () => {
-    setError('')
-    setNotice('')
+    setError("");
+    setNotice("");
     if (!request || disks.length === 0) {
-      setError('Choose a VM, target site and available replication backend.')
-      return
+      setError("Choose a VM, target site and available replication backend.");
+      return;
     }
-    setBusy(true)
+    setBusy(true);
     try {
-      const preflight = await replicationAPI.preflight(request)
+      const preflight = await replicationAPI.preflight(request);
       if (preflight?.ready !== true) {
-        throw new Error(preflight?.error || 'Replication preflight failed.')
+        throw new Error(preflight?.error || "Replication preflight failed.");
       }
-      await replicationAPI.create(request)
+      await replicationAPI.create(request);
       setNotice(
-        'Replication session created in SEEDING state. Existing Restic backup remains unchanged.'
-      )
-      await refresh()
+        "Replication session created in SEEDING state. Existing Restic backup remains unchanged."
+      );
+      await refresh();
     } catch (reason) {
-      setError(reason.message)
+      setError(reason.message);
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
-  }
+  };
 
   const testRecovery = async (sessionId, checkpointId) => {
-    setError('')
-    setNotice('')
-    const key = `clone:${sessionId}:${checkpointId}`
-    setActionBusy(key)
+    setError("");
+    setNotice("");
+    const key = `clone:${sessionId}:${checkpointId}`;
+    setActionBusy(key);
     try {
-      const name = `test-${sessionId}-${Date.now()}`
-      const result = await replicationAPI.clone(sessionId, checkpointId, name)
-      const count = Object.keys(result?.resources || {}).length
+      const name = `test-${sessionId}-${Date.now()}`;
+      const result = await replicationAPI.clone(sessionId, checkpointId, name);
+      const count = Object.keys(result?.resources || {}).length;
       setNotice(
         `Test Recovery clone created from committed checkpoint ${checkpointId} (${count} disk resource(s)). No failover was performed.`
-      )
+      );
     } catch (reason) {
-      setError(reason.message)
+      setError(reason.message);
     } finally {
-      setActionBusy('')
+      setActionBusy("");
     }
-  }
+  };
 
   const requestRebaseline = async (sessionId, health = {}) => {
-    setError('')
-    setNotice('')
-    const key = `rebaseline:${sessionId}`
-    setActionBusy(key)
+    setError("");
+    setNotice("");
+    const key = `rebaseline:${sessionId}`;
+    setActionBusy(key);
     try {
-      await replicationAPI.rebaseline(sessionId)
+      await replicationAPI.rebaseline(sessionId);
       setNotice(
-        `Rebaseline requested for ${sessionId}. Reason: ${health?.reason || 'operator-requested source continuity reset'}.`
-      )
-      await refresh()
+        `Rebaseline requested for ${sessionId}. Reason: ${
+          health?.reason || "operator-requested source continuity reset"
+        }.`
+      );
+      await refresh();
     } catch (reason) {
-      setError(reason.message)
+      setError(reason.message);
     } finally {
-      setActionBusy('')
+      setActionBusy("");
     }
-  }
+  };
 
-  const healthy = sessions.filter(({ state }) => state === 'REPLICATING').length
-  const seeding = sessions.filter(({ state }) => state === 'SEEDING').length
+  const healthy = sessions.filter(
+    ({ state }) => state === "REPLICATING"
+  ).length;
+  const seeding = sessions.filter(({ state }) => state === "SEEDING").length;
 
   return (
     <PageFrame
@@ -358,8 +371,8 @@ const ReplicationV2Workspace = () => {
 
       <Box
         sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' },
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "repeat(3, 1fr)" },
           gap: 1.5,
           mt: 2,
         }}
@@ -396,8 +409,8 @@ const ReplicationV2Workspace = () => {
         />
         <Box
           sx={{
-            display: 'grid',
-            gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' },
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", lg: "repeat(2, 1fr)" },
             gap: 1.5,
           }}
         >
@@ -490,16 +503,16 @@ const ReplicationV2Workspace = () => {
             label="Protection group ID"
             value={protectionGroupId}
             onChange={(e) => setProtectionGroupId(e.target.value)}
-            placeholder={selectedVm ? `vm-${selectedVm.ID}` : 'application-group'}
+            placeholder={
+              selectedVm ? `vm-${selectedVm.ID}` : "application-group"
+            }
             helperText="Use the same ID on application members that must share a coordinated checkpoint barrier."
           />
           <TextField
             label="Hot checkpoints to retain"
             type="number"
             value={retention}
-            onChange={(e) =>
-              setRetention(Math.max(1, Number(e.target.value)))
-            }
+            onChange={(e) => setRetention(Math.max(1, Number(e.target.value)))}
             inputProps={{ min: 1, max: 10000 }}
           />
         </Box>
@@ -510,13 +523,15 @@ const ReplicationV2Workspace = () => {
             remote site/transport before enabling protection.
           </Alert>
         )}
-        {targetSite && targetBackendCatalogBound && !allowedTargetBackends.length && (
-          <Alert severity="warning" sx={{ mt: 1.5 }}>
-            The selected recovery site has no qualified Replication v2 target
-            backend configured.
-          </Alert>
-        )}
-        {consistency !== 'CRASH_CONSISTENT' && (
+        {targetSite &&
+          targetBackendCatalogBound &&
+          !allowedTargetBackends.length && (
+            <Alert severity="warning" sx={{ mt: 1.5 }}>
+              The selected recovery site has no qualified Replication v2 target
+              backend configured.
+            </Alert>
+          )}
+        {consistency !== "CRASH_CONSISTENT" && (
           <Alert severity="info" sx={{ mt: 1.5 }}>
             Filesystem/application consistency is produced only by a coordinated
             protection-group capture using the qualified quiesce provider.
@@ -536,32 +551,33 @@ const ReplicationV2Workspace = () => {
             sx={{ mt: 0.5, fontSize: 12, color: colors.text.secondary }}
           >
             {selectedVm
-              ? `${selectedVm.NAME || 'VM'} · ${disks.length} eligible disk(s)`
-              : 'Choose a VM'}{' '}
-            ·{' '}
+              ? `${selectedVm.NAME || "VM"} · ${disks.length} eligible disk(s)`
+              : "Choose a VM"}{" "}
+            ·{" "}
             {selectedBackend
               ? backendLabel[selectedBackend]
-              : 'No qualified DR backend available'}{' '}
-            · {localSiteId || 'unconfigured source site'} → {targetSite || 'no target site'} ·
-            target checkpoint RPO {secondsToText(checkpointSeconds)}.
+              : "No qualified DR backend available"}{" "}
+            · {localSiteId || "unconfigured source site"} →{" "}
+            {targetSite || "no target site"} · target checkpoint RPO{" "}
+            {secondsToText(checkpointSeconds)}.
           </Typography>
           {disks.map((disk) => (
             <Typography
               key={disk.id}
               sx={{ mt: 0.25, fontSize: 11, color: colors.text.muted }}
             >
-              Disk {disk.id}: {disk.label} ·{' '}
+              Disk {disk.id}: {disk.label} ·{" "}
               {Math.round(disk.virtual_bytes / 1024 / 1024 / 1024)} GiB
             </Typography>
           ))}
         </Box>
         <Button
-          sx={{ mt: 2, textTransform: 'none' }}
+          sx={{ mt: 2, textTransform: "none" }}
           variant="contained"
           disabled={busy || !request || disks.length === 0}
           onClick={createProtection}
         >
-          {busy ? 'Validating…' : 'Validate and enable replication'}
+          {busy ? "Validating…" : "Validate and enable replication"}
         </Button>
       </Surface>
 
@@ -570,17 +586,18 @@ const ReplicationV2Workspace = () => {
           title="Replication sessions"
           description="Measured RPO and backlog are runtime evidence. Configured interval alone is never shown as achieved RPO."
         />
-        <Box sx={{ display: 'grid', gap: 1.5 }}>
+        <Box sx={{ display: "grid", gap: 1.5 }}>
           {sessions.map((session) => {
-            const sessionDetail = details[session.id] || {}
-            const health = sessionDetail.health || {}
-            const backendHealth = sessionDetail.backendHealth || {}
-            const checkpoints = sessionDetail.checkpoints || []
-            const latest = checkpoints[checkpoints.length - 1]
+            const sessionDetail = details[session.id] || {};
+            const health = sessionDetail.health || {};
+            const backendHealth = sessionDetail.backendHealth || {};
+            const checkpoints = sessionDetail.checkpoints || [];
+            const latest = checkpoints[checkpoints.length - 1];
+            const recoveryManifest = checkpointRecoveryManifest(latest);
             const degraded =
-              health.operational_state === 'RPO_VIOLATED' ||
-              health.operational_state === 'REPLICATION_DEGRADED' ||
-              session.state === 'DEGRADED'
+              health.operational_state === "RPO_VIOLATED" ||
+              health.operational_state === "REPLICATION_DEGRADED" ||
+              session.state === "DEGRADED";
 
             return (
               <Box
@@ -593,10 +610,10 @@ const ReplicationV2Workspace = () => {
               >
                 <Box
                   sx={{
-                    display: 'grid',
+                    display: "grid",
                     gridTemplateColumns: {
-                      xs: '1fr',
-                      md: '2fr repeat(5, 1fr)',
+                      xs: "1fr",
+                      md: "2fr repeat(5, 1fr)",
                     },
                     gap: 1,
                   }}
@@ -606,7 +623,7 @@ const ReplicationV2Workspace = () => {
                       {session.id}
                     </Typography>
                     <Typography sx={{ fontSize: 11, color: colors.text.muted }}>
-                      VM {session.workload_id} · {session.source_site_id} →{' '}
+                      VM {session.workload_id} · {session.source_site_id} →{" "}
                       {session.target_site_id}
                     </Typography>
                   </Box>
@@ -623,7 +640,7 @@ const ReplicationV2Workspace = () => {
                       Health
                     </Typography>
                     <Typography sx={{ fontSize: 12, fontWeight: 700 }}>
-                      {health.operational_state || '—'}
+                      {health.operational_state || "—"}
                     </Typography>
                   </Box>
                   <Box>
@@ -632,7 +649,7 @@ const ReplicationV2Workspace = () => {
                     </Typography>
                     <Typography sx={{ fontSize: 12 }}>
                       {health.unavailable
-                        ? 'Unavailable'
+                        ? "Unavailable"
                         : durationToText(health.actual_rpo)}
                     </Typography>
                   </Box>
@@ -642,17 +659,17 @@ const ReplicationV2Workspace = () => {
                     </Typography>
                     <Typography sx={{ fontSize: 12 }}>
                       {health.unavailable
-                        ? 'Unavailable'
+                        ? "Unavailable"
                         : bytesToText(health.backlog_bytes)}
                     </Typography>
                   </Box>
                   <Box>
                     <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
-                      Catch-up ETA
+                      Sync ETA (projected)
                     </Typography>
                     <Typography sx={{ fontSize: 12 }}>
                       {health.unavailable
-                        ? 'Unavailable'
+                        ? "Unavailable"
                         : durationToText(health.catch_up_eta)}
                     </Typography>
                   </Box>
@@ -661,8 +678,8 @@ const ReplicationV2Workspace = () => {
                 <Box
                   sx={{
                     mt: 1.25,
-                    display: 'grid',
-                    gridTemplateColumns: { xs: '1fr', md: 'repeat(4, 1fr)' },
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", md: "repeat(5, 1fr)" },
                     gap: 1,
                   }}
                 >
@@ -680,10 +697,10 @@ const ReplicationV2Workspace = () => {
                     </Typography>
                     <Typography sx={{ fontSize: 12 }}>
                       {backendHealth.unavailable
-                        ? 'Unavailable'
+                        ? "Unavailable"
                         : backendHealth.ready
-                          ? 'Ready'
-                          : 'Not ready'}
+                        ? "Ready"
+                        : "Not ready"}
                     </Typography>
                   </Box>
                   <Box>
@@ -700,17 +717,147 @@ const ReplicationV2Workspace = () => {
                     </Typography>
                     <Typography sx={{ fontSize: 12 }}>
                       {latest
-                        ? `G${latest.generation} · ${dateText(latest.committed_at)}`
-                        : 'None yet'}
+                        ? `G${latest.generation} · ${dateText(
+                            latest.committed_at
+                          )}`
+                        : "None yet"}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+                      Verification
+                    </Typography>
+                    <Typography sx={{ fontSize: 12 }}>
+                      {firstDefined(
+                        latest?.verification_state,
+                        latest?.verification_status,
+                        health.verification_state,
+                        "Unavailable"
+                      )}
+                    </Typography>
+                  </Box>
+                </Box>
+
+                <Box
+                  sx={{
+                    mt: 1.25,
+                    display: "grid",
+                    gridTemplateColumns: { xs: "1fr", md: "repeat(4, 1fr)" },
+                    gap: 1,
+                  }}
+                >
+                  <Box>
+                    <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+                      Bytes received
+                    </Typography>
+                    <Typography sx={{ fontSize: 12 }}>
+                      {bytesToText(
+                        firstDefined(
+                          health.bytes_received,
+                          health.received_bytes
+                        )
+                      )}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+                      Sync progress
+                    </Typography>
+                    <Typography sx={{ fontSize: 12 }}>
+                      {percentText(
+                        firstDefined(
+                          health.sync_percent,
+                          health.progress_percent,
+                          health.progress
+                        )
+                      )}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+                      Replication throughput
+                    </Typography>
+                    <Typography sx={{ fontSize: 12 }}>
+                      {firstDefined(
+                        health.throughput_bytes_per_second,
+                        health.throughput_bps
+                      ) === undefined
+                        ? "Unavailable"
+                        : `${bytesToText(
+                            firstDefined(
+                              health.throughput_bytes_per_second,
+                              health.throughput_bps
+                            )
+                          )}/s`}
+                    </Typography>
+                  </Box>
+                  <Box>
+                    <Typography sx={{ fontSize: 10, color: colors.text.muted }}>
+                      Network utilization
+                    </Typography>
+                    <Typography sx={{ fontSize: 12 }}>
+                      {percentText(
+                        firstDefined(
+                          health.network_utilization_percent,
+                          health.network_utilization
+                        )
+                      )}
                     </Typography>
                   </Box>
                 </Box>
 
                 {health.reason && (
-                  <Alert severity={degraded ? 'warning' : 'info'} sx={{ mt: 1 }}>
+                  <Alert
+                    severity={degraded ? "warning" : "info"}
+                    sx={{ mt: 1 }}
+                  >
                     {health.reason}
                   </Alert>
                 )}
+
+                <Box sx={{ mt: 1 }}>
+                  <GuardianInsight
+                    scope="DR replication v2"
+                    evidence={
+                      health.guardian ??
+                      session.guardian ??
+                      latest?.guardian_verification
+                    }
+                  />
+                </Box>
+
+                <Box
+                  sx={{
+                    mt: 1,
+                    p: 1.25,
+                    border: `1px solid ${colors.border}`,
+                    borderRadius: 1.5,
+                  }}
+                >
+                  <Typography sx={{ fontSize: 12, fontWeight: 750 }}>
+                    Recovery boot contract
+                  </Typography>
+                  {recoveryManifest ? (
+                    <Typography
+                      sx={{ mt: 0.4, fontSize: 11, color: colors.text.secondary }}
+                    >
+                      {recoveryManifest.firmware || "Firmware unavailable"} ·
+                      Secure Boot {recoveryManifest.firmware_secure || "unavailable"} ·
+                      vTPM {recoveryManifest.tpm_model || "unavailable"} ·
+                      {recoveryManifest.disks?.length || 0} protected disk(s) ·
+                      {recoveryManifest.portable_pci_devices?.length || 0} portable GPU/PCI selector(s) ·
+                      cloud-init guest state travels on protected VM disks;
+                      non-secret context is digest-bound to the checkpoint.
+                    </Typography>
+                  ) : (
+                    <Typography
+                      sx={{ mt: 0.4, fontSize: 11, color: colors.text.muted }}
+                    >
+                      Unavailable — this checkpoint did not return a digest-bound
+                      recovery manifest, so complete bootability is not claimed.
+                    </Typography>
+                  )}
+                </Box>
 
                 <Box sx={{ mt: 1.5 }}>
                   <Typography sx={{ fontSize: 12, fontWeight: 750 }}>
@@ -721,7 +868,7 @@ const ReplicationV2Workspace = () => {
                     .reverse()
                     .slice(0, 8)
                     .map((checkpoint) => {
-                      const key = `clone:${session.id}:${checkpoint.id}`
+                      const key = `clone:${session.id}:${checkpoint.id}`;
                       return (
                         <Box
                           key={checkpoint.id}
@@ -730,19 +877,19 @@ const ReplicationV2Workspace = () => {
                             p: 1,
                             border: `1px solid ${colors.border}`,
                             borderRadius: 1,
-                            display: 'flex',
+                            display: "flex",
                             gap: 1,
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            flexWrap: 'wrap',
+                            alignItems: "center",
+                            justifyContent: "space-between",
+                            flexWrap: "wrap",
                           }}
                         >
                           <Typography
                             sx={{ fontSize: 11, color: colors.text.secondary }}
                           >
-                            G{checkpoint.generation} ·{' '}
-                            {dateText(checkpoint.committed_at)} ·{' '}
-                            {checkpoint.consistency} ·{' '}
+                            G{checkpoint.generation} ·{" "}
+                            {dateText(checkpoint.committed_at)} ·{" "}
+                            {checkpoint.consistency} ·{" "}
                             {checkpoint.disks?.length || 0} disk(s)
                           </Typography>
                           <Button
@@ -755,14 +902,14 @@ const ReplicationV2Workspace = () => {
                             onClick={() =>
                               testRecovery(session.id, checkpoint.id)
                             }
-                            sx={{ textTransform: 'none' }}
+                            sx={{ textTransform: "none" }}
                           >
                             {actionBusy === key
-                              ? 'Creating test recovery…'
-                              : 'Test Recovery'}
+                              ? "Creating test recovery…"
+                              : "Test Recovery"}
                           </Button>
                         </Box>
-                      )
+                      );
                     })}
                   {!checkpoints.length && (
                     <Typography
@@ -781,23 +928,23 @@ const ReplicationV2Workspace = () => {
                       color="warning"
                       disabled={actionBusy === `rebaseline:${session.id}`}
                       onClick={() => requestRebaseline(session.id, health)}
-                      sx={{ textTransform: 'none' }}
+                      sx={{ textTransform: "none" }}
                     >
                       {actionBusy === `rebaseline:${session.id}`
-                        ? 'Requesting…'
-                        : 'Rebaseline after continuity loss'}
+                        ? "Requesting…"
+                        : "Rebaseline after continuity loss"}
                     </Button>
                     <Typography
                       sx={{ mt: 0.5, fontSize: 10, color: colors.text.muted }}
                     >
                       Rebaseline starts a new baseline/epoch only when source
-                      continuity cannot be proven. Existing committed checkpoints
-                      and Restic recovery points remain independent.
+                      continuity cannot be proven. Existing committed
+                      checkpoints and Restic recovery points remain independent.
                     </Typography>
                   </Box>
                 )}
               </Box>
-            )
+            );
           })}
           {!sessions.length && (
             <Typography sx={{ fontSize: 12, color: colors.text.secondary }}>
@@ -815,8 +962,8 @@ const ReplicationV2Workspace = () => {
           />
           <Box
             sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', lg: 'repeat(2, 1fr)' },
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", lg: "repeat(2, 1fr)" },
               gap: 1.5,
             }}
           >
@@ -840,8 +987,8 @@ const ReplicationV2Workspace = () => {
                 label="Member sessions"
                 onChange={(e) =>
                   setGroupMembers(
-                    typeof e.target.value === 'string'
-                      ? e.target.value.split(',')
+                    typeof e.target.value === "string"
+                      ? e.target.value.split(",")
                       : e.target.value
                   )
                 }
@@ -858,8 +1005,8 @@ const ReplicationV2Workspace = () => {
                         !groupMembers.includes(session.id))
                     }
                   >
-                    {session.id} · VM {session.workload_id} · group{' '}
-                    {session.protection_group_id || '—'}
+                    {session.id} · VM {session.workload_id} · group{" "}
+                    {session.protection_group_id || "—"}
                   </MenuItem>
                 ))}
               </Select>
@@ -882,30 +1029,33 @@ const ReplicationV2Workspace = () => {
               >
                 <MenuItem value="CRASH_CONSISTENT">Crash consistent</MenuItem>
                 <MenuItem
-                value="FILESYSTEM_CONSISTENT"
-                disabled={!capabilities.application_consistency}
-              >
-                Filesystem quiesced
-              </MenuItem>
-              <MenuItem
-                value="APPLICATION_CONSISTENT"
-                disabled={!capabilities.application_consistency}
-              >
-                Application consistent
-              </MenuItem>
+                  value="FILESYSTEM_CONSISTENT"
+                  disabled={!capabilities.application_consistency}
+                >
+                  Filesystem quiesced
+                </MenuItem>
+                <MenuItem
+                  value="APPLICATION_CONSISTENT"
+                  disabled={!capabilities.application_consistency}
+                >
+                  Application consistent
+                </MenuItem>
               </Select>
             </FormControl>
           </Box>
-          <Alert severity={groupModeQualified ? 'info' : 'warning'} sx={{ mt: 1.5 }}>
+          <Alert
+            severity={groupModeQualified ? "info" : "warning"}
+            sx={{ mt: 1.5 }}
+          >
             {multiWorkloadGroups
-              ? 'Every member session must already use this exact protection-group ID. The dependency DAG is validated and retained for recovery planning; no failover action is exposed here.'
-              : 'A qualified multi-workload quiesce provider is not configured. This site can create only single-session crash-consistent protection groups; multi-session and filesystem/application consistency remain unavailable.'}
+              ? "Every member session must already use this exact protection-group ID. The dependency DAG is validated and retained for recovery planning; no failover action is exposed here."
+              : "A qualified multi-workload quiesce provider is not configured. This site can create only single-session crash-consistent protection groups; multi-session and filesystem/application consistency remain unavailable."}
           </Alert>
-          <Box sx={{ mt: 1.5, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+          <Box sx={{ mt: 1.5, display: "flex", gap: 1, flexWrap: "wrap" }}>
             <Button
               variant="outlined"
               disabled={
-                actionBusy === 'group:configure' ||
+                actionBusy === "group:configure" ||
                 !groupId.trim() ||
                 !groupName.trim() ||
                 groupMembers.length === 0 ||
@@ -913,19 +1063,21 @@ const ReplicationV2Workspace = () => {
                 !groupConsistencyQualified
               }
               onClick={async () => {
-                setError('')
-                setNotice('')
-                setActionBusy('group:configure')
+                setError("");
+                setNotice("");
+                setActionBusy("group:configure");
                 try {
-                  const parsedDependencies = JSON.parse(groupDependencies || '{}')
+                  const parsedDependencies = JSON.parse(
+                    groupDependencies || "{}"
+                  );
                   if (
                     !parsedDependencies ||
                     Array.isArray(parsedDependencies) ||
-                    typeof parsedDependencies !== 'object'
+                    typeof parsedDependencies !== "object"
                   ) {
                     throw new Error(
-                      'Protection-group dependencies must be a JSON object.'
-                    )
+                      "Protection-group dependencies must be a JSON object."
+                    );
                   }
                   await replicationAPI.putProtectionGroup({
                     id: groupId.trim(),
@@ -933,59 +1085,59 @@ const ReplicationV2Workspace = () => {
                     session_ids: groupMembers,
                     dependencies: parsedDependencies,
                     consistency: groupConsistency,
-                  })
-                  setNotice(`Protection group ${groupId} configured.`)
+                  });
+                  setNotice(`Protection group ${groupId} configured.`);
                 } catch (reason) {
-                  setError(reason.message)
+                  setError(reason.message);
                 } finally {
-                  setActionBusy('')
+                  setActionBusy("");
                 }
               }}
-              sx={{ textTransform: 'none' }}
+              sx={{ textTransform: "none" }}
             >
-              {actionBusy === 'group:configure'
-                ? 'Configuring…'
-                : 'Configure group'}
+              {actionBusy === "group:configure"
+                ? "Configuring…"
+                : "Configure group"}
             </Button>
             <Button
               variant="contained"
               disabled={
-                actionBusy === 'group:capture' ||
+                actionBusy === "group:capture" ||
                 !groupId.trim() ||
                 groupMembers.length === 0 ||
                 !groupModeQualified ||
                 !groupConsistencyQualified
               }
               onClick={async () => {
-                setError('')
-                setNotice('')
-                setActionBusy('group:capture')
+                setError("");
+                setNotice("");
+                setActionBusy("group:capture");
                 try {
                   const checkpoint =
-                    await replicationAPI.captureProtectionGroup(groupId.trim())
+                    await replicationAPI.captureProtectionGroup(groupId.trim());
                   const payload =
                     await replicationAPI.protectionGroupCheckpoints(
                       groupId.trim()
-                    )
-                  setGroupCheckpoints(payload?.checkpoints || [])
+                    );
+                  setGroupCheckpoints(payload?.checkpoints || []);
                   setNotice(
                     `Coordinated protection-group checkpoint ${checkpoint.id} committed. This did not perform failover.`
-                  )
-                  await refresh()
+                  );
+                  await refresh();
                 } catch (reason) {
-                  setError(reason.message)
+                  setError(reason.message);
                 } finally {
-                  setActionBusy('')
+                  setActionBusy("");
                 }
               }}
-              sx={{ textTransform: 'none' }}
+              sx={{ textTransform: "none" }}
             >
-              {actionBusy === 'group:capture'
-                ? 'Capturing coordinated checkpoint…'
-                : 'Capture coordinated checkpoint'}
+              {actionBusy === "group:capture"
+                ? "Capturing coordinated checkpoint…"
+                : "Capture coordinated checkpoint"}
             </Button>
           </Box>
-          <Box sx={{ mt: 1.5, display: 'grid', gap: 0.75 }}>
+          <Box sx={{ mt: 1.5, display: "grid", gap: 0.75 }}>
             {groupCheckpoints
               .slice()
               .reverse()
@@ -1004,7 +1156,7 @@ const ReplicationV2Workspace = () => {
                   <Typography
                     sx={{ fontSize: 10, color: colors.text.secondary }}
                   >
-                    {checkpoint.consistency} ·{' '}
+                    {checkpoint.consistency} ·{" "}
                     {Object.keys(checkpoint.checkpoints || {}).length} member
                     checkpoint(s) · {dateText(checkpoint.committed_at)}
                   </Typography>
@@ -1014,7 +1166,7 @@ const ReplicationV2Workspace = () => {
         </Surface>
       )}
     </PageFrame>
-  )
-}
+  );
+};
 
-export default ReplicationV2Workspace
+export default ReplicationV2Workspace;

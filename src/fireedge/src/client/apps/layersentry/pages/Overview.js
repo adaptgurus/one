@@ -29,7 +29,7 @@ import { useHistory } from 'react-router-dom'
 import {
   BackupJobAPI,
   DatastoreAPI,
-  OneKsAPI,
+  KubeOnePortalAPI,
   ServiceAPI,
   VmAPI,
   VnAPI,
@@ -56,6 +56,13 @@ const count = (query) => {
   if (query.isError) return '—'
 
   return Array.isArray(query.data) ? query.data.length : 0
+}
+
+const countKubeOneClusters = (query) => {
+  if (query.isLoading || query.isFetching) return '…'
+  if (query.isError) return '—'
+
+  return Array.isArray(query.data?.clusters) ? query.data.clusters.length : 0
 }
 
 const Overview = ({ endpoints }) => {
@@ -112,7 +119,7 @@ const Overview = ({ endpoints }) => {
     { extended: false },
     { skip: !canViewCompute }
   )
-  const kubernetes = OneKsAPI.useGetOneKsClustersQuery(undefined, {
+  const kubernetes = KubeOnePortalAPI.useGetKubeOneClustersQuery(undefined, {
     skip: !canViewKubernetes,
   })
   const networks = VnAPI.useGetVNetworksQuery(undefined, {
@@ -153,8 +160,8 @@ const Overview = ({ endpoints }) => {
     },
     canViewKubernetes && {
       label: 'Kubernetes',
-      value: count(kubernetes),
-      detail: 'Managed clusters',
+      value: countKubeOneClusters(kubernetes),
+      detail: 'KubeOne-managed clusters',
       icon: XrayView,
       accent: colors.kubernetes,
     },

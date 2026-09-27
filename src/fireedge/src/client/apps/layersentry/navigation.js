@@ -63,6 +63,7 @@ export const PRODUCT_PATHS = Object.freeze({
   SUPPORT: '/support',
   SETTINGS: '/settings',
   INFRASTRUCTURE: '/infrastructure',
+  INFRA_ARCHITECTURE: '/infrastructure/architecture',
   INFRA_HOSTS: '/infrastructure/hosts',
   INFRA_CLUSTERS: '/infrastructure/clusters',
   INFRA_STORAGE: '/infrastructure/storage',
@@ -225,6 +226,12 @@ const adminGroups = [
     label: 'Infrastructure',
     icon: Db,
     children: [
+      {
+        label: 'Architecture',
+        path: PRODUCT_PATHS.INFRA_ARCHITECTURE,
+        icon: Db,
+        capability: CAPABILITY_IDS.INFRA_HOSTS,
+      },
       {
         label: 'Compute Hosts',
         path: PRODUCT_PATHS.INFRA_HOSTS,

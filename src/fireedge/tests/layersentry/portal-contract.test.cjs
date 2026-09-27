@@ -78,7 +78,7 @@ test('overview gates live queries and actions through the capability model', () 
   assert.match(overview, /getCapabilityModel\(endpoints\)/)
   assert.match(
     overview,
-    /OneKsAPI\.useGetOneKsClustersQuery\(undefined, \{\s*skip: !canViewKubernetes/
+    /KubeOnePortalAPI\.useGetKubeOneClustersQuery\(undefined, \{\s*skip: !canViewKubernetes/
   )
   assert.match(
     overview,

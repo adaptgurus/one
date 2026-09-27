@@ -25,6 +25,7 @@ import {
 } from 'client/apps/layersentry/components/Primitives'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import { colors } from 'client/apps/layersentry/theme/tokens'
+import GuardianInsight from 'client/apps/layersentry/components/GuardianInsight'
 
 const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
 
@@ -166,6 +167,21 @@ const SiteRecoveryWorkspace = () => {
             </Box>
           ))}
         </Box>
+      </Surface>
+
+      <Surface sx={{ mt: 2, p: 2.5 }}>
+        <SectionHeader
+          title="Guardian AI for DC/DR"
+          description="Evidence-bound guidance only; Guardian cannot bypass the Replication v2 owner, fencing, approval or recovery verification."
+        />
+        <GuardianInsight scope="DC/DR" />
+        <Button
+          variant="outlined"
+          onClick={() => history.push(PRODUCT_PATHS.PROTECTION_REPLICATION)}
+          sx={{ mt: 1.5, textTransform: 'none' }}
+        >
+          Open Replication v2 evidence
+        </Button>
       </Surface>
 
       {isAdmin && (

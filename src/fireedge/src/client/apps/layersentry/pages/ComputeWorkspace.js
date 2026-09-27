@@ -146,7 +146,9 @@ const ComputeWorkspace = ({ endpoints }) => {
     isCapabilityEnabled(CAPABILITY_IDS.VM_UPDATE_CONFIG, capabilityModel)
   const canMigrateVm =
     isAdmin && isCapabilityEnabled(CAPABILITY_IDS.VM_MIGRATE, capabilityModel)
-  const hostQuery = HostAPI.useGetHostsQuery(undefined, { skip: !canMigrateVm })
+  const hostQuery = HostAPI.useGetHostsQuery(undefined, {
+    skip: !canMigrateVm,
+  })
   const datastoreQuery = DatastoreAPI.useGetDatastoresQuery(undefined, {
     skip: !canMigrateVm,
   })
@@ -183,7 +185,8 @@ const ComputeWorkspace = ({ endpoints }) => {
     migrateState.isLoading
   const currentLocation = selectedVm ? getLastVmHistory(selectedVm) : {}
   const allSystemDatastores = toArray(datastoreQuery.data).filter(
-    ({ TYPE }) => String(TYPE) === '1' || String(TYPE).toUpperCase() === 'SYSTEM_DS'
+    ({ TYPE }) =>
+      String(TYPE) === '1' || String(TYPE).toUpperCase() === 'SYSTEM_DS'
   )
   const currentDatastore = allSystemDatastores.find(
     ({ ID }) => String(ID) === String(currentLocation?.DS_ID)
@@ -196,7 +199,8 @@ const ComputeWorkspace = ({ endpoints }) => {
     return !currentTransferDriver || transferDriver === currentTransferDriver
   })
   const availableHosts = toArray(hostQuery.data).filter(
-    ({ STATE }) => String(STATE) === '2' || String(STATE).toUpperCase() === 'MONITORED'
+    ({ STATE }) =>
+      String(STATE) === '2' || String(STATE).toUpperCase() === 'MONITORED'
   )
 
   const selectVmForEdit = (id) => {
@@ -219,11 +223,17 @@ const ComputeWorkspace = ({ endpoints }) => {
   const moveVmStorage = async () => {
     if (!selectedVm?.ID || !targetHostId || !targetDatastoreId) return
     if (String(currentLocation?.DS_ID) === String(targetDatastoreId)) {
-      setMigrationStatus('Choose a destination storage pool different from the current pool.')
+      setMigrationStatus(
+        'Choose a destination storage pool different from the current pool.'
+      )
+
       return
     }
     if (liveStorageMove && String(selectedVm.STATE) !== '3') {
-      setMigrationStatus('Live storage migration requires a running virtual machine.')
+      setMigrationStatus(
+        'Live storage migration requires a running virtual machine.'
+      )
+
       return
     }
 
@@ -237,7 +247,7 @@ const ComputeWorkspace = ({ endpoints }) => {
         type: liveStorageMove ? 0 : 1,
       }).unwrap()
       setMigrationStatus(
-        'OpenNebula accepted the storage move. Completion is shown only after the refreshed VM location reports the destination pool.'
+        'The infrastructure service accepted the storage move. Completion is shown only after the refreshed VM location reports the destination pool.'
       )
       await query.refetch()
     } catch (error) {
@@ -554,10 +564,13 @@ const ComputeWorkspace = ({ endpoints }) => {
                   <Typography sx={{ fontSize: 14, fontWeight: 800 }}>
                     Move storage
                   </Typography>
-                  <Typography sx={{ mt: 0.5, fontSize: 12, color: colors.text.secondary }}>
-                    Current host: {currentLocation?.HOSTNAME ?? '—'} · Current storage pool:{' '}
-                    {currentLocation?.DS_ID ?? '—'}. OpenNebula performs the native migration;
-                    LayerSentry never copies disk files directly.
+                  <Typography
+                    sx={{ mt: 0.5, fontSize: 12, color: colors.text.secondary }}
+                  >
+                    Current host: {currentLocation?.HOSTNAME ?? '—'} · Current
+                    storage pool: {currentLocation?.DS_ID ?? '—'}. The
+                    infrastructure service performs the migration; LayerSentry
+                    never copies disk files directly.
                   </Typography>
                   <Box
                     sx={{
@@ -568,12 +581,16 @@ const ComputeWorkspace = ({ endpoints }) => {
                     }}
                   >
                     <FormControl fullWidth size="small">
-                      <InputLabel id="storage-move-host-label">Destination host</InputLabel>
+                      <InputLabel id="storage-move-host-label">
+                        Destination host
+                      </InputLabel>
                       <Select
                         labelId="storage-move-host-label"
                         label="Destination host"
                         value={targetHostId}
-                        onChange={(event) => setTargetHostId(event.target.value)}
+                        onChange={(event) =>
+                          setTargetHostId(event.target.value)
+                        }
                       >
                         {availableHosts.map((host) => (
                           <MenuItem key={host.ID} value={String(host.ID)}>
@@ -590,13 +607,18 @@ const ComputeWorkspace = ({ endpoints }) => {
                         labelId="storage-move-datastore-label"
                         label="Destination storage pool"
                         value={targetDatastoreId}
-                        onChange={(event) => setTargetDatastoreId(event.target.value)}
+                        onChange={(event) =>
+                          setTargetDatastoreId(event.target.value)
+                        }
                       >
                         {systemDatastores.map((datastore) => (
                           <MenuItem
                             key={datastore.ID}
                             value={String(datastore.ID)}
-                            disabled={String(datastore.ID) === String(currentLocation?.DS_ID)}
+                            disabled={
+                              String(datastore.ID) ===
+                              String(currentLocation?.DS_ID)
+                            }
                           >
                             {datastore.NAME || `Storage ${datastore.ID}`}
                           </MenuItem>
@@ -609,7 +631,9 @@ const ComputeWorkspace = ({ endpoints }) => {
                     control={
                       <Checkbox
                         checked={liveStorageMove}
-                        onChange={(event) => setLiveStorageMove(event.target.checked)}
+                        onChange={(event) =>
+                          setLiveStorageMove(event.target.checked)
+                        }
                       />
                     }
                     label="Keep the running VM online (live migration)"
@@ -618,14 +642,15 @@ const ComputeWorkspace = ({ endpoints }) => {
                     ({ ID }) => String(ID) === String(currentLocation?.DS_ID)
                   ) && (
                     <Alert severity="warning" sx={{ mt: 1 }}>
-                      No compatible destination storage pool is available. OpenNebula
-                      requires the source and destination to use the same transfer driver.
+                      No compatible destination storage pool is available. The
+                      infrastructure service requires the source and destination
+                      to use the same transfer driver.
                     </Alert>
                   )}
                   {!liveStorageMove && (
                     <Alert severity="warning" sx={{ mt: 1 }}>
-                      Warm migration powers off the VM during the storage move. Review the
-                      workload maintenance window first.
+                      Warm migration powers off the VM during the storage move.
+                      Review the workload maintenance window first.
                     </Alert>
                   )}
                   {migrationStatus && (
@@ -635,13 +660,13 @@ const ComputeWorkspace = ({ endpoints }) => {
                   )}
                   <Button
                     variant="contained"
-                    disabled={
-                      editorBusy || !targetHostId || !targetDatastoreId
-                    }
+                    disabled={editorBusy || !targetHostId || !targetDatastoreId}
                     onClick={moveVmStorage}
                     sx={{ mt: 1.25, textTransform: 'none' }}
                   >
-                    {migrateState.isLoading ? 'Requesting move…' : 'Move storage'}
+                    {migrateState.isLoading
+                      ? 'Requesting move…'
+                      : 'Move storage'}
                   </Button>
                 </Box>
               )}

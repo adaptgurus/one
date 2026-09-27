@@ -40,6 +40,9 @@ import ReplicationV2Workspace from 'client/apps/layersentry/pages/ReplicationV2W
 import BackupStorageWorkspace from 'client/apps/layersentry/pages/BackupStorageWorkspace'
 import NetworkCreateWizard from 'client/apps/layersentry/pages/NetworkCreateWizard'
 import BackupPlanCreateWizard from 'client/apps/layersentry/pages/BackupPlanCreateWizard'
+import HostWorkspace from 'client/apps/layersentry/pages/HostWorkspace'
+import HostDetail from 'client/apps/layersentry/pages/HostDetail'
+import InfrastructureArchitecture from 'client/apps/layersentry/pages/InfrastructureArchitecture'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 
 const area = (props) => <AreaPage {...props} />
@@ -578,17 +581,22 @@ const Portal = ({ endpoints }) => {
         {isAdmin && (
           <Route
             exact
+            path={PRODUCT_PATHS.INFRA_ARCHITECTURE}
+            component={InfrastructureArchitecture}
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={`${PRODUCT_PATHS.INFRA_HOSTS}/:id`}
+            component={HostDetail}
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
             path={PRODUCT_PATHS.INFRA_HOSTS}
-            render={() =>
-              area({
-                endpoints,
-                title: 'Compute Hosts',
-                description: 'Physical compute host health and administration.',
-                resources: [{ label: 'Hosts', legacyPath: '/host' }],
-                createTo: '/infrastructure/hosts/create',
-                createLabel: 'Add Host',
-              })
-            }
+            render={() => <HostWorkspace authoritativePath="/host" />}
           />
         )}
         {isAdmin && (
