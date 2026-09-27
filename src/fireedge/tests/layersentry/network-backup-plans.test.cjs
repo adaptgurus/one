@@ -172,7 +172,7 @@ test("Open vSwitch network requires an explicit qualified bridge and exact readb
 });
 
 test("backup profiles compile schedule retention destination and VM assignment", () => {
-  for (const id of ["ESSENTIAL", "BUSINESS", "CRITICAL"]) {
+  for (const id of ["ESSENTIAL", "BUSINESS", "CRITICAL", "COMPLIANCE_6M"]) {
     const draft = {
       ...backup.defaultBackupPlanDraft(),
       name: `${id} plan`,
@@ -189,8 +189,10 @@ test("backup profiles compile schedule retention destination and VM assignment",
     assert.equal(template.KEEP_LAST, profile.keepLast);
     assert.equal(template.SCHED_ACTION.DAYS, profile.intervalHours);
     assert.equal(template.SCHED_ACTION.ACTION, "backup");
-    assert.ok(template.PRIORITY <= 49);
+    assert.ok(template.PRIORITY <= 50);
   }
+  assert.equal(backup.BACKUP_PLAN_PROFILES.COMPLIANCE_6M.keepLast, 180);
+  assert.equal(backup.BACKUP_PLAN_PROFILES.COMPLIANCE_6M.intervalHours, 24);
 });
 
 test("custom backup plan and authoritative readback fail closed", () => {

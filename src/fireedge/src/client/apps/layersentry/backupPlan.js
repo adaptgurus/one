@@ -37,6 +37,13 @@ export const BACKUP_PLAN_PROFILES = Object.freeze({
     intervalHours: 4,
     fsFreeze: 'AGENT',
   }),
+  COMPLIANCE_6M: Object.freeze({
+    label: 'Compliance 6M',
+    summary: 'Daily application-consistent backup · keep 180 restore points',
+    keepLast: 180,
+    intervalHours: 24,
+    fsFreeze: 'AGENT',
+  }),
   CUSTOM: Object.freeze({
     label: 'Custom',
     summary: 'Choose schedule, retention and consistency settings',
@@ -199,7 +206,9 @@ export const compileBackupPlanTemplate = (draft) => {
     BACKUP_VMS: [...new Set(draft.vmIds.map(String))].join(','),
     DATASTORE_ID: String(draft.datastoreId),
     PRIORITY:
-      draft.profile === 'CRITICAL'
+      draft.profile === 'COMPLIANCE_6M'
+        ? 50
+        : draft.profile === 'CRITICAL'
         ? 49
         : draft.profile === 'BUSINESS'
         ? 35

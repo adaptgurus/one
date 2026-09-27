@@ -15,7 +15,17 @@
  * ------------------------------------------------------------------------- */
 /* eslint-disable jsdoc/require-jsdoc */
 import PropTypes from 'prop-types'
-import { Alert, Grid, Typography } from '@mui/material'
+import {
+  Alert,
+  FormControl,
+  Grid,
+  InputLabel,
+  MenuItem,
+  Select,
+  Typography,
+} from '@mui/material'
+import { Settings as LuxonSettings } from 'luxon'
+import { useState } from 'react'
 import { useViews } from '@FeaturesModule'
 import ResourceBridge from 'client/apps/layersentry/components/ResourceBridge'
 import {
@@ -24,10 +34,41 @@ import {
   Surface,
 } from 'client/apps/layersentry/components/Primitives'
 import { colors } from 'client/apps/layersentry/theme/tokens'
+import {
+  DEFAULT_LAYERSENTRY_TIMEZONE,
+  LAYERSENTRY_TIMEZONE_KEY,
+  normalizeProductTimezone,
+} from 'client/apps/layersentry/timezone'
+
+const TIMEZONES = Object.freeze([
+  'Asia/Kolkata',
+  'UTC',
+  'Asia/Dubai',
+  'Asia/Singapore',
+  'Europe/London',
+  'Europe/Paris',
+  'America/New_York',
+  'America/Chicago',
+  'America/Denver',
+  'America/Los_Angeles',
+])
 
 const SettingsPage = ({ endpoints }) => {
   const { view } = useViews()
   const isPlatformAdmin = view === 'admin'
+  const [timezone, setTimezone] = useState(() =>
+    normalizeProductTimezone(
+      window.localStorage.getItem(LAYERSENTRY_TIMEZONE_KEY) ||
+        DEFAULT_LAYERSENTRY_TIMEZONE
+    )
+  )
+
+  const updateTimezone = (event) => {
+    const value = normalizeProductTimezone(event.target.value)
+    window.localStorage.setItem(LAYERSENTRY_TIMEZONE_KEY, value)
+    LuxonSettings.defaultZone = value
+    setTimezone(value)
+  }
 
   const settings = [
     {
@@ -97,6 +138,27 @@ const SettingsPage = ({ endpoints }) => {
           </Grid>
         ))}
       </Grid>
+
+      <Surface sx={{ mt: 2, p: 2.5 }}>
+        <SectionHeader
+          title="Timezone"
+          description="Choose how LayerSentry displays timestamps. Audit and operation records remain stored in UTC."
+        />
+        <FormControl size="small" sx={{ minWidth: 280 }}>
+          <InputLabel>Display timezone</InputLabel>
+          <Select
+            label="Display timezone"
+            value={timezone}
+            onChange={updateTimezone}
+          >
+            {TIMEZONES.map((value) => (
+              <MenuItem key={value} value={value}>
+                {value}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+      </Surface>
 
       <Surface sx={{ mt: 2, p: 2 }}>
         <SectionHeader

@@ -27,6 +27,11 @@ import { ENDPOINTS as DEV_ENDPOINTS } from 'client/router/dev'
 import { ReactElement, useEffect, useMemo } from 'react'
 import { matchPath, useLocation } from 'react-router-dom'
 import { _APPS, SERVER_CONFIG } from '@ConstantsModule'
+import { Settings as LuxonSettings } from 'luxon'
+import {
+  LAYERSENTRY_TIMEZONE_KEY,
+  normalizeProductTimezone,
+} from 'client/apps/layersentry/timezone'
 import {
   oneApi,
   SupportAPI,
@@ -37,6 +42,13 @@ import {
 } from '@FeaturesModule'
 
 export const APP_NAME = _APPS.layersentry
+
+const configureProductTimezone = () => {
+  const requested = window.localStorage.getItem(LAYERSENTRY_TIMEZONE_KEY)
+  LuxonSettings.defaultZone = normalizeProductTimezone(requested)
+}
+
+configureProductTimezone()
 
 export const safeProductRedirect = (value) => {
   if (typeof value !== 'string') return '/overview'
