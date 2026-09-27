@@ -258,6 +258,10 @@ const CAPABILITY_PATHS = Object.freeze([
   ['/attention', CAPABILITY_IDS.OPERATIONS],
 ])
 
+const DYNAMIC_CAPABILITY_PATHS = Object.freeze([
+  [/^\/infrastructure\/hosts\/\d+$/, CAPABILITY_IDS.INFRA_HOSTS],
+])
+
 const ALWAYS_AVAILABLE_PATHS = new Set([
   '/',
   '/overview',
@@ -493,7 +497,8 @@ export const isCapabilityEnabled = (capabilityId, model = {}) =>
   CAPABILITY_VISIBILITY.VISIBLE_ENABLED
 
 export const getCapabilityForPath = (pathname = '') =>
-  CAPABILITY_PATHS.find(([path]) => pathname === path)?.[1]
+  CAPABILITY_PATHS.find(([path]) => pathname === path)?.[1] ??
+  DYNAMIC_CAPABILITY_PATHS.find(([pattern]) => pattern.test(pathname))?.[1]
 
 export const isCapabilityPathAvailable = (pathname = '', model = {}) => {
   if (ALWAYS_AVAILABLE_PATHS.has(pathname)) return true

@@ -178,18 +178,40 @@ jobs:
           known="$RUNNER_TEMP/layersentry-known-hosts"
           username="ls-ci-${GITHUB_SHA:0:10}"
           password=$(openssl rand -hex 24)
+          admin_username="ls-ci-admin-${GITHUB_SHA:0:10}"
+          admin_password=$(openssl rand -hex 24)
           echo "::add-mask::$password"
+          echo "::add-mask::$admin_password"
           user_output=$(ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
             layersentry-deploy@172.17.60.30 \
             "sudo -n -u oneadmin oneuser create '$username' '$password' --driver core")
           user_id=${user_output##*: }
           [[ "$user_id" =~ ^[0-9]+$ ]]
+          auth_file="$RUNNER_TEMP/layersentry-auth.env"
           {
             printf 'LAYERSENTRY_TEST_USERNAME=%q\n' "$username"
             printf 'LAYERSENTRY_TEST_PASSWORD=%q\n' "$password"
             printf 'LAYERSENTRY_TEST_USER_ID=%q\n' "$user_id"
-          } >"$RUNNER_TEMP/layersentry-auth.env"
-          chmod 600 "$RUNNER_TEMP/layersentry-auth.env"
+          } >"$auth_file"
+          chmod 600 "$auth_file"
+          admin_output=$(ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            layersentry-deploy@172.17.60.30 \
+            "sudo -n -u oneadmin oneuser create '$admin_username' '$admin_password' --driver core")
+          admin_id=${admin_output##*: }
+          [[ "$admin_id" =~ ^[0-9]+$ ]]
+          {
+            printf 'LAYERSENTRY_ADMIN_USERNAME=%q\n' "$admin_username"
+            printf 'LAYERSENTRY_ADMIN_PASSWORD=%q\n' "$admin_password"
+            printf 'LAYERSENTRY_ADMIN_USER_ID=%q\n' "$admin_id"
+          } >>"$auth_file"
+          ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            layersentry-deploy@172.17.60.30 \
+            "sudo -n -u oneadmin oneuser chgrp '$admin_id' 0"
+          host_id=$(ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            layersentry-deploy@172.17.60.30 \
+            "sudo -n -u oneadmin onehost list --json | ruby -rjson -e 'v=JSON.parse(STDIN.read).dig(\"HOST_POOL\",\"HOST\"); a=v.is_a?(Array) ? v : [v]; puts a.compact.first.fetch(\"ID\")'")
+          [[ "$host_id" =~ ^[0-9]+$ ]]
+          printf 'LAYERSENTRY_TEST_HOST_ID=%q\n' "$host_id" >>"$auth_file"
 
       - name: Authenticated browser, deep-link, expiry and IDOR smoke
         working-directory: src/fireedge
@@ -198,6 +220,39 @@ jobs:
           set -euo pipefail
           source "$RUNNER_TEMP/layersentry-auth.env"
           node tests/layersentry/live-auth-browser-smoke.cjs \
+            http://172.17.60.30:2616/fireedge \
+            "$LAYERSENTRY_TEST_USERNAME" "$LAYERSENTRY_TEST_PASSWORD" customer
+          node tests/layersentry/live-auth-browser-smoke.cjs \
+            http://172.17.60.30:2616/fireedge \
+            "$LAYERSENTRY_ADMIN_USERNAME" "$LAYERSENTRY_ADMIN_PASSWORD" admin \
+            "$LAYERSENTRY_TEST_HOST_ID"
+
+      - name: Restart persistence and exact deployment recheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/layersentry-auth.env"
+          key=/root/.ssh/layersentry_lab_ed25519
+          known="$RUNNER_TEMP/layersentry-known-hosts"
+          bundle_hash=$(sha256sum src/fireedge/dist/client/bundle.layersentry.js | awk '{print $1}')
+          server_hash=$(sha256sum src/fireedge/dist/index.js | awk '{print $1}')
+          ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            layersentry-deploy@172.17.60.30 \
+            "sudo -n systemctl restart opennebula-fireedge.service && \
+             sudo -n systemctl is-active --quiet opennebula-fireedge.service && \
+             sudo -n grep -qx '$GITHUB_SHA' /usr/lib/one/fireedge/dist/LAYERSENTRY_SOURCE_COMMIT && \
+             sudo -n sha256sum /usr/lib/one/fireedge/dist/client/bundle.layersentry.js | grep -q '^$bundle_hash  ' && \
+             sudo -n sha256sum /usr/lib/one/fireedge/dist/index.js | grep -q '^$server_hash  '"
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://172.17.60.30:2616/fireedge/layersentry | grep -q 'layersentry_capabilities'; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
+          node src/fireedge/tests/layersentry/live-auth-browser-smoke.cjs \
             http://172.17.60.30:2616/fireedge \
             "$LAYERSENTRY_TEST_USERNAME" "$LAYERSENTRY_TEST_PASSWORD" customer
 
@@ -211,6 +266,13 @@ jobs:
           source "$auth_file"
           key=/root/.ssh/layersentry_lab_ed25519
           known="$RUNNER_TEMP/layersentry-known-hosts"
-          ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
-            layersentry-deploy@172.17.60.30 \
-            "sudo -n -u oneadmin oneuser delete '$LAYERSENTRY_TEST_USER_ID'"
+          if [[ "${LAYERSENTRY_TEST_USER_ID:-}" =~ ^[0-9]+$ ]]; then
+            ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+              layersentry-deploy@172.17.60.30 \
+              "sudo -n -u oneadmin oneuser delete '$LAYERSENTRY_TEST_USER_ID'"
+          fi
+          if [[ "${LAYERSENTRY_ADMIN_USER_ID:-}" =~ ^[0-9]+$ ]]; then
+            ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+              layersentry-deploy@172.17.60.30 \
+              "sudo -n -u oneadmin oneuser delete '$LAYERSENTRY_ADMIN_USER_ID'"
+          fi

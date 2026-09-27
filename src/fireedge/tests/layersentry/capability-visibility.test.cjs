@@ -352,6 +352,10 @@ test('native detail routes are not implicitly authorized by inventory capability
   assert.match(capabilities, /\['\/vm', CAPABILITY_IDS\.COMPUTE\]/)
   assert.doesNotMatch(capabilities, /'\/vm\/:/)
   assert.doesNotMatch(capabilities, /startsWith/)
+  assert.match(
+    capabilities,
+    /\/\^\\\/infrastructure\\\/hosts\\\/\\d\+\$\/, CAPABILITY_IDS\.INFRA_HOSTS/
+  )
 })
 
 test('known blank core inventories bypass route-dependent embedded pages', () => {

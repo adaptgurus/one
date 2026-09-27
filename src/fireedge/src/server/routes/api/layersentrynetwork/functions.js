@@ -139,7 +139,9 @@ const buildOverlay = (params, blueprint, securityGroup) => {
 
   const name = normalized(params.name)
   if (!/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(name)) {
-    throw new Error('Network name must use letters, numbers, dot, dash or underscore')
+    throw new Error(
+      'Network name must use letters, numbers, dot, dash or underscore'
+    )
   }
   const environment = normalized(params.environment).toUpperCase()
   const tier = normalized(params.tier).toUpperCase()
@@ -156,9 +158,7 @@ const buildOverlay = (params, blueprint, securityGroup) => {
   ) {
     throw new Error('Network blueprint is not approved for this environment')
   }
-  const securityEnvironments = allowedValues(
-    security.LAYERSENTRY_ENVIRONMENTS
-  )
+  const securityEnvironments = allowedValues(security.LAYERSENTRY_ENVIRONMENTS)
   if (
     Number(securityGroup?.ID) === 0 ||
     normalized(security.LAYERSENTRY_APPROVED).toUpperCase() !== 'YES' ||
@@ -221,8 +221,7 @@ const verify = (network, id, request) => {
   const ranges = toArray(network?.AR_POOL?.AR)
   const range = ranges.find(
     ({ IP, SIZE }) =>
-      IP === request.template.AR.IP &&
-      String(SIZE) === request.template.AR.SIZE
+      IP === request.template.AR.IP && String(SIZE) === request.template.AR.SIZE
   )
 
   return (
@@ -238,8 +237,7 @@ const verify = (network, id, request) => {
     template.NETWORK_MASK === request.template.NETWORK_MASK &&
     normalized(template.GATEWAY) === normalized(request.template.GATEWAY) &&
     normalized(template.DNS) === normalized(request.template.DNS) &&
-    String(template.SECURITY_GROUPS) ===
-      request.template.SECURITY_GROUPS &&
+    String(template.SECURITY_GROUPS) === request.template.SECURITY_GROUPS &&
     Boolean(range)
   )
 }
@@ -263,6 +261,16 @@ const respondWithNetwork = (res, id, network, extra = {}) => {
   })
 }
 
+/**
+ * Allocate an admitted LayerSentry network and verify authoritative readback.
+ *
+ * @param {object} res - Express response object.
+ * @param {Function} next - Express continuation callback.
+ * @param {object} params - Validated customer network request.
+ * @param {object} userData - Authenticated OpenNebula identity.
+ * @param {Function} xmlrpc - OpenNebula XML-RPC client factory.
+ * @returns {Promise<void>} Resolves after the HTTP response is prepared.
+ */
 const create = async (
   res = {},
   next = defaultEmptyFunction,

@@ -18,7 +18,8 @@
 const assert = require('node:assert/strict')
 const { chromium } = require('playwright')
 
-const [baseUrl, username, password, role = 'customer'] = process.argv.slice(2)
+const [baseUrl, username, password, role = 'customer', hostId] =
+  process.argv.slice(2)
 assert.ok(baseUrl && username && password, 'base URL and credentials required')
 
 const forbiddenBrand = /OpenNebula|Sunstone|KubeOne|OneKS/i
@@ -89,6 +90,11 @@ const assertProductPage = async (page, label) => {
   assert.match(overview, /Network/)
   assert.match(overview, /Protection/)
   assert.match(overview, /Operations/)
+  if (role === 'admin') {
+    assert.match(overview, /Infrastructure/i)
+    assert.match(overview, /Access/i)
+    assert.match(overview, /Platform/i)
+  }
   // The anonymous login bootstrap probes /api/user/info and receives the
   // expected 401 before credentials are submitted. Qualification below starts
   // from the authenticated overview and treats every later browser error as a
@@ -113,6 +119,23 @@ const assertProductPage = async (page, label) => {
     })
     const text = await assertProductPage(page, 'customer IDOR route')
     assert.doesNotMatch(text, /Host Detail|Storage & Devices/)
+  } else {
+    assert.match(hostId ?? '', /^\d+$/, 'admin KVM host ID required')
+    for (const path of [
+      '/layersentry/infrastructure/hosts',
+      `/layersentry/infrastructure/hosts/${hostId}`,
+      '/layersentry/infrastructure/drs',
+      '/layersentry/access/projects',
+      '/layersentry/operations/usage-showback',
+      '/layersentry/operations/scheduled-actions',
+    ]) {
+      await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' })
+      const text = await assertProductPage(page, `admin ${path}`)
+      if (path.endsWith(`hosts/${hostId}`)) {
+        assert.match(text, /Storage & Devices/)
+        assert.match(text, /DRS & Maintenance/)
+      }
+    }
   }
 
   assert.deepEqual(
