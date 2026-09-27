@@ -22,13 +22,26 @@ const baseUrl = process.argv[2]
 assert.ok(baseUrl, 'base URL is required')
 
 const errors = []
+const unexpectedResponses = []
 let browser
 ;(async () => {
   browser = await chromium.launch({ headless: true })
   const page = await browser.newPage()
   page.on('pageerror', (error) => errors.push(`pageerror: ${error.message}`))
   page.on('console', (message) => {
-    if (message.type() === 'error') errors.push(`console: ${message.text()}`)
+    if (
+      message.type() === 'error' &&
+      !message.text().includes('401 (Unauthorized)')
+    ) {
+      errors.push(`console: ${message.text()}`)
+    }
+  })
+  page.on('response', (response) => {
+    if (response.status() !== 401) return
+    const url = new URL(response.url())
+    if (!url.pathname.startsWith('/fireedge/api/')) {
+      unexpectedResponses.push(`${response.status()} ${url.pathname}`)
+    }
   })
 
   for (const path of [
@@ -71,6 +84,11 @@ let browser
     errors,
     [],
     `unexpected browser errors:\n${errors.join('\n')}`
+  )
+  assert.deepEqual(
+    unexpectedResponses,
+    [],
+    `unexpected unauthorized resources:\n${unexpectedResponses.join('\n')}`
   )
 })()
   .finally(async () => browser?.close())
