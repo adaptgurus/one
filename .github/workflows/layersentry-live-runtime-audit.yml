@@ -91,4 +91,4 @@ jobs:
           REMOTE
           chmod 700 "$remote"
           ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
-            root@172.17.60.30 'bash -s; rc=$?; rm -f /tmp/layersentry-route-body /tmp/layersentry-route-headers; exit $rc' <"$remote"
+            layersentry-deploy@172.17.60.30 'sudo -n bash -s; rc=$?; sudo -n rm -f /tmp/layersentry-route-body /tmp/layersentry-route-headers; exit $rc' <"$remote"
