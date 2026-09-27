@@ -17,6 +17,69 @@
 
 export const REPLICATION_V2_API = '/api/v1/replication-v2'
 
+const value = (input) => String(input ?? '').trim().toUpperCase()
+const asArray = (input) =>
+  input === undefined || input === null
+    ? []
+    : Array.isArray(input)
+    ? input
+    : [input]
+
+/**
+ * Resolve the digest-bound recovery manifest returned by Replication v2.
+ *
+ * @param {object} checkpoint - Authoritative checkpoint readback
+ * @returns {object|undefined} Recovery manifest, when published
+ */
+export const recoveryManifestForCheckpoint = (checkpoint = {}) =>
+  checkpoint.recovery_manifest ??
+  asArray(checkpoint.native_points)
+    .map((point) => point?.recovery_manifest)
+    .find(Boolean)
+
+/**
+ * A checkpoint is presented as RESTORABLE only when backend state,
+ * verification, and an immutable recovery-manifest digest all agree.
+ *
+ * @param {object} checkpoint - Authoritative checkpoint readback
+ * @returns {boolean} Whether test recovery is admissible
+ */
+export const isRestorableCheckpoint = (checkpoint = {}) => {
+  const state = value(
+    checkpoint.state ?? checkpoint.recovery_state ?? checkpoint.status
+  )
+  const verification = value(
+    checkpoint.verification_state ?? checkpoint.verification_status
+  )
+  const manifest = recoveryManifestForCheckpoint(checkpoint)
+  const digest = String(
+    manifest?.digest ?? checkpoint.recovery_manifest_digest ?? ''
+  ).trim()
+
+  return (
+    state === 'RESTORABLE' &&
+    ['VERIFIED', 'PASS', 'PASSED', 'SUCCEEDED'].includes(verification) &&
+    /^sha256:[a-f0-9]{64}$/i.test(digest)
+  )
+}
+
+/**
+ * Return the newest admissible recovery point without trusting list order.
+ *
+ * @param {object[]} checkpoints - Authoritative checkpoint readback
+ * @returns {object|undefined} Latest restorable checkpoint
+ */
+export const latestRestorableCheckpoint = (checkpoints = []) =>
+  asArray(checkpoints)
+    .filter(isRestorableCheckpoint)
+    .sort((left, right) => {
+      const time =
+        new Date(right.committed_at ?? 0).getTime() -
+        new Date(left.committed_at ?? 0).getTime()
+
+      return time || Number(right.generation ?? 0) - Number(left.generation ?? 0)
+    })[0]
+
 const json = async (path, options = {}) => {
   const response = await fetch(REPLICATION_V2_API + path, {
     credentials: 'same-origin',

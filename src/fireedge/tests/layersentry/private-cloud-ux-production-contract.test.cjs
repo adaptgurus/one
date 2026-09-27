@@ -1,11 +1,19 @@
 /* SPDX-License-Identifier: Apache-2.0 */
-const { test } = require('node:test')
+const { before, test } = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
 const path = require('node:path')
 
 const root = path.join(__dirname, '../..')
 const read = (...parts) => fs.readFileSync(path.join(root, ...parts), 'utf8')
+let replication
+
+before(async () => {
+  const source = read('src/client/apps/layersentry/replicationV2.js')
+  replication = await import(
+    'data:text/javascript;base64,' + Buffer.from(source).toString('base64')
+  )
+})
 
 test('KubeOne is the only Kubernetes lifecycle surface', () => {
   const overview = read('src/client/apps/layersentry/pages/Overview.js')
@@ -75,8 +83,57 @@ test('DR v2 displays measured telemetry and Guardian evidence without inference'
     assert.ok(replication.includes(label), `missing DR telemetry ${label}`)
   }
   assert.match(replication, /GuardianInsight/)
+  assert.match(replication, /latestRestorableCheckpoint/)
+  assert.match(replication, /!restorable/)
   assert.match(guardian, /No\s+recommendation or safe action is inferred/)
   assert.match(guardian, /never bypass/)
+})
+
+test('DR v2 permits recovery only from verified digest-bound RESTORABLE points', () => {
+  const base = {
+    id: 'cp-7',
+    generation: 7,
+    committed_at: '2026-09-27T12:00:00Z',
+    state: 'RESTORABLE',
+    verification_state: 'VERIFIED',
+    recovery_manifest: {
+      digest: `sha256:${'a'.repeat(64)}`,
+      disks: [{ id: '0' }],
+    },
+  }
+
+  assert.equal(replication.isRestorableCheckpoint(base), true)
+  assert.equal(
+    replication.isRestorableCheckpoint({ ...base, state: 'COMMITTED' }),
+    false
+  )
+  assert.equal(
+    replication.isRestorableCheckpoint({
+      ...base,
+      verification_state: 'FAILED',
+    }),
+    false
+  )
+  assert.equal(
+    replication.isRestorableCheckpoint({
+      ...base,
+      recovery_manifest: { disks: [{ id: '0' }] },
+    }),
+    false
+  )
+  assert.equal(
+    replication.latestRestorableCheckpoint([
+      base,
+      {
+        ...base,
+        id: 'cp-8',
+        generation: 8,
+        committed_at: '2026-09-27T12:05:00Z',
+      },
+      { ...base, id: 'cp-9', generation: 9, state: 'VERIFYING' },
+    ]).id,
+    'cp-8'
+  )
 })
 
 test('backup and DC/DR surfaces share evidence-bound Guardian presentation', () => {

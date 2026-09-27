@@ -34,7 +34,12 @@ import {
   Surface,
 } from "client/apps/layersentry/components/Primitives";
 import { colors } from "client/apps/layersentry/theme/tokens";
-import { replicationAPI } from "client/apps/layersentry/replicationV2";
+import {
+  isRestorableCheckpoint,
+  latestRestorableCheckpoint,
+  recoveryManifestForCheckpoint,
+  replicationAPI,
+} from "client/apps/layersentry/replicationV2";
 import DRProductPanel from "client/apps/layersentry/components/DRProductPanel";
 import GuardianInsight from "client/apps/layersentry/components/GuardianInsight";
 
@@ -111,11 +116,6 @@ const percentText = (value) => {
     number <= 1 ? Math.round(number * 1000) / 10 : Math.round(number * 10) / 10
   }%`;
 };
-
-const checkpointRecoveryManifest = (checkpoint) =>
-  checkpoint?.recovery_manifest ??
-  checkpoint?.native_points?.find((point) => point?.recovery_manifest)
-    ?.recovery_manifest;
 
 const ReplicationV2Workspace = () => {
   const vmQuery = VmAPI.useGetVmsQuery({ extended: true });
@@ -592,8 +592,8 @@ const ReplicationV2Workspace = () => {
             const health = sessionDetail.health || {};
             const backendHealth = sessionDetail.backendHealth || {};
             const checkpoints = sessionDetail.checkpoints || [];
-            const latest = checkpoints[checkpoints.length - 1];
-            const recoveryManifest = checkpointRecoveryManifest(latest);
+            const latest = latestRestorableCheckpoint(checkpoints);
+            const recoveryManifest = recoveryManifestForCheckpoint(latest);
             const degraded =
               health.operational_state === "RPO_VIOLATED" ||
               health.operational_state === "REPLICATION_DEGRADED" ||
@@ -869,6 +869,7 @@ const ReplicationV2Workspace = () => {
                     .slice(0, 8)
                     .map((checkpoint) => {
                       const key = `clone:${session.id}:${checkpoint.id}`;
+                      const restorable = isRestorableCheckpoint(checkpoint);
                       return (
                         <Box
                           key={checkpoint.id}
@@ -890,14 +891,18 @@ const ReplicationV2Workspace = () => {
                             G{checkpoint.generation} ·{" "}
                             {dateText(checkpoint.committed_at)} ·{" "}
                             {checkpoint.consistency} ·{" "}
-                            {checkpoint.disks?.length || 0} disk(s)
+                            {checkpoint.disks?.length || 0} disk(s) ·{" "}
+                            {restorable
+                              ? "RESTORABLE"
+                              : checkpoint.state || "Not restorable"}
                           </Typography>
                           <Button
                             size="small"
                             variant="outlined"
                             disabled={
                               actionBusy === key ||
-                              !capabilities.recovery_materialization
+                              !capabilities.recovery_materialization ||
+                              !restorable
                             }
                             onClick={() =>
                               testRecovery(session.id, checkpoint.id)
