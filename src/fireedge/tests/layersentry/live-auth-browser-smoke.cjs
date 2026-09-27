@@ -130,12 +130,31 @@ const assertProductPage = async (page, label) => {
       '/layersentry/operations/scheduled-actions',
     ]) {
       await page.goto(`${baseUrl}${path}`, { waitUntil: 'domcontentloaded' })
+      if (path.endsWith(`hosts/${hostId}`)) {
+        await page.getByText('Storage & Devices', { exact: true }).waitFor({
+          state: 'visible',
+          timeout: 15_000,
+        })
+      }
       const text = await assertProductPage(page, `admin ${path}`)
       if (path.endsWith(`hosts/${hostId}`)) {
         assert.match(text, /Storage & Devices/)
         assert.match(text, /DRS & Maintenance/)
       }
     }
+    await page.goto(`${baseUrl}/layersentry/compute`, {
+      waitUntil: 'domcontentloaded',
+    })
+    await page.getByText('Create VM', { exact: true }).first().waitFor({
+      state: 'visible',
+      timeout: 15_000,
+    })
+    await page.getByText('Create VM', { exact: true }).first().click()
+    await page.waitForURL(/\/layersentry\/compute\/create$/)
+    const createText = await assertProductPage(page, 'admin VM create workflow')
+    assert.match(createText, /Create Virtual Machine/)
+    assert.match(createText, /Operating System/)
+    assert.match(createText, /Review/)
   }
 
   assert.deepEqual(

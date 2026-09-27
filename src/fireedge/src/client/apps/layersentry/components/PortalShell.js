@@ -663,38 +663,40 @@ const PortalShell = ({ children, endpoints }) => {
                 <Settings width={19} height={19} />
               </IconButton>
             </Tooltip>
-            <Box
-              sx={{
-                display: { xs: 'none', lg: 'block' },
-                px: 1.25,
-                py: 0.55,
-                border: `1px solid ${colors.border}`,
-                borderRadius: `${radius.sm}px`,
-                backgroundColor: colors.surfaceMuted,
-              }}
-              data-layersentry-current-role
-            >
-              <Typography
+            {availableViews.length <= 1 && (
+              <Box
                 sx={{
-                  color: colors.text.muted,
-                  fontSize: 9,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.06em',
-                  fontWeight: 700,
+                  display: { xs: 'none', lg: 'block' },
+                  px: 1.25,
+                  py: 0.55,
+                  border: `1px solid ${colors.border}`,
+                  borderRadius: `${radius.sm}px`,
+                  backgroundColor: colors.surfaceMuted,
                 }}
+                data-layersentry-current-role
               >
-                Role
-              </Typography>
-              <Typography
-                sx={{
-                  color: colors.text.primary,
-                  fontSize: 12,
-                  fontWeight: 700,
-                }}
-              >
-                {roleLabel(view)}
-              </Typography>
-            </Box>
+                <Typography
+                  sx={{
+                    color: colors.text.muted,
+                    fontSize: 9,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.06em',
+                    fontWeight: 700,
+                  }}
+                >
+                  Role
+                </Typography>
+                <Typography
+                  sx={{
+                    color: colors.text.primary,
+                    fontSize: 12,
+                    fontWeight: 700,
+                  }}
+                >
+                  {roleLabel(view)}
+                </Typography>
+              </Box>
+            )}
             {availableViews.length > 1 && (
               <FormControl
                 size="small"

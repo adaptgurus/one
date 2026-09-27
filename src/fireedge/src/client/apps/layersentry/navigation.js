@@ -137,7 +137,7 @@ const cloudWorkloads = [
     capability: CAPABILITY_IDS.STORAGE,
   },
   {
-    label: 'Images',
+    label: 'Workload Images',
     path: PRODUCT_PATHS.STORAGE_IMAGES,
     icon: Packages,
     capability: CAPABILITY_IDS.STORAGE_IMAGES,
@@ -206,7 +206,7 @@ const cloudProtection = [
 
 const cloudOperations = [
   {
-    label: 'Operations',
+    label: 'Guardian & Operations',
     path: PRODUCT_PATHS.OPERATIONS,
     icon: SettingsProfiles,
     capability: CAPABILITY_IDS.OPERATIONS,
@@ -357,13 +357,13 @@ const adminGroups = [
     icon: Packages,
     children: [
       {
-        label: 'Images',
+        label: 'Image Catalog',
         path: PRODUCT_PATHS.PLATFORM_IMAGES,
         icon: Packages,
         capability: CAPABILITY_IDS.PLATFORM_IMAGES,
       },
       {
-        label: 'Templates',
+        label: 'Template Catalog',
         path: PRODUCT_PATHS.PLATFORM_TEMPLATES,
         icon: Packages,
         capability: CAPABILITY_IDS.PLATFORM_TEMPLATES,

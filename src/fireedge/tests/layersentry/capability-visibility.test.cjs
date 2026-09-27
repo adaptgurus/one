@@ -446,17 +446,18 @@ test('Super Admin provider pages use qualified read-only inventories', () => {
   assert.doesNotMatch(bridge, /useDisable.*Mutation/)
 })
 
-test('deployment configuration prequalifies only proven read-only core inventories', () => {
+test('deployment configuration exposes only qualified inventory and VM create capabilities', () => {
   const config = read('etc/sunstone/sunstone-server.conf')
 
   assert.match(config, /Empty or omitted means fail closed/)
   assert.ok(config.includes('  COMPUTE:'))
   assert.ok(config.includes('  BLUEPRINTS:'))
   assert.ok(config.includes('  AFFINITY:'))
+  assert.ok(config.includes('  VM_CREATE:'))
+  assert.match(config, /VM_CREATE:[\s\S]*?qualification: true/)
   assert.equal((config.match(/readOnly: true/g) ?? []).length, 3)
 
   for (const forbidden of [
-    'VM_CREATE:',
     'AFFINITY_CREATE:',
     'KUBERNETES:',
     'APPLICATIONS_ONEFLOW:',
