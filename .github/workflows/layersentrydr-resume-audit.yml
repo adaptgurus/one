@@ -2,6 +2,9 @@ name: LayerSentry DR Resume Audit
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ops/layersentrydr-probe-20260927]
+    paths: [.github/workflows/layersentrydr-resume-audit.yml]
 
 permissions:
   contents: read
