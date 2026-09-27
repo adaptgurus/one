@@ -269,6 +269,7 @@ jobs:
           mapfile -t vm_fields < <(
             sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","LCM_STATE","TEMPLATE/NIC/IP","DEPLOY_ID","HISTORY_RECORDS/HISTORY/HOSTNAME","TEMPLATE/NIC/NETWORK_ID","TEMPLATE/NIC/NETWORK_MASK","TEMPLATE/NIC/GATEWAY")],sep="\\n")'
           )
+          qga_stage=vm_field_count
           test "${#vm_fields[@]}" -eq 9
           observed_name="${vm_fields[0]}"
           observed_state="${vm_fields[1]}"
@@ -279,11 +280,15 @@ jobs:
           network_id="${vm_fields[6]}"
           network_mask="${vm_fields[7]}"
           gateway="${vm_fields[8]}"
+          echo "QGA_VM_INVENTORY NAME=$observed_name STATE=$observed_state LCM=$observed_lcm IP=$observed_ip DEPLOY_ID=$deploy_id HYPERVISOR=$hypervisor NETWORK_ID=${network_id:-unset} MASK=${network_mask:-unset} GATEWAY=${gateway:-unset}"
+          qga_stage=vm_identity_match
           test "$observed_name" = ls-dr-v2-qual-alpine-20260928
           test "$observed_state" = 3 && test "$observed_lcm" = 3
           test "$observed_ip" = "$vm_ip"
+          qga_stage=vm_target_fields
           test -n "$deploy_id" && test -n "$hypervisor" && test -n "$network_id"
           if test -z "$network_mask" || test -z "$gateway"; then
+            qga_stage=vnet_inventory
             mapfile -t network_fields < <(
               sudo -n -u oneadmin onevnet show "$network_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("TEMPLATE/NETWORK_MASK","TEMPLATE/GATEWAY")],sep="\\n")'
             )
@@ -291,6 +296,8 @@ jobs:
             test -n "$network_mask" || network_mask="${network_fields[0]}"
             test -n "$gateway" || gateway="${network_fields[1]}"
           fi
+          echo "QGA_NETWORK_RESOLVED NETWORK_ID=$network_id MASK=${network_mask:-unset} GATEWAY=${gateway:-unset}"
+          qga_stage=network_mask_required
           test -n "$network_mask"
           qga_stage=network_prefix
           prefix="$(python3 -c 'import ipaddress,sys; print(ipaddress.IPv4Network("0.0.0.0/"+sys.argv[1]).prefixlen)' "$network_mask")"
