@@ -69,9 +69,31 @@ jobs:
               }
             }
           }
-          if ($trusted.Count -eq 0) {
-            throw 'No retained trusted host-key entry exists for 172.17.60.40'
+          Write-Output "trusted_dr_entry_count=$($trusted.Count)"
+
+      - name: Pin the independently verified DR host key
+        if: steps.target.outputs.eligible == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = 'C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $known = Join-Path $base 'readonly-known-hosts'
+          $expected = 'SHA256:qOEu7khxLLpUIwS4RYyc7p5Vg/27MmZKr3YNtLWVTpI'
+          $scan = @(& ssh-keyscan.exe -T 5 -t ed25519 172.17.60.40 2>$null) | Where-Object { $_ -match '^172\.17\.60\.40 ssh-ed25519 ' }
+          if ($scan.Count -ne 1) { throw 'Expected exactly one live ED25519 DR host key' }
+          $fingerprint = ($scan | & ssh-keygen.exe -lf - -E sha256) -join "`n"
+          if ($LASTEXITCODE -ne 0 -or $fingerprint -notmatch [regex]::Escape($expected)) {
+            throw 'Live DR host key does not match the independently verified fingerprint'
           }
+          & ssh-keygen.exe -F '172.17.60.40' -f $known *> $null
+          if ($LASTEXITCODE -ne 0) {
+            Add-Content -LiteralPath $known -Value $scan[0] -Encoding Ascii
+            Write-Output 'DR_HOST_KEY_PINNED=YES'
+          } else {
+            Write-Output 'DR_HOST_KEY_PINNED=ALREADY_PRESENT'
+          }
+          & ssh-keygen.exe -F '172.17.60.40' -f $known *> $null
+          if ($LASTEXITCODE -ne 0) { throw 'Pinned DR host key readback failed' }
 
       - name: Test the retained key against exact DR identity
         if: steps.target.outputs.eligible == 'true'
