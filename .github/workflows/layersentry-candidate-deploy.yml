@@ -146,3 +146,47 @@ jobs:
           npm install --no-save --ignore-scripts playwright@1.55.0
           npx playwright install chromium
           node tests/layersentry/live-browser-smoke.cjs http://172.17.60.30:2616/fireedge
+
+      - name: Create short-lived browser qualification identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          key=/root/.ssh/layersentry_lab_ed25519
+          known="$RUNNER_TEMP/layersentry-known-hosts"
+          username="ls-ci-${GITHUB_SHA:0:10}"
+          password=$(openssl rand -hex 24)
+          echo "::add-mask::$password"
+          user_id=$(ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            layersentry-deploy@172.17.60.30 \
+            "sudo -n -u oneadmin oneuser create '$username' '$password' --driver core")
+          test "$user_id" = "${user_id#*[!0-9]}"
+          {
+            printf 'LAYERSENTRY_TEST_USERNAME=%q\n' "$username"
+            printf 'LAYERSENTRY_TEST_PASSWORD=%q\n' "$password"
+            printf 'LAYERSENTRY_TEST_USER_ID=%q\n' "$user_id"
+          } >"$RUNNER_TEMP/layersentry-auth.env"
+          chmod 600 "$RUNNER_TEMP/layersentry-auth.env"
+
+      - name: Authenticated browser, deep-link, expiry and IDOR smoke
+        working-directory: src/fireedge
+        shell: bash
+        run: |
+          set -euo pipefail
+          source "$RUNNER_TEMP/layersentry-auth.env"
+          node tests/layersentry/live-auth-browser-smoke.cjs \
+            http://172.17.60.30:2616/fireedge \
+            "$LAYERSENTRY_TEST_USERNAME" "$LAYERSENTRY_TEST_PASSWORD" customer
+
+      - name: Remove short-lived browser qualification identity
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth_file="$RUNNER_TEMP/layersentry-auth.env"
+          test -f "$auth_file" || exit 0
+          source "$auth_file"
+          key=/root/.ssh/layersentry_lab_ed25519
+          known="$RUNNER_TEMP/layersentry-known-hosts"
+          ssh -T -i "$key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" \
+            layersentry-deploy@172.17.60.30 \
+            "sudo -n -u oneadmin oneuser delete '$LAYERSENTRY_TEST_USER_ID'"
