@@ -190,9 +190,9 @@ jobs:
               $stored = @(& ssh-keygen.exe -F '172.17.60.30' -f $path 2>$null)
               if ($LASTEXITCODE -eq 0) {
                 $storedFingerprintText = ($stored | & ssh-keygen.exe -lf - -E sha256) -join "`n"
-                $storedFingerprint = ([regex]::Match($storedFingerprintText, 'SHA256:[A-Za-z0-9+/]+')).Value
-                Write-Output "DC_STORED_HOST_KEY file=$name fingerprint=$storedFingerprint"
-                if ($LASTEXITCODE -eq 0 -and $storedFingerprint -eq $liveFingerprint) { $known = $path; break }
+                $storedFingerprints = @([regex]::Matches($storedFingerprintText, 'SHA256:[A-Za-z0-9+/]+') | ForEach-Object { $_.Value })
+                Write-Output "DC_STORED_HOST_KEY file=$name fingerprints=$($storedFingerprints -join ',')"
+                if ($LASTEXITCODE -eq 0 -and $storedFingerprints -contains $liveFingerprint) { $known = $path; break }
               }
             }
           }
