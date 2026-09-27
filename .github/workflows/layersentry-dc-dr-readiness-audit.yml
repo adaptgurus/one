@@ -14,6 +14,28 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  replication-transfer-key:
+    if: contains(github.event.head_commit.message, '[replication-transfer-key]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 5
+    steps:
+      - name: Create bounded runner-to-DR transfer identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+          key=/root/.ssh/layersentry-replication-v2-transfer
+          if test ! -f "$key"; then
+            ssh-keygen -q -t ed25519 -N '' -C layersentry-replication-v2-transfer -f "$key"
+            chmod 0600 "$key"
+          fi
+          test "$(stat -c '%a' "$key")" -le 600
+          echo "TRANSFER_PUBLIC_KEY=$(cat "$key.pub")"
+          echo "TRANSFER_KEY_FINGERPRINT=$(ssh-keygen -lf "$key" -E sha256 | awk '{print $2}')"
+
   dc-readonly:
     runs-on: [self-hosted, Linux, X64, layersentryol7]
     timeout-minutes: 10
