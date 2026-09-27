@@ -178,9 +178,9 @@ jobs:
           image_template=''
           vm_template=''
           trap 'test -z "$image_template" || rm -f -- "$image_template"; test -z "$vm_template" || rm -f -- "$vm_template"' EXIT
-          data_name=ls-dr-v2-qual-20260928-data
-          vm_name=ls-dr-v2-qual-20260928
-          base_image_id=3
+          data_name=ls-dr-v2-qual-alpine-20260928-data
+          vm_name=ls-dr-v2-qual-alpine-20260928
+          base_image_id=0
           sudo -n -u oneadmin oneimage show "$base_image_id" --xml >/dev/null
           data_id="$(sudo -n -u oneadmin oneimage list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("IMAGE") if (x.findtext("NAME") or "")==n),""))' "$data_name")"
           if test -z "$data_id"; then
@@ -248,11 +248,11 @@ jobs:
           PROBE
           )"
           if test "$guest_tcp" = PASS; then
-            for candidate_user in layersentry-deploy rocky cloud-user almalinux centos root; do
+            for candidate_user in root layersentry-deploy rocky cloud-user almalinux centos; do
               if timeout 8 ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
                 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$work/guest_known_hosts" \
                 -o "ProxyCommand=$proxy" -o ConnectTimeout=5 "$candidate_user@$vm_ip" \
-                'sudo -n true' >/dev/null 2>&1; then
+                '{ test "$(id -u)" -eq 0 || sudo -n true; }' >/dev/null 2>&1; then
                 guest_user="$candidate_user"
                 break 2
               fi
@@ -273,7 +273,7 @@ jobs:
           if ping -c 1 -W 2 "$vm_ip" >/dev/null 2>&1; then echo DC_TO_GUEST_ICMP=PASS; else echo DC_TO_GUEST_ICMP=FAIL; fi
           if timeout 3 bash -c "</dev/tcp/$vm_ip/22" >/dev/null 2>&1; then echo DC_TO_GUEST_TCP22=PASS; else echo DC_TO_GUEST_TCP22=FAIL; fi
           sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","STATE","LCM_STATE","DEPLOY_ID","HISTORY_RECORDS/HISTORY/HID","TEMPLATE/NIC/IP","TEMPLATE/CONTEXT/NETWORK","TEMPLATE/CONTEXT/TARGET","TEMPLATE/CONTEXT/SSH_PUBLIC_KEY"); print(" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
-          sudo -n -u oneadmin oneimage show 3 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","STATE","TEMPLATE/FORMAT","TEMPLATE/DEV_PREFIX","TEMPLATE/DRIVER","TEMPLATE/SIZE","TEMPLATE/OS_DISTRIBUTION","TEMPLATE/OS_VERSION","TEMPLATE/USERNAME"); print("BASE_IMAGE "+" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
+          sudo -n -u oneadmin oneimage show 0 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","STATE","TEMPLATE/FORMAT","TEMPLATE/DEV_PREFIX","TEMPLATE/DRIVER","TEMPLATE/SIZE","TEMPLATE/OS_DISTRIBUTION","TEMPLATE/OS_VERSION","TEMPLATE/USERNAME"); print("BASE_IMAGE "+" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
           read -r deploy_id hypervisor < <(sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("DEPLOY_ID") or "",r.findtext("HISTORY_RECORDS/HISTORY/HOSTNAME") or "")')
           test -n "$deploy_id" && test -n "$hypervisor"
           sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" 'bash -s --' "$deploy_id" "$vm_id" <<'HYPERVISOR'
@@ -297,7 +297,7 @@ jobs:
           guest_ssh=(ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/guest_known_hosts" \
             -o "ProxyCommand=$proxy" "$guest_user@$vm_ip")
-          payload="$("${guest_ssh[@]}" 'set -euo pipefail; test "$(sudo -n id -u)" = 0; sudo -n lsblk -dn -o NAME,TYPE | grep -Eq "^vdb[[:space:]]+disk$"; if ! sudo -n blkid /dev/vdb >/dev/null 2>&1; then sudo -n mkfs.xfs -f /dev/vdb >/dev/null; fi; sudo -n mkdir -p /srv/layersentry-data/generations; uuid=$(sudo -n blkid -s UUID -o value /dev/vdb); grep -q "UUID=$uuid " /etc/fstab || echo "UUID=$uuid /srv/layersentry-data xfs defaults,nofail 0 2" | sudo -n tee -a /etc/fstab >/dev/null; sudo -n mount /srv/layersentry-data 2>/dev/null || true; test "$(findmnt -n -o SOURCE /srv/layersentry-data)" = /dev/vdb; generation=$(date -u +%Y%m%dT%H%M%SZ); printf "%s\n" "layersentry-replication-v2" "source=dc" "vm_id='"$vm_id"'" "generation=$generation" | sudo -n tee "/srv/layersentry-data/generations/$generation.records" >/dev/null; sudo -n dd if=/dev/urandom of="/srv/layersentry-data/generations/$generation.payload" bs=1M count=64 status=none; sudo -n sha256sum "/srv/layersentry-data/generations/$generation.records" "/srv/layersentry-data/generations/$generation.payload" | sudo -n tee "/srv/layersentry-data/generations/$generation.sha256" >/dev/null; sudo -n sync; sudo -n sha256sum -c "/srv/layersentry-data/generations/$generation.sha256" >/dev/null; sudo -n sha256sum "/srv/layersentry-data/generations/$generation.records" "/srv/layersentry-data/generations/$generation.payload"')"
+          payload="$("${guest_ssh[@]}" 'set -eu; if test "$(id -u)" -eq 0; then SUDO=""; else SUDO="sudo -n"; fi; $SUDO lsblk -dn -o NAME,TYPE | grep -Eq "^vdb[[:space:]]+disk$"; if ! $SUDO blkid /dev/vdb >/dev/null 2>&1; then $SUDO mkfs.ext4 -F /dev/vdb >/dev/null; fi; $SUDO mkdir -p /srv/layersentry-data/generations; uuid=$($SUDO blkid -s UUID -o value /dev/vdb); grep -q "UUID=$uuid " /etc/fstab || echo "UUID=$uuid /srv/layersentry-data ext4 defaults,nofail 0 2" | $SUDO tee -a /etc/fstab >/dev/null; $SUDO mount /srv/layersentry-data 2>/dev/null || true; test "$(findmnt -n -o SOURCE /srv/layersentry-data)" = /dev/vdb; generation=$(date -u +%Y%m%dT%H%M%SZ); printf "%s\n" "layersentry-replication-v2" "source=dc" "vm_id='"$vm_id"'" "generation=$generation" | $SUDO tee "/srv/layersentry-data/generations/$generation.records" >/dev/null; $SUDO dd if=/dev/urandom of="/srv/layersentry-data/generations/$generation.payload" bs=1M count=64 status=none; $SUDO sha256sum "/srv/layersentry-data/generations/$generation.records" "/srv/layersentry-data/generations/$generation.payload" | $SUDO tee "/srv/layersentry-data/generations/$generation.sha256" >/dev/null; $SUDO sync; $SUDO sha256sum -c "/srv/layersentry-data/generations/$generation.sha256" >/dev/null; $SUDO sha256sum "/srv/layersentry-data/generations/$generation.records" "/srv/layersentry-data/generations/$generation.payload"')"
           records_sha="$(printf '%s\n' "$payload" | awk '$2 ~ /\.records$/ {print $1}')"
           payload_sha="$(printf '%s\n' "$payload" | awk '$2 ~ /\.payload$/ {print $1}')"
           test "${#records_sha}" -eq 64
