@@ -62,6 +62,58 @@ export const defaultBackupPlanDraft = () => ({
 })
 
 /**
+ * Build a safe editable draft from authoritative native Backup Plan readback.
+ * Provider runtime state and historical timestamps are intentionally omitted.
+ *
+ * @param {object} plan - Native Backup Plan readback
+ * @returns {object} Customer-editable clone draft
+ */
+export const backupPlanDraftFromReadback = (plan = {}) => {
+  const template = plan?.TEMPLATE ?? {}
+  const schedule = [template.SCHED_ACTION]
+    .filter(Boolean)
+    .flat()
+    .find((item) => String(item?.ACTION).toLowerCase() === 'backup')
+  const requestedProfile = String(template.LAYERSENTRY_PLAN ?? '').toUpperCase()
+  const profile = BACKUP_PLAN_PROFILES[requestedProfile]
+    ? requestedProfile
+    : 'CUSTOM'
+  const preset = BACKUP_PLAN_PROFILES[profile]
+
+  return {
+    ...defaultBackupPlanDraft(),
+    name: `${String(plan?.NAME ?? 'Backup Plan').trim()} copy`.slice(0, 127),
+    profile,
+    vmIds: String(template.BACKUP_VMS ?? '')
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => /^\d+$/.test(id)),
+    datastoreId: /^\d+$/.test(String(template.DATASTORE_ID ?? ''))
+      ? String(template.DATASTORE_ID)
+      : '',
+    keepLast: String(template.KEEP_LAST ?? preset?.keepLast ?? 7),
+    intervalHours: String(schedule?.DAYS ?? preset?.intervalHours ?? 24),
+    advanced:
+      profile === 'CUSTOM' ||
+      !['SEQUENTIAL', ''].includes(String(template.EXECUTION ?? '')) ||
+      !['AGENT', ''].includes(String(template.FS_FREEZE ?? '')) ||
+      !['CBT', ''].includes(String(template.INCREMENT_MODE ?? '')) ||
+      String(template.BACKUP_VOLATILE ?? '').toUpperCase() === 'YES',
+    fsFreeze: ['AGENT', 'SUSPEND', 'NONE'].includes(template.FS_FREEZE)
+      ? template.FS_FREEZE
+      : 'AGENT',
+    execution: ['SEQUENTIAL', 'PARALLEL'].includes(template.EXECUTION)
+      ? template.EXECUTION
+      : 'SEQUENTIAL',
+    incrementMode: ['CBT', 'SNAPSHOT'].includes(template.INCREMENT_MODE)
+      ? template.INCREMENT_MODE
+      : 'CBT',
+    backupVolatile:
+      String(template.BACKUP_VOLATILE ?? '').toUpperCase() === 'YES',
+  }
+}
+
+/**
  * @param draft
  */
 export const effectiveBackupProfile = (draft) => {

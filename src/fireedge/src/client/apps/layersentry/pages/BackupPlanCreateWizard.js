@@ -27,8 +27,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { useMemo, useState } from 'react'
-import { useHistory } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useHistory, useLocation } from 'react-router-dom'
 import { BackupJobAPI, DatastoreAPI, VmAPI } from '@FeaturesModule'
 import { jsonToXml } from '@UtilsModule'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
@@ -38,6 +38,7 @@ import {
 } from 'client/apps/layersentry/components/Primitives'
 import {
   BACKUP_PLAN_PROFILES,
+  backupPlanDraftFromReadback,
   backupPlanReadbackMatches,
   compileBackupPlanTemplate,
   defaultBackupPlanDraft,
@@ -80,6 +81,10 @@ const SelectField = ({ label, value, onChange, options }) => (
 
 const BackupPlanCreateWizard = () => {
   const history = useHistory()
+  const location = useLocation()
+  const cloneId = new URLSearchParams(location.search).get('clone')
+  const validCloneId = /^\d+$/.test(String(cloneId ?? ''))
+  const cloneLoaded = useRef(false)
   const [draft, setDraft] = useState(defaultBackupPlanDraft)
   const [step, setStep] = useState(0)
   const [error, setError] = useState('')
@@ -88,10 +93,21 @@ const BackupPlanCreateWizard = () => {
   const storesQuery = DatastoreAPI.useGetDatastoresQuery()
   const [createPlan] = BackupJobAPI.useCreateBackupJobMutation()
   const [readPlan] = BackupJobAPI.useLazyGetBackupJobQuery()
+  const cloneQuery = BackupJobAPI.useGetBackupJobQuery(
+    { id: cloneId },
+    { skip: !validCloneId }
+  )
   const vms = toArray(vmsQuery.data)
   const stores = toArray(storesQuery.data).filter(isBackupStorage)
   const errors = useMemo(() => validateBackupPlanDraft(draft), [draft])
   const profile = effectiveBackupProfile(draft)
+
+  useEffect(() => {
+    if (!cloneLoaded.current && cloneQuery.data) {
+      setDraft(backupPlanDraftFromReadback(cloneQuery.data))
+      cloneLoaded.current = true
+    }
+  }, [cloneQuery.data])
 
   const update = (name) => (event) => {
     const value =
@@ -184,6 +200,23 @@ const BackupPlanCreateWizard = () => {
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
             {error}
+          </Alert>
+        )}
+        {validCloneId && cloneQuery.isLoading && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Loading the source Backup Plan…
+          </Alert>
+        )}
+        {validCloneId && cloneQuery.isError && (
+          <Alert severity="error" sx={{ mb: 2 }}>
+            The source Backup Plan could not be loaded. No clone values were
+            applied.
+          </Alert>
+        )}
+        {validCloneId && cloneLoaded.current && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            Cloning Backup Plan #{cloneId}. Review the new name, VM assignment,
+            destination, schedule and retention before creating it.
           </Alert>
         )}
         {step === 0 && (

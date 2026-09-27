@@ -92,6 +92,7 @@ const formatBackupSize = (value) => {
 }
 
 const BackupPlanInventory = ({ canMutate }) => {
+  const history = useHistory()
   const query = BackupJobAPI.useGetBackupJobsQuery()
   const plans = toArray(query.data)
   const [retry, retryState] = BackupJobAPI.useRetryBackupJobMutation()
@@ -190,15 +191,30 @@ const BackupPlanInventory = ({ canMutate }) => {
               }
             />
           </Box>
-          {canMutate && getBackupPlanState(plan) === 'Error' && (
-            <Button
-              size="small"
-              sx={{ mt: 1, textTransform: 'none' }}
-              disabled={retryState.isLoading}
-              onClick={() => retryPlan(plan.ID)}
-            >
-              Retry failed plan
-            </Button>
+          {canMutate && (
+            <Box sx={{ mt: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+              <Button
+                size="small"
+                sx={{ textTransform: 'none' }}
+                onClick={() =>
+                  history.push(
+                    `/protection/create?clone=${encodeURIComponent(plan.ID)}`
+                  )
+                }
+              >
+                Clone plan
+              </Button>
+              {getBackupPlanState(plan) === 'Error' && (
+                <Button
+                  size="small"
+                  sx={{ textTransform: 'none' }}
+                  disabled={retryState.isLoading}
+                  onClick={() => retryPlan(plan.ID)}
+                >
+                  Retry failed plan
+                </Button>
+              )}
+            </Box>
           )}
         </Box>
       ))}

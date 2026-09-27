@@ -211,6 +211,46 @@ test("custom backup plan and authoritative readback fail closed", () => {
     ),
     false
   );
+  assert.equal(
+    backup.backupPlanReadbackMatches(
+      {
+        NAME: expected.NAME,
+        PRIORITY: expected.PRIORITY,
+        TEMPLATE: { ...expected, DATASTORE_ID: "101" },
+      },
+      expected
+    ),
+    false
+  );
+});
+
+test("backup plan clone copies only editable policy and permits a new storage path", () => {
+  const clone = backup.backupPlanDraftFromReadback({
+    ID: "77",
+    NAME: "Business databases",
+    LAST_BACKUP_TIME: "9999999999",
+    ERROR_VMS: { ID: "51" },
+    TEMPLATE: {
+      LAYERSENTRY_PLAN: "BUSINESS",
+      BACKUP_VMS: "51,52,not-an-id",
+      DATASTORE_ID: "100",
+      KEEP_LAST: "30",
+      EXECUTION: "SEQUENTIAL",
+      FS_FREEZE: "AGENT",
+      INCREMENT_MODE: "CBT",
+      BACKUP_VOLATILE: "NO",
+      SCHED_ACTION: { ACTION: "backup", DAYS: "12", TIME: "1" },
+    },
+  });
+
+  assert.equal(clone.name, "Business databases copy");
+  assert.deepEqual(clone.vmIds, ["51", "52"]);
+  assert.equal(clone.datastoreId, "100");
+  assert.equal(clone.startTime, "");
+  assert.equal(clone.LAST_BACKUP_TIME, undefined);
+  clone.datastoreId = "101";
+  assert.deepEqual(backup.validateBackupPlanDraft(clone), {});
+  assert.equal(backup.compileBackupPlanTemplate(clone).DATASTORE_ID, "101");
 });
 
 test("portal uses dedicated RBAC-gated Network and Backup Plan flows", () => {
@@ -232,6 +272,7 @@ test("portal uses dedicated RBAC-gated Network and Backup Plan flows", () => {
   assert.match(capabilities, /CAPABILITY_IDS\.BACKUP_RECOVERY_CREATE/);
   assert.match(protection, /useRetryBackupJobMutation/);
   assert.match(protection, /useRestoreBackupMutation/);
+  assert.match(protection, /Clone plan/);
   assert.match(protection, /timestamp \* 1000/);
   assert.doesNotMatch(protection, /^import .* from ['"]@ResourcesModule['"]/m);
   assert.doesNotMatch(protection, /^import .* from ['"]@ModelsModule['"]/m);
