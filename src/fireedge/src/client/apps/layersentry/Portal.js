@@ -619,6 +619,26 @@ const Portal = ({ endpoints }) => {
         {isAdmin && (
           <Route
             exact
+            path={PRODUCT_PATHS.INFRA_DRS}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Distributed Resource Scheduling',
+                description:
+                  'Review cluster placement, maintenance and migration constraints. Automation remains fail-closed until its backend qualification is enabled.',
+                resources: [
+                  {
+                    label: 'Cluster placement',
+                    legacyPath: '/cluster',
+                  },
+                ],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
             path={PRODUCT_PATHS.INFRA_STORAGE}
             render={() =>
               area({
@@ -675,6 +695,21 @@ const Portal = ({ endpoints }) => {
         {isAdmin && (
           <Route
             exact
+            path={PRODUCT_PATHS.INFRA_FEDERATION}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Sites & Federation',
+                description:
+                  'Authoritative site, zone and federation inventory with backend-reported connectivity and state.',
+                resources: [{ label: 'Sites and zones', legacyPath: '/zone' }],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
             path={PRODUCT_PATHS.INFRA_PROVIDERS}
             render={() =>
               area({
@@ -701,6 +736,43 @@ const Portal = ({ endpoints }) => {
                 resources: [{ label: 'Users', legacyPath: '/user' }],
                 createTo: '/access/users/create',
                 createLabel: 'Add User',
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.OPERATIONS_SHOWBACK}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Usage & Showback',
+                description:
+                  'Review authoritative user and team accounting without changing resource ownership.',
+                resources: [
+                  { label: 'User usage', legacyPath: '/user' },
+                  { label: 'Team usage', legacyPath: '/group' },
+                ],
+              })
+            }
+          />
+        )}
+        {isAdmin && (
+          <Route
+            exact
+            path={PRODUCT_PATHS.OPERATIONS_SCHEDULES}
+            render={() =>
+              area({
+                endpoints,
+                title: 'Scheduled Actions',
+                description:
+                  'Review backend-owned virtual-machine, service and backup schedules from one LayerSentry workspace.',
+                resources: [
+                  { label: 'Virtual machines', legacyPath: '/vm' },
+                  { label: 'Services', legacyPath: '/service' },
+                  { label: 'Backup plans', legacyPath: '/backupjobs' },
+                ],
               })
             }
           />

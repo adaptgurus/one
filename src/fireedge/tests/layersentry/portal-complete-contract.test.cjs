@@ -125,9 +125,13 @@ test('bare FireEdge redirects to LayerSentry and native Sunstone is not the defa
 
 test('shared modules cannot inherit a host-only locale that blanks LayerSentry', () => {
   const dashboard = read('src/modules/containers/Dashboard/General.js')
+  const bootstrap = read('src/client/bootstrap.js')
 
   assert.match(dashboard, /new Intl\.NumberFormat\('en'\)/)
   assert.doesNotMatch(dashboard, /new Intl\.NumberFormat\(\)/)
+  assert.match(bootstrap, /Intl\.getCanonicalLocales\(requested\)/)
+  assert.match(bootstrap, /Object\.defineProperty\(navigator, 'language'/)
+  assert.match(bootstrap, /normalizeBrowserLocale\(\)/)
 })
 
 test('normal Settings never links to a provider-native portal', () => {

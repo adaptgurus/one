@@ -20,6 +20,25 @@ const HOST_RESOLVE_FLAG = '__HOST__'
 const CLIENT_BOOT_TIMEOUT_MS = 30000
 const CLIENT_MOUNT_SETTLE_MS = 50
 
+const normalizeBrowserLocale = () => {
+  const requested = navigator.language
+  try {
+    Intl.getCanonicalLocales(requested)
+
+    return
+  } catch {
+    const fallback = document.documentElement.lang || 'en'
+    Object.defineProperty(navigator, 'language', {
+      configurable: true,
+      get: () => fallback,
+    })
+    Object.defineProperty(navigator, 'languages', {
+      configurable: true,
+      get: () => [fallback],
+    })
+  }
+}
+
 const showEditor = ({ failedModule = '', error = '' } = {}) =>
   new Promise((resolve) => {
     const oldContainer = document.getElementById('inline-remotes-config-editor')
@@ -337,6 +356,7 @@ const withTimeout = (promise, milliseconds, label) =>
 
 async function bootstrap(forceNoDialog = false) {
   try {
+    normalizeBrowserLocale()
     await initLocalRemotesConfig(forceNoDialog)
     await checkRemotes()
     await syncConfig()
