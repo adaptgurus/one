@@ -1,4 +1,4 @@
-name: LayerSentry DR Base Repair and Qualification
+name: LayerSentry DR Listener Diagnosis
 on:
   push:
     branches: [ops/layersentrydr-probe-20260927]
@@ -9,92 +9,53 @@ concurrency:
   group: layersentrydr-base-install
   cancel-in-progress: false
 jobs:
-  qualify:
+  diagnose:
     strategy:
       fail-fast: false
       matrix:
         attempt: [1, 2, 3, 4]
     runs-on: [self-hosted, linux]
-    timeout-minutes: 15
+    timeout-minutes: 5
     steps:
-      - name: Bind exact DR runner and host
-        id: bind
+      - name: Identify target-owned listener without mutation
         shell: bash
         run: |
           set -euo pipefail
-          if [ "${RUNNER_NAME:-}" != "layersentrydr" ]; then
-            echo "target=false" >> "$GITHUB_OUTPUT"
-            echo 'NOT_EXECUTED: wrong runner, not deployment evidence.' >> "$GITHUB_STEP_SUMMARY"
-            exit 0
-          fi
+          if [ "${RUNNER_NAME:-}" != layersentrydr ]; then echo 'NOT_EXECUTED_WRONG_RUNNER'; exit 0; fi
           test "$(id -u)" -eq 0
           ip -4 addr show | grep -qE '(^|[[:space:]])172\.17\.60\.40/'
-          echo "target=true" >> "$GITHUB_OUTPUT"
-      - name: Repair and qualify version-matched base
-        if: steps.bind.outputs.target == 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          umask 077
-          exec 9>/var/lock/layersentry-dr-base-install.lock
-          flock -n 9 || { echo 'BLOCKED_CONCURRENT_INSTALL'; exit 48; }
-          mkdir -p /var/log/layersentrydr /var/lib/layersentry
-          rpm -q opennebula opennebula-node-kvm opennebula-fireedge
-          test "$(rpm -q --qf '%{VERSION}' opennebula)" = '7.4.1'
-          # OpenNebula 7.x has no separate opennebula-scheduler.service.
-          for unit in opennebula opennebula-fireedge opennebula-flow opennebula-gate; do
-            systemctl enable "$unit"
-            if ! systemctl is-active --quiet "$unit"; then systemctl start "$unit"; fi
-          done
-          ready=0
-          for attempt in 1 2 3 4 5 6; do
-            if systemctl is-active --quiet opennebula-fireedge && curl --silent --fail --max-time 5 -o /dev/null http://127.0.0.1:2616/fireedge/; then ready=1; break; fi
-            sleep 5
-          done
-          # Require per-service status, persistence, and an HTTP response, not just systemd startup acceptance.
-          for unit in opennebula opennebula-fireedge opennebula-flow opennebula-gate; do
-            systemctl show "$unit" -p ActiveState -p SubState -p Result -p UnitFileState
-            systemctl is-active --quiet "$unit" || ready=0
-            systemctl is-enabled --quiet "$unit" || ready=0
-          done
-          if [ "$ready" -ne 1 ]; then
-            journalctl -u opennebula-fireedge -n 50 --no-pager > /var/log/layersentrydr/fireedge-qualification-journal.log
-            echo 'FIREEDGE_LOCAL_DIAGNOSTICS'
-            python3 - <<'PY'
-          import pathlib,re
-          values=[]
-          for p in pathlib.Path('/root/.layersentry-secrets').glob('*.pw'):
-              v=p.read_text(errors='replace').strip()
-              if len(v)>4: values.append(v)
-          paths=[pathlib.Path('/var/log/layersentrydr/fireedge-qualification-journal.log')]
-          paths.extend(pathlib.Path('/var/log/one').glob('fireedge*'))
-          for p in paths:
-              if not p.is_file(): continue
-              with p.open('rb') as f:
-                  f.seek(0,2); f.seek(max(0,f.tell()-12000)); text=f.read().decode(errors='replace')
-              for v in values: text=text.replace(v,'[REDACTED]')
-              text=re.sub(r'(?i)(password|token|secret|one_pass)([\s\"\x27:=]+)[^\s,}\"\x27]+',r'\1\2[REDACTED]',text)
-              print('LOG='+p.name); print('\n'.join(text.splitlines()[-30:]))
+          python3 - <<'PY'
+          import subprocess,re,pathlib,os
+          result=subprocess.run(['ss','-lntp','( sport = :2616 )'],capture_output=True,text=True,check=True)
+          print(result.stdout)
+          for pid in sorted(set(re.findall(r'pid=(\d+)',result.stdout))):
+              p=pathlib.Path('/proc')/pid
+              if not p.exists(): continue
+              print('LISTENER_PID='+pid)
+              print('EXE='+os.readlink(p/'exe'))
+              print('CGROUP='+p.joinpath('cgroup').read_text())
+              subprocess.run(['ps','-p',pid,'-o','user,pid,ppid,comm'],check=False)
+          config=pathlib.Path('/etc/one/fireedge-server.conf')
+          if config.exists():
+              print('FIREEDGE_CONFIG_ENDPOINT_FIELDS')
+              for line in config.read_text().splitlines():
+                  if re.match(r'^\s*:?(host|port|bind|listen|guacd_port|guacd_host)\s*:',line): print(line)
+          for base in ('/etc/nginx','/etc/httpd'):
+              p=pathlib.Path(base)
+              if not p.exists(): continue
+              for f in p.rglob('*.conf'):
+                  try:
+                      text=f.read_text()
+                  except (OSError,UnicodeError): continue
+                  lines=[l for l in text.splitlines() if re.search(r'\b(listen|proxy_pass|ProxyPass|Listen)\b',l) and not l.lstrip().startswith('#')]
+                  if any('2616' in l for l in lines):
+                      print('PROXY_CONFIG='+str(f))
+                      for line in lines: print(re.sub(r'(https?://)[^/@\s]+:[^/@\s]+@',r'\1[REDACTED]@',line))
           PY
-            echo 'BASE_HEALTH=FAILED'
-            exit 52
-          fi
-          su - oneadmin -s /bin/bash -c 'set -e; onehost list; onevm list; oneimage list; onevnet list'
-          test "$(getenforce)" = Enforcing
-          touch /var/lib/layersentry/.dr-base-services-verified
-          echo 'DR_BASE_SERVICES=LIVE_VERIFIED'
-          echo 'Base services only verified. Customer LayerSentry UI, 3 Raft VMs and 3 MySQL VMs remain pending.' >> "$GITHUB_STEP_SUMMARY"
-      - name: Discover configured private installer access and cached sources
-        if: always() && steps.bind.outputs.target == 'true'
-        shell: bash
-        env:
-          GIT_TERMINAL_PROMPT: '0'
-        run: |
-          set -euo pipefail
-          find /opt /srv /root -maxdepth 4 -type d \( -name layersentry-platform -o -name codexagentlogic -o -name one-deploy \) -print 2>/dev/null || true
-          if timeout 15 git ls-remote https://github.com/adaptgurus/layersentry-platform.git HEAD >/var/log/layersentrydr/private-installer-access.log 2>&1; then
-            echo 'EXISTING_PRIVATE_INSTALLER_READ_ACCESS=AVAILABLE'
-          else
-            echo 'EXISTING_PRIVATE_INSTALLER_READ_ACCESS=UNAVAILABLE'
-          fi
-          virsh -r -c qemu:///system list --all
+          echo 'FIREEDGE_UNIT'
+          systemctl show opennebula-fireedge -p FragmentPath -p DropInPaths -p Type -p ExecStart -p User -p Group -p ActiveState -p Result
+          echo 'HTTP_READBACK'
+          curl --silent --show-error --max-time 8 -D - -o /dev/null http://127.0.0.1:2616/fireedge/ || true
+          echo 'INSTALLED_SERVICE_NAMES'
+          systemctl list-unit-files 'opennebula*' --no-pager
+          echo 'READ_ONLY_DIAGNOSIS_COMPLETE'
