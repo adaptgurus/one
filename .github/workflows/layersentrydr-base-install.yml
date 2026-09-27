@@ -76,10 +76,6 @@ jobs:
           dnf -y install 'dnf-command(config-manager)' || true
           dnf config-manager --set-enabled crb || true
 
-          if ! command -v hatch >/dev/null 2>&1; then
-            python3 -m pip install --quiet --disable-pip-version-check 'hatch==1.15.1'
-          fi
-
           if [ ! -d /opt/layersentry/one-deploy/.git ]; then
             git clone https://github.com/adaptgurus/one-deploy.git /opt/layersentry/one-deploy
           fi
