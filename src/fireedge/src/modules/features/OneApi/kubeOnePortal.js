@@ -18,9 +18,22 @@ import { Actions, Commands } from 'server/routes/api/kubeoneportal/routes'
 
 const kubeOnePortalApi = oneApi.injectEndpoints({
   endpoints: (builder) => ({
+    getKubeOneCapabilities: builder.query({
+      query: () => ({ command: Commands[Actions.CAPABILITIES] }),
+    }),
     getKubeOneClusters: builder.query({
       query: () => ({ command: Commands[Actions.LIST] }),
       providesTags: ['KUBEONE_PORTAL'],
+    }),
+    getKubeOneDiagnostics: builder.query({
+      query: (id) => ({
+        params: { id },
+        command: Commands[Actions.DIAGNOSTICS],
+        showNotification: false,
+      }),
+      providesTags: (_result, _error, id) => [
+        { type: 'KUBEONE_PORTAL', id: `diagnostics-${id}` },
+      ],
     }),
     getKubeOneNamespaces: builder.query({
       query: (id) => ({
@@ -130,7 +143,9 @@ const kubeOnePortalApi = oneApi.injectEndpoints({
 })
 
 export const {
+  useGetKubeOneCapabilitiesQuery,
   useGetKubeOneClustersQuery,
+  useGetKubeOneDiagnosticsQuery,
   useGetKubeOneNamespacesQuery,
   useCreateKubeOneNamespaceMutation,
   useLazyGetKubeOneKubeconfigQuery,

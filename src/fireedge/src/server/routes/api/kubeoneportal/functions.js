@@ -64,6 +64,28 @@ const call = (res, next, request, userData, oneConnection) =>
  * @param userData
  * @param oneConnection
  */
+const capabilities = (
+  res = {},
+  next = defaultEmptyFunction,
+  _params = {},
+  userData = {},
+  oneConnection
+) =>
+  call(
+    res,
+    next,
+    { method: 'GET', path: '/v1/kubernetes/capabilities' },
+    userData,
+    oneConnection
+  )
+
+/**
+ * @param res
+ * @param next
+ * @param _params
+ * @param userData
+ * @param oneConnection
+ */
 const list = (
   res = {},
   next = defaultEmptyFunction,
@@ -78,6 +100,41 @@ const list = (
     userData,
     oneConnection
   )
+
+/**
+ * @param res
+ * @param next
+ * @param root0
+ * @param root0.id
+ * @param userData
+ * @param oneConnection
+ */
+const diagnostics = (
+  res = {},
+  next = defaultEmptyFunction,
+  { id } = {},
+  userData = {},
+  oneConnection
+) => {
+  if (!validClusterID(id)) {
+    res.locals.httpCode = httpResponse(badRequest, {
+      error: 'Invalid cluster identity.',
+    })
+    next()
+
+    return
+  }
+  call(
+    res,
+    next,
+    {
+      method: 'GET',
+      path: `/v1/kubernetes/clusters/${encodeURIComponent(id)}/diagnostics`,
+    },
+    userData,
+    oneConnection
+  )
+}
 
 /**
  * @param res
@@ -488,7 +545,9 @@ const installApplication = (
 }
 
 module.exports = {
+  capabilities,
   list,
+  diagnostics,
   namespaces,
   createNamespace,
   kubeconfig,

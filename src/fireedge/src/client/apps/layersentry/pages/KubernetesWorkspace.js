@@ -19,11 +19,7 @@ import {
   Box,
   Button,
   Chip,
-  FormControl,
-  InputLabel,
   LinearProgress,
-  MenuItem,
-  Select,
   Stack,
   Table,
   TableBody,
@@ -35,10 +31,11 @@ import {
 } from '@mui/material'
 import { Download, Plus, Refresh } from 'iconoir-react'
 import PropTypes from 'prop-types'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { KubeOnePortalAPI } from '@FeaturesModule'
 import {
   PageFrame,
+  MetricCard,
   Surface,
 } from 'client/apps/layersentry/components/Primitives'
 import {
@@ -62,8 +59,11 @@ const downloadText = (name, value) => {
 
 const ClusterManager = ({ cluster, profiles, canMutate }) => {
   const [namespace, setNamespace] = useState('')
-  const [accelerator, setAccelerator] = useState('')
-  const [count, setCount] = useState(1)
+  const [operationError, setOperationError] = useState('')
+  const diagnostics = KubeOnePortalAPI.useGetKubeOneDiagnosticsQuery(
+    cluster.id,
+    { pollingInterval: 15000 }
+  )
   const namespaces = KubeOnePortalAPI.useGetKubeOneNamespacesQuery(cluster.id, {
     skip: !cluster.provisioned,
   })
@@ -96,51 +96,69 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
   )
   const [installApplication, installState] =
     KubeOnePortalAPI.useInstallKubeOneApplicationMutation()
-  const selectedProfile = profiles.find(({ id }) => id === accelerator)
+  const status = cluster.status || {}
   const workerPending =
-    cluster.provisioned && cluster.status.ready_nodes < cluster.expected_nodes
+    cluster.provisioned && status.ready_nodes < cluster.expected_nodes
   const controlPlanePending =
     cluster.provisioned &&
-    cluster.status.ready_control_planes < cluster.expected_control_planes
+    status.ready_control_planes < cluster.expected_control_planes
   const existingControlPlaneHealthy =
     cluster.provisioned &&
-    cluster.status.api_ready &&
-    cluster.status.ready_control_planes >= 1 &&
-    cluster.status.kube_system_non_ready === 0
+    status.api_ready &&
+    status.ready_control_planes >= 1 &&
+    status.kube_system_non_ready === 0
   const controlPlaneHealthy =
     existingControlPlaneHealthy &&
-    cluster.status.ready_control_planes === cluster.expected_control_planes
+    status.ready_control_planes === cluster.expected_control_planes
   const job = workerJob.data?.job
   const cpJob = controlPlaneJob.data?.job
   const createJob = provisionJob.data?.job
 
-  const createCluster = async () => {
-    await provisionCluster(cluster.id).unwrap()
-    await provisionJob.refetch()
+  const runOperation = async (operation) => {
+    setOperationError('')
+    try {
+      await operation()
+    } catch (error) {
+      setOperationError(
+        error?.data?.error ||
+          error?.error ||
+          'The requested operation could not be completed.'
+      )
+    }
   }
-  const addControlPlane = async () => {
-    await reconcileControlPlane(cluster.id).unwrap()
-    await controlPlaneJob.refetch()
-  }
-  const addNamespace = async () => {
-    await createNamespace({ id: cluster.id, name: namespace }).unwrap()
-    setNamespace('')
-  }
-  const downloadKubeconfig = async () => {
-    const value = await loadKubeconfig(cluster.id).unwrap()
-    downloadText(
-      cluster.id,
-      typeof value === 'string' ? value : String(value || '')
-    )
-  }
-  const addRegisteredWorker = async () => {
-    await reconcileWorkers(cluster.id).unwrap()
-    await workerJob.refetch()
-  }
-  const installCatalogApplication = async (app) => {
-    await installApplication({ id: cluster.id, app }).unwrap()
-    await applications.refetch()
-  }
+  const createCluster = () =>
+    runOperation(async () => {
+      await provisionCluster(cluster.id).unwrap()
+      await provisionJob.refetch()
+    })
+  const addControlPlane = () =>
+    runOperation(async () => {
+      await reconcileControlPlane(cluster.id).unwrap()
+      await controlPlaneJob.refetch()
+    })
+  const addNamespace = () =>
+    runOperation(async () => {
+      await createNamespace({ id: cluster.id, name: namespace }).unwrap()
+      setNamespace('')
+    })
+  const downloadKubeconfig = () =>
+    runOperation(async () => {
+      const value = await loadKubeconfig(cluster.id).unwrap()
+      downloadText(
+        cluster.id,
+        typeof value === 'string' ? value : String(value || '')
+      )
+    })
+  const reconcileRegisteredWorkers = () =>
+    runOperation(async () => {
+      await reconcileWorkers(cluster.id).unwrap()
+      await workerJob.refetch()
+    })
+  const installCatalogApplication = (app) =>
+    runOperation(async () => {
+      await installApplication({ id: cluster.id, app }).unwrap()
+      await applications.refetch()
+    })
   const applicationItems = applications.data?.applications || []
   const installedApps = new Set(
     applicationItems
@@ -150,6 +168,7 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
 
   return (
     <Stack spacing={2}>
+      {operationError && <Alert severity="error">{operationError}</Alert>}
       <Surface sx={{ p: 2 }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
@@ -173,20 +192,20 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
                 <>
                   <Chip
                     size="small"
-                    color={cluster.status.api_ready ? 'success' : 'error'}
-                    label={
-                      cluster.status.api_ready ? 'API ready' : 'API unavailable'
-                    }
+                    color={status.api_ready ? 'success' : 'error'}
+                    label={status.api_ready ? 'API ready' : 'API unavailable'}
                   />
                   <Chip
                     size="small"
-                    label={`${cluster.status.ready_nodes}/${
-                      cluster.status.nodes?.length || cluster.expected_nodes
+                    label={`${status.ready_nodes}/${
+                      status.nodes?.length || cluster.expected_nodes
                     } nodes Ready`}
                   />
                   <Chip
                     size="small"
-                    label={`${cluster.status.ready_control_planes}/${cluster.status.control_planes} control planes Ready`}
+                    label={`${status.ready_control_planes}/${
+                      status.control_planes || cluster.expected_control_planes
+                    } control planes Ready`}
                   />
                 </>
               )}
@@ -201,6 +220,58 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
             Download kubeconfig
           </Button>
         </Stack>
+      </Surface>
+
+      <Surface sx={{ p: 2 }}>
+        <Typography variant="h6">Health diagnostics</Typography>
+        {diagnostics.isLoading ? (
+          <LinearProgress sx={{ mt: 2 }} />
+        ) : diagnostics.isError ? (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            Authoritative cluster diagnostics are unavailable.
+          </Alert>
+        ) : (
+          <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+              <Chip
+                size="small"
+                color={diagnostics.data?.healthy ? 'success' : 'warning'}
+                label={
+                  diagnostics.data?.healthy ? 'Healthy' : 'Needs attention'
+                }
+              />
+              <Chip
+                size="small"
+                label={`Phase: ${diagnostics.data?.phase || 'unknown'}`}
+              />
+              {diagnostics.data?.observed_at && (
+                <Chip
+                  size="small"
+                  label={`Observed ${new Date(
+                    diagnostics.data.observed_at
+                  ).toLocaleString()}`}
+                />
+              )}
+            </Stack>
+            {(diagnostics.data?.issues || []).length === 0 ? (
+              <Alert severity="success">No active diagnostic issues.</Alert>
+            ) : (
+              (diagnostics.data?.issues || []).map((issue) => (
+                <Alert
+                  key={issue.code}
+                  severity={issue.severity === 'error' ? 'error' : 'warning'}
+                >
+                  <Typography fontWeight={650}>{issue.message}</Typography>
+                  {issue.remediation && (
+                    <Typography variant="body2">
+                      Remediation: {issue.remediation}
+                    </Typography>
+                  )}
+                </Alert>
+              ))
+            )}
+          </Stack>
+        )}
       </Surface>
 
       {!cluster.provisioned && (
@@ -280,8 +351,8 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
           {!controlPlanePending && (
             <Alert severity="success" sx={{ mt: 2 }}>
               Registered control-plane topology is converged (
-              {cluster.status.ready_control_planes}/
-              {cluster.expected_control_planes} Ready).
+              {status.ready_control_planes}/{cluster.expected_control_planes}{' '}
+              Ready).
             </Alert>
           )}
           {controlPlanePending && !existingControlPlaneHealthy && (
@@ -474,37 +545,13 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
 
       {cluster.provisioned && (
         <Surface sx={{ p: 2 }}>
-          <Typography variant="h6">Add worker</Typography>
+          <Typography variant="h6">Worker topology</Typography>
           <Typography color="text.secondary" sx={{ mb: 2 }}>
-            Join only workers already present in the LayerSentry-qualified
-            topology. Arbitrary IP addresses, SSH commands, and unmanaged worker
-            definitions are not accepted.
+            Reconcile only workers already present in the LayerSentry-qualified
+            server-owned topology. Arbitrary hosts, SSH commands, accelerator
+            assignments, and unmanaged worker definitions are not accepted.
           </Typography>
           <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-            <FormControl size="small" sx={{ minWidth: 260 }}>
-              <InputLabel>GPU / vGPU profile</InputLabel>
-              <Select
-                label="GPU / vGPU profile"
-                value={accelerator}
-                onChange={(event) => setAccelerator(event.target.value)}
-              >
-                <MenuItem value="">No accelerator</MenuItem>
-                {profiles.map((profile) => (
-                  <MenuItem key={profile.id} value={profile.id}>
-                    {profile.label} ({profile.kind})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-            <TextField
-              size="small"
-              type="number"
-              label="Device count"
-              value={count}
-              disabled={!selectedProfile}
-              onChange={(event) => setCount(Number(event.target.value))}
-              inputProps={{ min: 1, max: selectedProfile?.max_count || 1 }}
-            />
             <Button
               variant="contained"
               disabled={
@@ -515,16 +562,15 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
                 reconcileState.isLoading ||
                 job?.status === 'RUNNING'
               }
-              onClick={addRegisteredWorker}
+              onClick={reconcileRegisteredWorkers}
             >
-              Add worker
+              Reconcile registered workers
             </Button>
           </Stack>
           {!workerPending && (
             <Alert severity="success" sx={{ mt: 2 }}>
-              Registered worker topology is converged (
-              {cluster.status.ready_nodes}/{cluster.expected_nodes} nodes
-              Ready).
+              Registered worker topology is converged ({status.ready_nodes}/
+              {cluster.expected_nodes} nodes Ready).
             </Alert>
           )}
           {workerPending && !controlPlaneHealthy && (
@@ -549,8 +595,15 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
           )}
           {profiles.length === 0 && (
             <Alert severity="info" sx={{ mt: 2 }}>
-              This tester has no provider-qualified GPU or vGPU profile.
-              Attachment is correctly unavailable.
+              No LayerSentry-qualified accelerator profiles are published for
+              this environment.
+            </Alert>
+          )}
+          {profiles.length > 0 && (
+            <Alert severity="info" sx={{ mt: 2 }}>
+              Qualified accelerator inventory:{' '}
+              {profiles.map(({ label }) => label).join(', ')}. Assignment is
+              controlled by the registered topology.
             </Alert>
           )}
         </Surface>
@@ -566,6 +619,7 @@ ClusterManager.propTypes = {
 }
 
 const KubernetesWorkspace = ({ endpoints }) => {
+  const capabilities = KubeOnePortalAPI.useGetKubeOneCapabilitiesQuery()
   const query = KubeOnePortalAPI.useGetKubeOneClustersQuery()
   const canCreate = isCapabilityEnabled(
     CAPABILITY_IDS.KUBERNETES_CREATE,
@@ -574,30 +628,49 @@ const KubernetesWorkspace = ({ endpoints }) => {
   const [selected, setSelected] = useState('')
   const clusters = query.data?.clusters || []
   const activeID = selected || clusters[0]?.id || ''
-  const cluster = useMemo(
-    () => clusters.find(({ id }) => id === activeID),
-    [clusters, activeID]
+  const cluster = clusters.find(({ id }) => id === activeID)
+  const fleet = clusters.reduce(
+    (summary, item) => {
+      const status = item.status || {}
+      const healthy =
+        item.provisioned &&
+        status.api_ready &&
+        status.ready_nodes >= item.expected_nodes &&
+        status.ready_control_planes >= item.expected_control_planes &&
+        !item.readback_error
+      summary.readyNodes += Number(status.ready_nodes || 0)
+      summary[
+        healthy ? 'healthy' : item.provisioned ? 'degraded' : 'planned'
+      ] += 1
+
+      return summary
+    },
+    { healthy: 0, degraded: 0, planned: 0, readyNodes: 0 }
   )
+  const refresh = () => {
+    capabilities.refetch()
+    query.refetch()
+  }
 
   return (
     <PageFrame
       title="Kubernetes"
       description="Manage LayerSentry Kubernetes clusters through typed, tenant-scoped operations."
       actions={
-        <Button
-          variant="outlined"
-          startIcon={<Refresh />}
-          onClick={query.refetch}
-        >
+        <Button variant="outlined" startIcon={<Refresh />} onClick={refresh}>
           Refresh
         </Button>
       }
     >
-      {query.isLoading ? (
+      {query.isLoading || capabilities.isLoading ? (
         <LinearProgress />
-      ) : query.isError ? (
+      ) : query.isError || capabilities.isError ? (
         <Alert severity="error">
           Kubernetes management service is unavailable.
+        </Alert>
+      ) : capabilities.data?.multi_cluster !== true ? (
+        <Alert severity="warning">
+          Multi-cluster orchestration is not enabled by the management service.
         </Alert>
       ) : clusters.length === 0 ? (
         <Alert severity="info">
@@ -605,20 +678,116 @@ const KubernetesWorkspace = ({ endpoints }) => {
         </Alert>
       ) : (
         <Stack spacing={2}>
-          <FormControl size="small" sx={{ maxWidth: 360 }}>
-            <InputLabel>Cluster</InputLabel>
-            <Select
-              label="Cluster"
-              value={activeID}
-              onChange={(event) => setSelected(event.target.value)}
-            >
-              {clusters.map(({ id }) => (
-                <MenuItem key={id} value={id}>
-                  {clusters.find((item) => item.id === id)?.display_name || id}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Box
+            sx={{
+              display: 'grid',
+              gridTemplateColumns: {
+                xs: '1fr',
+                sm: 'repeat(2, minmax(0, 1fr))',
+                lg: 'repeat(4, minmax(0, 1fr))',
+              },
+              gap: 2,
+            }}
+          >
+            <MetricCard label="Clusters" value={clusters.length} />
+            <MetricCard label="Healthy" value={fleet.healthy} />
+            <MetricCard label="Needs attention" value={fleet.degraded} />
+            <MetricCard label="Ready nodes" value={fleet.readyNodes} />
+          </Box>
+          <Surface sx={{ p: 2 }}>
+            <Typography variant="h6" sx={{ mb: 1 }}>
+              Cluster fleet
+            </Typography>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Cluster</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Nodes</TableCell>
+                  <TableCell>Control plane</TableCell>
+                  <TableCell align="right">Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {clusters.map((item) => {
+                  const status = item.status || {}
+                  const healthy =
+                    item.provisioned &&
+                    status.api_ready &&
+                    status.ready_nodes >= item.expected_nodes &&
+                    status.ready_control_planes >=
+                      item.expected_control_planes &&
+                    !item.readback_error
+
+                  return (
+                    <TableRow key={item.id} selected={item.id === activeID}>
+                      <TableCell>
+                        <Typography fontWeight={650}>
+                          {item.display_name || item.id}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">
+                          {item.id}
+                        </Typography>
+                        {item.readback_error && (
+                          <Typography
+                            variant="caption"
+                            color="error"
+                            display="block"
+                          >
+                            Live readback unavailable
+                          </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          size="small"
+                          color={
+                            healthy
+                              ? 'success'
+                              : item.provisioned
+                              ? 'warning'
+                              : 'default'
+                          }
+                          label={
+                            healthy
+                              ? 'Healthy'
+                              : item.provisioned
+                              ? 'Needs attention'
+                              : 'Planned'
+                          }
+                        />
+                      </TableCell>
+                      <TableCell>
+                        {status.ready_nodes || 0}/{item.expected_nodes || 0}{' '}
+                        Ready
+                      </TableCell>
+                      <TableCell>
+                        {status.ready_control_planes || 0}/
+                        {item.expected_control_planes || 0} Ready
+                      </TableCell>
+                      <TableCell align="right">
+                        <Button
+                          size="small"
+                          variant={
+                            item.id === activeID ? 'contained' : 'outlined'
+                          }
+                          onClick={() => setSelected(item.id)}
+                        >
+                          {item.id === activeID ? 'Selected' : 'Manage'}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </Surface>
+          {capabilities.data?.destructive_lifecycle === false && (
+            <Alert severity="info">
+              Destructive cluster lifecycle actions are disabled. Workspaces,
+              topology, and credentials remain server-owned.
+            </Alert>
+          )}
           {cluster &&
             (canCreate ? (
               <ClusterManager

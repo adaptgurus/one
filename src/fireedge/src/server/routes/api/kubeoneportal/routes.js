@@ -23,7 +23,9 @@ const { postBody, resource } = fromData
 const basepath = '/v1/kubeone'
 
 const Actions = {
+  CAPABILITIES: 'kubeoneportal.capabilities',
   LIST: 'kubeoneportal.list',
+  DIAGNOSTICS: 'kubeoneportal.diagnostics',
   NAMESPACES: 'kubeoneportal.namespaces',
   CREATE_NAMESPACE: 'kubeoneportal.namespace.create',
   KUBECONFIG: 'kubeoneportal.kubeconfig',
@@ -41,11 +43,23 @@ const Actions = {
 module.exports = {
   Actions,
   Commands: {
+    [Actions.CAPABILITIES]: {
+      path: `${basepath}/capabilities`,
+      httpMethod: GET,
+      auth: true,
+      params: {},
+    },
     [Actions.LIST]: {
       path: `${basepath}/clusters`,
       httpMethod: GET,
       auth: true,
       params: {},
+    },
+    [Actions.DIAGNOSTICS]: {
+      path: `${basepath}/clusters/:id/diagnostics`,
+      httpMethod: GET,
+      auth: true,
+      params: { id: { from: resource } },
     },
     [Actions.NAMESPACES]: {
       path: `${basepath}/clusters/:id/namespaces`,

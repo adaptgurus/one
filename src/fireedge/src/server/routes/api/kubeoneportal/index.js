@@ -15,7 +15,9 @@
  * ------------------------------------------------------------------------- */
 const { Actions, Commands } = require('server/routes/api/kubeoneportal/routes')
 const {
+  capabilities,
   list,
+  diagnostics,
   namespaces,
   createNamespace,
   kubeconfig,
@@ -30,7 +32,9 @@ const {
 } = require('server/routes/api/kubeoneportal/functions')
 
 module.exports = [
+  { ...Commands[Actions.CAPABILITIES], action: capabilities },
   { ...Commands[Actions.LIST], action: list },
+  { ...Commands[Actions.DIAGNOSTICS], action: diagnostics },
   { ...Commands[Actions.NAMESPACES], action: namespaces },
   { ...Commands[Actions.CREATE_NAMESPACE], action: createNamespace },
   { ...Commands[Actions.KUBECONFIG], action: kubeconfig },
