@@ -1,0 +1,40 @@
+name: LayerSentry DR Runner Probe
+on:
+  push:
+    branches: [ops/layersentrydr-probe-20260927]
+permissions:
+  contents: read
+concurrency:
+  group: layersentrydr-exact-probe
+  cancel-in-progress: true
+jobs:
+  probe:
+    runs-on: layersentrydr
+    timeout-minutes: 10
+    steps:
+      - name: Bind runner and DR host
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_NAME=${RUNNER_NAME:-unknown}"
+          echo "HOST=$(hostname -f 2>/dev/null || hostname)"
+          echo "USER=$(id -un) UID=$(id -u)"
+          test "${RUNNER_NAME:-}" = "layersentrydr" || exit 41
+          ip -4 -br addr
+          ip -4 addr show | grep -qE '(^|[[:space:]])172\.17\.60\.40/' || { echo "WRONG_HOST"; exit 42; }
+          test "$(id -u)" -eq 0 || { echo "NOT_ROOT"; exit 43; }
+          echo "BOUND_OK"
+      - name: Inventory
+        shell: bash
+        run: |
+          set -u
+          cat /etc/os-release || true
+          nproc || true
+          free -h || true
+          lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINTS || true
+          df -hT || true
+          ip -4 route || true
+          command -v virsh && virsh list --all || true
+          command -v onehost && onehost list || true
+          command -v onevm && onevm list || true
+          find /root /opt /srv /home -maxdepth 4 -type d \( -name codexagentlogic -o -name one-deploy -o -name layersentry-platform -o -name one \) -print 2>/dev/null | head -100 || true
