@@ -201,7 +201,7 @@ jobs:
             exit 0
           }
           $ErrorActionPreference = 'Continue'
-          $identity = & ssh.exe -i $key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" root@172.17.60.30 'hostname -s; id -u; ip -4 -o addr show' 2>&1
+          $identity = & ssh.exe -i $key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" layersentry-deploy@172.17.60.30 'hostname -s; id -u; ip -4 -o addr show; sudo -n true' 2>&1
           $identityExit = $LASTEXITCODE
           $ErrorActionPreference = $savedPreference
           if ($identityExit -ne 0) {
@@ -210,9 +210,9 @@ jobs:
             exit 0
           }
           $identityText = $identity -join "`n"
-          if ($identityText -notmatch '(?m)^0\s*$' -or $identityText -notmatch '172\.17\.60\.30/26') {
-            throw 'SSH authenticated but exact DC root UID or address did not match'
+          if ($identityText -notmatch '(?m)^\d+\s*$' -or $identityText -match '(?m)^0\s*$' -or $identityText -notmatch '172\.17\.60\.30/26') {
+            throw 'SSH authenticated but exact DC non-root deployment identity, sudo, or address did not match'
           }
-          Write-Output 'DC_KEY_AUTH=PASS exact_address=172.17.60.30 uid=0'
-          & ssh.exe -i $key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" root@172.17.60.30 'echo OPENNEBULA_VERSION; oneversion || true; echo HOSTS; onehost list || true; echo VMS; onevm list || true; echo LAYERSENTRY_UNITS; systemctl list-unit-files --no-pager | grep -Ei "layersentry|replication" || true; echo DR_ENDPOINTS; for u in http://127.0.0.1:2616/v1/dr/capabilities http://127.0.0.1:2616/fireedge/api/v1/dr/capabilities; do c=$(curl -sS --max-time 5 -o /dev/null -w "%{http_code}" "$u" || true); echo "$c $u"; done'
+          Write-Output 'DC_KEY_AUTH=PASS exact_address=172.17.60.30 deployment_user=layersentry-deploy sudo=noninteractive'
+          & ssh.exe -i $key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" layersentry-deploy@172.17.60.30 'echo OPENNEBULA_VERSION; sudo -n -u oneadmin oneversion || true; echo HOSTS; sudo -n -u oneadmin onehost list || true; echo VMS; sudo -n -u oneadmin onevm list || true; echo IMAGES; sudo -n -u oneadmin oneimage list --extended || true; echo DATASTORES; sudo -n -u oneadmin onedatastore list || true; echo LAYERSENTRY_UNITS; sudo -n systemctl list-unit-files --no-pager | grep -Ei "layersentry|replication" || true; echo DR_ENDPOINTS; for u in http://127.0.0.1:2616/v1/dr/capabilities http://127.0.0.1:2616/fireedge/api/v1/dr/capabilities; do c=$(curl -sS --max-time 5 -o /dev/null -w "%{http_code}" "$u" || true); echo "$c $u"; done'
           if ($LASTEXITCODE -ne 0) { throw 'Read-only DC inventory command failed' }
