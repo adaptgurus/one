@@ -76,7 +76,7 @@ jobs:
           dnf config-manager --set-enabled crb || true
 
           if ! command -v hatch >/dev/null 2>&1; then
-            python3 -m pip install --quiet --disable-pip-version-check 'hatch==1.16.5'
+            python3 -m pip install --quiet --disable-pip-version-check 'hatch==1.15.1'
           fi
 
           if [ ! -d /opt/layersentry/one-deploy/.git ]; then
