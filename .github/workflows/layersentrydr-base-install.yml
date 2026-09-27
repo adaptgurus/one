@@ -136,8 +136,11 @@ jobs:
           EOF
           chmod 600 /root/.layersentry-secrets/ansible-extra.yml
 
-          make requirements
-          hatch env run -e default -- ansible-playbook -v             -i /etc/layersentry/dr-poc.yml             -e @/root/.layersentry-secrets/ansible-extra.yml             opennebula.deploy.main
+          make HATCH_BIN= requirements
+          ansible-playbook -v \
+            -i /etc/layersentry/dr-poc.yml \
+            -e @/root/.layersentry-secrets/ansible-extra.yml \
+            opennebula.deploy.main
           touch /var/lib/layersentry/.dr-base-install-complete
 
       - name: Verify base deployment
