@@ -241,7 +241,7 @@ jobs:
           test -n "$vm_ip"
           proxy="ssh -i $dc_key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$work/dc_known_hosts -W %h:%p $dc_user@172.17.60.30"
           guest_user=''
-          for _ in $(seq 1 60); do
+          for _ in $(seq 1 3); do
             for candidate_user in layersentry-deploy rocky cloud-user almalinux centos root; do
               if ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
                 -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$work/guest_known_hosts" \
@@ -255,6 +255,7 @@ jobs:
           done
           if test -z "$guest_user"; then
             echo "GUEST_SSH_NOT_READY VM_ID=$vm_id IP=$vm_ip" >&2
+            set +e
             ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
               -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
               "$dc_user@172.17.60.30" 'bash -s --' "$vm_id" "$vm_ip" <<'DIAG' >&2
@@ -267,7 +268,9 @@ jobs:
           if ping -c 1 -W 2 "$vm_ip" >/dev/null 2>&1; then echo DC_TO_GUEST_ICMP=PASS; else echo DC_TO_GUEST_ICMP=FAIL; fi
           if timeout 3 bash -c "</dev/tcp/$vm_ip/22" >/dev/null 2>&1; then echo DC_TO_GUEST_TCP22=PASS; else echo DC_TO_GUEST_TCP22=FAIL; fi
           sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","STATE","LCM_STATE","DEPLOY_ID","HISTORY_RECORDS/HISTORY/HID","TEMPLATE/NIC/IP","TEMPLATE/CONTEXT/NETWORK","TEMPLATE/CONTEXT/TARGET","TEMPLATE/CONTEXT/SSH_PUBLIC_KEY"); print(" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
+          sudo -n -u oneadmin oneimage show 3 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","STATE","TEMPLATE/FORMAT","TEMPLATE/DEV_PREFIX","TEMPLATE/DRIVER","TEMPLATE/SIZE","TEMPLATE/OS_DISTRIBUTION","TEMPLATE/OS_VERSION","TEMPLATE/USERNAME"); print("BASE_IMAGE "+" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
           DIAG
+            exit 61
           fi
           test -n "$guest_user"
           guest_ssh=(ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
