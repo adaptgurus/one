@@ -18,6 +18,7 @@ const assert = require('node:assert/strict')
 const { readFileSync } = require('node:fs')
 const { resolve } = require('node:path')
 let api
+let operations
 
 before(async () => {
   const source = readFileSync(
@@ -26,6 +27,17 @@ before(async () => {
   )
   api = await import(
     'data:text/javascript;base64,' + Buffer.from(source).toString('base64')
+  )
+  const operationsSource = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/client/apps/layersentry/storageOperations.js'
+    ),
+    'utf8'
+  )
+  operations = await import(
+    'data:text/javascript;base64,' +
+      Buffer.from(operationsSource).toString('base64')
   )
 })
 
@@ -90,4 +102,68 @@ test('LINSTOR requires a resource group and supports controller lists', () => {
       LINSTOR_CONTROLLERS: '10.1.0.10:3370,10.1.0.11:3370',
     }
   )
+})
+
+test('VM disk attach only offers READY persistent volumes and datastores', () => {
+  assert.equal(
+    operations.isReadyImageDatastore({ TYPE: 'IMAGE_DS', STATE: 'READY' }),
+    true
+  )
+  assert.equal(
+    operations.isReadyImageDatastore({ TYPE: 'IMAGE_DS', STATE: 'DISABLED' }),
+    false
+  )
+  assert.equal(
+    operations.isPersistentAvailableImage({
+      TYPE: 'DATABLOCK',
+      STATE: 'READY',
+      PERSISTENT: 'YES',
+    }),
+    true
+  )
+  assert.equal(
+    operations.isPersistentAvailableImage({
+      TYPE: 'DATABLOCK',
+      STATE: 'ERROR',
+      PERSISTENT: 'YES',
+    }),
+    false
+  )
+  assert.equal(
+    operations.isPersistentAvailableImage({
+      TYPE: 'DATABLOCK',
+      STATE: 'READY',
+      PERSISTENT: 'NO',
+    }),
+    false
+  )
+})
+
+test('disk mutation PASS requires exact authoritative VM readback', () => {
+  const vm = {
+    TEMPLATE: {
+      DISK: [
+        { DISK_ID: '0', IMAGE_ID: '40', SIZE: '10240' },
+        { DISK_ID: '1', IMAGE_ID: '41', SIZE: '20480' },
+      ],
+    },
+  }
+  assert.equal(operations.vmHasImage(vm, '41'), true)
+  assert.equal(operations.vmHasImage(vm, '42'), false)
+  assert.equal(operations.vmDoesNotHaveDisk(vm, '2'), true)
+  assert.equal(operations.vmDoesNotHaveDisk(vm, '1'), false)
+  assert.equal(operations.vmDiskAtLeastSize(vm, '1', 20480), true)
+  assert.equal(operations.vmDiskAtLeastSize(vm, '1', 30720), false)
+})
+
+test('iSCSI datastore profile uses the canonical storage profile identity', () => {
+  const steps = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/Datastore/Forms/CreateForm/Steps/index.js'
+    ),
+    'utf8'
+  )
+  assert.match(steps, /STORAGE_PROFILE\.ISCSI_MULTIPATH/)
+  assert.match(steps, /STORAGE_PROFILE\.LINSTOR/)
 })

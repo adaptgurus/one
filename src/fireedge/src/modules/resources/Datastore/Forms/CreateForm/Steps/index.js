@@ -35,6 +35,7 @@ import {
   createSteps,
   normalizeIscsiMultipath,
   normalizeLinstor,
+  STORAGE_PROFILE,
 } from '@UtilsModule'
 
 function getDsAndTMMad({
@@ -150,10 +151,12 @@ const Steps = createSteps(
         [dsTemplate?.DS_MAD, dsTemplate?.TM_MAD]
           ?.filter((v) => Boolean(v) && v !== '-')
           ?.join('-') || undefined
-      const STORAGE_BACKEND =
-        dsTemplate?.TEMPLATE?.LAYERSENTRY_STORAGE_PROFILE === 'iscsi-multipath'
-          ? DS_STORAGE_BACKENDS.ISCSI_MULTIPATH.value
-          : nativeStorageBackend
+      const STORAGE_BACKEND = [
+        STORAGE_PROFILE.ISCSI_MULTIPATH,
+        'iscsi-multipath',
+      ].includes(dsTemplate?.TEMPLATE?.LAYERSENTRY_STORAGE_PROFILE)
+        ? DS_STORAGE_BACKENDS.ISCSI_MULTIPATH.value
+        : nativeStorageBackend
 
       const generalAttrs = {
         NAME: dsTemplate?.NAME,
@@ -306,9 +309,9 @@ const Steps = createSteps(
           DISK_TYPE: diskType,
           LAYERSENTRY_STORAGE_PROFILE:
             STORAGE_BACKEND === DS_STORAGE_BACKENDS.ISCSI_MULTIPATH.value
-              ? 'iscsi-multipath'
+              ? STORAGE_PROFILE.ISCSI_MULTIPATH
               : STORAGE_BACKEND === DS_STORAGE_BACKENDS.LINSTOR.value
-              ? 'linstor-drbd'
+              ? STORAGE_PROFILE.LINSTOR
               : undefined,
           ...formatRestConf,
           ...profileConf,

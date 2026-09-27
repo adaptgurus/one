@@ -51,6 +51,13 @@ import {
   Surface,
 } from 'client/apps/layersentry/components/Primitives'
 import { colors } from 'client/apps/layersentry/theme/tokens'
+import {
+  isPersistentAvailableImage,
+  isReadyImageDatastore,
+  vmDiskAtLeastSize,
+  vmDoesNotHaveDisk,
+  vmHasImage,
+} from 'client/apps/layersentry/storageOperations'
 
 const toArray = (value) =>
   value === undefined || value === null || value === ''
@@ -99,14 +106,8 @@ const StorageWorkspace = ({ endpoints }) => {
   const [resizeDisk, resizeState] = VmAPI.useResizeDiskMutation()
 
   const vms = toArray(vmQuery.data)
-  const images = toArray(imageQuery.data).filter(
-    ({ TYPE }) =>
-      String(TYPE) === '1' || String(TYPE).toUpperCase() === 'DATABLOCK'
-  )
-  const datastores = toArray(datastoreQuery.data).filter(
-    ({ TYPE }) =>
-      String(TYPE) === '0' || String(TYPE).toUpperCase() === 'IMAGE_DS'
-  )
+  const images = toArray(imageQuery.data).filter(isPersistentAvailableImage)
+  const datastores = toArray(datastoreQuery.data).filter(isReadyImageDatastore)
 
   const [tab, setTab] = useState(0)
   const [vmId, setVmId] = useState('')
@@ -116,6 +117,7 @@ const StorageWorkspace = ({ endpoints }) => {
   const [datastoreId, setDatastoreId] = useState('')
   const [resizeValues, setResizeValues] = useState({})
   const [unattachedImage, setUnattachedImage] = useState(null)
+  const [operationStatus, setOperationStatus] = useState(null)
 
   const vm = useMemo(
     () => vms.find(({ ID }) => String(ID) === String(vmId)),
@@ -135,9 +137,49 @@ const StorageWorkspace = ({ endpoints }) => {
       return null
     }
   }
+  const waitForVM = async (id, predicate) => {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+      const refreshed = await refreshVM(id)
+      if (predicate(refreshed)) return refreshed
+    }
+
+    return null
+  }
+  const waitForImage = async (id) => {
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+      const refreshed = await imageQuery.refetch()
+      const image = toArray(refreshed?.data).find(
+        ({ ID }) => String(ID) === String(id)
+      )
+      if (isPersistentAvailableImage(image)) return image
+    }
+
+    return null
+  }
+  const waitForImageRemoval = async (id) => {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+      }
+      const refreshed = await imageQuery.refetch()
+      const exists = toArray(refreshed?.data).some(
+        ({ ID }) => String(ID) === String(id)
+      )
+      if (!exists) return true
+    }
+
+    return false
+  }
 
   const runAttach = async () => {
     if (!vm?.ID) return enqueueError('Select a virtual machine first.')
+    setOperationStatus(null)
     let createdImage = null
     try {
       let selectedImage = imageId
@@ -165,6 +207,16 @@ const StorageWorkspace = ({ endpoints }) => {
           name,
           vmId: vm.ID,
         }
+        if (!(await waitForImage(selectedImage))) {
+          setUnattachedImage(createdImage)
+          setOperationStatus({
+            severity: 'warning',
+            message:
+              'Disk creation remains UNKNOWN: the image was allocated but did not become READY before timeout. It was preserved and was not attached.',
+          })
+
+          return
+        }
       }
       if (!selectedImage) {
         enqueueError('Select an existing disk image.')
@@ -176,15 +228,20 @@ const StorageWorkspace = ({ endpoints }) => {
         template: jsonToXml({ DISK: { IMAGE_ID: selectedImage } }),
       }).unwrap()
       setUnattachedImage(null)
-      const refreshedVM = await refreshVM(vm.ID)
-      const confirmed = toArray(refreshedVM?.TEMPLATE?.DISK).some(
-        ({ IMAGE_ID }) => String(IMAGE_ID) === String(selectedImage)
+      const confirmed = await waitForVM(vm.ID, (refreshedVM) =>
+        vmHasImage(refreshedVM, selectedImage)
       )
-      enqueueSuccess(
-        confirmed
-          ? 'Disk attachment confirmed by authoritative VM readback.'
-          : 'Disk attach request accepted. Refresh to confirm the authoritative VM state.'
-      )
+      if (confirmed) {
+        enqueueSuccess(
+          'Disk attachment confirmed by authoritative VM readback.'
+        )
+      } else {
+        setOperationStatus({
+          severity: 'warning',
+          message:
+            'Disk attachment remains UNKNOWN: the request was accepted, but authoritative VM readback did not confirm it.',
+        })
+      }
       setImageId('')
       imageQuery.refetch()
     } catch (error) {
@@ -204,19 +261,23 @@ const StorageWorkspace = ({ endpoints }) => {
     ) {
       return
     }
+    setOperationStatus(null)
     try {
       await detachDisk({ id: vm.ID, disk: disk.DISK_ID }).unwrap()
-      const refreshedVM = await refreshVM(vm.ID)
-      const confirmed =
-        refreshedVM &&
-        !toArray(refreshedVM.TEMPLATE?.DISK).some(
-          ({ DISK_ID }) => String(DISK_ID) === String(disk.DISK_ID)
-        )
-      enqueueSuccess(
-        confirmed
-          ? 'Disk detachment confirmed. The persistent disk image is preserved.'
-          : 'Disk detach request accepted. The disk image is preserved; refresh to confirm VM state.'
+      const confirmed = await waitForVM(vm.ID, (refreshedVM) =>
+        vmDoesNotHaveDisk(refreshedVM, disk.DISK_ID)
       )
+      if (confirmed) {
+        enqueueSuccess(
+          'Disk detachment confirmed. The persistent disk image is preserved.'
+        )
+      } else {
+        setOperationStatus({
+          severity: 'warning',
+          message:
+            'Disk detachment remains UNKNOWN: authoritative VM readback did not confirm removal. The disk image was not deleted.',
+        })
+      }
     } catch (error) {
       enqueueError(
         error?.data?.message ?? error?.message ?? 'Could not detach disk.'
@@ -229,23 +290,26 @@ const StorageWorkspace = ({ endpoints }) => {
       mbToGb(disk.SIZE),
       asNumber(resizeValues[disk.DISK_ID] ?? mbToGb(disk.SIZE))
     )
+    setOperationStatus(null)
     try {
       await resizeDisk({
         id: vm.ID,
         disk: disk.DISK_ID,
         size: String(nextGb * 1024),
       }).unwrap()
-      const refreshedVM = await refreshVM(vm.ID)
-      const confirmed = toArray(refreshedVM?.TEMPLATE?.DISK).some(
-        ({ DISK_ID, SIZE }) =>
-          String(DISK_ID) === String(disk.DISK_ID) &&
-          asNumber(SIZE) >= nextGb * 1024
+      const confirmed = await waitForVM(vm.ID, (refreshedVM) =>
+        vmDiskAtLeastSize(refreshedVM, disk.DISK_ID, nextGb * 1024)
       )
-      enqueueSuccess(
-        confirmed
-          ? `Disk resize to ${nextGb} GB confirmed by authoritative VM readback.`
-          : `Disk resize request accepted for ${nextGb} GB. Refresh to confirm provider state.`
-      )
+      if (confirmed) {
+        enqueueSuccess(
+          `Disk resize to ${nextGb} GB confirmed by authoritative VM readback.`
+        )
+      } else {
+        setOperationStatus({
+          severity: 'warning',
+          message: `Disk resize to ${nextGb} GB remains UNKNOWN: authoritative VM readback did not confirm the new size.`,
+        })
+      }
     } catch (error) {
       enqueueError(
         error?.data?.message ?? error?.message ?? 'Could not resize disk.'
@@ -258,12 +322,18 @@ const StorageWorkspace = ({ endpoints }) => {
       `Permanent deletion cannot be undone. Type ${image.NAME} to delete this disk image.`
     )
     if (typed !== image.NAME) return
+    setOperationStatus(null)
     try {
       await removeImage({ id: image.ID }).unwrap()
-      enqueueSuccess(
-        'Disk image deletion request accepted. Refresh to confirm provider state.'
-      )
-      imageQuery.refetch()
+      if (await waitForImageRemoval(image.ID)) {
+        enqueueSuccess('Disk image deletion confirmed by provider readback.')
+      } else {
+        setOperationStatus({
+          severity: 'warning',
+          message:
+            'Disk image deletion remains UNKNOWN: the request was accepted, but provider readback still reports the image.',
+        })
+      }
     } catch (error) {
       enqueueError(
         error?.data?.message ?? error?.message ?? 'Could not delete disk image.'
@@ -294,6 +364,11 @@ const StorageWorkspace = ({ endpoints }) => {
         <Tab label="Disk images" />
         {canViewInfraStorage && <Tab label="Storage pools" />}
       </Tabs>
+      {operationStatus && (
+        <Alert severity={operationStatus.severity} sx={{ mt: 2 }}>
+          {operationStatus.message}
+        </Alert>
+      )}
 
       {tab === 0 && (
         <Box sx={{ display: 'grid', gap: 2, mt: 2 }}>
@@ -474,8 +549,10 @@ const StorageWorkspace = ({ endpoints }) => {
                 )}
 
                 <Alert severity="info">
-                  New disks are created as persistent disk images. Detaching
-                  them does not delete their data.
+                  New disks are created as persistent disk images on a READY
+                  image datastore. NFS and iSCSI are onboarded and qualified as
+                  storage pools first; VMs attach volumes through this flow.
+                  Detaching does not delete their data.
                 </Alert>
                 {unattachedImage &&
                   String(unattachedImage.vmId) === String(vm.ID) && (
@@ -483,11 +560,11 @@ const StorageWorkspace = ({ endpoints }) => {
                       severity="warning"
                       onClose={() => setUnattachedImage(null)}
                     >
-                      Disk image {unattachedImage.name} (ID{' '}
-                      {unattachedImage.id}) was created, but its VM attachment
-                      was not confirmed. The image was preserved for safety.
-                      Select “Attach existing disk” to retry, or review it in
-                      Disk images before deleting it.
+                      Disk image {unattachedImage.name} (ID {unattachedImage.id}
+                      ) was created, but its VM attachment was not confirmed.
+                      The image was preserved for safety. Select “Attach
+                      existing disk” to retry, or review it in Disk images
+                      before deleting it.
                     </Alert>
                   )}
                 <Box>
