@@ -111,6 +111,15 @@ jobs:
           test "$(sha256sum "$target/dist/client/bundle.layersentry.js" | awk '{print $1}')" = "$expected_bundle"
           test "$(sha256sum "$target/dist/index.js" | awk '{print $1}')" = "$expected_server"
           test "$(cat "$target/dist/LAYERSENTRY_SOURCE_COMMIT")" = "$candidate_sha"
+          ready=false
+          for attempt in $(seq 1 30); do
+            if curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:2616/fireedge/layersentry; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" = true
           for route in /fireedge /fireedge/layersentry /fireedge/layersentry/compute /fireedge/layersentry/infrastructure/hosts /fireedge/undefined/; do
             code=$(curl -sS -o /dev/null --max-time 15 -w '%{http_code}' "http://127.0.0.1:2616$route")
             case "$route:$code" in
@@ -136,4 +145,3 @@ jobs:
           npm install --no-save --ignore-scripts playwright@1.55.0
           npx playwright install chromium
           node tests/layersentry/live-browser-smoke.cjs http://172.17.60.30:2616/fireedge
-
