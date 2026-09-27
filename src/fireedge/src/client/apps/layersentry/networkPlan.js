@@ -188,6 +188,13 @@ export const validateNetworkDraft = (draft) => {
   if (effectiveDriver === '802.1Q' && vlanId === undefined) {
     errors.vlanId = '802.1Q networks require a VLAN ID.'
   }
+  if (
+    ['ovswitch', 'ovswitch_vxlan'].includes(effectiveDriver) &&
+    !String(draft.bridge ?? '').trim()
+  ) {
+    errors.bridge =
+      'Select the prequalified Open vSwitch bridge published by Cluster Fabric.'
+  }
 
   return errors
 }

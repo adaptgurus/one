@@ -339,6 +339,7 @@ const NetworkCreateWizard = () => {
                   label="Bridge"
                   value={draft.bridge}
                   onChange={update('bridge')}
+                  error={errors.bridge}
                 />
                 <Field
                   label="Uplink device"
@@ -355,6 +356,15 @@ const NetworkCreateWizard = () => {
               </Box>
             )}
             {errors.uplink && <Alert severity="warning">{errors.uplink}</Alert>}
+            {draft.advanced &&
+              ['ovswitch', 'ovswitch_vxlan'].includes(draft.driver) && (
+                <Alert severity="info">
+                  This workflow attaches the network to an existing qualified
+                  Open vSwitch bridge. Host-level vSwitch, bond, VLAN, MTU and
+                  uplink configuration stays in the authoritative Cluster Fabric
+                  workflow and must already match on every eligible host.
+                </Alert>
+              )}
           </Box>
         )}
         {step === 2 && (
@@ -421,17 +431,21 @@ const NetworkCreateWizard = () => {
               variant="contained"
               onClick={() => setStep((value) => value + 1)}
               disabled={
-                step === 0 &&
-                Boolean(
-                  errors.name ||
-                    errors.cidr ||
-                    errors.gateway ||
-                    errors.firstIp ||
-                    errors.size ||
-                    errors.vlanId ||
-                    errors.dns ||
-                    errors.uplink
-                )
+                (step === 0 &&
+                  Boolean(
+                    errors.name ||
+                      errors.cidr ||
+                      errors.gateway ||
+                      errors.firstIp ||
+                      errors.size ||
+                      errors.vlanId ||
+                      errors.dns ||
+                      errors.uplink
+                  )) ||
+                (step === 1 &&
+                  Boolean(
+                    errors.securityGroups || errors.uplink || errors.bridge
+                  ))
               }
             >
               Next

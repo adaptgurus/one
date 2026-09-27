@@ -138,6 +138,39 @@ test("network validation fails closed for CIDR, DNS and VLAN driver gaps", () =>
   assert.match(network.validateNetworkDraft(overflow).size, /fit inside/);
 });
 
+test("Open vSwitch network requires an explicit qualified bridge and exact readback", () => {
+  const draft = {
+    ...network.defaultNetworkDraft(),
+    name: "prod_app_ovs",
+    environment: "prod",
+    tier: "app",
+    securityGroups: "12",
+    advanced: true,
+    driver: "ovswitch",
+    bridge: "",
+    mtu: "1450",
+  };
+  assert.match(network.validateNetworkDraft(draft).bridge, /Cluster Fabric/);
+
+  draft.bridge = "br-vm";
+  assert.deepEqual(network.validateNetworkDraft(draft), {});
+  const expected = network.compileNetworkTemplate(draft);
+  assert.equal(expected.VN_MAD, "ovswitch");
+  assert.equal(expected.BRIDGE, "br-vm");
+  assert.equal(expected.MTU, "1450");
+  assert.equal(
+    network.networkReadbackMatches(
+      {
+        NAME: expected.NAME,
+        TEMPLATE: { ...expected, BRIDGE: "wrong-bridge" },
+        AR_POOL: { AR: expected.AR },
+      },
+      expected
+    ),
+    false
+  );
+});
+
 test("backup profiles compile schedule retention destination and VM assignment", () => {
   for (const id of ["ESSENTIAL", "BUSINESS", "CRITICAL"]) {
     const draft = {
