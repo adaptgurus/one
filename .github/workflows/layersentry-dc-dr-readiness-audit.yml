@@ -181,7 +181,7 @@ jobs:
           template_name=ls-dr-v2-qual-20260928-template
           base_image_id=3
           sudo -n -u oneadmin oneimage show "$base_image_id" --xml >/dev/null
-          data_id="$(sudo -n -u oneadmin oneimage list --no-header -l ID,NAME | awk -v n="$data_name" '$2==n {print $1; exit}')"
+          data_id="$(sudo -n -u oneadmin oneimage list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("IMAGE") if (x.findtext("NAME") or "")==n),""))' "$data_name")"
           if test -z "$data_id"; then
             image_template="$(mktemp)"
             cat >"$image_template" <<IMAGE
@@ -202,7 +202,7 @@ jobs:
             sleep 2
           done
           test "$state" = 2
-          vm_id="$(sudo -n -u oneadmin onevm list --no-header -l ID,NAME | awk -v n="$vm_name" '$2==n {print $1; exit}')"
+          vm_id="$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")==n),""))' "$vm_name")"
           if test -z "$vm_id"; then
             vm_template="$(mktemp)"
             cat >"$vm_template" <<VM
