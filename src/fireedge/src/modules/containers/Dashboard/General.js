@@ -87,7 +87,10 @@ const {
   VNET,
   ZONE,
 } = RESOURCE_NAMES
-const numberFormatter = new Intl.NumberFormat()
+// Do not inherit a host-only locale such as `en-US@posix`: Chromium exposes
+// those values on some Linux systems, but ECMA-402 rejects them and prevents
+// every remote module (including the LayerSentry login) from mounting.
+const numberFormatter = new Intl.NumberFormat('en')
 const HOST_UNAVAILABLE_STATES = [STATES.ERROR, STATES.MONITORING_ERROR]
 const HOST_STATE_LABELS = {
   [STATES.INIT]: T.INIT,

@@ -40,7 +40,19 @@ let browser
     '/undefined/',
   ]) {
     await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' })
-    await page.locator('#root > *').first().waitFor({ state: 'visible' })
+    try {
+      await page
+        .locator('#root > *')
+        .first()
+        .waitFor({ state: 'visible', timeout: 15000 })
+    } catch (error) {
+      const bodyText = (await page.locator('body').innerText()).trim()
+      throw new Error(
+        `${path || '/'} did not mount: ${error.message}; body=${JSON.stringify(
+          bodyText.slice(0, 1000)
+        )}; browser=${JSON.stringify(errors)}`
+      )
+    }
     const text = (await page.locator('body').innerText()).trim()
     assert.ok(text.length > 20, `${path || '/'} rendered a blank page`)
     assert.doesNotMatch(
