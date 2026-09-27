@@ -316,7 +316,7 @@ jobs:
           gateway="$5"
           test "$gateway" != __LAYERSENTRY_NO_GATEWAY__ || gateway=''
           guest_pub_b64="$6"
-          virsh -c qemu:///system dominfo "$domain" | grep -q '^State:[[:space:]]*running$'
+          test "$(virsh -c qemu:///system domstate "$domain" | tr -d '[:space:]')" = running
           hypervisor_stage=guest_exec_submit
           route_command=''
           gateway_config=''
