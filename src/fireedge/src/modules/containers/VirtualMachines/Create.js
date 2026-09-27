@@ -375,7 +375,8 @@ export function CreateVm() {
           {tab === 0 ? (
             <Stack gap={2}>
               <Alert severity="info">
-                Only customer VM templates backed by QCOW2 OS images are shown. Provider-managed OneKS and virtual-router templates are hidden.
+                Only customer VM templates backed by QCOW2 OS images are shown.
+                Platform-managed Kubernetes and virtual-router templates are hidden.
               </Alert>
               <Table
                 columns={templateColumns}
