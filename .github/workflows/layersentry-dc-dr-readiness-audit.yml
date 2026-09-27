@@ -297,7 +297,7 @@ jobs:
                 -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
                 "$dc_user@172.17.60.30" 'bash -s --' "$vm_ip" <<'PROBE_AFTER_REPAIR'
               if timeout 3 bash -c "</dev/tcp/$1/22" >/dev/null 2>&1; then printf PASS; else printf FAIL; fi
-              PROBE_AFTER_REPAIR
+          PROBE_AFTER_REPAIR
               )"
               test "$guest_tcp" = PASS && break
               sleep 2
