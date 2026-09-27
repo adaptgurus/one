@@ -145,6 +145,7 @@ export const getLayerSentryGuestNetcfgType = (sourceTemplate = {}) => {
  *
  * @param {object} existingContext - Source template context
  * @param {object} access - LayerSentry access form values
+ * @param {object} sourceTemplate - Authoritative source VM template
  * @returns {object} Context ready for OpenNebula instantiation
  */
 export const buildLayerSentryGuestContext = (
@@ -152,12 +153,14 @@ export const buildLayerSentryGuestContext = (
   access = {},
   sourceTemplate = {}
 ) => {
+  const osFamily = getLayerSentryGuestOsFamily(sourceTemplate)
+  const username = osFamily === 'WINDOWS' ? 'Administrator' : 'root'
   const context = {
     ...existingContext,
     NETWORK: 'YES',
     SET_HOSTNAME: '$NAME',
     GROW_FS: '/',
-    USERNAME: normalized(access.username) || 'root',
+    USERNAME: username,
   }
 
   credentialKeys.forEach((key) => delete context[key])
@@ -171,9 +174,11 @@ export const buildLayerSentryGuestContext = (
   if (password) context.PASSWORD_BASE64 = encodeBase64Utf8(password)
 
   const sshKeys = []
-  if (access.useAccountKey !== false) sshKeys.push('$USER[SSH_PUBLIC_KEY]')
-  const customKey = String(access.sshPublicKey ?? '').trim()
-  if (customKey) sshKeys.push(customKey)
+  if (osFamily === 'LINUX') {
+    if (access.useAccountKey !== false) sshKeys.push('$USER[SSH_PUBLIC_KEY]')
+    const customKey = String(access.sshPublicKey ?? '').trim()
+    if (customKey) sshKeys.push(customKey)
+  }
 
   if (sshKeys.length) context.SSH_PUBLIC_KEY = [...new Set(sshKeys)].join('\n')
   else delete context.SSH_PUBLIC_KEY
@@ -186,6 +191,7 @@ export const buildLayerSentryGuestContext = (
  *
  * @param {object} template - Filtered OpenNebula VM template body
  * @param {object} access - LayerSentry access form values
+ * @param {object} sourceTemplate - Authoritative source VM template
  * @returns {object} Template with customer-safe defaults
  */
 export const applyLayerSentryVmDefaults = (
@@ -326,9 +332,7 @@ const networkTemplate = (network = {}) => network?.TEMPLATE ?? {}
  * @returns {string} Published environment or blank
  */
 export const getLayerSentryNetworkEnvironment = (network = {}) =>
-  normalized(
-    networkTemplate(network)?.LAYERSENTRY_ENVIRONMENT
-  ).toUpperCase()
+  normalized(networkTemplate(network)?.LAYERSENTRY_ENVIRONMENT).toUpperCase()
 
 /**
  * Check whether a provider VNet is eligible for a workload environment.

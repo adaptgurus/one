@@ -66,7 +66,8 @@ const Steps = createSteps(
           view,
           ...rest,
         }),
-      selfService && (() => AccessConfiguration()),
+      selfService &&
+        (() => AccessConfiguration({ vmTemplate: dataTemplateExtended })),
       selfService &&
         (() => CloudResources({ vmTemplate: dataTemplateExtended })),
       selfService &&

@@ -103,7 +103,7 @@ test('provider managed OneKS and virtual-router templates never enter VM create'
   )
 })
 
-test('guest access defaults never emit a plain-text password', () => {
+test('Linux guest access is root-only and never emits a plain-text password', () => {
   const context = api.buildLayerSentryGuestContext(
     {
       NETWORK: 'NO',
@@ -119,7 +119,7 @@ test('guest access defaults never emit a plain-text password', () => {
     }
   )
 
-  assert.equal(context.USERNAME, 'clouduser')
+  assert.equal(context.USERNAME, 'root')
   assert.equal(context.NETWORK, 'YES')
   assert.equal(context.SET_HOSTNAME, '$NAME')
   assert.equal(context.GROW_FS, '/')
@@ -132,6 +132,27 @@ test('guest access defaults never emit a plain-text password', () => {
   )
   assert.match(context.SSH_PUBLIC_KEY, /\$USER\[SSH_PUBLIC_KEY\]/)
   assert.match(context.SSH_PUBLIC_KEY, /ssh-ed25519 AAAATEST/)
+})
+
+test('Windows guest access is Administrator-only and rejects Linux SSH context', () => {
+  const context = api.buildLayerSentryGuestContext(
+    { SSH_PUBLIC_KEY: 'stale-key' },
+    {
+      username: 'forged-user',
+      password: 'CorrectHorseBatteryStaple!',
+      useAccountKey: true,
+      sshPublicKey: 'ssh-ed25519 AAAATEST user@example',
+    },
+    { NAME: 'Windows Server 2025' }
+  )
+
+  assert.equal(context.USERNAME, 'Administrator')
+  assert.equal(context.SSH_PUBLIC_KEY, undefined)
+  assert.equal(context.PASSWORD, undefined)
+  assert.equal(
+    Buffer.from(context.PASSWORD_BASE64, 'base64').toString('utf8'),
+    'CorrectHorseBatteryStaple!'
+  )
 })
 
 test('blank password removes inherited password and defaults username to root', () => {
@@ -569,6 +590,30 @@ test('cloud instantiate flow is customer-only and strips helper data', () => {
   assert.match(instantiate, /delete requestTemplate\.resources/)
   assert.match(instantiate, /delete requestTemplate\.services/)
   assert.match(instantiate, /delete requestTemplate\.review/)
+})
+
+test('VM access step is OS-specific and never exposes an editable account name', () => {
+  const schema = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/AccessConfiguration/schema.js'
+    ),
+    'utf8'
+  )
+  const step = readFileSync(
+    resolve(
+      __dirname,
+      '../../src/modules/resources/VmTemplate/Forms/InstantiateForm/Steps/AccessConfiguration/index.js'
+    ),
+    'utf8'
+  )
+
+  assert.match(schema, /getLayerSentryGuestOsFamily/)
+  assert.match(schema, /'Administrator' : 'root'/)
+  assert.match(schema, /type: INPUT_TYPES\.HIDDEN/)
+  assert.match(schema, /!windows \? \[USE_ACCOUNT_KEY, SSH_PUBLIC_KEY\] : \[\]/)
+  assert.match(step, /Windows Administrator account/)
+  assert.match(step, /Configure root access/)
 })
 
 test('VM create review summarizes choices without rendering secrets', () => {

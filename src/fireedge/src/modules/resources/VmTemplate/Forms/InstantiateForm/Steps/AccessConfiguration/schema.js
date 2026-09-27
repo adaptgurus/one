@@ -16,36 +16,53 @@
 import { boolean, object, string } from 'yup'
 
 import { INPUT_TYPES } from '@ConstantsModule'
-import { getValidationFromFields } from '@UtilsModule'
+import {
+  getLayerSentryGuestOsFamily,
+  getValidationFromFields,
+} from '@UtilsModule'
 
-const USERNAME = {
-  name: 'username',
-  label: 'Guest username',
-  tooltip: 'Linux account that receives the password and SSH key.',
-  type: INPUT_TYPES.TEXT,
-  validation: string()
-    .trim()
-    .matches(/^[a-z_][a-z0-9_-]{0,31}$/i, 'Enter a valid Linux username')
-    .required()
-    .default(() => 'root'),
-  grid: { md: 6 },
+const USERNAME = (vmTemplate) => {
+  const windows = getLayerSentryGuestOsFamily(vmTemplate) === 'WINDOWS'
+  const account = windows ? 'Administrator' : 'root'
+
+  return {
+    name: 'username',
+    label: windows ? 'Windows account' : 'Linux account',
+    tooltip: `LayerSentry provisions only the ${account} account for this image.`,
+    type: INPUT_TYPES.HIDDEN,
+    validation: string()
+      .oneOf([account])
+      .required()
+      .default(() => account),
+    grid: { md: 6 },
+  }
 }
 
-const PASSWORD = {
-  name: 'password',
-  label: 'Guest password (optional)',
-  tooltip: 'Stored in the VM context as PASSWORD_BASE64, never as plain text.',
-  type: INPUT_TYPES.PASSWORD,
-  validation: string()
-    .max(128)
-    .notRequired()
-    .default(() => ''),
-  grid: { md: 6 },
+const PASSWORD = (vmTemplate) => {
+  const windows = getLayerSentryGuestOsFamily(vmTemplate) === 'WINDOWS'
+
+  return {
+    name: 'password',
+    label: windows
+      ? 'Administrator password (optional)'
+      : 'Root password (optional)',
+    tooltip:
+      'Used only for first-boot contextualization and never rendered in Review.',
+    type: INPUT_TYPES.PASSWORD,
+    validation: string()
+      .max(128)
+      .notRequired()
+      .default(() => ''),
+    grid: { md: 6 },
+  }
 }
 
-const CONFIRM_PASSWORD = {
+const CONFIRM_PASSWORD = (vmTemplate) => ({
   name: 'confirmPassword',
-  label: 'Confirm guest password',
+  label:
+    getLayerSentryGuestOsFamily(vmTemplate) === 'WINDOWS'
+      ? 'Confirm Administrator password'
+      : 'Confirm root password',
   type: INPUT_TYPES.PASSWORD,
   validation: string()
     .max(128)
@@ -55,7 +72,7 @@ const CONFIRM_PASSWORD = {
     })
     .default(() => ''),
   grid: { md: 6 },
-}
+})
 
 const USE_ACCOUNT_KEY = {
   name: 'useAccountKey',
@@ -81,12 +98,28 @@ const SSH_PUBLIC_KEY = {
   grid: { md: 12 },
 }
 
-export const FIELDS = [
-  USERNAME,
-  PASSWORD,
-  CONFIRM_PASSWORD,
-  USE_ACCOUNT_KEY,
-  SSH_PUBLIC_KEY,
-]
+/**
+ * Build fields for the guest family published by the source template.
+ *
+ * @param {object} vmTemplate - Authoritative source VM template
+ * @returns {object[]} Guest access fields
+ */
+export const FIELDS = (vmTemplate = {}) => {
+  const windows = getLayerSentryGuestOsFamily(vmTemplate) === 'WINDOWS'
 
-export const SCHEMA = object(getValidationFromFields(FIELDS))
+  return [
+    USERNAME(vmTemplate),
+    PASSWORD(vmTemplate),
+    CONFIRM_PASSWORD(vmTemplate),
+    ...(!windows ? [USE_ACCOUNT_KEY, SSH_PUBLIC_KEY] : []),
+  ]
+}
+
+/**
+ * Build validation for the OS-specific access form.
+ *
+ * @param {object} vmTemplate - Authoritative source VM template
+ * @returns {object} Yup object schema
+ */
+export const SCHEMA = (vmTemplate = {}) =>
+  object(getValidationFromFields(FIELDS(vmTemplate)))
