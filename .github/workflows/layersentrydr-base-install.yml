@@ -11,7 +11,7 @@ permissions:
 
 concurrency:
   group: layersentrydr-base-install
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   install:
@@ -30,6 +30,7 @@ jobs:
           if [ "${RUNNER_NAME:-}" != "layersentrydr" ]; then
             echo "target=false" >> "$GITHUB_OUTPUT"
             echo "SAFE_SKIP_WRONG_RUNNER=${RUNNER_NAME:-unknown}"
+            echo 'NOT_EXECUTED: this job is not DR deployment evidence.' >> "$GITHUB_STEP_SUMMARY"
             exit 0
           fi
           echo "target=true" >> "$GITHUB_OUTPUT"
@@ -60,88 +61,53 @@ jobs:
           ONE_DEPLOY_SHA: 361df79c154b691aaf8a89cbcfe1864d75543ec0
         run: |
           set -euo pipefail
+          umask 077
           export PATH="/usr/local/bin:$PATH"
-          mkdir -p /var/lib/layersentry
+          mkdir -p /var/lib/layersentry /var/log/layersentrydr
           exec 9>/var/lock/layersentry-dr-base-install.lock
-          flock -x 9
+          flock -n 9 || { echo "BLOCKED_INSTALL_ALREADY_RUNNING"; exit 48; }
           if [ -f /var/lib/layersentry/.dr-base-install-complete ]; then
-            echo "BASE_INSTALL_ALREADY_COMPLETE"
+            echo "BASE_INSTALL_ALREADY_COMPLETE_REVERIFY_REQUIRED"
             exit 0
           fi
-          export DNF_YUM_AUTO_YES=1
           mkdir -p /opt/layersentry /etc/layersentry /root/.layersentry-secrets
           chmod 700 /root/.layersentry-secrets
-
-          dnf -y install epel-release git make python3 python3-pip openssl rsync jq curl tar
-          dnf -y install 'dnf-command(config-manager)' || true
-          dnf config-manager --set-enabled crb || true
-
           if [ ! -d /opt/layersentry/one-deploy/.git ]; then
-            git clone https://github.com/adaptgurus/one-deploy.git /opt/layersentry/one-deploy
+            echo "BLOCKED_EXPECTED_PINNED_CHECKOUT_MISSING"
+            exit 49
           fi
           cd /opt/layersentry/one-deploy
-          git fetch --force origin "$ONE_DEPLOY_SHA"
-          git checkout --detach "$ONE_DEPLOY_SHA"
-          test "$(git rev-parse HEAD)" = "$ONE_DEPLOY_SHA"
-
-          cat >/etc/layersentry/dr-poc.yml <<'YAML'
-          ---
-          all:
-            vars:
-              env_name: layersentry-dr-poc
-              ansible_user: root
-              ansible_connection: local
-              ansible_python_interpreter: /usr/bin/python3
-              ensure_keys_for: [root]
-              ensure_hosts: true
-              one_version: '7.4'
-              db_backend: MariaDB
-              features:
-                gate: true
-                flow: true
-                form: false
-                gui: true
-                prometheus: false
-                ceph: false
-                evpn: false
-              ds:
-                mode: ssh
-              vn: {}
-          frontend:
-            hosts:
-              dr1:
-                ansible_host: 172.17.60.40
-                ansible_connection: local
-          node:
-            hosts:
-              dr1:
-                ansible_host: 172.17.60.40
-                ansible_connection: local
-          YAML
-          chmod 600 /etc/layersentry/dr-poc.yml
-
-          if [ ! -s /root/.layersentry-secrets/oneadmin.pw ]; then
-            umask 077
-            openssl rand -base64 30 | tr -d '\n' > /root/.layersentry-secrets/oneadmin.pw
-          fi
-          if [ ! -s /root/.layersentry-secrets/db.pw ]; then
-            umask 077
-            openssl rand -base64 30 | tr -d '\n' > /root/.layersentry-secrets/db.pw
-          fi
-          ONE_PASS="$(cat /root/.layersentry-secrets/oneadmin.pw)"
-          DB_PASS="$(cat /root/.layersentry-secrets/db.pw)"
-          cat >/root/.layersentry-secrets/ansible-extra.yml <<EOF
-          one_pass: "${ONE_PASS}"
-          db_password: "${DB_PASS}"
-          EOF
-          chmod 600 /root/.layersentry-secrets/ansible-extra.yml
-
-          make HATCH_BIN= requirements
-          ansible-playbook -v \
-            -i /etc/layersentry/dr-poc.yml \
-            -e @/root/.layersentry-secrets/ansible-extra.yml \
-            opennebula.deploy.main
-          touch /var/lib/layersentry/.dr-base-install-complete
+          test "$(git rev-parse HEAD)" = "$ONE_DEPLOY_SHA" || { echo "BLOCKED_SOURCE_DRIFT"; exit 50; }
+          test -z "$(git status --porcelain --untracked-files=no)" || { echo "BLOCKED_TRACKED_SOURCE_CHANGES"; exit 51; }
+          test -s /etc/layersentry/dr-poc.yml
+          test -s /root/.layersentry-secrets/ansible-extra.yml
+          # The local collection path in ansible.cfg hid dependencies installed under /root.
+          # Use an isolated compatible override and retain both native and existing collection roots.
+          export ANSIBLE_COLLECTIONS_PATH="$PWD/.dr-collections:$PWD/ansible_collections:/root/.ansible/collections:/usr/share/ansible/collections"
+          export ANSIBLE_HOST_KEY_CHECKING=True
+          ansible --version
+          ansible-galaxy collection install 'community.general:==10.7.0' -p "$PWD/.dr-collections"
+          ansible-doc -t module ansible.posix.authorized_key >/dev/null
+          ansible-doc -t module community.mysql.mysql_db >/dev/null
+          ansible-playbook --syntax-check -i /etc/layersentry/dr-poc.yml -e @/root/.layersentry-secrets/ansible-extra.yml opennebula.deploy.main
+          echo "ANSIBLE_COLLECTION_AND_SYNTAX_PREFLIGHT=PASS"
+          # Keep raw task output local; it can contain generated credentials.
+          LOG="/var/log/layersentrydr/base-${GITHUB_RUN_ID}-${GITHUB_JOB}.log"
+          set +e
+          ansible-playbook -i /etc/layersentry/dr-poc.yml -e @/root/.layersentry-secrets/ansible-extra.yml opennebula.deploy.main >"$LOG" 2>&1
+          rc=$?
+          set -e
+          LOG_PATH="$LOG" python3 - <<'PY'
+          import os,re,pathlib,yaml
+          text=pathlib.Path(os.environ['LOG_PATH']).read_text(errors='replace')
+          secrets=yaml.safe_load(pathlib.Path('/root/.layersentry-secrets/ansible-extra.yml').read_text()) or {}
+          for value in secrets.values():
+              if isinstance(value,str) and len(value)>4:
+                  text=text.replace(value,'[REDACTED]')
+          text=re.sub(r'(?i)(password|token|secret|one_pass)([\s\"\x27:=]+)[^\s,}\"\x27]+',r'\1\2[REDACTED]',text)
+          print('\n'.join(text.splitlines()[-70:]))
+          PY
+          test "$rc" -eq 0 || { echo "BASE_INSTALL_FAILED_RC=$rc"; exit "$rc"; }
 
       - name: Verify base deployment
         if: steps.bind.outputs.target == 'true'
@@ -149,14 +115,13 @@ jobs:
         run: |
           set -euo pipefail
           rpm -qa | grep '^opennebula' | sort
-          systemctl is-active opennebula
-          systemctl is-active opennebula-scheduler
-          systemctl is-active opennebula-fireedge
-          systemctl is-active opennebula-flow
-          systemctl is-active opennebula-gate
+          systemctl is-active opennebula opennebula-scheduler opennebula-fireedge opennebula-flow opennebula-gate
           su - oneadmin -s /bin/bash -c 'onehost list'
           su - oneadmin -s /bin/bash -c 'onecluster list'
           su - oneadmin -s /bin/bash -c 'onedatastore list'
           su - oneadmin -s /bin/bash -c 'onevnet list'
           virsh -r -c qemu:///system list --all
+          getenforce
+          touch /var/lib/layersentry/.dr-base-install-complete
           echo "LAYERSENTRY_DR_BASE=LIVE_VERIFIED"
+          echo 'Base services verified on layersentrydr only. Six-VM Raft/MySQL topology and production qualification remain separate pending gates.' >> "$GITHUB_STEP_SUMMARY"
