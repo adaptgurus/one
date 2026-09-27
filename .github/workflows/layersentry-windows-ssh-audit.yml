@@ -100,6 +100,19 @@ jobs:
           & ssh-keygen.exe -F '172.17.60.40' -f $known *> $null
           if ($LASTEXITCODE -ne 0) { throw 'Pinned DR host key readback failed' }
 
+      - name: Report the existing bootstrap public key
+        if: steps.target.outputs.eligible == 'true'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $publicKey = 'C:\ProgramData\LayerSentryLab\seven-node-bootstrap\deploy_ed25519.pub'
+          if (-not (Test-Path -LiteralPath $publicKey -PathType Leaf)) { throw 'Bootstrap public key is absent' }
+          $line = (Get-Content -LiteralPath $publicKey -Raw).Trim()
+          if ($line -notmatch '^ssh-ed25519 [A-Za-z0-9+/=]+(?: .*)?$') { throw 'Bootstrap public key format is invalid' }
+          & ssh-keygen.exe -lf $publicKey -E sha256
+          if ($LASTEXITCODE -ne 0) { throw 'Bootstrap public key fingerprint failed' }
+          Write-Output "DR_BOOTSTRAP_PUBLIC_KEY=$line"
+
       - name: Test the retained key against exact DR identity
         if: steps.target.outputs.eligible == 'true'
         shell: powershell
