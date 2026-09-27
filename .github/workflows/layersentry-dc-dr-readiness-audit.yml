@@ -259,13 +259,32 @@ jobs:
           vm_id="$1"
           vm_ip="$2"
           guest_pub_b64="$3"
-          read -r observed_name observed_state observed_lcm observed_ip deploy_id hypervisor network_mask gateway < <(
-            sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",r.findtext("LCM_STATE") or "",r.findtext("TEMPLATE/NIC/IP") or "",r.findtext("DEPLOY_ID") or "",r.findtext("HISTORY_RECORDS/HISTORY/HOSTNAME") or "",r.findtext("TEMPLATE/NIC/NETWORK_MASK") or "",r.findtext("TEMPLATE/NIC/GATEWAY") or "")'
+          mapfile -t vm_fields < <(
+            sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","LCM_STATE","TEMPLATE/NIC/IP","DEPLOY_ID","HISTORY_RECORDS/HISTORY/HOSTNAME","TEMPLATE/NIC/NETWORK_ID","TEMPLATE/NIC/NETWORK_MASK","TEMPLATE/NIC/GATEWAY")],sep="\\n")'
           )
+          test "${#vm_fields[@]}" -eq 9
+          observed_name="${vm_fields[0]}"
+          observed_state="${vm_fields[1]}"
+          observed_lcm="${vm_fields[2]}"
+          observed_ip="${vm_fields[3]}"
+          deploy_id="${vm_fields[4]}"
+          hypervisor="${vm_fields[5]}"
+          network_id="${vm_fields[6]}"
+          network_mask="${vm_fields[7]}"
+          gateway="${vm_fields[8]}"
           test "$observed_name" = ls-dr-v2-qual-alpine-20260928
           test "$observed_state" = 3 && test "$observed_lcm" = 3
           test "$observed_ip" = "$vm_ip"
-          test -n "$deploy_id" && test -n "$hypervisor" && test -n "$network_mask" && test -n "$gateway"
+          test -n "$deploy_id" && test -n "$hypervisor" && test -n "$network_id"
+          if test -z "$network_mask" || test -z "$gateway"; then
+            mapfile -t network_fields < <(
+              sudo -n -u oneadmin onevnet show "$network_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("TEMPLATE/NETWORK_MASK","TEMPLATE/GATEWAY")],sep="\\n")'
+            )
+            test "${#network_fields[@]}" -eq 2
+            test -n "$network_mask" || network_mask="${network_fields[0]}"
+            test -n "$gateway" || gateway="${network_fields[1]}"
+          fi
+          test -n "$network_mask" && test -n "$gateway"
           prefix="$(python3 -c 'import ipaddress,sys; print(ipaddress.IPv4Network("0.0.0.0/"+sys.argv[1]).prefixlen)' "$network_mask")"
           test "$prefix" -ge 8 && test "$prefix" -le 30
           sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" 'bash -s --' \
