@@ -1,3 +1,18 @@
+/* ------------------------------------------------------------------------- *
+ * Copyright 2002-2026, OpenNebula Project, OpenNebula Systems               *
+ *                                                                           *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may   *
+ * not use this file except in compliance with the License. You may obtain   *
+ * a copy of the License at                                                  *
+ *                                                                           *
+ * http://www.apache.org/licenses/LICENSE-2.0                                *
+ *                                                                           *
+ * Unless required by applicable law or agreed to in writing, software       *
+ * distributed under the License is distributed on an "AS IS" BASIS,         *
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.  *
+ * See the License for the specific language governing permissions and       *
+ * limitations under the License.                                            *
+ * ------------------------------------------------------------------------- */
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const fs = require('node:fs')
@@ -25,12 +40,14 @@ test('KubeOne proxy preserves server-side identity and bounded typed routes', ()
 })
 
 test('KubeOne manager exposes health, namespace, access and bounded registered-worker reconciliation', () => {
-  const workspace = read('src/client/apps/layersentry/pages/KubernetesWorkspace.js')
+  const workspace = read(
+    'src/client/apps/layersentry/pages/KubernetesWorkspace.js'
+  )
 
   assert.match(workspace, /API ready/)
   assert.match(workspace, /Create namespace/)
   assert.match(workspace, /Download kubeconfig/)
-  assert.match(workspace, /Create KubeOne cluster/)
+  assert.match(workspace, /Create Kubernetes cluster/)
   assert.match(workspace, /provider-approved control-plane hosts/)
   assert.match(workspace, /Join only workers already present/)
   assert.match(workspace, /useProvisionKubeOneClusterMutation/)
@@ -42,12 +59,14 @@ test('KubeOne manager exposes health, namespace, access and bounded registered-w
   assert.match(workspace, /no provider-qualified GPU or vGPU profile/)
 })
 
-
-test('LayerSentry Kubernetes workspace does not route lifecycle through OneKS', () => {
-  const workspace = read('src/client/apps/layersentry/pages/KubernetesWorkspace.js')
+test('LayerSentry Kubernetes workspace keeps provider brands out of presentation', () => {
+  const workspace = read(
+    'src/client/apps/layersentry/pages/KubernetesWorkspace.js'
+  )
   const kubeOneApi = read('src/modules/features/OneApi/kubeOnePortal.js')
 
-  assert.match(workspace, /KubeOne-owned clusters/)
+  assert.match(workspace, /Manage LayerSentry Kubernetes clusters/)
+  assert.doesNotMatch(workspace, />[^<{]*(KubeOne|OneKS)[^<{]*</i)
   assert.doesNotMatch(workspace, /OneKsAPI|ONEKS|oneks/i)
   assert.doesNotMatch(kubeOneApi, /OneKsAPI|\/oneks/)
 })

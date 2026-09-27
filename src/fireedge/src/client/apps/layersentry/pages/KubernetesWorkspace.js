@@ -205,11 +205,11 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
 
       {!cluster.provisioned && (
         <Surface sx={{ p: 2 }}>
-          <Typography variant="h6">Create KubeOne cluster</Typography>
+          <Typography variant="h6">Create Kubernetes cluster</Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-            Provision this server-approved KubeOne plan. Control-plane and
+            Provision this LayerSentry-approved cluster plan. Control-plane and
             worker hosts, endpoint, Kubernetes version, SSH identity, and
-            manifest are fixed by the provider; the browser cannot submit
+            manifest are fixed by the platform; the browser cannot submit
             arbitrary hosts or shell commands.
           </Typography>
           {!cluster.provisionable ? (
@@ -259,7 +259,7 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
           <Typography variant="h6">Control plane</Typography>
           <Typography color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
             Add only provider-approved control-plane hosts already declared in
-            this cluster&apos;s KubeOne manifest. Final production topology
+            this cluster&apos;s approved manifest. Final production topology
             stays odd and quorum-safe.
           </Typography>
           <Button
@@ -372,7 +372,7 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
           <Typography variant="h6">Applications</Typography>
           <Typography color="text.secondary" sx={{ mb: 2 }}>
             Install only LayerSentry-qualified applications on this selected
-            KubeOne cluster. Helm repository, chart, version, namespace, and
+            Kubernetes cluster. Helm repository, chart, version, namespace, and
             values are fixed by the server catalog.
           </Typography>
           {applications.isLoading ? (
@@ -476,7 +476,7 @@ const ClusterManager = ({ cluster, profiles, canMutate }) => {
         <Surface sx={{ p: 2 }}>
           <Typography variant="h6">Add worker</Typography>
           <Typography color="text.secondary" sx={{ mb: 2 }}>
-            Join only workers already present in the provider-qualified KubeOne
+            Join only workers already present in the LayerSentry-qualified
             topology. Arbitrary IP addresses, SSH commands, and unmanaged worker
             definitions are not accepted.
           </Typography>
@@ -582,7 +582,7 @@ const KubernetesWorkspace = ({ endpoints }) => {
   return (
     <PageFrame
       title="Kubernetes"
-      description="Manage KubeOne-owned clusters through typed, tenant-scoped operations."
+      description="Manage LayerSentry Kubernetes clusters through typed, tenant-scoped operations."
       actions={
         <Button
           variant="outlined"
@@ -597,11 +597,11 @@ const KubernetesWorkspace = ({ endpoints }) => {
         <LinearProgress />
       ) : query.isError ? (
         <Alert severity="error">
-          KubeOne management service is unavailable.
+          Kubernetes management service is unavailable.
         </Alert>
       ) : clusters.length === 0 ? (
         <Alert severity="info">
-          No KubeOne cluster is registered for this tenant.
+          No Kubernetes cluster is registered for this tenant.
         </Alert>
       ) : (
         <Stack spacing={2}>

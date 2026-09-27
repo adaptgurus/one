@@ -115,6 +115,8 @@ test('bare FireEdge redirects to LayerSentry and native Sunstone is not the defa
     /res\.redirect\(`\/\$\{defaultAppName\}\/sunstone`\)/
   )
   assert.match(entrypoint, /requestedAppName \|\| 'layersentry'/)
+  assert.match(entrypoint, /<div id="root"><\/div>/)
+  assert.doesNotMatch(entrypoint, /<div id="root"\s*\/>/)
   assert.match(bootstrap, /requestedApp === 'sunstone'/)
   assert.match(bootstrap, /import\('client\/layersentry'\)/)
   assert.match(appRoot, /safeProductRedirect/)

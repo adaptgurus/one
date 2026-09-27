@@ -161,7 +161,7 @@ const Overview = ({ endpoints }) => {
     canViewKubernetes && {
       label: 'Kubernetes',
       value: countKubeOneClusters(kubernetes),
-      detail: 'KubeOne-managed clusters',
+      detail: 'LayerSentry-managed clusters',
       icon: XrayView,
       accent: colors.kubernetes,
     },
@@ -198,7 +198,7 @@ const Overview = ({ endpoints }) => {
     canViewKubernetes && [
       'Kubernetes',
       kubernetes,
-      'Cluster lifecycle is managed by OneKS.',
+      'Cluster lifecycle is managed by LayerSentry.',
     ],
     canViewProtection && [
       'Protection',

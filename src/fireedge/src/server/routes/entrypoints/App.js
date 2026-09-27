@@ -128,7 +128,7 @@ router.get('*', async (req, res) => {
       <meta http-equiv="X-UA-Compatible" content="ie=edge">
     </head>
     <body>
-      <div id="root"/>
+      <div id="root"></div>
       ${storeRender}
       ${config}
       ${requestTimeOut}

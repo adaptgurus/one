@@ -293,7 +293,7 @@ const waitForClientMount = () =>
   new Promise((resolve, reject) => {
     window.setTimeout(() => {
       const root = document.getElementById('root')
-      root?.hasChildNodes()
+      root?.childElementCount > 0
         ? resolve()
         : reject(new Error('FireEdge client did not mount into #root'))
     }, CLIENT_MOUNT_SETTLE_MS)

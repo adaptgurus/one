@@ -40,12 +40,12 @@ let browser
     '/undefined/',
   ]) {
     await page.goto(`${baseUrl}${path}`, { waitUntil: 'networkidle' })
-    await page.locator('body').waitFor({ state: 'visible' })
+    await page.locator('#root > *').first().waitFor({ state: 'visible' })
     const text = (await page.locator('body').innerText()).trim()
     assert.ok(text.length > 20, `${path || '/'} rendered a blank page`)
     assert.doesNotMatch(
       text,
-      /OpenNebula|Sunstone/i,
+      /OpenNebula|Sunstone|KubeOne|OneKS/i,
       `${path || '/'} leaked provider branding`
     )
     assert.doesNotMatch(
