@@ -86,6 +86,7 @@ const assertProductPage = async (page, label) => {
   const overview = await assertProductPage(page, `${role} overview`)
   assert.match(overview, /LayerSentry/)
   assert.match(overview, /Compute/)
+  assert.match(overview, /Kubernetes/)
   assert.match(overview, /Storage/)
   assert.match(overview, /Network/)
   assert.match(overview, /Protection/)
@@ -103,6 +104,7 @@ const assertProductPage = async (page, label) => {
 
   for (const path of [
     '/layersentry/compute',
+    '/layersentry/kubernetes',
     '/layersentry/storage',
     '/layersentry/network',
     '/layersentry/protection/backup-plans',
