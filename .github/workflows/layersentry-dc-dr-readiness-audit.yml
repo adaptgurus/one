@@ -267,7 +267,7 @@ jobs:
           guest_pub_b64="$3"
           qga_stage=vm_inventory
           mapfile -t vm_fields < <(
-            sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","LCM_STATE","TEMPLATE/NIC/IP","DEPLOY_ID","HISTORY_RECORDS/HISTORY/HOSTNAME","TEMPLATE/NIC/NETWORK_ID","TEMPLATE/NIC/NETWORK_MASK","TEMPLATE/NIC/GATEWAY")],sep="\\n")'
+            sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","LCM_STATE","TEMPLATE/NIC/IP","DEPLOY_ID","HISTORY_RECORDS/HISTORY/HOSTNAME","TEMPLATE/NIC/NETWORK_ID","TEMPLATE/NIC/NETWORK_MASK","TEMPLATE/NIC/GATEWAY")],sep="\n")'
           )
           qga_stage=vm_field_count
           test "${#vm_fields[@]}" -eq 9
@@ -290,7 +290,7 @@ jobs:
           if test -z "$network_mask" || test -z "$gateway"; then
             qga_stage=vnet_inventory
             mapfile -t network_fields < <(
-              sudo -n -u oneadmin onevnet show "$network_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("TEMPLATE/NETWORK_MASK","TEMPLATE/GATEWAY")],sep="\\n")'
+              sudo -n -u oneadmin onevnet show "$network_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("TEMPLATE/NETWORK_MASK","TEMPLATE/GATEWAY")],sep="\n")'
             )
             test "${#network_fields[@]}" -eq 2
             test -n "$network_mask" || network_mask="${network_fields[0]}"
