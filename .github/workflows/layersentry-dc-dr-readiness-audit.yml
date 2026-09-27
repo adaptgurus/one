@@ -192,6 +192,7 @@ jobs:
           DEV_PREFIX = "vd"
           DESCRIPTION = "Disposable LayerSentry Replication v2 qualification data disk"
           IMAGE
+            chmod 0644 "$image_template"
             data_id="$(sudo -n -u oneadmin oneimage create -d 1 "$image_template")"
           fi
           for _ in $(seq 1 120); do
@@ -216,6 +217,7 @@ jobs:
           OS = [ ARCH = "x86_64", MACHINE = "q35" ]
           CONTEXT = [ NETWORK = "YES", NETCFG_TYPE = "nm", SET_HOSTNAME = "$vm_name", GROW_FS = "/", SSH_PUBLIC_KEY = "$guest_pub" ]
           VM
+            chmod 0644 "$vm_template"
             template_id="$(sudo -n -u oneadmin onetemplate create "$vm_template")"
             vm_id="$(sudo -n -u oneadmin onetemplate instantiate "$template_id" --name "$vm_name")"
           fi
