@@ -1,0 +1,73 @@
+name: LayerSentry DR Resume Audit
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentrydr-resume-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3, 4]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind exact DR target
+        id: bind
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${RUNNER_NAME:-}" != layersentrydr ]; then
+            echo 'target=false' >> "$GITHUB_OUTPUT"
+            echo 'NOT_EXECUTED_WRONG_RUNNER'
+            exit 0
+          fi
+          test "$(id -u)" -eq 0
+          test "$(hostname -s)" = layersentrydr
+          ip -4 addr show dev enp6s18 | grep -qE '(^|[[:space:]])172\.17\.60\.40/26([[:space:]]|$)'
+          echo 'target=true' >> "$GITHUB_OUTPUT"
+
+      - name: Read-only continuation inventory
+        if: steps.bind.outputs.target == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "RUNNER_NAME=$RUNNER_NAME"
+          echo "HOSTNAME=$(hostname -s)"
+          echo "EXECUTION_UID=$(id -u)"
+          echo "OS=$(source /etc/os-release; printf '%s %s' "$NAME" "$VERSION_ID")"
+          echo "SSH_HOST_ED25519=$(ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub | awk '{print $2" "$3}')"
+          findmnt -n -o FSTYPE,SIZE,AVAIL /var/lib/one/datastores
+          getenforce
+          for unit in opennebula opennebula-fireedge opennebula-flow opennebula-gate frr; do
+            printf '%s=' "$unit"
+            systemctl is-active "$unit"
+          done
+          test "$(rpm -q --qf '%{VERSION}' opennebula)" = '7.4.1'
+          test -f /var/lib/layersentry/.dr-base-services-verified
+          grep -Eq "^host:[[:space:]]*['\"]?127\.0\.0\.1['\"]?[[:space:]]*$" /etc/one/fireedge-server.conf
+          grep -Eq '^port:[[:space:]]*2617[[:space:]]*$' /etc/one/fireedge-server.conf
+          curl --silent --fail --show-error --max-time 10 -o /dev/null -w 'FIREEDGE_HTTP_STATUS=%{http_code}\n' http://127.0.0.1:2617/fireedge/
+          ss -lnt '( sport = :2616 or sport = :2617 )'
+          vtysh -c 'show bgp l2vpn evpn summary'
+          su - oneadmin -s /bin/bash -c 'set -e; echo HOSTS; onehost list; echo VMS; onevm list; echo IMAGES; oneimage list; echo NETWORKS; onevnet list; echo DATASTORES; onedatastore list'
+          if [ -d /opt/layersentry/one-deploy/.git ]; then
+            git -C /opt/layersentry/one-deploy rev-parse HEAD
+            git -C /opt/layersentry/one-deploy status --short
+          else
+            echo 'ONE_DEPLOY_CHECKOUT=ABSENT'
+          fi
+          find /opt/layersentry -maxdepth 3 -type d -name .git -printf '%h\n' 2>/dev/null | sort
+          if GIT_TERMINAL_PROMPT=0 git ls-remote https://github.com/adaptgurus/layersentry-platform.git HEAD >/dev/null 2>&1; then
+            echo 'PRIVATE_INSTALLER_READ_ACCESS=AVAILABLE'
+          else
+            echo 'PRIVATE_INSTALLER_READ_ACCESS=UNAVAILABLE'
+          fi
+          echo 'DR_RESUME_AUDIT=READ_ONLY_COMPLETE'
