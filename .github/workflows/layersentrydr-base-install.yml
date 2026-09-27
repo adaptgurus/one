@@ -1,0 +1,136 @@
+name: LayerSentry DR Base Install
+
+on:
+  push:
+    branches: [ops/layersentrydr-probe-20260927]
+    paths:
+      - .github/workflows/layersentrydr-base-install.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentrydr-base-install
+  cancel-in-progress: false
+
+jobs:
+  install:
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 60
+    steps:
+      - name: Bind exact DR host and preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = "layersentrydr" || { echo "BLOCKED_WRONG_RUNNER"; exit 41; }
+          ip -4 addr show | grep -qE '(^|[[:space:]])172\.17\.60\.40/' || { echo "BLOCKED_WRONG_HOST"; exit 42; }
+          test "$(id -u)" -eq 0 || { echo "BLOCKED_NOT_ROOT"; exit 43; }
+          . /etc/os-release
+          test "$ID" = "almalinux" && [[ "$VERSION_ID" == 9.* ]] || { echo "BLOCKED_UNSUPPORTED_OS"; exit 44; }
+          test -c /dev/kvm || { echo "BLOCKED_NO_KVM"; exit 45; }
+          virsh -r -c qemu:///system capabilities >/dev/null
+          for b in br-cluster br-migrate br-backup br-storage br-vm; do
+            ip link show "$b" >/dev/null || { echo "BLOCKED_MISSING_BRIDGE:$b"; exit 46; }
+          done
+          findmnt -n -T /var/lib/one/datastores -o FSTYPE,SIZE,AVAIL,TARGET
+          AVAIL_GB=$(df -BG --output=avail /var/lib/one/datastores | tail -1 | tr -dc '0-9')
+          test "${AVAIL_GB:-0}" -ge 800 || { echo "BLOCKED_DATASTORE_CAPACITY"; exit 47; }
+          echo "DR_PREFLIGHT=PASS"
+
+      - name: Install LayerSentry OpenNebula base with pinned OneDeploy
+        shell: bash
+        env:
+          ONE_DEPLOY_SHA: 361df79c154b691aaf8a89cbcfe1864d75543ec0
+        run: |
+          set -euo pipefail
+          export DNF_YUM_AUTO_YES=1
+          mkdir -p /opt/layersentry /etc/layersentry /root/.layersentry-secrets
+          chmod 700 /root/.layersentry-secrets
+
+          dnf -y install epel-release git make python3 python3-pip openssl rsync jq curl tar
+          dnf -y install 'dnf-command(config-manager)' || true
+          dnf config-manager --set-enabled crb || true
+
+          if ! command -v hatch >/dev/null 2>&1; then
+            python3 -m pip install --quiet --disable-pip-version-check 'hatch==1.16.5'
+          fi
+
+          if [ ! -d /opt/layersentry/one-deploy/.git ]; then
+            git clone https://github.com/adaptgurus/one-deploy.git /opt/layersentry/one-deploy
+          fi
+          cd /opt/layersentry/one-deploy
+          git fetch --force origin "$ONE_DEPLOY_SHA"
+          git checkout --detach "$ONE_DEPLOY_SHA"
+          test "$(git rev-parse HEAD)" = "$ONE_DEPLOY_SHA"
+
+          cat >/etc/layersentry/dr-poc.yml <<'YAML'
+          ---
+          all:
+            vars:
+              env_name: layersentry-dr-poc
+              ansible_user: root
+              ansible_connection: local
+              ansible_python_interpreter: /usr/bin/python3
+              ensure_keys_for: [root]
+              ensure_hosts: true
+              one_version: '7.4'
+              db_backend: MariaDB
+              features:
+                gate: true
+                flow: true
+                form: false
+                gui: true
+                prometheus: false
+                ceph: false
+                evpn: false
+              ds:
+                mode: ssh
+              vn: {}
+          frontend:
+            hosts:
+              dr1:
+                ansible_host: 172.17.60.40
+                ansible_connection: local
+          node:
+            hosts:
+              dr1:
+                ansible_host: 172.17.60.40
+                ansible_connection: local
+          YAML
+          chmod 600 /etc/layersentry/dr-poc.yml
+
+          if [ ! -s /root/.layersentry-secrets/oneadmin.pw ]; then
+            umask 077
+            openssl rand -base64 30 | tr -d '\n' > /root/.layersentry-secrets/oneadmin.pw
+          fi
+          if [ ! -s /root/.layersentry-secrets/db.pw ]; then
+            umask 077
+            openssl rand -base64 30 | tr -d '\n' > /root/.layersentry-secrets/db.pw
+          fi
+          ONE_PASS="$(cat /root/.layersentry-secrets/oneadmin.pw)"
+          DB_PASS="$(cat /root/.layersentry-secrets/db.pw)"
+          cat >/root/.layersentry-secrets/ansible-extra.yml <<EOF
+          one_pass: "${ONE_PASS}"
+          db_password: "${DB_PASS}"
+          EOF
+          chmod 600 /root/.layersentry-secrets/ansible-extra.yml
+
+          make requirements
+          hatch env run -e default -- ansible-playbook -v             -i /etc/layersentry/dr-poc.yml             -e @/root/.layersentry-secrets/ansible-extra.yml             opennebula.deploy.main
+
+      - name: Verify base deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          rpm -qa | grep '^opennebula' | sort
+          systemctl is-active opennebula
+          systemctl is-active opennebula-scheduler
+          systemctl is-active opennebula-fireedge
+          systemctl is-active opennebula-flow
+          systemctl is-active opennebula-gate
+          su - oneadmin -s /bin/bash -c 'onehost list'
+          su - oneadmin -s /bin/bash -c 'onecluster list'
+          su - oneadmin -s /bin/bash -c 'onedatastore list'
+          su - oneadmin -s /bin/bash -c 'onevnet list'
+          virsh -r -c qemu:///system list --all
+          echo "LAYERSENTRY_DR_BASE=LIVE_VERIFIED"
