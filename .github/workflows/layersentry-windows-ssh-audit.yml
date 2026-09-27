@@ -148,20 +148,43 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $base = 'C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
           $key = Join-Path $base 'deploy_ed25519'
+          $savedPreference = $ErrorActionPreference
+          $ErrorActionPreference = 'Continue'
+          $dcScanRaw = @(& ssh-keyscan.exe -T 5 -t ed25519 172.17.60.30 2>$null)
+          $dcScanExit = $LASTEXITCODE
+          $ErrorActionPreference = $savedPreference
+          $dcScan = @($dcScanRaw | Where-Object { $_ -match '^172\.17\.60\.30 ssh-ed25519 ' })
+          if ($dcScanExit -ne 0 -or $dcScan.Count -ne 1) {
+            Write-Output 'DC_KEY_AUTH=NOT_TESTED reason=live_host_key_unavailable'
+            exit 0
+          }
+          $liveFingerprintText = ($dcScan | & ssh-keygen.exe -lf - -E sha256) -join "`n"
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot fingerprint live DC host key' }
+          $liveFingerprint = ([regex]::Match($liveFingerprintText, 'SHA256:[A-Za-z0-9+/]+')).Value
+          if (-not $liveFingerprint) { throw 'Live DC host-key digest is absent' }
+          Write-Output "DC_LIVE_HOST_KEY=$liveFingerprint"
           $known = $null
           foreach ($name in @('alma-known-hosts', 'known_hosts', 'readonly-known-hosts')) {
             $path = Join-Path $base $name
             if (Test-Path -LiteralPath $path -PathType Leaf) {
-              & ssh-keygen.exe -F '172.17.60.30' -f $path *> $null
-              if ($LASTEXITCODE -eq 0) { $known = $path; break }
+              $stored = @(& ssh-keygen.exe -F '172.17.60.30' -f $path 2>$null)
+              if ($LASTEXITCODE -eq 0) {
+                $storedFingerprintText = ($stored | & ssh-keygen.exe -lf - -E sha256) -join "`n"
+                $storedFingerprint = ([regex]::Match($storedFingerprintText, 'SHA256:[A-Za-z0-9+/]+')).Value
+                Write-Output "DC_STORED_HOST_KEY file=$name fingerprint=$storedFingerprint"
+                if ($LASTEXITCODE -eq 0 -and $storedFingerprint -eq $liveFingerprint) { $known = $path; break }
+              }
             }
           }
           if (-not $known) {
-            Write-Output 'DC_KEY_AUTH=NOT_TESTED reason=no_retained_trusted_host_entry'
+            Write-Output 'DC_KEY_AUTH=NOT_TESTED reason=no_matching_retained_trusted_host_entry'
             exit 0
           }
+          $ErrorActionPreference = 'Continue'
           $identity = & ssh.exe -i $key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" root@172.17.60.30 'hostname -s; id -u; ip -4 -o addr show' 2>&1
-          if ($LASTEXITCODE -ne 0) {
+          $identityExit = $LASTEXITCODE
+          $ErrorActionPreference = $savedPreference
+          if ($identityExit -ne 0) {
             Write-Output 'DC_KEY_AUTH=FAILED'
             $identity | Select-Object -Last 3
             exit 0
