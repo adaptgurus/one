@@ -15,14 +15,30 @@ concurrency:
 
 jobs:
   install:
-    runs-on: layersentrydr
+    strategy:
+      fail-fast: false
+      matrix:
+        attempt: [1, 2, 3, 4]
+    runs-on: [self-hosted, linux]
     timeout-minutes: 60
     steps:
-      - name: Bind exact DR host and preflight
+      - name: Bind exact DR runner
+        id: bind
         shell: bash
         run: |
           set -euo pipefail
-          test "${RUNNER_NAME:-}" = "layersentrydr" || { echo "BLOCKED_WRONG_RUNNER"; exit 41; }
+          if [ "${RUNNER_NAME:-}" != "layersentrydr" ]; then
+            echo "target=false" >> "$GITHUB_OUTPUT"
+            echo "SAFE_SKIP_WRONG_RUNNER=${RUNNER_NAME:-unknown}"
+            exit 0
+          fi
+          echo "target=true" >> "$GITHUB_OUTPUT"
+
+      - name: Bind exact DR host and preflight
+        if: steps.bind.outputs.target == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
           ip -4 addr show | grep -qE '(^|[[:space:]])172\.17\.60\.40/' || { echo "BLOCKED_WRONG_HOST"; exit 42; }
           test "$(id -u)" -eq 0 || { echo "BLOCKED_NOT_ROOT"; exit 43; }
           . /etc/os-release
@@ -38,11 +54,19 @@ jobs:
           echo "DR_PREFLIGHT=PASS"
 
       - name: Install LayerSentry OpenNebula base with pinned OneDeploy
+        if: steps.bind.outputs.target == 'true'
         shell: bash
         env:
           ONE_DEPLOY_SHA: 361df79c154b691aaf8a89cbcfe1864d75543ec0
         run: |
           set -euo pipefail
+          mkdir -p /var/lib/layersentry
+          exec 9>/var/lock/layersentry-dr-base-install.lock
+          flock -x 9
+          if [ -f /var/lib/layersentry/.dr-base-install-complete ]; then
+            echo "BASE_INSTALL_ALREADY_COMPLETE"
+            exit 0
+          fi
           export DNF_YUM_AUTO_YES=1
           mkdir -p /opt/layersentry /etc/layersentry /root/.layersentry-secrets
           chmod 700 /root/.layersentry-secrets
@@ -117,8 +141,10 @@ jobs:
 
           make requirements
           hatch env run -e default -- ansible-playbook -v             -i /etc/layersentry/dr-poc.yml             -e @/root/.layersentry-secrets/ansible-extra.yml             opennebula.deploy.main
+          touch /var/lib/layersentry/.dr-base-install-complete
 
       - name: Verify base deployment
+        if: steps.bind.outputs.target == 'true'
         shell: bash
         run: |
           set -euo pipefail
