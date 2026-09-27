@@ -61,13 +61,15 @@ import {
 } from 'client/apps/layersentry/components/Primitives'
 import { PRODUCT_PATHS } from 'client/apps/layersentry/navigation'
 import { colors } from 'client/apps/layersentry/theme/tokens'
+import {
+  eligibleSystemDatastores,
+  getLastVmHistory,
+  getTransferDriver,
+  migrationReadbackMatches,
+  validateStorageMigration,
+} from 'client/apps/layersentry/vmMigration'
 
 const toArray = (value) => (Array.isArray(value) ? value : value ? [value] : [])
-const getLastVmHistory = (vm) => {
-  const history = toArray(vm?.HISTORY_RECORDS?.HISTORY)
-
-  return history[history.length - 1] ?? {}
-}
 
 const COMPUTE_QUICK_ACTIONS = [
   {
@@ -191,13 +193,12 @@ const ComputeWorkspace = ({ endpoints }) => {
   const currentDatastore = allSystemDatastores.find(
     ({ ID }) => String(ID) === String(currentLocation?.DS_ID)
   )
-  const currentTransferDriver =
-    currentDatastore?.TM_MAD ?? currentDatastore?.TEMPLATE?.TM_MAD
-  const systemDatastores = allSystemDatastores.filter((datastore) => {
-    const transferDriver = datastore?.TM_MAD ?? datastore?.TEMPLATE?.TM_MAD
-
-    return !currentTransferDriver || transferDriver === currentTransferDriver
-  })
+  const currentTransferDriver = getTransferDriver(currentDatastore)
+  const systemDatastores = eligibleSystemDatastores(
+    allSystemDatastores,
+    currentDatastore,
+    liveStorageMove
+  )
   const availableHosts = toArray(hostQuery.data).filter(
     ({ STATE }) =>
       String(STATE) === '2' || String(STATE).toUpperCase() === 'MONITORED'
@@ -222,17 +223,18 @@ const ComputeWorkspace = ({ endpoints }) => {
 
   const moveVmStorage = async () => {
     if (!selectedVm?.ID || !targetHostId || !targetDatastoreId) return
-    if (String(currentLocation?.DS_ID) === String(targetDatastoreId)) {
-      setMigrationStatus(
-        'Choose a destination storage pool different from the current pool.'
-      )
-
-      return
-    }
-    if (liveStorageMove && String(selectedVm.STATE) !== '3') {
-      setMigrationStatus(
-        'Live storage migration requires a running virtual machine.'
-      )
+    const targetDatastore = allSystemDatastores.find(
+      ({ ID }) => String(ID) === String(targetDatastoreId)
+    )
+    const validationError = validateStorageMigration({
+      vm: selectedVm,
+      currentDatastore,
+      targetDatastore,
+      targetHostId,
+      live: liveStorageMove,
+    })
+    if (validationError) {
+      setMigrationStatus(validationError)
 
       return
     }
@@ -246,10 +248,32 @@ const ComputeWorkspace = ({ endpoints }) => {
         enforce: true,
         type: liveStorageMove ? 0 : 1,
       }).unwrap()
-      setMigrationStatus(
-        'The infrastructure service accepted the storage move. Completion is shown only after the refreshed VM location reports the destination pool.'
-      )
-      await query.refetch()
+      setMigrationStatus('Move accepted; waiting for authoritative readback…')
+      let confirmed = false
+      for (let attempt = 0; attempt < 8 && !confirmed; attempt += 1) {
+        if (attempt > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 1000))
+        }
+        const refreshed = await query.refetch()
+        const vm = toArray(refreshed?.data).find(
+          ({ ID }) => String(ID) === String(selectedVm.ID)
+        )
+        confirmed = migrationReadbackMatches(
+          vm,
+          targetHostId,
+          targetDatastoreId
+        )
+      }
+      if (confirmed) {
+        const message =
+          'Storage move confirmed by the authoritative VM location readback.'
+        setMigrationStatus(message)
+        enqueueSuccess(message)
+      } else {
+        setMigrationStatus(
+          'Move remains UNKNOWN: the request was accepted, but authoritative location readback has not confirmed the destination.'
+        )
+      }
     } catch (error) {
       const message =
         error?.data?.message ?? error?.message ?? 'Could not move VM storage.'
@@ -588,6 +612,7 @@ const ComputeWorkspace = ({ endpoints }) => {
                         labelId="storage-move-host-label"
                         label="Destination host"
                         value={targetHostId}
+                        disabled={liveStorageMove}
                         onChange={(event) =>
                           setTargetHostId(event.target.value)
                         }
@@ -631,9 +656,14 @@ const ComputeWorkspace = ({ endpoints }) => {
                     control={
                       <Checkbox
                         checked={liveStorageMove}
-                        onChange={(event) =>
+                        onChange={(event) => {
                           setLiveStorageMove(event.target.checked)
-                        }
+                          if (event.target.checked) {
+                            setTargetHostId(String(currentLocation?.HID ?? ''))
+                          }
+                          setTargetDatastoreId('')
+                          setMigrationStatus('')
+                        }}
                       />
                     }
                     label="Keep the running VM online (live migration)"
@@ -647,6 +677,24 @@ const ComputeWorkspace = ({ endpoints }) => {
                       to use the same transfer driver.
                     </Alert>
                   )}
+                  {!currentTransferDriver && (
+                    <Alert severity="error" sx={{ mt: 1 }}>
+                      The current storage transfer driver is unknown. Migration
+                      is blocked until authoritative datastore metadata is
+                      available.
+                    </Alert>
+                  )}
+                  <Typography
+                    sx={{
+                      mt: 0.75,
+                      fontSize: 12,
+                      color: colors.text.secondary,
+                    }}
+                  >
+                    Live storage moves keep the current host. Changing both host
+                    and storage requires a warm migration. Cross-driver moves,
+                    such as block storage to NFS, are intentionally blocked.
+                  </Typography>
                   {!liveStorageMove && (
                     <Alert severity="warning" sx={{ mt: 1 }}>
                       Warm migration powers off the VM during the storage move.
