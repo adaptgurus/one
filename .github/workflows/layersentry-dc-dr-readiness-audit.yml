@@ -281,13 +281,14 @@ jobs:
           deploy_id="$1"
           vm_id="$2"
           domain="$deploy_id"
-          virsh dominfo "$domain" >/dev/null 2>&1 || domain="one-$vm_id"
+          sudo -n virsh -c qemu:///system dominfo "$domain" >/dev/null 2>&1 || domain="one-$vm_id"
           echo "HYPERVISOR_DOMAIN=$domain"
-          virsh domiflist "$domain"
-          virsh domifaddr "$domain" --source agent 2>/dev/null || true
-          virsh domifaddr "$domain" --source lease 2>/dev/null || true
-          virsh domifaddr "$domain" --source arp 2>/dev/null || true
-          virsh domblklist "$domain" --details
+          sudo -n virsh -c qemu:///system dominfo "$domain"
+          sudo -n virsh -c qemu:///system domiflist "$domain"
+          sudo -n virsh -c qemu:///system domifaddr "$domain" --source agent 2>/dev/null || true
+          sudo -n virsh -c qemu:///system domifaddr "$domain" --source lease 2>/dev/null || true
+          sudo -n virsh -c qemu:///system domifaddr "$domain" --source arp 2>/dev/null || true
+          sudo -n virsh -c qemu:///system domblklist "$domain" --details
           HYPERVISOR
           DIAG
             exit 61
