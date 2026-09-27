@@ -102,6 +102,16 @@ jobs:
           $SUDO df -hT /var/lib/one/datastores
           echo LAYERSENTRY_ENDPOINTS
           $SUDO ss -lntp | grep -E ':(2616|2617|2633|9444)([[:space:]]|$)' || true
+          echo REPLICATION_V2_SOURCE_RUNTIME
+          for checkout in /root/layersentry-platform /opt/layersentry/layersentry-platform /opt/layersentry/platform; do
+            if $SUDO test -d "$checkout/.git"; then
+              echo "PLATFORM_CHECKOUT=$checkout"
+              $SUDO git -C "$checkout" rev-parse HEAD
+              $SUDO git -C "$checkout" branch --show-current
+              if $SUDO test -f "$checkout/cmd/layersentry-replication-v2/main.go"; then echo REPLICATION_V2_COMMAND=PASS; else echo REPLICATION_V2_COMMAND=FAIL; fi
+            fi
+          done
+          command -v go || true
           REMOTE
 
       - name: Reassert read-only completion
