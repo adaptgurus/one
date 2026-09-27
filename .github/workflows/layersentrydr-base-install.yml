@@ -60,6 +60,7 @@ jobs:
           ONE_DEPLOY_SHA: 361df79c154b691aaf8a89cbcfe1864d75543ec0
         run: |
           set -euo pipefail
+          export PATH="/usr/local/bin:$PATH"
           mkdir -p /var/lib/layersentry
           exec 9>/var/lock/layersentry-dr-base-install.lock
           flock -x 9
