@@ -85,11 +85,11 @@ jobs:
           sudo -n -u oneadmin onevnet list
           sudo -n -u oneadmin onedatastore list
           echo IMAGE_INVENTORY
-          sudo -n -u oneadmin oneimage list --extended
+          sudo -n -u oneadmin oneimage list -l ID,NAME,USER,TYPE,REGTIME,STAT,RVMS
           echo BACKUP_DATASTORE_100
           sudo -n -u oneadmin onedatastore show 100 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","TYPE","DS_MAD","TM_MAD","TEMPLATE/RESTIC_COMPRESSION","TEMPLATE/RSYNC_HOST","TEMPLATE/BRIDGE_LIST"); print(" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
           echo IMAGE_DETAILS
-          for image_id in $(sudo -n -u oneadmin oneimage list --no-header -x ID 2>/dev/null || true); do
+          for image_id in $(sudo -n -u oneadmin oneimage list --no-header -l ID 2>/dev/null || true); do
             sudo -n -u oneadmin oneimage show "$image_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","STATE","TYPE","REGTIME","TEMPLATE/FORMAT","TEMPLATE/SIZE","TEMPLATE/MD5","TEMPLATE/SHA1"); print(" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
           done
           echo NETWORK
