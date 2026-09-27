@@ -1,0 +1,126 @@
+name: LayerSentry Windows SSH audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ops/layersentrydr-probe-20260927]
+    paths: [.github/workflows/layersentry-windows-ssh-audit.yml]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-windows-ssh-audit
+  cancel-in-progress: false
+
+jobs:
+  audit:
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind to the authorized Windows access computer
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:RUNNER_NAME -ne 'WIN-GK6MO7T7OPC') {
+            throw "Refusing unexpected runner $($env:RUNNER_NAME)"
+          }
+          if ($env:COMPUTERNAME -ne 'WIN-GK6MO7T7OPC') {
+            throw "Refusing unexpected computer $($env:COMPUTERNAME)"
+          }
+          Write-Output "TARGET_WINDOWS_OK runner=$env:RUNNER_NAME computer=$env:COMPUTERNAME"
+
+      - name: Inspect bootstrap key permissions and trusted host files
+        id: sshmeta
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = 'C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $key = Join-Path $base 'deploy_ed25519'
+          if (-not (Test-Path -LiteralPath $key -PathType Leaf)) {
+            throw 'Existing deploy_ed25519 key is absent'
+          }
+          $item = Get-Item -LiteralPath $key
+          Write-Output "key_path=$($item.FullName) size=$($item.Length)"
+          $acl = Get-Acl -LiteralPath $key
+          Write-Output "key_owner=$($acl.Owner)"
+          foreach ($entry in $acl.Access) {
+            Write-Output "key_acl=$($entry.IdentityReference):$($entry.FileSystemRights):$($entry.AccessControlType):inherited=$($entry.IsInherited)"
+          }
+          $trusted = @()
+          foreach ($name in @('alma-known-hosts', 'known_hosts', 'readonly-known-hosts')) {
+            $path = Join-Path $base $name
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+              & ssh-keygen.exe -F '172.17.60.40' -f $path *> $null
+              if ($LASTEXITCODE -eq 0) {
+                $trusted += $path
+                Write-Output "trusted_dr_entry=$name"
+              }
+              & ssh-keygen.exe -F '172.17.60.30' -f $path *> $null
+              if ($LASTEXITCODE -eq 0) {
+                Write-Output "trusted_dc_entry=$name"
+              }
+            }
+          }
+          if ($trusted.Count -eq 0) {
+            throw 'No retained trusted host-key entry exists for 172.17.60.40'
+          }
+
+      - name: Test the retained key against exact DR identity
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = 'C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $key = Join-Path $base 'deploy_ed25519'
+          $known = $null
+          foreach ($name in @('alma-known-hosts', 'known_hosts', 'readonly-known-hosts')) {
+            $path = Join-Path $base $name
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+              & ssh-keygen.exe -F '172.17.60.40' -f $path *> $null
+              if ($LASTEXITCODE -eq 0) { $known = $path; break }
+            }
+          }
+          if (-not $known) { throw 'No retained trusted DR host-key entry' }
+          $result = & ssh.exe -i $key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" root@172.17.60.40 'hostname -s; id -u; ip -4 -o addr show dev enp6s18' 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output 'DR_KEY_AUTH=FAILED'
+            $result | Select-Object -Last 3
+            exit 42
+          }
+          $text = $result -join "`n"
+          if ($text -notmatch '(?m)^layersentrydr\s*$' -or $text -notmatch '(?m)^0\s*$' -or $text -notmatch '172\.17\.60\.40/26') {
+            throw 'SSH authenticated but exact DR hostname, root UID, or address did not match'
+          }
+          Write-Output 'DR_KEY_AUTH=PASS exact_target=layersentrydr/172.17.60.40 uid=0'
+
+      - name: Test retained key for read-only DC inventory
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $base = 'C:\ProgramData\LayerSentryLab\seven-node-bootstrap'
+          $key = Join-Path $base 'deploy_ed25519'
+          $known = $null
+          foreach ($name in @('alma-known-hosts', 'known_hosts', 'readonly-known-hosts')) {
+            $path = Join-Path $base $name
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+              & ssh-keygen.exe -F '172.17.60.30' -f $path *> $null
+              if ($LASTEXITCODE -eq 0) { $known = $path; break }
+            }
+          }
+          if (-not $known) {
+            Write-Output 'DC_KEY_AUTH=NOT_TESTED reason=no_retained_trusted_host_entry'
+            exit 0
+          }
+          $identity = & ssh.exe -i $key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" root@172.17.60.30 'hostname -s; id -u; ip -4 -o addr show' 2>&1
+          if ($LASTEXITCODE -ne 0) {
+            Write-Output 'DC_KEY_AUTH=FAILED'
+            $identity | Select-Object -Last 3
+            exit 0
+          }
+          $identityText = $identity -join "`n"
+          if ($identityText -notmatch '(?m)^0\s*$' -or $identityText -notmatch '172\.17\.60\.30/26') {
+            throw 'SSH authenticated but exact DC root UID or address did not match'
+          }
+          Write-Output 'DC_KEY_AUTH=PASS exact_address=172.17.60.30 uid=0'
+          & ssh.exe -i $key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$known" root@172.17.60.30 'echo OPENNEBULA_VERSION; oneversion || true; echo HOSTS; onehost list || true; echo VMS; onevm list || true; echo LAYERSENTRY_UNITS; systemctl list-unit-files --no-pager | grep -Ei "layersentry|replication" || true; echo DR_ENDPOINTS; for u in http://127.0.0.1:2616/v1/dr/capabilities http://127.0.0.1:2616/fireedge/api/v1/dr/capabilities; do c=$(curl -sS --max-time 5 -o /dev/null -w "%{http_code}" "$u" || true); echo "$c $u"; done'
+          if ($LASTEXITCODE -ne 0) { throw 'Read-only DC inventory command failed' }
