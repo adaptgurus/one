@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   install:
-    runs-on: [self-hosted, linux]
+    runs-on: layersentrydr
     timeout-minutes: 60
     steps:
       - name: Bind exact DR host and preflight
