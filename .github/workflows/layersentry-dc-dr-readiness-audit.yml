@@ -1193,8 +1193,8 @@ jobs:
           firmware_count=$(find /usr/share -xdev -type f \( -iname '*secboot*.fd' -o -iname '*secure*.fd' \) 2>/dev/null | wc -l)
           test "$firmware_count" -gt 0
           domcaps=$(virsh -c qemu:///system domcapabilities --virttype kvm --arch x86_64 --machine q35)
-          printf '%s' "$domcaps" | grep -q "secure='yes'"
-          printf '%s' "$domcaps" | grep -q '<tpm supported='
+          grep -q "secure='yes'" <<<"$domcaps"
+          grep -q '<tpm supported=' <<<"$domcaps"
           echo "SECUREBOOT_VTPM_DR_CAPABILITY=PASS FIRMWARE_COUNT=$firmware_count"
           DR_AUDIT
 
@@ -1227,6 +1227,6 @@ jobs:
           test -n "${image[0]}" && { test "${image[1]}" = 1 || test "${image[1]}" = 2; } && test "${image[2]}" = 0 && test -n "${image[3]}"
           mapfile -t host < <(sudo -n -u oneadmin onehost show 0 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",sep="\n")')
           test -n "${host[0]}" && test "${host[1]}" = 2
-          sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "${host[0]}" 'set -euo pipefail; test "$(id -u)" = 0; command -v swtpm >/dev/null; command -v virsh >/dev/null; firmware_count=$(find /usr/share -xdev -type f \( -iname "*secboot*.fd" -o -iname "*secure*.fd" \) 2>/dev/null | wc -l); test "$firmware_count" -gt 0; domcaps=$(virsh -c qemu:///system domcapabilities --virttype kvm --arch x86_64 --machine q35); printf "%s" "$domcaps" | grep -q "secure='\''yes'\''"; printf "%s" "$domcaps" | grep -q "<tpm supported="; echo "SECUREBOOT_VTPM_DC_CAPABILITY=PASS FIRMWARE_COUNT=$firmware_count"'
+          sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "${host[0]}" 'set -euo pipefail; test "$(id -u)" = 0; command -v swtpm >/dev/null; command -v virsh >/dev/null; firmware_count=$(find /usr/share -xdev -type f \( -iname "*secboot*.fd" -o -iname "*secure*.fd" \) 2>/dev/null | wc -l); test "$firmware_count" -gt 0; domcaps=$(virsh -c qemu:///system domcapabilities --virttype kvm --arch x86_64 --machine q35); grep -q "secure='\''yes'\''" <<<"$domcaps"; grep -q "<tpm supported=" <<<"$domcaps"; echo "SECUREBOOT_VTPM_DC_CAPABILITY=PASS FIRMWARE_COUNT=$firmware_count"'
           echo "SECUREBOOT_VTPM_SOURCE_IMAGE=PASS IMAGE_ID=3 IMAGE_NAME=${image[0]} HOST=${host[0]}"
           DC_AUDIT
