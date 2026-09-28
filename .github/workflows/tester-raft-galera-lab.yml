@@ -1,4 +1,4 @@
-name: Tester Foundation process and VM recovery
+name: Tester Foundation reboot persistence qualification
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,22 +9,73 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  resilience:
+  reboot-recovery:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 25
+    timeout-minutes: 30
     steps:
-      - name: Bind tester source and compile exact qualification
+      - name: Bind tested installer and lab source
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 6ebe949c43c19dfd07aa50ecaad490127f7397b9
-          test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
-          test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = bbe15fb307819a59b4a959dd775b5636dc09f1ca
-          /home/opc/layersentry-foundation-qual-20260929/venv/bin/python -m py_compile /home/opc/layersentry-platform/tools/lab/tester_cluster_resilience.py
-      - name: Exercise exact owned VM and process failure with recovery and retained data
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = b55b8db7ddf842fe416f1a9d1117583a91d964f6
+          test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = faf53b034f7922746f35b033f2156a997b04fe00
+          cd /home/opc/one-deploy
+          /home/opc/layersentry-foundation-qual-20260929/venv/bin/python -m unittest discover -s tests -p 'test_layersentry_*.py' -v
+      - name: Apply persistent hostname repair through existing Foundation
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          python /home/opc/layersentry-platform/tools/lab/tester_foundation_apply.py --stage provider
+      - name: Verify preserved failed-test data before exact cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          python - <<'PY'
+          import sys,json,re,hashlib,fcntl,datetime,os
+          from pathlib import Path
+          sys.path.insert(0,'/home/opc/layersentry-platform/tools/lab')
+          import tester_native_qualification as n
+          import tester_galera_qualification as g
+          lock=(n.WORK/'.execution.lock').open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+          old=n.WORK/'evidence/cluster-resilience-36494404491'
+          assert (old/'SHA256SUMS').is_file(), 'prior operation must have exited'
+          events=[json.loads(x) for x in (old/'events.jsonl').read_text().splitlines()]
+          tables=set()
+          for row in events:
+              for arg in row.get('argv',[]):
+                  tables.update(re.findall(r'CREATE TABLE layersentry.`(lsf_qual_resilience_[0-9a-f]{16})`',arg))
+          assert len(tables)==1
+          table=tables.pop()
+          expected={str(r['id']):r['payload_sha256'] for r in events if r['action']=='acknowledged_write'}
+          native=n.converge();galera=g.healthy();results={}
+          for name in n.NAMES:
+              text=g.sql(name,f'SET SESSION wsrep_sync_wait=1; SELECT id,payload FROM layersentry.`{table}` ORDER BY id;')
+              values={k:hashlib.sha256(v.encode()).hexdigest() for k,v in (line.split('\t',1) for line in text.splitlines())}
+              assert values==expected, 'prior acknowledged data mismatch'
+              results[name]=len(values)
+          g.sql('lsf-fe1',f'DROP TABLE layersentry.`{table}`;')
+          for name in n.NAMES:
+              assert g.sql(name,"SET SESSION wsrep_sync_wait=1; SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='layersentry' AND table_name='"+table+"';").strip()=='0'
+          groups=[]
+          for row in events:
+              args=row.get('argv',[])
+              if len(args)==3 and args[:2]==['onegroup','create'] and re.fullmatch(r'lsf-resilience-[0-9a-f]{16}',args[2]):
+                  match=re.search(r'(?m)^ID:\s*(\d+)',row.get('stdout',''))
+                  if match:groups.append((match.group(1),args[2]))
+          leader=native[n.NAMES[0]]['leader']
+          for gid,name in groups:
+              assert n.native_json(leader,['onegroup','show',gid,'--json'])['GROUP']['NAME']==name
+              n.require(n.remote(leader,['onegroup','delete',gid],native=True),'owned group cleanup')
+          result={'timestamp_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'prior_operation':'cluster-resilience-36494404491','recovery':'canonical Foundation hostname persistence repair','automatic_recovery_claimed':False,'acknowledged_rows_verified_by_sha256':results,'exact_table_removed':table,'exact_groups_removed':groups,'raft':n.converge(),'galera':g.healthy(),'prior_events_sha256':hashlib.sha256((old/'events.jsonl').read_bytes()).hexdigest()}
+          (n.WORK/'evidence'/('prior-run-reconciled-'+os.environ['GITHUB_RUN_ID']+'.json')).write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps({k:v for k,v in result.items() if k not in ('raft','galera')},indent=2))
+          PY
+      - name: Repeat actual process and every management VM loss with corrected persistence
         shell: bash
         run: |
           set -euo pipefail
