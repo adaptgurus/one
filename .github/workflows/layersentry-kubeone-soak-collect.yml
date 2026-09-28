@@ -30,6 +30,8 @@ jobs:
           test "$(printf '%s\n' "$scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
           printf '%s\n' "$scan" >"$work/known_hosts"
           chmod 0600 "$work/known_hosts"
+          stage=locate_dc_access
+          trap 'echo "KUBEONE_SOAK_COLLECT_FAIL_STAGE=$stage" >&2; rm -rf -- "$work"' ERR EXIT
 
           dc_key=''
           dc_user=''
@@ -51,10 +53,32 @@ jobs:
           test -n "$dc_key"
 
           ssh_dc=(ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" "$dc_user@172.17.60.30")
-          "${ssh_dc[@]}" 'test "$(hostname -s)" = layersentry1; ip -4 -o addr show dev enp6s18 | grep -Eq "(^|[[:space:]])172\\.17\\.60\\.30/26([[:space:]]|$)"; if test "$(id -u)" -eq 0; then SUDO=""; else SUDO="sudo -n"; fi; test "$($SUDO id -u)" = 0; $SUDO test -f /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; $SUDO test -f /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log'
-          "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; else sudo -n cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; fi' >"$out/samples.csv"
-          "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log; else sudo -n cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log; fi' >"$out/events.log"
+          stage=locate_soak_output
+          source_host=''
+          source_dir=/var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01
+          if test -f "$source_dir/samples.csv" && test -f "$source_dir/events.log"; then
+            cp -- "$source_dir/samples.csv" "$out/samples.csv"
+            cp -- "$source_dir/events.log" "$out/events.log"
+            source_host=layersentryol7
+          elif "${ssh_dc[@]}" 'test "$(hostname -s)" = layersentry1; ip -4 -o addr show dev enp6s18 | grep -Eq "(^|[[:space:]])172\\.17\\.60\\.30/26([[:space:]]|$)"; if test "$(id -u)" -eq 0; then SUDO=""; else SUDO="sudo -n"; fi; test "$($SUDO id -u)" = 0; $SUDO test -f /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; $SUDO test -f /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log'; then
+            "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; else sudo -n cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; fi' >"$out/samples.csv"
+            "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log; else sudo -n cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log; fi' >"$out/events.log"
+            source_host=layersentry1
+          else
+            {
+              echo '# KubeOne soak evidence collection'
+              echo
+              echo 'Result: MISSING_OUTPUT'
+              echo
+              echo 'The expected samples.csv and events.log were absent from both the authorized runner and DC frontend.'
+            } >"$out/SUMMARY.md"
+            find /var/lib/layersentry/evidence -maxdepth 3 -type f -printf 'layersentryol7 %p %s bytes\n' 2>/dev/null | sort >"$out/AVAILABLE_FILES.txt" || true
+            "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then SUDO=""; else SUDO="sudo -n"; fi; $SUDO find /var/lib/layersentry/evidence -maxdepth 3 -type f -printf "layersentry1 %p %s bytes\\n" 2>/dev/null | sort' >>"$out/AVAILABLE_FILES.txt" || true
+            stage=soak_output_missing
+            false
+          fi
 
+          stage=validate_soak_output
           test "$(head -n1 "$out/samples.csv")" = 'timestamp,elapsed_seconds,cluster,ready_nodes,total_nodes,kube_system_nonready,total_restarts,api_ready,result'
           grep -Eq ' SOAK_START duration_seconds=72000 interval_seconds=60$' "$out/events.log"
           complete=$(grep -Ec ' SOAK_COMPLETE samples=[0-9]+ failures=[0-9]+$' "$out/events.log" || true)
@@ -67,7 +91,7 @@ jobs:
             echo '# KubeOne multi-cluster 20-hour soak evidence'
             echo
             echo "- Collected at: $(date -Is)"
-            echo '- Source: LayerSentry DC frontend `layersentry1` / `172.17.60.30`.'
+            echo "- Source host: $source_host"
             echo "- First sample: $start"
             echo "- Last sample: $end"
             echo "- Maximum elapsed seconds: $max_elapsed"
@@ -84,8 +108,11 @@ jobs:
           test "$complete" -eq 1
           test "$max_elapsed" -ge 72000
           test "$failed" -eq 0
+          trap - ERR EXIT
+          rm -rf -- "$work"
 
       - name: Upload sanitized KubeOne soak logs
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: kubeone-20h-soak-20260927-01
