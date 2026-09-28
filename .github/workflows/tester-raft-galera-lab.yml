@@ -1,4 +1,4 @@
-name: Tester Foundation owned guest recovery
+name: Tester Foundation native provider deployment
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,43 +9,31 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  recover-owned-boot:
+  native-provider:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 4
+    timeout-minutes: 35
     steps:
-      - name: Restart only UUID-bound guests with uninitialized affected disks
+      - name: Bind exact tester Foundation source and run focused gates
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 459328ed3078aeb10ae5ebd38df2214b41e8caea
-          sudo -n python3 - <<'PY' 2>&1 | tee /home/opc/layersentry-foundation-qual-20260929/evidence/owned-guest-label-recovery.log
-          import json,os,socket,subprocess,xml.etree.ElementTree as E
-          from pathlib import Path
-          assert socket.gethostname().split('.')[0]=='tester'
-          assert os.environ.get('SUDO_USER')=='opc'
-          names={'lsf-fe1':'59b15120-8865-54a6-abc6-66ccb404f799','lsf-fe2':'3a10fc3a-2d6d-5f4a-83b7-209d037beb64','lsf-fe3':'3fe0d15c-3d7b-55ec-9bf0-e49695013e02','lsf-kvm1':'b632ab8c-9f38-577e-a05e-c4f05c92ab02','lsf-kvm2':'e02dc93a-98ef-54a3-bf70-aa4302c79b48'}
-          root=Path('/var/lib/libvirt/images/layersentry-tester-20260929')
-          assert json.loads((root/'owner.json').read_text())['operation']=='tester-foundation-20260929'
-          def run(*args):
-              return subprocess.check_output(args,text=True).strip()
-          assert run('getenforce')=='Enforcing'
-          for name,uid in names.items():
-              xml=E.fromstring(run('virsh','dumpxml',name))
-              assert xml.findtext('uuid')==uid
-              disk=root/(name+'.qcow2')
-              sources=[d.find('source').get('file') for d in xml.findall('./devices/disk') if d.get('device')=='disk']
-              assert sources==[str(disk)]
-              assert disk.stat().st_size < 1024*1024, 'Guest has written data; needs separate reconciliation'
-              context=run('stat','-c','%C',str(disk))
-              assert ':virt_image_t:' in context, 'Current label is not the demonstrated defect'
-              print('BOUND',name,uid,context,flush=True)
-          for name in names:
-              print(run('virsh','destroy',name),flush=True)
-              print(run('virsh','start',name),flush=True)
-              print(name,run('virsh','domstate',name),run('stat','-c','%C',str(root/(name+'.qcow2'))),flush=True)
-          print('SELINUX='+run('getenforce'))
-          print('OWNED_GUESTS_RESTARTED_NOT_CLUSTER_READY')
-          PY
+          cd /home/opc/layersentry-platform
+          test "$(git rev-parse HEAD)" = 54cd3544b75686e5d9e7167b9523df2aa7bdc8c4
+          test -z "$(git status --porcelain)"
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          export PYTHONPATH="$PWD/deploy:$PWD/tests"
+          python -m unittest test_management_ha test_provider_preflight_regressions test_raft_acceptance test_tester_substrate_labels test_layersentry_deploy -v
+      - name: Call existing Foundation provider deployment with encrypted runtime credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = tester
+          test "$(hostname -s)" = tester
+          test "$(id -un)" = opc
+          cd /home/opc/layersentry-platform
+          test "$(git rev-parse HEAD)" = 54cd3544b75686e5d9e7167b9523df2aa7bdc8c4
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          python tools/lab/tester_foundation_apply.py --stage provider
