@@ -878,6 +878,18 @@ jobs:
           $SUDO test -f "$recovery/disk-data.qcow2"
           $SUDO qemu-img check -q "$recovery/disk-os.qcow2"
           $SUDO qemu-img check -q "$recovery/disk-data.qcow2"
+          osid="$(sudo -n -u oneadmin oneimage list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n="layersentry-rv2-dc-vm29-g2-os"; print(next((x.findtext("ID") or "" for x in r.findall("IMAGE") if (x.findtext("NAME") or "")==n),""))')"
+          dataid="$(sudo -n -u oneadmin oneimage list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n="layersentry-rv2-dc-vm29-g2-data"; print(next((x.findtext("ID") or "" for x in r.findall("IMAGE") if (x.findtext("NAME") or "")==n),""))')"
+          if test -n "$osid" && test -n "$dataid"; then
+            mapfile -t oi < <(sudo -n -u oneadmin oneimage show "$osid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","TYPE","SOURCE")],sep="\n")')
+            mapfile -t di < <(sudo -n -u oneadmin oneimage show "$dataid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","TYPE","SOURCE")],sep="\n")')
+            test "${oi[0]}" = layersentry-rv2-dc-vm29-g2-os && test "${oi[1]}" = 1 && test "${oi[2]}" = 0 && test -f "${oi[3]}"
+            test "${di[0]}" = layersentry-rv2-dc-vm29-g2-data && test "${di[1]}" = 1 && test "${di[2]}" = 2 && test -f "${di[3]}"
+            sudo -n -u oneadmin qemu-img check -q "${oi[3]}"
+            sudo -n -u oneadmin qemu-img check -q "${di[3]}"
+            echo "REPLICATION_V2_FAILBACK_IMAGES_REUSED OS_IMAGE_ID=$osid DATA_IMAGE_ID=$dataid" >&2
+          else
+          test -z "$osid" && test -z "$dataid"
           stage=/var/lib/one/datastores/1/.layersentry-rv2-import
           $SUDO install -d -o oneadmin -g oneadmin -m 0750 "$stage"
           local_stage=/var/tmp/layersentry-rv2-dc-vm29-g2-retry6
@@ -948,6 +960,7 @@ jobs:
           done
           sudo -n -u oneadmin onedatastore update 1 --append "$ds_restore"
           test "$(sudo -n -u oneadmin onedatastore show 1 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("TEMPLATE/SAFE_DIRS") or "")')" = /var/tmp
+          fi
           test -z "$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")=="layersentry-rv2-dc-vm29-g2"),""))')"
           pub="$(printf '%s' "$pub64" | base64 -d)"
           cat >"$tvm" <<VM
