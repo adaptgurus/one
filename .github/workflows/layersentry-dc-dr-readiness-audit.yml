@@ -849,9 +849,12 @@ jobs:
           done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 \
             ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
           test -n "$dc_key"
-          ssh-keygen -q -t ed25519 -N '' -C layersentry-rv2-dc-failback-20260928 -f "$work/guest_key"
-          chmod 0600 "$work/guest_key"
-          guest_pub_b64="$(base64 -w0 "$work/guest_key.pub")"
+          guest_key=/root/.ssh/layersentry-replication-v2-failback-20260928
+          if test ! -f "$guest_key"; then
+            ssh-keygen -q -t ed25519 -N '' -C layersentry-rv2-dc-failback-20260928 -f "$guest_key"
+          fi
+          chmod 0600 "$guest_key"
+          guest_pub_b64="$(base64 -w0 "$guest_key.pub")"
 
           ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
@@ -981,14 +984,14 @@ jobs:
           proxy="ssh -i $dc_key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$work/dc_known_hosts -W %h:%p $dc_user@172.17.60.30"
           ready=FAIL
           for _ in $(seq 1 60); do
-            if timeout 10 ssh -i "$work/guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            if timeout 10 ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
               -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$work/guest_known_hosts" \
               -o "ProxyCommand=$proxy" -o ConnectTimeout=5 "root@$vm_ip" \
               'test "$(id -u)" = 0' >/dev/null 2>&1; then ready=PASS; break; fi
             sleep 2
           done
           test "$ready" = PASS
-          timeout 30 ssh -i "$work/guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+          timeout 30 ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/guest_known_hosts" \
             -o "ProxyCommand=$proxy" "root@$vm_ip" 'set -euo pipefail; test "$(id -u)" = 0; test "$(findmnt -n -o SOURCE /srv/layersentry-data)" = /dev/vdb; sha256sum -c /srv/layersentry-data/generations/20260927T234524Z.sha256; sha256sum -c /srv/layersentry-data/generations/20260928T000000Z-dr-failback.sha256; test "$(sha256sum /srv/layersentry-data/generations/20260927T234524Z.records | awk '\''{print $1}'\'')" = 9b3372cc6e663cae91df68d687d71a0470b10badbfb7ce60fb67cc6d230b4f0d; test "$(sha256sum /srv/layersentry-data/generations/20260927T234524Z.payload | awk '\''{print $1}'\'')" = ea57d829b452e3ea965d14b8942e00080a7692d462629a951507f1f4a0bda980; test "$(sha256sum /srv/layersentry-data/generations/20260928T000000Z-dr-failback.records | awk '\''{print $1}'\'')" = a0c957a52e9d46da1476def6bffdf8d086dca73e8d75d84513a5e675d976eff7; test "$(sha256sum /srv/layersentry-data/generations/20260928T000000Z-dr-failback.payload | awk '\''{print $1}'\'')" = 2ca76f41f6968d91cc8d65693c1a0e8bd94843b50ad1434518879f8cb59c4d10; echo REPLICATION_V2_FAILBACK_GUEST_DATA=PASS'
           ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
