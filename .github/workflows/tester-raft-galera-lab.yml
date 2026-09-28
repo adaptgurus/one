@@ -1,4 +1,4 @@
-name: Tester Foundation Galera deployment
+name: Tester Foundation Galera runtime correction
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -13,14 +13,14 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 25
     steps:
-      - name: Bind exact tester and reviewed source
+      - name: Bind exact tester and corrected source
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 386493236d5d9b1e44987196462713672112283e
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 7a37a3cc10ee2dad9fd72d9d2abe60fa61f9b2a1
           test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
           test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = bbe15fb307819a59b4a959dd775b5636dc09f1ca
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
