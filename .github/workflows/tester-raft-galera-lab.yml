@@ -1,4 +1,4 @@
-name: Tester Foundation fresh VM replacement qualification
+name: Tester independent final cluster health audit
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,29 +9,65 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  fresh-replacement:
+  independent-audit:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 40
+    timeout-minutes: 12
     steps:
-      - name: Bind exact original lab and reviewed replacement sources
+      - name: Bind tester and safely advance to independent audit source after prior job
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 66065eda0b4ea050ae4ce7b1dbbba3519e428bf8
-          test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
+          cd /home/opc/layersentry-platform
+          test -z "$(git status --porcelain)"
+          GIT_TERMINAL_PROMPT=0 git -c credential.useHttpPath=false fetch origin ops/tester-foundation-20260929
+          git merge --ff-only 29ebf94d16820ee7fa0c77fd94ea02f743d16373
+          test "$(git rev-parse HEAD)" = 29ebf94d16820ee7fa0c77fd94ea02f743d16373
           test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = faf53b034f7922746f35b033f2156a997b04fe00
-          /home/opc/layersentry-foundation-qual-20260929/venv/bin/python -m py_compile /home/opc/layersentry-platform/tools/lab/tester_fresh_replacement.py /home/opc/layersentry-platform/tools/lab/tester_replacement_substrate.py
-      - name: Prepare new empty-disk candidate without starting a duplicate identity
+          /home/opc/layersentry-foundation-qual-20260929/venv/bin/python -m py_compile tools/lab/tester_cluster_health_audit.py
+      - name: Verify exact original VM power and identity before final data checks
         shell: bash
         run: |
           set -euo pipefail
-          sudo -n /usr/bin/python3 /home/opc/layersentry-platform/tools/lab/tester_replacement_substrate.py
-      - name: Qualify Foundation enrollment and restore retained original
+          python3 - <<'PY'
+          import subprocess,json,datetime,os
+          from pathlib import Path
+          expected={'lsf-fe1':'59b15120-8865-54a6-abc6-66ccb404f799','lsf-fe2':'3a10fc3a-2d6d-5f4a-83b7-209d037beb64','lsf-fe3':'3fe0d15c-3d7b-55ec-9bf0-e49695013e02','lsf-fe1-replacement-20260929':'140cb428-098f-5f9f-ae7d-d2aef5230005'}
+          rows={}
+          for name,uid in expected.items():
+              def read(action):return subprocess.check_output(['sudo','-n','virsh','--connect','qemu:///system',action,name],text=True).strip()
+              observed=read('domuuid');state=read('domstate');assert observed==uid
+              assert state==('shut off' if 'replacement' in name else 'running')
+              rows[name]={'uuid':observed,'state':state}
+          result={'timestamp_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'vms':rows,'duplicate_active_identity':False,'original_disks_retained':True}
+          p=Path('/home/opc/layersentry-foundation-qual-20260929/evidence')/('final-vm-identities-'+os.environ['GITHUB_RUN_ID']+'.json');p.write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
+          PY
+      - name: Query raw cluster state independently and exercise application account through proxy
         shell: bash
         run: |
           set -euo pipefail
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          python /home/opc/layersentry-platform/tools/lab/tester_fresh_replacement.py --execute
+          python /home/opc/layersentry-platform/tools/lab/tester_cluster_health_audit.py
+      - name: Execute complete focused installer regression slice
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          cd /home/opc/layersentry-platform
+          export PYTHONPATH=$PWD/deploy
+          python - <<'PY'
+          import unittest,sys,json,os
+          from pathlib import Path
+          names=['test_raft_acceptance.py','test_provider_preflight_regressions.py','test_management_ha.py','test_tester_substrate_labels.py','test_layersentry_deploy.py','test_tester_native_qualification.py','test_management_galera_safety.py','test_tester_galera_qualification.py','test_galera_health_responder.py']
+          suite=unittest.TestSuite()
+          for name in names:suite.addTests(unittest.TestLoader().discover('tests',pattern=name))
+          w=Path('/home/opc/layersentry-foundation-qual-20260929/evidence')
+          with (w/('final-tests-'+os.environ['GITHUB_RUN_ID']+'.log')).open('w') as out:r=unittest.TextTestRunner(stream=out,verbosity=2).run(suite)
+          result={'source':'29ebf94d16820ee7fa0c77fd94ea02f743d16373','tests':r.testsRun,'failures':len(r.failures),'errors':len(r.errors),'scope':'focused Foundation regression suite','successful':r.wasSuccessful()}
+          (w/('final-tests-'+os.environ['GITHUB_RUN_ID']+'.json')).write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result,indent=2))
+          sys.exit(0 if r.wasSuccessful() else 1)
+          PY
+          cd /home/opc/one-deploy
+          python -m unittest discover -s tests -p 'test_layersentry_*.py' -v
