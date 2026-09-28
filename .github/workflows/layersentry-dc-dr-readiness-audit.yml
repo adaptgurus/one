@@ -880,11 +880,15 @@ jobs:
           $SUDO qemu-img check -q "$recovery/disk-data.qcow2"
           stage=/var/lib/one/datastores/1/.layersentry-rv2-import
           $SUDO install -d -o oneadmin -g oneadmin -m 0750 "$stage"
-          os_raw="$stage/layersentry-rv2-dc-vm29-g2-retry5-os.raw"
-          data_raw="$stage/layersentry-rv2-dc-vm29-g2-retry5-data.raw"
-          os_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry5-os.qcow2"
-          data_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry5-data.qcow2"
-          test ! -e "$os_raw" && test ! -e "$data_raw" && test ! -e "$os_qcow" && test ! -e "$data_qcow"
+          local_stage=/var/tmp/layersentry-rv2-dc-vm29-g2-retry6
+          os_raw="${local_stage}-os.raw"
+          data_raw="${local_stage}-data.raw"
+          os_qcow_local="${local_stage}-os.qcow2"
+          data_qcow_local="${local_stage}-data.qcow2"
+          os_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry6-os.qcow2"
+          data_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry6-data.qcow2"
+          test ! -e "$os_raw" && test ! -e "$data_raw" && test ! -e "$os_qcow_local" && test ! -e "$data_qcow_local"
+          $SUDO test ! -e "$os_qcow" && $SUDO test ! -e "$data_qcow"
           $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-os.qcow2" "$os_raw"
           $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-data.qcow2" "$data_raw"
           os_sha="$($SUDO sha256sum "$os_raw" | awk '{print $1}')"
@@ -900,10 +904,13 @@ jobs:
           test "$new_records" = a0c957a52e9d46da1476def6bffdf8d086dca73e8d75d84513a5e675d976eff7
           test "$new_payload" = 2ca76f41f6968d91cc8d65693c1a0e8bd94843b50ad1434518879f8cb59c4d10
           echo "REPLICATION_V2_FAILBACK_RECOVERY_READBACK OS_SHA256=$os_sha DATA_SHA256=$data_sha OLD_RECORDS_SHA256=$old_records OLD_PAYLOAD_SHA256=$old_payload NEW_RECORDS_SHA256=$new_records NEW_PAYLOAD_SHA256=$new_payload" >&2
-          $SUDO qemu-img convert -f raw -O qcow2 -o compat=1.1,lazy_refcounts=off "$os_raw" "$os_qcow"
-          $SUDO qemu-img convert -f raw -O qcow2 -o compat=1.1,lazy_refcounts=off "$data_raw" "$data_qcow"
-          $SUDO chown oneadmin:oneadmin "$os_qcow" "$data_qcow"
-          $SUDO chmod 0640 "$os_qcow" "$data_qcow"
+          $SUDO qemu-img convert -f raw -O qcow2 -o compat=1.1,lazy_refcounts=off "$os_raw" "$os_qcow_local"
+          $SUDO qemu-img convert -f raw -O qcow2 -o compat=1.1,lazy_refcounts=off "$data_raw" "$data_qcow_local"
+          $SUDO chown oneadmin:oneadmin "$os_qcow_local" "$data_qcow_local"
+          $SUDO chmod 0640 "$os_qcow_local" "$data_qcow_local"
+          sudo -n -u oneadmin cp --sparse=always "$os_qcow_local" "$os_qcow"
+          sudo -n -u oneadmin cp --sparse=always "$data_qcow_local" "$data_qcow"
+          sudo -n -u oneadmin chmod 0640 "$os_qcow" "$data_qcow"
           sudo -n -u oneadmin test -r "$os_qcow"
           sudo -n -u oneadmin test -r "$data_qcow"
           sudo -n -u oneadmin qemu-img info "$os_qcow" >/dev/null
