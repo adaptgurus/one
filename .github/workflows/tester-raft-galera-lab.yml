@@ -1,4 +1,4 @@
-name: Tester Foundation native privilege correction
+name: Tester Foundation final authoritative readback
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,30 +9,45 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  native-provider:
+  authoritative-readback:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 6
     steps:
-      - name: Bind corrected Foundation and OneDeploy pins
+      - name: Read status from fixed tester frontends without mutation
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 2289f9313778624f85a93ecafa9e0050c540ecf1
-          test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = d32205fd31743d54837973b42ce3e63f96f1007e
-          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          cd /home/opc/layersentry-platform
-          export PYTHONPATH="$PWD/deploy:$PWD/tests"
-          python -m unittest test_management_ha test_provider_preflight_regressions test_raft_acceptance test_tester_substrate_labels test_layersentry_deploy -v
-      - name: Call canonical Foundation with native privilege keywords preserved
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$RUNNER_NAME" = tester
-          test "$(hostname -s)" = tester
-          test "$(id -un)" = opc
-          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          cd /home/opc/layersentry-platform
-          python tools/lab/tester_foundation_apply.py --stage provider
+          w=/home/opc/layersentry-foundation-qual-20260929
+          out="$w/evidence/native-readback-$GITHUB_RUN_ID"
+          mkdir -p "$out"
+          ssh_args=(-T -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=5 -o "UserKnownHostsFile=$w/secrets/known_hosts" -i "$w/secrets/foundation_ed25519")
+          for n in 1 2 3; do
+            name="lsf-fe$n"
+            target="layersentry-bootstrap@10.250.10.$((10+n))"
+            ssh "${ssh_args[@]}" "$target" "test \"\$(hostname -s)\" = '$name'; date -Is; hostname; getenforce; rpm -q opennebula mariadb-server; systemctl is-active opennebula mariadb; systemctl is-active layersentry-mariadb || true" > "$out/$name-services.txt"
+            ssh "${ssh_args[@]}" "$target" 'sudo -n -u oneadmin onezone show 0 --json' > "$out/$name-zone.json" 2> "$out/$name-zone.stderr" || true
+            ssh "${ssh_args[@]}" "$target" 'sudo -n mariadb --protocol=socket --batch --skip-column-names --execute="SELECT VERSION(); SHOW GLOBAL VARIABLES LIKE '\''wsrep_on'\''; SHOW GLOBAL STATUS WHERE Variable_name IN ('\''wsrep_cluster_size'\'','\''wsrep_cluster_status'\'','\''wsrep_local_state_comment'\'','\''wsrep_ready'\'','\''wsrep_connected'\'');"; if test -S /run/layersentry-mariadb/mysqld.sock; then sudo -n mariadb --protocol=socket --socket=/run/layersentry-mariadb/mysqld.sock --batch --skip-column-names --execute="SHOW GLOBAL STATUS WHERE Variable_name IN ('\''wsrep_cluster_size'\'','\''wsrep_cluster_status'\'','\''wsrep_local_state_comment'\'','\''wsrep_ready'\'','\''wsrep_connected'\'');"; else echo LAYERSENTRY_GALERA_SOCKET_ABSENT; fi' > "$out/$name-database.txt" 2>&1 || true
+            cat "$out/$name-services.txt" "$out/$name-database.txt"
+          done
+          ssh "${ssh_args[@]}" layersentry-bootstrap@10.250.10.11 'sudo -n -u oneadmin onehost list; sudo -n -u oneadmin onevm list' > "$out/native-hosts-vms.txt" 2>&1 || true
+          export PYTHONPATH=/home/opc/layersentry-platform/deploy
+          export READBACK_DIR="$out"
+          /home/opc/layersentry-foundation-qual-20260929/venv/bin/python - <<'PY'
+          import json,os
+          from pathlib import Path
+          from layersentry_deployer.raft_acceptance import check_raft_snapshot
+          out=Path(os.environ['READBACK_DIR']); rows={}
+          for n in (1,2,3):
+              name=f'lsf-fe{n}'
+              try:
+                  doc=json.loads((out/f'{name}-zone.json').read_text())
+                  rows[name]=check_raft_snapshot(doc['ZONE'],['lsf-fe1','lsf-fe2','lsf-fe3'],'10.250.10.10/24')
+              except Exception as exc:
+                  rows[name]={'eligible':False,'readback_error':str(exc)}
+          result={'raft_all_views_eligible':all(x['eligible'] for x in rows.values()),'views':rows,'galera_ready':False,'production_certified':False}
+          (out/'summary.json').write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps(result,indent=2))
+          PY
