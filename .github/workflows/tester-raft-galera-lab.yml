@@ -1,4 +1,4 @@
-name: Tester Raft Galera lab
+name: Tester Foundation validation
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -7,31 +7,30 @@ permissions:
   contents: read
 concurrency:
   group: tester-raft-galera-lab
-  cancel-in-progress: true
+  cancel-in-progress: false
 jobs:
-  preflight:
+  foundation-validation:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
     steps:
-      - name: Bind authorized tester identity and inspect prerequisites
+      - name: Verify tester identity and exact private source digests
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          echo 'CENTRAL_AUTHORITY=f72f80cc089ae8c198082f5b29edc525725c9e4a'
-          echo 'MODE=READ_ONLY_PREFLIGHT'
-          date -Is
-          id
-          cat /etc/os-release
-          nproc
-          free -h
-          df -h /
-          test -c /dev/kvm
-          stat -c '%A %U %G %n' /dev/kvm
-          echo 'SUDO_POLICY_BEGIN'
-          sudo -n -l
-          echo 'SUDO_POLICY_END'
-          rpm -q qemu-kvm libvirt virt-install mariadb-server galera opennebula || true
-          echo 'PREFLIGHT_COMPLETE_NOT_CLUSTER_READY'
+          cd /home/opc/layersentry-foundation-qual-20260929
+          printf '%s\n' \
+            'f9d2633643edd726ef641fb79f3841485ea443efa9326c23c15c11557d101d8b  deploy/layersentry_deployer/raft_acceptance.py' \
+            '843beb4b1ad1f89bed54f715d9d1dc5cb7b54cfa04c02efe38c7187ef10a8643  tests/test_raft_acceptance.py' | sha256sum -c -
+          echo 'IMPLEMENTATION_COMMIT=eca4acbbb946aac0a7ab6c693d6d0edae1ed3f4c'
+          echo 'SCOPE=ISOLATED_FOUNDATION_RAFT_VALIDATOR_ONLY'
+      - name: Run focused Foundation acceptance tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /home/opc/layersentry-foundation-qual-20260929
+          python3 -m py_compile deploy/layersentry_deployer/raft_acceptance.py tests/test_raft_acceptance.py
+          python3 -m unittest discover -s tests -p 'test_raft_acceptance.py' -v 2>&1 | tee evidence/runner-raft-acceptance-tests.log
+          echo 'FOUNDATION_RAFT_UNIT_VERIFIED_NOT_CLUSTER_READY'
