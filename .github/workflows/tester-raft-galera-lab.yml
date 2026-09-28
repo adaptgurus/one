@@ -1,4 +1,4 @@
-name: Tester Foundation nested members
+name: Tester Foundation disk reconciliation evidence
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,24 +9,22 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  foundation-substrate:
+  substrate-readback:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
-      - name: Resume exact owned tester members after permission fix
+      - name: Read owned failed-member disk and libvirt state
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          source=/home/opc/layersentry-platform
-          test "$(git -C "$source" rev-parse HEAD)" = 85db99c86b126ffe72a2b677fb41124d2ccd029d
-          test -z "$(git -C "$source" status --porcelain --untracked-files=no)"
           w=/home/opc/layersentry-foundation-qual-20260929
-          exec > >(tee "$w/evidence/substrate-resume.log") 2>&1
+          exec > >(tee "$w/evidence/substrate-disk-readback.log") 2>&1
           date -Is
-          sudo -n python3 "$source/tools/lab/tester_foundation_substrate.py"
           sudo -n virsh list --all
-          sudo -n virsh net-list --all
-          echo 'THREE_NESTED_MEMBERS_CREATED_NOT_CLUSTER_READY'
+          sudo -n cat /var/lib/libvirt/images/layersentry-tester-20260929/owner.json
+          sudo -n qemu-img info --output=json /var/lib/libvirt/images/layersentry-tester-20260929/lsf-fe1.qcow2
+          sudo -n stat -c '%a %U %G %n' /var/lib/libvirt/images/layersentry-tester-20260929 /var/lib/libvirt/images/layersentry-tester-20260929/lsf-fe1.qcow2
+          echo 'READ_ONLY_DISK_RECONCILIATION_COMPLETE'
