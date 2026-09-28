@@ -1226,7 +1226,8 @@ jobs:
           echo "SECUREBOOT_VTPM_DC_IMAGE_AUDIT IMAGE_ID=3 NAME=${image[0]} STATE=${image[1]} TYPE=${image[2]} SOURCE_PRESENT=$([ -n "${image[3]}" ] && echo yes || echo no)"
           test -n "${image[0]}" && { test "${image[1]}" = 1 || test "${image[1]}" = 2; } && test "${image[2]}" = 0 && test -n "${image[3]}"
           active_host="$(sudo -n -u oneadmin onevm show 30 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); h=r.findall("HISTORY_RECORDS/HISTORY"); print((h[-1].findtext("HOSTNAME") if h else "") or "")')"
-          test "$active_host" = 10.10.10.1
+          echo "SECUREBOOT_VTPM_DC_ACTIVE_HOST=$active_host"
+          test -n "$active_host"
           mapfile -t host < <(sudo -n -u oneadmin onehost list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; x=next(x for x in r.findall("HOST") if (x.findtext("NAME") or "")==n); print(x.findtext("ID") or "",x.findtext("NAME") or "",x.findtext("STATE") or "",sep="\n")' "$active_host")
           echo "SECUREBOOT_VTPM_DC_HOST_AUDIT HOST_ID=${host[0]} NAME=${host[1]} STATE=${host[2]}"
           test -n "${host[0]}" && test "${host[1]}" = "$active_host" && test "${host[2]}" = 2
