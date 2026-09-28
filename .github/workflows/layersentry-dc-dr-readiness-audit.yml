@@ -756,7 +756,12 @@ jobs:
             sleep 1
           done
           test "$state" = active
-          $SUDO ss -ltn | grep -F '172.17.60.30:9446'
+          listening=FAIL
+          for _ in $(seq 1 30); do
+            if $SUDO ss -ltn | grep -Fq '172.17.60.30:9446'; then listening=PASS; break; fi
+            sleep 1
+          done
+          test "$listening" = PASS
           echo REPLICATION_V2_FAILBACK_RECEIVER=READY
           DC_INSTALL
 
