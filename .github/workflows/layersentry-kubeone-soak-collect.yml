@@ -55,15 +55,18 @@ jobs:
           ssh_dc=(ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" "$dc_user@172.17.60.30")
           stage=locate_soak_output
           source_host=''
+          soak_available=false
           source_dir=/var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01
           if test -f "$source_dir/samples.csv" && test -f "$source_dir/events.log"; then
             cp -- "$source_dir/samples.csv" "$out/samples.csv"
             cp -- "$source_dir/events.log" "$out/events.log"
             source_host=layersentryol7
+            soak_available=true
           elif "${ssh_dc[@]}" 'test "$(hostname -s)" = layersentry1; ip -4 -o addr show dev enp6s18 | grep -Eq "(^|[[:space:]])172\\.17\\.60\\.30/26([[:space:]]|$)"; if test "$(id -u)" -eq 0; then SUDO=""; else SUDO="sudo -n"; fi; test "$($SUDO id -u)" = 0; $SUDO test -f /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; $SUDO test -f /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log'; then
             "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; else sudo -n cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; fi' >"$out/samples.csv"
             "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log; else sudo -n cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log; fi' >"$out/events.log"
             source_host=layersentry1
+            soak_available=true
           else
             {
               echo '# KubeOne soak evidence collection'
@@ -74,11 +77,10 @@ jobs:
             } >"$out/SUMMARY.md"
             find /var/lib/layersentry/evidence -maxdepth 3 -type f -printf 'layersentryol7 %p %s bytes\n' 2>/dev/null | sort >"$out/AVAILABLE_FILES.txt" || true
             "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then SUDO=""; else SUDO="sudo -n"; fi; $SUDO find /var/lib/layersentry/evidence -maxdepth 3 -type f -printf "layersentry1 %p %s bytes\\n" 2>/dev/null | sort' >>"$out/AVAILABLE_FILES.txt" || true
-            stage=soak_output_missing
-            false
           fi
 
           stage=validate_soak_output
+          if test "$soak_available" = true; then
           test "$(head -n1 "$out/samples.csv")" = 'timestamp,elapsed_seconds,cluster,ready_nodes,total_nodes,kube_system_nonready,total_restarts,api_ready,result'
           grep -Eq ' SOAK_START duration_seconds=72000 interval_seconds=60$' "$out/events.log"
           complete=$(grep -Ec ' SOAK_COMPLETE samples=[0-9]+ failures=[0-9]+$' "$out/events.log" || true)
@@ -108,6 +110,41 @@ jobs:
           test "$complete" -eq 1
           test "$max_elapsed" -ge 72000
           test "$failed" -eq 0
+          fi
+
+          stage=collect_current_health
+          mkdir -m 0700 "$out/current-health"
+          echo 'cluster,ready_nodes,total_nodes,kube_system_nonready,total_restarts,api_ready,result' >"$out/current-health/results.csv"
+          current_failures=0
+          for cluster in a b c; do
+            kubeconfig="/var/lib/layersentry/kubeone/tenant-${cluster}/layersentry-k1${cluster}/layersentry-k1${cluster}-kubeconfig"
+            "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' get nodes -o wide" >"$out/current-health/cluster-${cluster}-nodes.txt"
+            "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' -n kube-system get pods -o wide" >"$out/current-health/cluster-${cluster}-kube-system-pods.txt"
+            "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' get --raw=/readyz" >"$out/current-health/cluster-${cluster}-readyz.txt"
+            "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' version -o json" >"$out/current-health/cluster-${cluster}-version.json"
+            total=$(awk 'NR>1 {n++} END {print n+0}' "$out/current-health/cluster-${cluster}-nodes.txt")
+            ready=$(awk 'NR>1 && $2=="Ready" {n++} END {print n+0}' "$out/current-health/cluster-${cluster}-nodes.txt")
+            nonready=$(awk 'NR>1 && $3!="Running" && $3!="Completed" {n++} END {print n+0}' "$out/current-health/cluster-${cluster}-kube-system-pods.txt")
+            restarts=$(awk 'NR>1 {sum+=$4} END {print sum+0}' "$out/current-health/cluster-${cluster}-kube-system-pods.txt")
+            api_ready=0
+            test "$(tr -d '\r\n' <"$out/current-health/cluster-${cluster}-readyz.txt")" = ok && api_ready=1
+            result=FAIL
+            if test "$total" -ge 5 && test "$ready" -eq "$total" && test "$nonready" -eq 0 && test "$api_ready" -eq 1; then result=PASS; else current_failures=$((current_failures + 1)); fi
+            echo "$cluster,$ready,$total,$nonready,$restarts,$api_ready,$result" >>"$out/current-health/results.csv"
+          done
+          {
+            echo
+            echo '## Current three-cluster health check'
+            echo
+            echo "- Collected at: $(date -Is)"
+            while IFS=, read -r cluster ready total nonready restarts api result; do
+              test "$cluster" = cluster && continue
+              echo "- Cluster ${cluster^^}: ready=$ready/$total, kube-system nonready=$nonready, restarts=$restarts, API ready=$api, result=$result"
+            done <"$out/current-health/results.csv"
+          } >>"$out/SUMMARY.md"
+          (cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS)
+          echo "KUBEONE_CURRENT_HEALTH failures=$current_failures"
+          test "$current_failures" -eq 0
           trap - ERR EXIT
           rm -rf -- "$work"
 
