@@ -77,7 +77,7 @@ jobs:
             expected_name=${mapping%%:*}
             target=${mapping#*:}
             stage=vm_identity_$expected_name
-            actual=$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; x=next((x for x in r.findall("VM") if (x.findtext("NAME") or "")==n),None); print(((x.findtext("STATE") or "")+\",\"+(x.findtext("TEMPLATE/NIC/IP") or "")) if x is not None else "")' "$expected_name")
+            actual=$(sudo -n -u oneadmin onevm list --xml 2>/dev/null | python3 -c 'import sys,xml.etree.ElementTree as E; d=sys.stdin.read(); r=E.fromstring(d) if d.strip() else E.Element("VMS"); n=sys.argv[1]; x=next((x for x in r.findall("VM") if (x.findtext("NAME") or "")==n),None); print(((x.findtext("STATE") or "")+\",\"+(x.findtext("TEMPLATE/NIC/IP") or "")) if x is not None else "")' "$expected_name" || true)
             echo "KUBEONE_SOAK_VM_IDENTITY name=$expected_name expected_ip=$target actual=$actual"
             test "$actual" = "3,$target"
             stage=ssh_keyscan_$expected_name
