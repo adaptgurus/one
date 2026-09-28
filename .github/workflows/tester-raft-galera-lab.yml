@@ -1,4 +1,4 @@
-name: Tester Foundation boot diagnosis
+name: Tester Foundation SELinux disk diagnosis
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,11 +9,11 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  boot-diagnosis:
+  disk-labels:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 3
     steps:
-      - name: Inspect owned nested guest state and bounded console
+      - name: Read exact owned disk labels and AVC records
         shell: bash
         run: |
           set -euo pipefail
@@ -21,26 +21,14 @@ jobs:
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
           test "$(sudo -n virsh domuuid lsf-fe1)" = 59b15120-8865-54a6-abc6-66ccb404f799
-          out=/home/opc/layersentry-foundation-qual-20260929/evidence/boot-resume-readback.log
           {
             date -Is
-            sudo -n virsh list --all
-            sudo -n virsh domstats lsf-fe1 lsf-kvm3 --state --cpu-total --balloon --block
-            sudo -n virsh domifaddr lsf-kvm3 --source arp
-            sudo -n virsh dumpxml lsf-fe1 | sed -n '/<os>/,/<\/os>/p; /<serial/,/<\/serial>/p; /<console/,/<\/console>/p; /<video/,/<\/video>/p'
-            sudo -n tail -n 12 /var/log/libvirt/qemu/lsf-fe1.log
-            sudo -n python3 - <<'PY'
-          import os,select,subprocess,time
-          path=subprocess.check_output(['virsh','ttyconsole','lsf-fe1'],text=True).strip()
-          assert path.startswith('/dev/pts/')
-          fd=os.open(path,os.O_RDWR|os.O_NONBLOCK)
-          os.write(fd,b'\r')
-          end=time.monotonic()+6
-          while time.monotonic()<end:
-              ready,_,_=select.select([fd],[],[],0.5)
-              if ready:
-                  print(os.read(fd,65536).decode(errors='replace'),end='',flush=True)
-          os.close(fd)
-          PY
-          } 2>&1 | tee "$out"
-          echo 'READBACK_ONLY_NOT_CLUSTER_READY'
+            getenforce
+            sudo -n ls -lZ /var/lib/libvirt/images/layersentry-tester-20260929/*qcow2
+            for vm in lsf-fe1 lsf-fe2 lsf-fe3 lsf-kvm1 lsf-kvm2 lsf-kvm3; do
+              echo "VM=$vm"
+              sudo -n virsh domstate "$vm" --reason
+              sudo -n virsh dumpxml "$vm" | sed -n '/<seclabel/,/<\/seclabel>/p'
+            done
+            sudo -n ausearch -m AVC,USER_AVC -ts today -i | grep -E 'lsf-fe|lsf-kvm|svirt|virt_image' | tail -30 || true
+          } 2>&1 | tee /home/opc/layersentry-foundation-qual-20260929/evidence/selinux-disk-readback.log
