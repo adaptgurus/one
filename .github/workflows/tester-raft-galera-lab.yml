@@ -1,4 +1,4 @@
-name: Tester Foundation corrected HA synchronization
+name: Tester Foundation native privilege correction
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -13,20 +13,20 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     steps:
-      - name: Bind exact corrected OneDeploy and verified Foundation
+      - name: Bind corrected Foundation and OneDeploy pins
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 209c356346a4e1a847164faf89a3b177001cb003
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 2289f9313778624f85a93ecafa9e0050c540ecf1
           test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = d32205fd31743d54837973b42ce3e63f96f1007e
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          cd /home/opc/one-deploy
-          python -m unittest discover -s tests -p 'test_layersentry_controller_ha_sync.py' -v
-          ANSIBLE_HOST_KEY_CHECKING=True ansible-playbook -i /home/opc/layersentry-foundation-qual-20260929/one-deploy-inventory.yml --syntax-check opennebula.deploy.main
-      - name: Execute canonical Foundation after HA transport correction
+          cd /home/opc/layersentry-platform
+          export PYTHONPATH="$PWD/deploy:$PWD/tests"
+          python -m unittest test_management_ha test_provider_preflight_regressions test_raft_acceptance test_tester_substrate_labels test_layersentry_deploy -v
+      - name: Call canonical Foundation with native privilege keywords preserved
         shell: bash
         run: |
           set -euo pipefail
