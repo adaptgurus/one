@@ -1,4 +1,4 @@
-name: Tester Foundation independent final cluster status
+name: Tester Foundation process and VM recovery
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,44 +9,24 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  final-state:
+  resilience:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 6
+    timeout-minutes: 25
     steps:
-      - name: Independently query each cluster and both management endpoints
+      - name: Bind tester source and compile exact qualification
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = f7865b37ba869594fddbded5d9e712f2799c4575
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 6ebe949c43c19dfd07aa50ecaad490127f7397b9
+          test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
+          test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = bbe15fb307819a59b4a959dd775b5636dc09f1ca
+          /home/opc/layersentry-foundation-qual-20260929/venv/bin/python -m py_compile /home/opc/layersentry-platform/tools/lab/tester_cluster_resilience.py
+      - name: Exercise exact owned VM and process failure with recovery and retained data
+        shell: bash
+        run: |
+          set -euo pipefail
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          python - <<'PY'
-          import sys,json,os,datetime,fcntl,hashlib
-          from pathlib import Path
-          sys.path.insert(0,'/home/opc/layersentry-platform/tools/lab')
-          from tester_galera_qualification import healthy,proxy,https_check,sql
-          from tester_native_qualification import WORK,NAMES,remote,require,converge,native_json,rows,hosts_ready
-          lock=(WORK/'.execution.lock').open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-          result={'timestamp_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'production_certified':False,'source':'f7865b37ba869594fddbded5d9e712f2799c4575'}
-          result['galera']=healthy();result['raft']=converge();result['proxy']=proxy();result['https']=https_check()
-          result['services']={};result['selinux']={};result['canary_tables']={};result['bootstrap_flags_clear']={}
-          for name in NAMES:
-              result['services'][name]=require(remote(name,['systemctl','is-active','opennebula','mariadb','layersentry-mariadb']),'native and dedicated services').splitlines()
-              result['selinux'][name]=require(remote(name,['getenforce']),'SELinux state').strip()
-              result['canary_tables'][name]=sql(name,"SET SESSION wsrep_sync_wait=1; SELECT table_name FROM information_schema.tables WHERE table_schema='layersentry' AND table_name LIKE 'lsf\\_qual\\_%';").splitlines()
-              result['bootstrap_flags_clear'][name]=remote(name,['sudo','-n','grep','-Fxq','GALERA_NEW_CLUSTER=','/run/layersentry-mariadb-bootstrap.env']).returncode==0
-          result['load_balancers']={}
-          for name in ['lsf-fe1','lsf-fe2']:
-              result['load_balancers'][name]={'services':require(remote(name,['systemctl','is-active','haproxy','keepalived','layersentry-galera-health']),'LB and health services').splitlines(),'listeners':require(remote(name,['ss','-lnt']),'listener readback')}
-          leader=result['raft'][NAMES[0]]['leader']
-          result['hosts']=rows(native_json(leader,['onehost','list','--json']).get('HOST_POOL',{}).get('HOST'))
-          result['hosts']=[{k:r.get(k) for k in ['ID','NAME','STATE','IM_MAD','VM_MAD']} for r in result['hosts']]
-          result['compute_ready']=hosts_ready(result['hosts'])
-          result['ready']=result['compute_ready'] and all(v=='Enforcing' for v in result['selinux'].values()) and not any(result['canary_tables'].values()) and all(result['bootstrap_flags_clear'].values())
-          target=WORK/'evidence'/('galera-independent-final-'+os.environ['GITHUB_RUN_ID']+'.json')
-          target.write_text(json.dumps(result,indent=2)+'\n')
-          print(json.dumps(result,indent=2));print('EVIDENCE_SHA256',hashlib.sha256(target.read_bytes()).hexdigest())
-          if not result['ready']:raise SystemExit(1)
-          PY
+          python /home/opc/layersentry-platform/tools/lab/tester_cluster_resilience.py --execute
