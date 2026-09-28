@@ -788,3 +788,221 @@ jobs:
           test "$status" = 403
           echo REPLICATION_V2_FAILBACK_MTLS_NEGATIVES=PASS
           DR_NEGATIVES
+
+  replication-failback-boot:
+    if: contains(github.event.head_commit.message, '[replication-failback-boot]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 45
+    steps:
+      - name: Materialize and boot exact failback VM on DC
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          chmod 0700 "$work"
+
+          transfer_key=/root/.ssh/layersentry-replication-v2-transfer
+          test -f "$transfer_key"
+          test "$(ssh-keygen -lf "$transfer_key" -E sha256 | awk '{print $2}')" = 'SHA256:muT1yGsF0/TU8ToxLHErVwPcvJyIHPUufPRCK9SLloE'
+          dr_scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.40 2>/dev/null)"
+          test "$(printf '%s\n' "$dr_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:qOEu7khxLLpUIwS4RYyc7p5Vg/27MmZKr3YNtLWVTpI'
+          printf '%s\n' "$dr_scan" >"$work/dr_known_hosts"
+          chmod 0600 "$work/dr_known_hosts"
+          ssh -i "$transfer_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dr_known_hosts" \
+            root@172.17.60.40 'bash -s' <<'DR_FENCE'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentrydr
+          test "$(id -u)" = 0
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.40/26([[:space:]]|$)'
+          mapfile -t f < <(sudo -n -u oneadmin onevm show 6 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","TEMPLATE/NIC/IP")],sep="\n")')
+          test "${f[0]}" = layersentry-rv2-dr-vm29-g1
+          test "${f[1]}" = 8
+          test "${f[2]}" = 10.100.50.126
+          echo REPLICATION_V2_FAILBACK_DR_FENCED=PASS
+          DR_FENCE
+
+          dc_scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)"
+          test "$(printf '%s\n' "$dc_scan" | grep -c '^172\.17\.60\.30 ssh-ed25519 ')" -eq 1
+          test "$(printf '%s\n' "$dc_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$dc_scan" >"$work/dc_known_hosts"
+          chmod 0600 "$work/dc_known_hosts"
+          dc_key=''
+          dc_user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes \
+                -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+                -o ConnectTimeout=5 "$candidate_user@172.17.60.30" \
+                'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' \
+                >/dev/null 2>&1; then dc_key="$candidate"; dc_user="$candidate_user"; break 2; fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 \
+            ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$dc_key"
+          ssh-keygen -q -t ed25519 -N '' -C layersentry-rv2-dc-failback-20260928 -f "$work/guest_key"
+          chmod 0600 "$work/guest_key"
+          guest_pub_b64="$(base64 -w0 "$work/guest_key.pub")"
+
+          ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+            "$dc_user@172.17.60.30" 'bash -s --' "$guest_pub_b64" >"$work/result" <<'DC_BOOT'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          pub64="$1"
+          source_vm=29
+          mapfile -t sf < <(sudo -n -u oneadmin onevm show "$source_vm" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","TEMPLATE/NIC/IP")],sep="\n")')
+          test "${sf[0]}" = ls-dr-v2-qual-alpine-20260928
+          test "${sf[1]}" = 8
+          test "${sf[2]}" = 10.50.10.126
+          recovery=/var/lib/layersentry/replication-v2-failback/filecow/recovery/ls-rv2-dc-vm29-g2
+          $SUDO test -f "$recovery/disk-os.qcow2"
+          $SUDO test -f "$recovery/disk-data.qcow2"
+          $SUDO qemu-img check -q "$recovery/disk-os.qcow2"
+          $SUDO qemu-img check -q "$recovery/disk-data.qcow2"
+          stage=/var/tmp/layersentry-rv2-dc-vm29-g2
+          test ! -e "$stage"
+          install -d -m 0700 "$stage"
+          os_raw="$stage/os.raw"
+          data_raw="$stage/data.raw"
+          os_qcow="$stage/os.qcow2"
+          data_qcow="$stage/data.qcow2"
+          $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-os.qcow2" "$os_raw"
+          $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-data.qcow2" "$data_raw"
+          os_sha="$(sha256sum "$os_raw" | awk '{print $1}')"
+          data_sha="$(sha256sum "$data_raw" | awk '{print $1}')"
+          test "$os_sha" = a6032ea4093b54e91eda29439c4bad8344187f193fb4beb8e48890dfa38146f5
+          test "$data_sha" = cb838ca25e9458f70594df25780103660ba2963eb308b8066cc6ef213e8dd608
+          old_records="$($SUDO debugfs -R 'cat /generations/20260927T234524Z.records' "$data_raw" 2>/dev/null | sha256sum | awk '{print $1}')"
+          old_payload="$($SUDO debugfs -R 'cat /generations/20260927T234524Z.payload' "$data_raw" 2>/dev/null | sha256sum | awk '{print $1}')"
+          new_records="$($SUDO debugfs -R 'cat /generations/20260928T000000Z-dr-failback.records' "$data_raw" 2>/dev/null | sha256sum | awk '{print $1}')"
+          new_payload="$($SUDO debugfs -R 'cat /generations/20260928T000000Z-dr-failback.payload' "$data_raw" 2>/dev/null | sha256sum | awk '{print $1}')"
+          test "$old_records" = 9b3372cc6e663cae91df68d687d71a0470b10badbfb7ce60fb67cc6d230b4f0d
+          test "$old_payload" = ea57d829b452e3ea965d14b8942e00080a7692d462629a951507f1f4a0bda980
+          test "$new_records" = a0c957a52e9d46da1476def6bffdf8d086dca73e8d75d84513a5e675d976eff7
+          test "$new_payload" = 2ca76f41f6968d91cc8d65693c1a0e8bd94843b50ad1434518879f8cb59c4d10
+          echo "REPLICATION_V2_FAILBACK_RECOVERY_READBACK OS_SHA256=$os_sha DATA_SHA256=$data_sha OLD_RECORDS_SHA256=$old_records OLD_PAYLOAD_SHA256=$old_payload NEW_RECORDS_SHA256=$new_records NEW_PAYLOAD_SHA256=$new_payload" >&2
+          $SUDO qemu-img convert -f raw -O qcow2 -o compat=1.1,lazy_refcounts=off "$os_raw" "$os_qcow"
+          $SUDO qemu-img convert -f raw -O qcow2 -o compat=1.1,lazy_refcounts=off "$data_raw" "$data_qcow"
+          $SUDO chown oneadmin:oneadmin "$stage" "$os_qcow" "$data_qcow"
+          $SUDO chmod 0750 "$stage"
+          $SUDO chmod 0640 "$os_qcow" "$data_qcow"
+          for n in layersentry-rv2-dc-vm29-g2-os layersentry-rv2-dc-vm29-g2-data; do
+            test -z "$(sudo -n -u oneadmin oneimage list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("IMAGE") if (x.findtext("NAME") or "")==n),""))' "$n")"
+          done
+          ti1=$(mktemp); ti2=$(mktemp); tvm=$(mktemp)
+          trap 'rm -f -- "$ti1" "$ti2" "$tvm"' EXIT
+          printf 'NAME = "layersentry-rv2-dc-vm29-g2-os"\nTYPE = "OS"\nPATH = "%s"\nFORMAT = "qcow2"\nDEV_PREFIX = "vd"\nDESCRIPTION = "Replication v2 DR-to-DC failback generation 2 OS"\n' "$os_qcow" >"$ti1"
+          printf 'NAME = "layersentry-rv2-dc-vm29-g2-data"\nTYPE = "DATABLOCK"\nPATH = "%s"\nFORMAT = "qcow2"\nDEV_PREFIX = "vd"\nDESCRIPTION = "Replication v2 DR-to-DC failback generation 2 data"\n' "$data_qcow" >"$ti2"
+          chmod 0644 "$ti1" "$ti2"
+          osid=$(sudo -n -u oneadmin oneimage create -d 1 "$ti1" | awk '{print $NF}')
+          dataid=$(sudo -n -u oneadmin oneimage create -d 1 "$ti2" | awk '{print $NF}')
+          for id in "$osid" "$dataid"; do
+            state=0
+            for _ in $(seq 1 120); do
+              state=$(sudo -n -u oneadmin oneimage show "$id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE") or "")')
+              { test "$state" = 1 || test "$state" = 2; } && break
+              test "$state" != 5
+              sleep 2
+            done
+            test "$state" = 1 || test "$state" = 2
+          done
+          test -z "$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")=="layersentry-rv2-dc-vm29-g2"),""))')"
+          pub="$(printf '%s' "$pub64" | base64 -d)"
+          cat >"$tvm" <<VM
+          NAME = "layersentry-rv2-dc-vm29-g2"
+          CPU = "2"
+          VCPU = "2"
+          MEMORY = "4096"
+          HYPERVISOR = "kvm"
+          DISK = [ IMAGE_ID = "$osid" ]
+          DISK = [ IMAGE_ID = "$dataid" ]
+          NIC = [ NETWORK_ID = "0", MODEL = "virtio" ]
+          OS = [ ARCH = "x86_64", MACHINE = "q35" ]
+          CONTEXT = [ NETWORK = "YES", NETCFG_TYPE = "nm", SET_HOSTNAME = "layersentry-rv2-dc-vm29-g2", SSH_PUBLIC_KEY = "$pub" ]
+          VM
+          chmod 0644 "$tvm"
+          vmid=$(sudo -n -u oneadmin onevm create "$tvm" | awk '{print $NF}')
+          test "$vmid" -ge 30
+          for _ in $(seq 1 180); do
+            mapfile -t vf < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("STATE","LCM_STATE","TEMPLATE/NIC/IP","DEPLOY_ID","HISTORY_RECORDS/HISTORY/HOSTNAME","TEMPLATE/NIC/NETWORK_ID")],sep="\n")')
+            test "${vf[0]}" != 7
+            if test "${vf[0]}" = 3 && test "${vf[1]}" = 3 && test -n "${vf[2]}" && test -n "${vf[3]}" && test -n "${vf[4]}"; then break; fi
+            sleep 2
+          done
+          test "${vf[0]}" = 3 && test "${vf[1]}" = 3
+          ip="${vf[2]}"; domain="${vf[3]}"; hypervisor="${vf[4]}"; network_id="${vf[5]}"
+          test "$network_id" = 0
+          mapfile -t nf < <(sudo -n -u oneadmin onevnet show "$network_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("TEMPLATE/NETWORK_MASK","TEMPLATE/GATEWAY")],sep="\n")')
+          mask="${nf[0]}"; gateway="${nf[1]}"
+          test -n "$mask"
+          prefix=$(python3 -c 'import ipaddress,sys; print(ipaddress.IPv4Network("0.0.0.0/"+sys.argv[1]).prefixlen)' "$mask")
+          sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" 'bash -s --' "$domain" "$ip" "$prefix" "$mask" "${gateway:-__NONE__}" "$pub64" <<'QGA'
+          set -euo pipefail
+          domain="$1"; ip="$2"; prefix="$3"; mask="$4"; gateway="$5"; pub64="$6"
+          test "$(virsh -c qemu:///system domstate "$domain" | tr -d '[:space:]')" = running
+          route=''; gateway_line=''
+          if test "$gateway" != __NONE__ && test -n "$gateway"; then route="ip route replace default via $gateway dev eth0;"; gateway_line="  gateway $gateway\\n"; fi
+          command="set -eu; ip link set eth0 up; ip addr flush dev eth0 scope global || true; ip addr add $ip/$prefix dev eth0; $route mkdir -p /etc/network /root/.ssh; printf 'auto lo\\niface lo inet loopback\\n\\nauto eth0\\niface eth0 inet static\\n  address $ip\\n  netmask $mask\\n$gateway_line' > /etc/network/interfaces; printf '%s' '$pub64' | base64 -d > /root/.ssh/authorized_keys; chmod 0700 /root/.ssh; chmod 0600 /root/.ssh/authorized_keys; command -v rc-service >/dev/null 2>&1 && rc-service sshd restart || true; sync"
+          request=$(python3 -c 'import json,sys; print(json.dumps({"execute":"guest-exec","arguments":{"path":"/bin/sh","arg":["-c",sys.argv[1]],"capture-output":True}}))' "$command")
+          response=$(virsh -c qemu:///system qemu-agent-command "$domain" "$request")
+          pid=$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin)["return"]["pid"])')
+          for _ in $(seq 1 30); do
+            status=$(virsh -c qemu:///system qemu-agent-command "$domain" "{\"execute\":\"guest-exec-status\",\"arguments\":{\"pid\":$pid}}")
+            read -r exited exitcode < <(printf '%s' "$status" | python3 -c 'import json,sys; r=json.load(sys.stdin)["return"]; print(str(bool(r.get("exited"))).lower(),r.get("exitcode",-1))')
+            test "$exited" = true && break
+            sleep 1
+          done
+          test "$exited" = true && test "$exitcode" = 0
+          QGA
+          echo "VM_ID=$vmid"
+          echo "VM_IP=$ip"
+          echo "OS_IMAGE_ID=$osid"
+          echo "DATA_IMAGE_ID=$dataid"
+          echo "HYPERVISOR=$hypervisor"
+          DC_BOOT
+
+          vmid=$(awk -F= '$1=="VM_ID" {print $2}' "$work/result")
+          vm_ip=$(awk -F= '$1=="VM_IP" {print $2}' "$work/result")
+          test "$vmid" -ge 30
+          test -n "$vm_ip"
+          proxy="ssh -i $dc_key -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$work/dc_known_hosts -W %h:%p $dc_user@172.17.60.30"
+          ready=FAIL
+          for _ in $(seq 1 60); do
+            if timeout 10 ssh -i "$work/guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+              -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$work/guest_known_hosts" \
+              -o "ProxyCommand=$proxy" -o ConnectTimeout=5 "root@$vm_ip" \
+              'test "$(id -u)" = 0' >/dev/null 2>&1; then ready=PASS; break; fi
+            sleep 2
+          done
+          test "$ready" = PASS
+          timeout 30 ssh -i "$work/guest_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/guest_known_hosts" \
+            -o "ProxyCommand=$proxy" "root@$vm_ip" 'set -euo pipefail; test "$(id -u)" = 0; test "$(findmnt -n -o SOURCE /srv/layersentry-data)" = /dev/vdb; sha256sum -c /srv/layersentry-data/generations/20260927T234524Z.sha256; sha256sum -c /srv/layersentry-data/generations/20260928T000000Z-dr-failback.sha256; test "$(sha256sum /srv/layersentry-data/generations/20260927T234524Z.records | awk '\''{print $1}'\'')" = 9b3372cc6e663cae91df68d687d71a0470b10badbfb7ce60fb67cc6d230b4f0d; test "$(sha256sum /srv/layersentry-data/generations/20260927T234524Z.payload | awk '\''{print $1}'\'')" = ea57d829b452e3ea965d14b8942e00080a7692d462629a951507f1f4a0bda980; test "$(sha256sum /srv/layersentry-data/generations/20260928T000000Z-dr-failback.records | awk '\''{print $1}'\'')" = a0c957a52e9d46da1476def6bffdf8d086dca73e8d75d84513a5e675d976eff7; test "$(sha256sum /srv/layersentry-data/generations/20260928T000000Z-dr-failback.payload | awk '\''{print $1}'\'')" = 2ca76f41f6968d91cc8d65693c1a0e8bd94843b50ad1434518879f8cb59c4d10; echo REPLICATION_V2_FAILBACK_GUEST_DATA=PASS'
+          ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+            "$dc_user@172.17.60.30" 'bash -s --' "$vmid" <<'DC_FINAL'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          mapfile -t source < <(sudo -n -u oneadmin onevm show 29 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",sep="\n")')
+          test "${source[0]}" = ls-dr-v2-qual-alpine-20260928
+          test "${source[1]}" = 8
+          mapfile -t target < <(sudo -n -u oneadmin onevm show "$1" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",r.findtext("LCM_STATE") or "",sep="\n")')
+          test "${target[0]}" = layersentry-rv2-dc-vm29-g2
+          test "${target[1]}" = 3 && test "${target[2]}" = 3
+          echo "REPLICATION_V2_FAILBACK_ONLINE VM_ID=$1 SOURCE_VM29_STATE=${source[1]}"
+          DC_FINAL
