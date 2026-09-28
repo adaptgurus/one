@@ -7,10 +7,10 @@ permissions:
   contents: read
 concurrency:
   group: tester-raft-galera-lab
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   preflight:
-    runs-on: [self-hosted, Linux, X64, tester]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
     steps:
       - name: Bind authorized tester identity and inspect prerequisites
