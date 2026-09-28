@@ -55,19 +55,24 @@ jobs:
 
           "${ssh_dc[@]}" 'bash -s' <<'REMOTE'
           set -euo pipefail
+          stage=target_binding
+          trap 'echo "KUBEONE_SOAK_START_FAIL_STAGE=$stage" >&2' ERR
           test "$(hostname -s)" = layersentry1
           ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
           if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
           test "$($SUDO id -u)" = 0
+          stage=storage_preflight
           available_kib=$($SUDO df -Pk /var/lib/layersentry | awk 'NR==2 {print $4}')
           test "$available_kib" -ge 1048576
           test -s /var/lib/layersentry/kubeone/lab/cluster-b/kubeconfig
           test -s /var/lib/one/.ssh/id_rsa
           test -s /var/lib/one/.ssh/known_hosts
+          stage=cluster_ac_connectivity
           for target in 10.50.10.102 10.50.10.121; do
             $SUDO ssh -i /var/lib/one/.ssh/id_rsa -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/var/lib/one/.ssh/known_hosts -o ConnectTimeout=5 root@"$target" -- kubectl --kubeconfig /etc/kubernetes/admin.conf get --raw=/readyz | grep -qx ok
           done
 
+          stage=install_monitor
           $SUDO install -d -m 0755 /usr/local/libexec/layersentry
           $SUDO install -d -m 0700 /var/lib/layersentry/credentials
           $SUDO install -o root -g root -m 0755 /tmp/layersentry-kubeone-soak.sh /usr/local/libexec/layersentry/kubeone-soak.sh
@@ -77,6 +82,7 @@ jobs:
           $SUDO curl -fsSL https://api.github.com/meta | $SUDO python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join("github.com "+x for x in d["ssh_keys"]))' | $SUDO tee /var/lib/layersentry/credentials/github-known-hosts >/dev/null
           $SUDO chmod 0600 /var/lib/layersentry/credentials/github-known-hosts
 
+          stage=two_minute_proof
           proof=/var/lib/layersentry/evidence/kubeone-soak-proof-2m-20260928
           if $SUDO test -e "$proof"; then $SUDO mv -- "$proof" "${proof}.previous.$(date +%s)"; fi
           $SUDO env SOAK_DURATION_SECONDS=120 SOAK_INTERVAL_SECONDS=15 SOAK_OUTPUT_DIR="$proof" /usr/local/libexec/layersentry/kubeone-soak.sh
@@ -87,6 +93,7 @@ jobs:
           test "$SOAK_FAILURES" = 0
           test "$SOAK_SAMPLES" -ge 27
 
+          stage=start_twenty_hour
           long=/var/lib/layersentry/evidence/kubeone-soak-20h-current
           if $SUDO systemctl is-active --quiet layersentry-kubeone-soak-20h.service; then echo EXISTING_20H_SOAK_ACTIVE >&2; exit 41; fi
           if $SUDO test -e "$long"; then $SUDO mv -- "$long" "${long}.previous.$(date +%s)"; fi
@@ -120,6 +127,7 @@ jobs:
           failures=$($SUDO awk -F, 'NR>1 && $11!="PASS" {n++} END {print n+0}' "$long/samples.csv")
           test "$rows" -ge 6
           test "$failures" -eq 0
+          trap - ERR
           echo "KUBEONE_SOAK_2M=PASS SAMPLES=$SOAK_SAMPLES"
           echo "KUBEONE_SOAK_20H=ACTIVE INITIAL_ROWS=$rows INITIAL_FAILURES=$failures AVAILABLE_KIB=$available_kib"
           REMOTE
