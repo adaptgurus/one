@@ -875,13 +875,12 @@ jobs:
           $SUDO test -f "$recovery/disk-data.qcow2"
           $SUDO qemu-img check -q "$recovery/disk-os.qcow2"
           $SUDO qemu-img check -q "$recovery/disk-data.qcow2"
-          stage=/var/tmp/layersentry-rv2-dc-vm29-g2
-          test ! -e "$stage"
-          install -d -m 0700 "$stage"
-          os_raw="$stage/os.raw"
-          data_raw="$stage/data.raw"
-          os_qcow="$stage/os.qcow2"
-          data_qcow="$stage/data.qcow2"
+          stage=/var/tmp/layersentry-rv2-dc-vm29-g2-retry1
+          os_raw="${stage}-os.raw"
+          data_raw="${stage}-data.raw"
+          os_qcow="${stage}-os.qcow2"
+          data_qcow="${stage}-data.qcow2"
+          test ! -e "$os_raw" && test ! -e "$data_raw" && test ! -e "$os_qcow" && test ! -e "$data_qcow"
           $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-os.qcow2" "$os_raw"
           $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-data.qcow2" "$data_raw"
           os_sha="$(sha256sum "$os_raw" | awk '{print $1}')"
@@ -899,9 +898,12 @@ jobs:
           echo "REPLICATION_V2_FAILBACK_RECOVERY_READBACK OS_SHA256=$os_sha DATA_SHA256=$data_sha OLD_RECORDS_SHA256=$old_records OLD_PAYLOAD_SHA256=$old_payload NEW_RECORDS_SHA256=$new_records NEW_PAYLOAD_SHA256=$new_payload" >&2
           $SUDO qemu-img convert -f raw -O qcow2 -o compat=1.1,lazy_refcounts=off "$os_raw" "$os_qcow"
           $SUDO qemu-img convert -f raw -O qcow2 -o compat=1.1,lazy_refcounts=off "$data_raw" "$data_qcow"
-          $SUDO chown oneadmin:oneadmin "$stage" "$os_qcow" "$data_qcow"
-          $SUDO chmod 0750 "$stage"
+          $SUDO chown oneadmin:oneadmin "$os_qcow" "$data_qcow"
           $SUDO chmod 0640 "$os_qcow" "$data_qcow"
+          sudo -n -u oneadmin test -r "$os_qcow"
+          sudo -n -u oneadmin test -r "$data_qcow"
+          sudo -n -u oneadmin qemu-img info "$os_qcow" >/dev/null
+          sudo -n -u oneadmin qemu-img info "$data_qcow" >/dev/null
           for n in layersentry-rv2-dc-vm29-g2-os layersentry-rv2-dc-vm29-g2-data; do
             test -z "$(sudo -n -u oneadmin oneimage list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("IMAGE") if (x.findtext("NAME") or "")==n),""))' "$n")"
           done
