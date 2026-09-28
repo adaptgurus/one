@@ -76,8 +76,11 @@ jobs:
           for mapping in k1a-cp1:10.50.10.102 k1c-cp1:10.50.10.121; do
             expected_name=${mapping%%:*}
             target=${mapping#*:}
+            stage=vm_identity_$expected_name
             actual=$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; x=next((x for x in r.findall("VM") if (x.findtext("NAME") or "")==n),None); print(((x.findtext("STATE") or "")+\",\"+(x.findtext("TEMPLATE/NIC/IP") or "")) if x is not None else "")' "$expected_name")
+            echo "KUBEONE_SOAK_VM_IDENTITY name=$expected_name expected_ip=$target actual=$actual"
             test "$actual" = "3,$target"
+            stage=ssh_keyscan_$expected_name
             scan=$($SUDO ssh-keyscan -T 5 -t ed25519 "$target" 2>/dev/null)
             test "$(printf '%s\n' "$scan" | grep -c "^$target ssh-ed25519 ")" -eq 1
             printf '%s\n' "$scan" | $SUDO tee -a "$known_tmp" >/dev/null
