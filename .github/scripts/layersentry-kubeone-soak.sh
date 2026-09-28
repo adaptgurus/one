@@ -8,11 +8,20 @@ kubectl_bin=${KUBECTL_BIN:-/usr/local/bin/kubectl}
 cluster_b_kubeconfig=${CLUSTER_B_KUBECONFIG:-/var/lib/layersentry/kubeone/lab/cluster-b/kubeconfig}
 ssh_key=${KUBEONE_SSH_KEY:-/var/lib/one/.ssh/id_rsa}
 ssh_known_hosts=${KUBEONE_SSH_KNOWN_HOSTS:-/var/lib/one/.ssh/known_hosts}
+clusters_raw=${SOAK_CLUSTERS:-b}
+read -r -a clusters <<<"${clusters_raw}"
 
 [[ ${duration_seconds} =~ ^[0-9]+$ ]] && (( duration_seconds >= 120 ))
 [[ ${interval_seconds} =~ ^[0-9]+$ ]] && (( interval_seconds >= 10 ))
 [[ ${output_dir} == /var/lib/layersentry/evidence/* ]]
-[[ -x ${kubectl_bin} && -s ${cluster_b_kubeconfig} && -s ${ssh_key} && -s ${ssh_known_hosts} ]]
+[[ -x ${kubectl_bin} && ${#clusters[@]} -ge 1 ]]
+for cluster in "${clusters[@]}"; do
+  [[ ${cluster} == a || ${cluster} == b || ${cluster} == c ]]
+done
+[[ " ${clusters[*]} " != *" b "* ]] || [[ -s ${cluster_b_kubeconfig} ]]
+if [[ " ${clusters[*]} " == *" a "* || " ${clusters[*]} " == *" c "* ]]; then
+  [[ -s ${ssh_key} && -s ${ssh_known_hosts} ]]
+fi
 mkdir -p "${output_dir}"
 chmod 0700 "${output_dir}"
 available_kib=$(df -Pk "${output_dir}" | awk 'NR==2 {print $4}')
@@ -39,7 +48,7 @@ kube() {
 }
 
 declare -A baseline_restarts
-for cluster in a b c; do
+for cluster in "${clusters[@]}"; do
   nodes=$(kube "${cluster}" --request-timeout=20s get nodes --no-headers)
   pods=$(kube "${cluster}" --request-timeout=20s -n kube-system get pods --no-headers)
   [[ -n ${nodes} && -n ${pods} ]]
@@ -51,7 +60,7 @@ end_epoch=$((start_epoch + duration_seconds))
 samples_total=0
 failures_total=0
 printf '%s SOAK_START duration_seconds=%s interval_seconds=%s available_kib=%s\n' "$(date -Is)" "${duration_seconds}" "${interval_seconds}" "${available_kib}" >>"${events}"
-for cluster in a b c; do
+for cluster in "${clusters[@]}"; do
   printf '%s BASELINE cluster=%s restarts=%s\n' "$(date -Is)" "${cluster}" "${baseline_restarts[${cluster}]}" >>"${events}"
 done
 
@@ -66,7 +75,7 @@ while :; do
   now_epoch=$(date +%s)
   elapsed=$((now_epoch - start_epoch))
   timestamp=$(date -Is)
-  for cluster in a b c; do
+  for cluster in "${clusters[@]}"; do
     ready_nodes=0; total_nodes=0; nonready=999; restarts=0; api_ready=0; result=FAIL
     node_output=$(kube "${cluster}" --request-timeout=20s get nodes --no-headers 2>/dev/null || true)
     pod_output=$(kube "${cluster}" --request-timeout=20s -n kube-system get pods --no-headers 2>/dev/null || true)
@@ -117,6 +126,7 @@ printf '%s SOAK_COMPLETE samples=%s failures=%s\n' "$(date -Is)" "${samples_tota
 {
   echo "SOAK_DURATION_SECONDS=${duration_seconds}"
   echo "SOAK_INTERVAL_SECONDS=${interval_seconds}"
+  echo "SOAK_CLUSTERS=${clusters[*]}"
   echo "SOAK_SAMPLES=${samples_total}"
   echo "SOAK_FAILURES=${failures_total}"
   echo "SOAK_RESULT=$([[ ${failures_total} -eq 0 ]] && echo PASS || echo FAIL)"
