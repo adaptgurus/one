@@ -64,12 +64,23 @@ jobs:
           stage=storage_preflight
           available_kib=$($SUDO df -Pk /var/lib/layersentry | awk 'NR==2 {print $4}')
           test "$available_kib" -ge 1048576
+          stage=cluster_b_kubeconfig_preflight
           test -s /var/lib/layersentry/kubeone/lab/cluster-b/kubeconfig
+          stage=kubeone_ssh_key_preflight
           test -s /var/lib/one/.ssh/id_rsa
-          test -s /var/lib/one/.ssh/known_hosts
+          stage=kubeone_known_hosts_preflight
+          kubeone_known_hosts=''
+          for candidate in /var/lib/one/.ssh/known_hosts /root/.ssh/known_hosts; do
+            $SUDO test -s "$candidate" || continue
+            $SUDO ssh-keygen -F 10.50.10.102 -f "$candidate" >/dev/null || continue
+            $SUDO ssh-keygen -F 10.50.10.121 -f "$candidate" >/dev/null || continue
+            kubeone_known_hosts=$candidate
+            break
+          done
+          test -n "$kubeone_known_hosts"
           stage=cluster_ac_connectivity
           for target in 10.50.10.102 10.50.10.121; do
-            $SUDO ssh -i /var/lib/one/.ssh/id_rsa -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/var/lib/one/.ssh/known_hosts -o ConnectTimeout=5 root@"$target" -- kubectl --kubeconfig /etc/kubernetes/admin.conf get --raw=/readyz | grep -qx ok
+            $SUDO ssh -i /var/lib/one/.ssh/id_rsa -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$kubeone_known_hosts" -o ConnectTimeout=5 root@"$target" -- kubectl --kubeconfig /etc/kubernetes/admin.conf get --raw=/readyz | grep -qx ok
           done
 
           stage=install_monitor
@@ -85,7 +96,7 @@ jobs:
           stage=two_minute_proof
           proof=/var/lib/layersentry/evidence/kubeone-soak-proof-2m-20260928
           if $SUDO test -e "$proof"; then $SUDO mv -- "$proof" "${proof}.previous.$(date +%s)"; fi
-          $SUDO env SOAK_DURATION_SECONDS=120 SOAK_INTERVAL_SECONDS=15 SOAK_OUTPUT_DIR="$proof" /usr/local/libexec/layersentry/kubeone-soak.sh
+          $SUDO env SOAK_DURATION_SECONDS=120 SOAK_INTERVAL_SECONDS=15 SOAK_OUTPUT_DIR="$proof" KUBEONE_SSH_KNOWN_HOSTS="$kubeone_known_hosts" /usr/local/libexec/layersentry/kubeone-soak.sh
           SOAK_RESULT=$($SUDO awk -F= '$1=="SOAK_RESULT" {print $2}' "$proof/SUMMARY.env")
           SOAK_FAILURES=$($SUDO awk -F= '$1=="SOAK_FAILURES" {print $2}' "$proof/SUMMARY.env")
           SOAK_SAMPLES=$($SUDO awk -F= '$1=="SOAK_SAMPLES" {print $2}' "$proof/SUMMARY.env")
@@ -109,6 +120,7 @@ jobs:
           Environment=SOAK_DURATION_SECONDS=72000
           Environment=SOAK_INTERVAL_SECONDS=60
           Environment=SOAK_OUTPUT_DIR=$long
+          Environment=KUBEONE_SSH_KNOWN_HOSTS=$kubeone_known_hosts
           ExecStart=/usr/local/libexec/layersentry/kubeone-soak.sh
           ExecStartPost=/usr/local/libexec/layersentry/kubeone-soak-upload.sh
           TimeoutStartSec=75600
