@@ -1290,11 +1290,10 @@ jobs:
           test -n "$secure_firmware" && test "${secure_firmware#/}" != "$secure_firmware"
           vmid="$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")==n),"") )' "$name")"
           if test -n "$vmid"; then
-            mapfile -t existing < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("TEMPLATE/DISK/IMAGE_ID") or "",r.findtext("TEMPLATE/OS/MACHINE") or "",r.findtext("TEMPLATE/OS/FIRMWARE_SECURE") or "",r.findtext("TEMPLATE/OS/FIRMWARE") or "",r.findtext("TEMPLATE/TPM/MODEL") or "",r.findtext("STATE") or "",r.findtext("TEMPLATE/FEATURES/GUEST_AGENT") or "",sep="\n")')
+            mapfile -t existing < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("TEMPLATE/DISK/IMAGE_ID") or "",r.findtext("TEMPLATE/OS/MACHINE") or "",r.findtext("TEMPLATE/OS/FIRMWARE_SECURE") or "",r.findtext("TEMPLATE/OS/FIRMWARE") or "",r.findtext("TEMPLATE/TPM/MODEL") or "",r.findtext("STATE") or "",r.findtext("TEMPLATE/DESCRIPTION") or "",sep="\n")')
             echo "SECUREBOOT_VTPM_EXISTING VM_ID=$vmid FIRMWARE=${existing[4]:-unset} STATE=${existing[6]}"
             test "${existing[0]}" = "$name" && test "${existing[1]}" = "$image_id" && test "${existing[2]}" = q35 && test "${existing[3]}" = YES && test "${existing[5]}" = tpm-crb
-            if test "${existing[4]}" != "$secure_firmware" || test "${existing[7],,}" != yes; then
-              { test "$vmid" = 31 || test "$vmid" = 32; }
+            if test "${existing[7]}" = layersentry-secure-vtpm-isolated-qualification || { test "$vmid" -ge 31 && test "$vmid" -le 33; }; then
               if test "${existing[6]}" = 3; then sudo -n -u oneadmin onevm poweroff --hard "$vmid"; else test "${existing[6]}" = 8; fi
               for _ in $(seq 1 120); do
                 state=$(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE") or "")')
@@ -1310,13 +1309,22 @@ jobs:
               done
               test "$state" = 6 || test "$state" = gone
               vmid=''
+            else
+              echo "refusing to replace unmarked VM $vmid" >&2
+              exit 31
             fi
           fi
           if test -z "$vmid"; then
             tmpl=$(mktemp)
-            trap 'rm -f -- "$tmpl"' EXIT
+            guest_key=$(mktemp)
+            rm -f -- "$guest_key"
+            ssh-keygen -q -t ed25519 -N '' -C layersentry-secure-vtpm-live -f "$guest_key"
+            guest_pub=$(cat "$guest_key.pub")
+            guest_known_hosts=$(mktemp)
+            trap 'rm -f -- "$tmpl" "$guest_key" "$guest_key.pub" "$guest_known_hosts"' EXIT
             cat >"$tmpl" <<VM
           NAME = "$name"
+          DESCRIPTION = "layersentry-secure-vtpm-isolated-qualification"
           CPU = "2"
           VCPU = "2"
           MEMORY = "4096"
@@ -1325,6 +1333,8 @@ jobs:
           OS = [ ARCH = "x86_64", MACHINE = "q35", FIRMWARE = "$secure_firmware", FIRMWARE_SECURE = "YES" ]
           TPM = [ MODEL = "tpm-crb" ]
           FEATURES = [ GUEST_AGENT = "YES" ]
+          NIC = [ NETWORK_ID = "0", MODEL = "virtio" ]
+          CONTEXT = [ NETWORK = "YES", NETCFG_TYPE = "nm", SET_HOSTNAME = "$name", SSH_PUBLIC_KEY = "$guest_pub" ]
           SCHED_REQUIREMENTS = "NAME = \"$active_host\""
           VM
             chmod 0644 "$tmpl"
@@ -1344,32 +1354,18 @@ jobs:
           test "${vf[0]}" = 3 && test "${vf[1]}" = 3
           domain="${vf[2]}"
           echo "SECUREBOOT_VTPM_RUNNING VM_ID=$vmid DOMAIN=$domain HOST=$active_host"
+          guest_ip=$(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E,ipaddress; r=E.parse(sys.stdin).getroot(); a=r.findtext("TEMPLATE/NIC/IP") or ""; assert ipaddress.ip_address(a) in ipaddress.ip_network("10.50.10.0/24"); print(a)')
           guest_check() {
-            sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$active_host" 'bash -s --' "$domain" <<'HOST_CHECK'
-          set -euo pipefail
-          domain="$1"
-          test "$(virsh -c qemu:///system domstate "$domain" | tr -d '[:space:]')" = running
-          xml=$(virsh -c qemu:///system dumpxml "$domain")
-          python3 -c 'import sys,xml.etree.ElementTree as E; r=E.fromstring(sys.stdin.read()); l=r.find("./os/loader"); t=r.find("./devices/tpm"); b=t.find("backend") if t is not None else None; print("SECUREBOOT_VTPM_DOMAIN_XML",dict(l.attrib) if l is not None else None,r.find("./os/nvram") is not None,dict(t.attrib) if t is not None else None,dict(b.attrib) if b is not None else None,file=sys.stderr); assert l is not None and l.get("secure")=="yes"; assert r.find("./os/nvram") is not None; assert t is not None and t.get("model")=="tpm-crb"; assert b is not None and b.get("type")=="emulator" and b.get("version")=="2.0"' <<<"$xml"
-          ready=false
-          for _ in $(seq 1 180); do
-            if virsh -c qemu:///system qemu-agent-command "$domain" '{"execute":"guest-ping"}' >/dev/null 2>&1; then ready=true; break; fi
-            sleep 2
-          done
-          test "$ready" = true
-          command='set -eu; test -d /sys/firmware/efi; set -- /sys/firmware/efi/efivars/SecureBoot-*; test -f "$1"; secure=$(od -An -t u1 "$1" | awk "{print \$NF}"); test "$secure" = 1; test -c /dev/tpm0; test "$(cat /sys/class/tpm/tpm0/tpm_version_major)" = 2; printf "BOOT_ID=%s\nSECURE_BOOT=1\nTPM_VERSION=2\n" "$(cat /proc/sys/kernel/random/boot_id)"'
-          request=$(python3 -c 'import json,sys; print(json.dumps({"execute":"guest-exec","arguments":{"path":"/bin/bash","arg":["-c",sys.argv[1]],"capture-output":True}}))' "$command")
-          response=$(virsh -c qemu:///system qemu-agent-command "$domain" "$request")
-          pid=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["return"]["pid"])' <<<"$response")
-          for _ in $(seq 1 60); do
-            status=$(virsh -c qemu:///system qemu-agent-command "$domain" "{\"execute\":\"guest-exec-status\",\"arguments\":{\"pid\":$pid}}")
-            exited=$(python3 -c 'import json,sys; print(str(bool(json.load(sys.stdin)["return"].get("exited"))).lower())' <<<"$status")
-            test "$exited" = true && break
-            sleep 1
-          done
-          python3 -c 'import base64,json,sys; r=json.load(sys.stdin)["return"]; assert r.get("exitcode")==0,base64.b64decode(r.get("err-data","")).decode(errors="replace"); print(base64.b64decode(r.get("out-data","")).decode(),end="")' <<<"$status"
-          HOST_CHECK
+            ready=false
+            for _ in $(seq 1 180); do
+              if ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o "UserKnownHostsFile=$guest_known_hosts" -o ConnectTimeout=3 "root@$guest_ip" true >/dev/null 2>&1; then ready=true; break; fi
+              sleep 2
+            done
+            test "$ready" = true
+            ssh -i "$guest_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$guest_known_hosts" -o ConnectTimeout=5 "root@$guest_ip" 'set -eu; test -d /sys/firmware/efi; set -- /sys/firmware/efi/efivars/SecureBoot-*; test -f "$1"; secure=$(od -An -t u1 "$1" | awk "{print \$NF}"); test "$secure" = 1; test -c /dev/tpm0; test "$(cat /sys/class/tpm/tpm0/tpm_version_major)" = 2; printf "BOOT_ID=%s\nSECURE_BOOT=1\nTPM_VERSION=2\n" "$(cat /proc/sys/kernel/random/boot_id)"'
           }
+          xml=$(sudo -n -u oneadmin ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$active_host" "virsh -c qemu:///system dumpxml '$domain'")
+          python3 -c 'import sys,xml.etree.ElementTree as E; r=E.fromstring(sys.stdin.read()); l=r.find("./os/loader"); t=r.find("./devices/tpm"); b=t.find("backend") if t is not None else None; print("SECUREBOOT_VTPM_DOMAIN_XML",dict(l.attrib) if l is not None else None,r.find("./os/nvram") is not None,dict(t.attrib) if t is not None else None,dict(b.attrib) if b is not None else None,file=sys.stderr); assert l is not None and l.get("secure")=="yes"; assert r.find("./os/nvram") is not None; assert t is not None and t.get("model")=="tpm-crb"; assert b is not None and b.get("type")=="emulator" and b.get("version")=="2.0"' <<<"$xml"
           first=$(guest_check)
           grep -q '^SECURE_BOOT=1$' <<<"$first" && grep -q '^TPM_VERSION=2$' <<<"$first"
           first_boot=$(awk -F= '$1=="BOOT_ID" {print $2}' <<<"$first")
