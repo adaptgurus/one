@@ -1,0 +1,118 @@
+name: LayerSentry KubeOne sanitized diagnostics
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/layersentrydr-probe-20260927
+
+jobs:
+  diagnose:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[kubeone-diagnostics]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 15
+    steps:
+      - name: Collect credential-safe diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+
+          out="$RUNNER_TEMP/kubeone-diagnostics-20260928"
+          rm -rf -- "$out"
+          mkdir -m 0700 "$out"
+          work=$(mktemp -d)
+          trap 'rm -rf -- "$work"' EXIT
+          scan=$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)
+          test "$(printf '%s\n' "$scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$scan" >"$work/known_hosts"
+          chmod 0600 "$work/known_hosts"
+
+          dc_key=''; dc_user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" -o ConnectTimeout=5 "$candidate_user@172.17.60.30" 'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' >/dev/null 2>&1; then
+                dc_key="$candidate"; dc_user="$candidate_user"; break 2
+              fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$dc_key"
+          ssh_dc=(ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" "$dc_user@172.17.60.30")
+          "${ssh_dc[@]}" 'test "$(hostname -s)" = layersentry1; ip -4 -o addr show dev enp6s18 | grep -Eq "(^|[[:space:]])172\\.17\\.60\\.30/26([[:space:]]|$)"; sudo -n true'
+
+          {
+            echo '# Sanitized evidence-location audit'
+            echo
+            for host in layersentryol7 layersentry1; do
+              echo "## $host"
+              if test "$host" = layersentryol7; then
+                find /var/lib/layersentry /root /opt /home -xdev -type f \( -name 'live-multicluster-soak.sh' -o -path '*kubeone-20h-soak*' -o -iname '*kubeconfig*' \) -printf '%p\n' 2>/dev/null | sed -E 's#(/[^/]+)?-kubeconfig$#/[kubeconfig]#' | sort || true
+                printf 'running_soak_processes=%s\n' "$(pgrep -fc '[l]ive-multicluster-soak.sh' || true)"
+              else
+                "${ssh_dc[@]}" 'sudo -n find /var/lib/layersentry /root /opt /home -xdev -type f \( -name "live-multicluster-soak.sh" -o -path "*kubeone-20h-soak*" -o -iname "*kubeconfig*" \) -printf "%p\\n" 2>/dev/null | sed -E "s#(/[^/]+)?-kubeconfig\$#/[kubeconfig]#" | sort; printf "running_soak_processes=%s\\n" "$(pgrep -fc "[l]ive-multicluster-soak.sh" || true)"'
+              fi
+              echo
+            done
+          } >"$out/location-audit.md"
+
+          kubeconfig=$("${ssh_dc[@]}" "sudo -n find /var/lib/layersentry /root /opt /home -xdev -type f -path '*layersentry-k1b*' -iname '*kubeconfig*' 2>/dev/null | head -n1")
+          test -n "$kubeconfig"
+          "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' get events -A --sort-by=.lastTimestamp" >"$out/cluster-b-events.txt"
+          "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' -n kube-system get pods -o json" >"$work/pods.json"
+          "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' get nodes -o json" >"$work/nodes.json"
+          python3 - "$work/pods.json" >"$out/cluster-b-restarts.csv" <<'PY'
+          import csv, json, sys
+          data=json.load(open(sys.argv[1]))
+          w=csv.writer(sys.stdout)
+          w.writerow(('pod','container','restart_count','last_reason','exit_code','started_at','finished_at'))
+          for item in data.get('items',[]):
+              pod=item.get('metadata',{}).get('name','')
+              for status in item.get('status',{}).get('containerStatuses',[]):
+                  count=int(status.get('restartCount',0) or 0)
+                  if count:
+                      term=status.get('lastState',{}).get('terminated',{})
+                      w.writerow((pod,status.get('name',''),count,term.get('reason',''),term.get('exitCode',''),term.get('startedAt',''),term.get('finishedAt','')))
+          PY
+          python3 - "$work/nodes.json" >"$out/cluster-b-node-conditions.csv" <<'PY'
+          import csv, json, sys
+          data=json.load(open(sys.argv[1]))
+          w=csv.writer(sys.stdout)
+          w.writerow(('node','condition','status','reason','last_transition'))
+          for item in data.get('items',[]):
+              node=item.get('metadata',{}).get('name','')
+              for c in item.get('status',{}).get('conditions',[]):
+                  w.writerow((node,c.get('type',''),c.get('status',''),c.get('reason',''),c.get('lastTransitionTime','')))
+          PY
+          rm -f -- "$work/pods.json" "$work/nodes.json"
+
+          "${ssh_dc[@]}" 'sudo -n -u oneadmin onevm list --xml | python3 -c '\''import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print("vm_id,name,state,lcm_state"); [print(",".join((x.findtext("ID") or "",x.findtext("NAME") or "",x.findtext("STATE") or "",x.findtext("LCM_STATE") or ""))) for x in r.findall("VM") if (x.findtext("NAME") or "").startswith("k1b-")]'\''' >"$out/cluster-b-opennebula-vms.csv"
+
+          restart_rows=$(awk 'END {print NR-1}' "$out/cluster-b-restarts.csv")
+          output_paths=$(grep -Ec 'kubeone-20h-soak|live-multicluster-soak' "$out/location-audit.md" || true)
+          kubeconfig_paths=$(grep -Ec '\[kubeconfig\]|kubeconfig' "$out/location-audit.md" || true)
+          {
+            echo '# KubeOne diagnostic summary'
+            echo
+            echo "- Collected at: $(date -Is)"
+            echo "- Historical soak script/output paths found on authorized hosts: $output_paths"
+            echo "- Sanitized kubeconfig paths found on authorized hosts: $kubeconfig_paths"
+            echo "- Cluster B containers with nonzero restart counts: $restart_rows"
+            echo '- Raw kubeconfigs and Kubernetes Secret values were not collected.'
+          } >"$out/SUMMARY.md"
+          (cd "$out" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum >SHA256SUMS)
+
+      - name: Upload sanitized diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubeone-diagnostics-20260928
+          path: ${{ runner.temp }}/kubeone-diagnostics-20260928/
+          if-no-files-found: error
+          retention-days: 30
