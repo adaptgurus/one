@@ -1,4 +1,4 @@
-name: Tester Foundation validation
+name: Tester Foundation substrate preparation
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,28 +9,29 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  foundation-validation:
+  foundation-substrate:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 5
+    timeout-minutes: 20
     steps:
-      - name: Verify tester identity and exact private source digests
+      - name: Bind tester and install nested lab prerequisites
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          cd /home/opc/layersentry-foundation-qual-20260929
-          printf '%s\n' \
-            'f9d2633643edd726ef641fb79f3841485ea443efa9326c23c15c11557d101d8b  deploy/layersentry_deployer/raft_acceptance.py' \
-            '843beb4b1ad1f89bed54f715d9d1dc5cb7b54cfa04c02efe38c7187ef10a8643  tests/test_raft_acceptance.py' | sha256sum -c -
-          echo 'IMPLEMENTATION_COMMIT=eca4acbbb946aac0a7ab6c693d6d0edae1ed3f4c'
-          echo 'SCOPE=ISOLATED_FOUNDATION_RAFT_VALIDATOR_ONLY'
-      - name: Run focused Foundation acceptance tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd /home/opc/layersentry-foundation-qual-20260929
-          python3 -m py_compile deploy/layersentry_deployer/raft_acceptance.py tests/test_raft_acceptance.py
-          python3 -m unittest discover -s tests -p 'test_raft_acceptance.py' -v 2>&1 | tee evidence/runner-raft-acceptance-tests.log
-          echo 'FOUNDATION_RAFT_UNIT_VERIFIED_NOT_CLUSTER_READY'
+          ip -4 -o addr show | grep -q '172.28.0.10/26'
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = eca4acbbb946aac0a7ab6c693d6d0edae1ed3f4c
+          test -c /dev/kvm
+          work=/home/opc/layersentry-foundation-qual-20260929
+          mkdir -p "$work/evidence"
+          exec > >(tee "$work/evidence/substrate-prerequisites.log") 2>&1
+          echo 'OPERATION_ID=tester-foundation-substrate-20260929'
+          date -Is
+          sudo -n dnf install -y qemu-kvm qemu-img libvirt libvirt-daemon-kvm virt-install osinfo-db xorriso nfs-utils gnupg2 openssl python3.12 python3.12-pip
+          sudo -n systemctl enable --now libvirtd
+          sudo -n virsh -c qemu:///system list --all
+          sudo -n virsh -c qemu:///system net-list --all
+          getenforce
+          ip route
+          echo 'SUBSTRATE_PREREQUISITES_COMPLETE_NOT_CLUSTER_READY'
