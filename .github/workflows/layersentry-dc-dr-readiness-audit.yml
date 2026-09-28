@@ -37,6 +37,7 @@ jobs:
           echo "TRANSFER_KEY_FINGERPRINT=$(ssh-keygen -lf "$key" -E sha256 | awk '{print $2}')"
 
   dc-readonly:
+    if: contains(github.event.head_commit.message, '[dc-readonly]')
     runs-on: [self-hosted, Linux, X64, layersentryol7]
     timeout-minutes: 10
     steps:
@@ -791,6 +792,69 @@ jobs:
           test "$status" = 403
           echo REPLICATION_V2_FAILBACK_MTLS_NEGATIVES=PASS
           DR_NEGATIVES
+
+  replication-failback-receiver-expand:
+    if: contains(github.event.head_commit.message, '[replication-failback-receiver-expand]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 10
+    steps:
+      - name: Expand exact DC bounded failback receiver NBD pool
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          chmod 0700 "$work"
+          scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)"
+          test "$(printf '%s\n' "$scan" | grep -c '^172\.17\.60\.30 ssh-ed25519 ')" -eq 1
+          test "$(printf '%s\n' "$scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$scan" >"$work/known_hosts"
+          chmod 0600 "$work/known_hosts"
+
+          key=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            if test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA'; then
+              key="$candidate"
+              break
+            fi
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 \
+            ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$key"
+
+          ssh -i "$key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" \
+            -o ConnectTimeout=8 layersentry-deploy@172.17.60.30 'bash -s' <<'DC_EXPAND'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          sudo -n true
+          test "$(sudo -n id -u)" = 0
+          unit=/etc/systemd/system/layersentry-replication-v2-failback-qualifier.service
+          sudo -n test -f "$unit"
+          sudo -n grep -Fq -- '--listen 172.17.60.30:9446' "$unit"
+          sudo -n grep -Fq -- '--root /var/lib/layersentry/replication-v2-failback/filecow' "$unit"
+          sudo -n grep -Fq -- '--nbd /dev/nbd6,/dev/nbd7' "$unit"
+          sudo -n modprobe nbd max_part=8 nbds_max=16
+          test -b /dev/nbd8 && test -b /dev/nbd9
+          test "$(cat /sys/block/nbd8/pid 2>/dev/null || true)" = ''
+          test "$(cat /sys/block/nbd9/pid 2>/dev/null || true)" = ''
+          sudo -n cp -a "$unit" "$unit.before-secure-vtpm-20260928"
+          sudo -n sed -i 's#--nbd /dev/nbd6,/dev/nbd7 #--nbd /dev/nbd6,/dev/nbd7,/dev/nbd8,/dev/nbd9 #' "$unit"
+          test "$(sudo -n grep -c -- '--nbd /dev/nbd6,/dev/nbd7,/dev/nbd8,/dev/nbd9' "$unit")" = 1
+          sudo -n systemctl daemon-reload
+          sudo -n systemctl restart layersentry-replication-v2-failback-qualifier.service
+          test "$(sudo -n systemctl is-active layersentry-replication-v2-failback-qualifier.service)" = active
+          sudo -n ss -lntp | grep -Fq '172.17.60.30:9446'
+          printf 'REPLICATION_V2_FAILBACK_RECEIVER_EXPANDED=PASS HOST=%s NBD_POOL=%s\n' "$(hostname -s)" '/dev/nbd6,/dev/nbd7,/dev/nbd8,/dev/nbd9'
+          DC_EXPAND
 
   replication-failback-boot:
     if: contains(github.event.head_commit.message, '[replication-failback-boot]')
