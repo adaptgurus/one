@@ -765,17 +765,26 @@ jobs:
           echo REPLICATION_V2_FAILBACK_RECEIVER=READY
           DC_INSTALL
 
-          if curl --noproxy '*' --silent --show-error --fail \
-            --cacert "$work/ca.crt" --resolve layersentry-dc-replication-v2-receiver:9446:172.17.60.30 \
+          ssh -i "$transfer_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dr_known_hosts" \
+            root@172.17.60.40 'bash -s' <<'DR_NEGATIVES'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentrydr
+          test "$(id -u)" = 0
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.40/26([[:space:]]|$)'
+          d=/var/lib/layersentry/replication-v2-qualification/transfer
+          if curl --noproxy '*' --silent --show-error --fail --connect-timeout 5 --max-time 10 \
+            --cacert "$d/ca.crt" --resolve layersentry-dc-replication-v2-receiver:9446:172.17.60.30 \
             https://layersentry-dc-replication-v2-receiver:9446/ >/dev/null 2>&1; then
             echo REPLICATION_V2_FAILBACK_NO_CLIENT_NEGATIVE=FAIL >&2
             exit 91
           fi
           status="$(curl --noproxy '*' --silent --show-error --output /dev/null --write-out '%{http_code}' \
-            --cacert "$work/ca.crt" --cert "$work/dr.crt" --key "$work/dr.key" \
+            --connect-timeout 5 --max-time 10 --cacert "$d/ca.crt" --cert "$d/dr.crt" --key "$d/dr.key" \
             --resolve layersentry-dc-replication-v2-receiver:9446:172.17.60.30 \
             -H 'X-LayerSentry-Source-Site: unauthorized-site' \
             -H 'X-LayerSentry-Target-Site: dc-qualification' \
             https://layersentry-dc-replication-v2-receiver:9446/internal/v1/replication/receiver/backend-health?session_id=denied)"
           test "$status" = 403
           echo REPLICATION_V2_FAILBACK_MTLS_NEGATIVES=PASS
+          DR_NEGATIVES
