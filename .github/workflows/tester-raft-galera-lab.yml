@@ -1,4 +1,4 @@
-name: Tester Foundation Galera TCP health qualification
+name: Tester Foundation independent final cluster status
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,11 +9,11 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  management-ha:
+  final-state:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 25
+    timeout-minutes: 6
     steps:
-      - name: Bind exact tester and tested source
+      - name: Independently query each cluster and both management endpoints
         shell: bash
         run: |
           set -euo pipefail
@@ -21,34 +21,32 @@ jobs:
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
           test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = f7865b37ba869594fddbded5d9e712f2799c4575
-          test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
-          test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = bbe15fb307819a59b4a959dd775b5636dc09f1ca
-      - name: Execute complete focused Foundation test slice
-        shell: bash
-        run: |
-          set -euo pipefail
-          cd /home/opc/layersentry-platform
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          export PYTHONPATH=$PWD/deploy
           python - <<'PY'
-          import unittest,sys
-          names=['test_raft_acceptance.py','test_provider_preflight_regressions.py','test_management_ha.py','test_tester_substrate_labels.py','test_layersentry_deploy.py','test_tester_native_qualification.py','test_management_galera_safety.py','test_tester_galera_qualification.py','test_galera_health_responder.py']
-          suite=unittest.TestSuite()
-          for name in names: suite.addTests(unittest.TestLoader().discover('tests',pattern=name))
-          r=unittest.TextTestRunner(verbosity=2).run(suite)
-          sys.exit(0 if r.wasSuccessful() else 1)
+          import sys,json,os,datetime,fcntl,hashlib
+          from pathlib import Path
+          sys.path.insert(0,'/home/opc/layersentry-platform/tools/lab')
+          from tester_galera_qualification import healthy,proxy,https_check,sql
+          from tester_native_qualification import WORK,NAMES,remote,require,converge,native_json,rows,hosts_ready
+          lock=(WORK/'.execution.lock').open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+          result={'timestamp_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'production_certified':False,'source':'f7865b37ba869594fddbded5d9e712f2799c4575'}
+          result['galera']=healthy();result['raft']=converge();result['proxy']=proxy();result['https']=https_check()
+          result['services']={};result['selinux']={};result['canary_tables']={};result['bootstrap_flags_clear']={}
+          for name in NAMES:
+              result['services'][name]=require(remote(name,['systemctl','is-active','opennebula','mariadb','layersentry-mariadb']),'native and dedicated services').splitlines()
+              result['selinux'][name]=require(remote(name,['getenforce']),'SELinux state').strip()
+              result['canary_tables'][name]=sql(name,"SET SESSION wsrep_sync_wait=1; SELECT table_name FROM information_schema.tables WHERE table_schema='layersentry' AND table_name LIKE 'lsf\\_qual\\_%';").splitlines()
+              result['bootstrap_flags_clear'][name]=remote(name,['sudo','-n','grep','-Fxq','GALERA_NEW_CLUSTER=','/run/layersentry-mariadb-bootstrap.env']).returncode==0
+          result['load_balancers']={}
+          for name in ['lsf-fe1','lsf-fe2']:
+              result['load_balancers'][name]={'services':require(remote(name,['systemctl','is-active','haproxy','keepalived','layersentry-galera-health']),'LB and health services').splitlines(),'listeners':require(remote(name,['ss','-lnt']),'listener readback')}
+          leader=result['raft'][NAMES[0]]['leader']
+          result['hosts']=rows(native_json(leader,['onehost','list','--json']).get('HOST_POOL',{}).get('HOST'))
+          result['hosts']=[{k:r.get(k) for k in ['ID','NAME','STATE','IM_MAD','VM_MAD']} for r in result['hosts']]
+          result['compute_ready']=hosts_ready(result['hosts'])
+          result['ready']=result['compute_ready'] and all(v=='Enforcing' for v in result['selinux'].values()) and not any(result['canary_tables'].values()) and all(result['bootstrap_flags_clear'].values())
+          target=WORK/'evidence'/('galera-independent-final-'+os.environ['GITHUB_RUN_ID']+'.json')
+          target.write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps(result,indent=2));print('EVIDENCE_SHA256',hashlib.sha256(target.read_bytes()).hexdigest())
+          if not result['ready']:raise SystemExit(1)
           PY
-      - name: Apply through existing Foundation management entrypoint
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          export PYTHONPATH=/home/opc/layersentry-platform/deploy
-          python /home/opc/layersentry-platform/tools/lab/tester_foundation_apply.py --stage management
-          echo MANAGEMENT_APPLY_EXITED_NOT_INDEPENDENT_READINESS
-      - name: Independently exercise SQL replication quorum rejoin and VIP failover
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          python /home/opc/layersentry-platform/tools/lab/tester_galera_qualification.py --exercise
