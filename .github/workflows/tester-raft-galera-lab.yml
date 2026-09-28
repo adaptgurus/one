@@ -1,4 +1,4 @@
-name: Tester Foundation substrate preparation
+name: Tester Foundation nested members
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -13,25 +13,20 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     steps:
-      - name: Bind tester and install nested lab prerequisites
+      - name: Create exact pinned disposable tester VM substrate
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          ip -4 -o addr show | grep -q '172.28.0.10/26'
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = eca4acbbb946aac0a7ab6c693d6d0edae1ed3f4c
-          test -c /dev/kvm
-          work=/home/opc/layersentry-foundation-qual-20260929
-          mkdir -p "$work/evidence"
-          exec > >(tee "$work/evidence/substrate-prerequisites.log") 2>&1
-          echo 'OPERATION_ID=tester-foundation-substrate-20260929'
+          source=/home/opc/layersentry-platform
+          test "$(git -C "$source" rev-parse HEAD)" = 29535b9c8c98b3e43004b2514c637265a1e30be8
+          test -z "$(git -C "$source" status --porcelain --untracked-files=no)"
+          w=/home/opc/layersentry-foundation-qual-20260929
+          exec > >(tee "$w/evidence/substrate-create.log") 2>&1
           date -Is
-          sudo -n dnf install -y qemu-kvm qemu-img libvirt libvirt-daemon-kvm virt-install osinfo-db xorriso nfs-utils gnupg2 openssl python3.12 python3.12-pip
-          sudo -n systemctl enable --now libvirtd
-          sudo -n virsh -c qemu:///system list --all
-          sudo -n virsh -c qemu:///system net-list --all
-          getenforce
-          ip route
-          echo 'SUBSTRATE_PREREQUISITES_COMPLETE_NOT_CLUSTER_READY'
+          sudo -n python3 "$source/tools/lab/tester_foundation_substrate.py"
+          sudo -n virsh list --all
+          sudo -n virsh net-list --all
+          echo 'THREE_NESTED_MEMBERS_CREATED_NOT_CLUSTER_READY'
