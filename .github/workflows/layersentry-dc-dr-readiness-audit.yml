@@ -880,15 +880,15 @@ jobs:
           $SUDO qemu-img check -q "$recovery/disk-data.qcow2"
           stage=/var/lib/one/datastores/1/.layersentry-rv2-import
           $SUDO install -d -o oneadmin -g oneadmin -m 0750 "$stage"
-          os_raw="$stage/layersentry-rv2-dc-vm29-g2-retry4-os.raw"
-          data_raw="$stage/layersentry-rv2-dc-vm29-g2-retry4-data.raw"
-          os_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry4-os.qcow2"
-          data_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry4-data.qcow2"
+          os_raw="$stage/layersentry-rv2-dc-vm29-g2-retry5-os.raw"
+          data_raw="$stage/layersentry-rv2-dc-vm29-g2-retry5-data.raw"
+          os_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry5-os.qcow2"
+          data_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry5-data.qcow2"
           test ! -e "$os_raw" && test ! -e "$data_raw" && test ! -e "$os_qcow" && test ! -e "$data_qcow"
           $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-os.qcow2" "$os_raw"
           $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-data.qcow2" "$data_raw"
-          os_sha="$(sha256sum "$os_raw" | awk '{print $1}')"
-          data_sha="$(sha256sum "$data_raw" | awk '{print $1}')"
+          os_sha="$($SUDO sha256sum "$os_raw" | awk '{print $1}')"
+          data_sha="$($SUDO sha256sum "$data_raw" | awk '{print $1}')"
           test "$os_sha" = a6032ea4093b54e91eda29439c4bad8344187f193fb4beb8e48890dfa38146f5
           test "$data_sha" = cb838ca25e9458f70594df25780103660ba2963eb308b8066cc6ef213e8dd608
           old_records="$($SUDO debugfs -R 'cat /generations/20260927T234524Z.records' "$data_raw" 2>/dev/null | sha256sum | awk '{print $1}')"
