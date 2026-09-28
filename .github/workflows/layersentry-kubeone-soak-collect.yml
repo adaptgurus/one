@@ -1,0 +1,94 @@
+name: LayerSentry KubeOne soak evidence collection
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/layersentrydr-probe-20260927
+
+jobs:
+  collect:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[kubeone-soak-collect]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 10
+    steps:
+      - name: Collect and summarize sanitized soak evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+
+          out="$RUNNER_TEMP/kubeone-20h-soak-20260927-01"
+          rm -rf -- "$out"
+          mkdir -m 0700 "$out"
+          work=$(mktemp -d)
+          trap 'rm -rf -- "$work"' EXIT
+          scan=$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)
+          test "$(printf '%s\n' "$scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$scan" >"$work/known_hosts"
+          chmod 0600 "$work/known_hosts"
+
+          dc_key=''
+          dc_user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+                -o "UserKnownHostsFile=$work/known_hosts" -o ConnectTimeout=5 "$candidate_user@172.17.60.30" \
+                'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' >/dev/null 2>&1; then
+                dc_key="$candidate"
+                dc_user="$candidate_user"
+                break 2
+              fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$dc_key"
+
+          ssh_dc=(ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" "$dc_user@172.17.60.30")
+          "${ssh_dc[@]}" 'test "$(hostname -s)" = layersentry1; ip -4 -o addr show dev enp6s18 | grep -Eq "(^|[[:space:]])172\\.17\\.60\\.30/26([[:space:]]|$)"; if test "$(id -u)" -eq 0; then SUDO=""; else SUDO="sudo -n"; fi; test "$($SUDO id -u)" = 0; $SUDO test -f /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; $SUDO test -f /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log'
+          "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; else sudo -n cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/samples.csv; fi' >"$out/samples.csv"
+          "${ssh_dc[@]}" 'if test "$(id -u)" -eq 0; then cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log; else sudo -n cat /var/lib/layersentry/evidence/kubeone-20h-soak-20260927-01/events.log; fi' >"$out/events.log"
+
+          test "$(head -n1 "$out/samples.csv")" = 'timestamp,elapsed_seconds,cluster,ready_nodes,total_nodes,kube_system_nonready,total_restarts,api_ready,result'
+          grep -Eq ' SOAK_START duration_seconds=72000 interval_seconds=60$' "$out/events.log"
+          complete=$(grep -Ec ' SOAK_COMPLETE samples=[0-9]+ failures=[0-9]+$' "$out/events.log" || true)
+          rows=$(awk 'END {print NR-1}' "$out/samples.csv")
+          max_elapsed=$(awk -F, 'NR>1 && $2+0>m {m=$2+0} END {print m+0}' "$out/samples.csv")
+          failed=$(awk -F, 'NR>1 && $9!="PASS" {n++} END {print n+0}' "$out/samples.csv")
+          start=$(awk -F, 'NR==2 {print $1}' "$out/samples.csv")
+          end=$(awk -F, 'NR>1 {v=$1} END {print v}' "$out/samples.csv")
+          {
+            echo '# KubeOne multi-cluster 20-hour soak evidence'
+            echo
+            echo "- Collected at: $(date -Is)"
+            echo '- Source: LayerSentry DC frontend `layersentry1` / `172.17.60.30`.'
+            echo "- First sample: $start"
+            echo "- Last sample: $end"
+            echo "- Maximum elapsed seconds: $max_elapsed"
+            echo "- Sample rows: $rows"
+            echo "- Failed cluster samples: $failed"
+            echo "- Completion marker count: $complete"
+            echo
+            for cluster in a b c; do
+              awk -F, -v c="$cluster" 'NR>1 && $3==c {n++; if($9=="PASS") p++; else f++} END {printf "- Cluster %s: samples=%d pass=%d fail=%d\n",toupper(c),n+0,p+0,f+0}' "$out/samples.csv"
+            done
+          } >"$out/SUMMARY.md"
+          (cd "$out" && sha256sum SUMMARY.md events.log samples.csv >SHA256SUMS)
+          echo "KUBEONE_SOAK_COLLECTION rows=$rows failures=$failed complete=$complete max_elapsed=$max_elapsed"
+          test "$complete" -eq 1
+          test "$max_elapsed" -ge 72000
+          test "$failed" -eq 0
+
+      - name: Upload sanitized KubeOne soak logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubeone-20h-soak-20260927-01
+          path: ${{ runner.temp }}/kubeone-20h-soak-20260927-01/
+          if-no-files-found: error
+          retention-days: 30
