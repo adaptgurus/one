@@ -1248,6 +1248,7 @@ jobs:
           test "$(hostname -s)" = layersentryol7
           test "$(id -u)" = 0
           ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+          echo SECUREBOOT_VTPM_LIVE_RUNNER_BOUND=PASS
           work="$(mktemp -d)"
           trap 'rm -rf -- "$work"' EXIT
           chmod 0700 "$work"
@@ -1276,6 +1277,7 @@ jobs:
           ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
           if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
           test "$($SUDO id -u)" = 0
+          echo SECUREBOOT_VTPM_LIVE_DC_BOUND=PASS
           name=layersentry-secure-vtpm-qual-20260928
           image_id=3
           mapfile -t image < <(sudo -n -u oneadmin oneimage show "$image_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",r.findtext("TYPE") or "",sep="\n")')
@@ -1289,6 +1291,7 @@ jobs:
           vmid="$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")==n),"") )' "$name")"
           if test -n "$vmid"; then
             mapfile -t existing < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("TEMPLATE/DISK/IMAGE_ID") or "",r.findtext("TEMPLATE/OS/MACHINE") or "",r.findtext("TEMPLATE/OS/FIRMWARE_SECURE") or "",r.findtext("TEMPLATE/OS/FIRMWARE") or "",r.findtext("TEMPLATE/TPM/MODEL") or "",r.findtext("STATE") or "",sep="\n")')
+            echo "SECUREBOOT_VTPM_EXISTING VM_ID=$vmid FIRMWARE=${existing[4]:-unset} STATE=${existing[6]}"
             test "${existing[0]}" = "$name" && test "${existing[1]}" = "$image_id" && test "${existing[2]}" = q35 && test "${existing[3]}" = YES && test "${existing[5]}" = tpm-crb
             if test "${existing[4]}" != "$secure_firmware"; then
               test "$vmid" = 31
@@ -1339,6 +1342,7 @@ jobs:
           done
           test "${vf[0]}" = 3 && test "${vf[1]}" = 3
           domain="${vf[2]}"
+          echo "SECUREBOOT_VTPM_RUNNING VM_ID=$vmid DOMAIN=$domain HOST=$active_host"
           guest_check() {
             sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$active_host" 'bash -s --' "$domain" <<'HOST_CHECK'
           set -euo pipefail
