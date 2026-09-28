@@ -69,18 +69,26 @@ jobs:
           stage=kubeone_ssh_key_preflight
           $SUDO test -s /var/lib/one/.ssh/id_rsa
           stage=kubeone_known_hosts_preflight
-          kubeone_known_hosts=''
-          for candidate in /var/lib/one/.ssh/known_hosts /root/.ssh/known_hosts; do
-            $SUDO test -s "$candidate" || continue
-            $SUDO ssh-keygen -F 10.50.10.102 -f "$candidate" >/dev/null || continue
-            $SUDO ssh-keygen -F 10.50.10.121 -f "$candidate" >/dev/null || continue
-            kubeone_known_hosts=$candidate
-            break
+          $SUDO install -d -m 0700 /var/lib/layersentry/credentials
+          kubeone_known_hosts=/var/lib/layersentry/credentials/kubeone-soak-known-hosts
+          known_tmp=$($SUDO mktemp)
+          : | $SUDO tee "$known_tmp" >/dev/null
+          for mapping in k1a-cp1:10.50.10.102 k1c-cp1:10.50.10.121; do
+            expected_name=${mapping%%:*}
+            target=${mapping#*:}
+            actual=$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; x=next((x for x in r.findall("VM") if (x.findtext("NAME") or "")==n),None); print(((x.findtext("STATE") or "")+\",\"+(x.findtext("TEMPLATE/NIC/IP") or "")) if x is not None else "")' "$expected_name")
+            test "$actual" = "3,$target"
+            scan=$($SUDO ssh-keyscan -T 5 -t ed25519 "$target" 2>/dev/null)
+            test "$(printf '%s\n' "$scan" | grep -c "^$target ssh-ed25519 ")" -eq 1
+            printf '%s\n' "$scan" | $SUDO tee -a "$known_tmp" >/dev/null
           done
-          test -n "$kubeone_known_hosts"
+          $SUDO install -o root -g root -m 0600 "$known_tmp" "$kubeone_known_hosts"
+          $SUDO rm -f -- "$known_tmp"
           stage=cluster_ac_connectivity
-          for target in 10.50.10.102 10.50.10.121; do
-            $SUDO ssh -i /var/lib/one/.ssh/id_rsa -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$kubeone_known_hosts" -o ConnectTimeout=5 root@"$target" -- kubectl --kubeconfig /etc/kubernetes/admin.conf get --raw=/readyz | grep -qx ok
+          for mapping in k1a-cp1:10.50.10.102 k1c-cp1:10.50.10.121; do
+            expected_name=${mapping%%:*}
+            target=${mapping#*:}
+            $SUDO ssh -i /var/lib/one/.ssh/id_rsa -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$kubeone_known_hosts" -o ConnectTimeout=5 root@"$target" "test \"\$(hostname -s)\" = \"$expected_name\" && kubectl --kubeconfig /etc/kubernetes/admin.conf get --raw=/readyz" | grep -qx ok
           done
 
           stage=install_monitor
