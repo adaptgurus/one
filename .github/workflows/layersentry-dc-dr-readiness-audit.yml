@@ -535,6 +535,7 @@ jobs:
           $SUDO install -d -o "$(id -un)" -g "$(id -gn)" -m 0700 /var/tmp/layersentry-rv2-ingress
           $SUDO chown "$(id -un):$(id -gn)" /var/tmp/layersentry-rv2-ingress
           $SUDO chmod 0700 /var/tmp/layersentry-rv2-ingress
+          $SUDO rm -f -- /var/tmp/layersentry-rv2-ingress/layersentry-replication-v2-qualifier /var/tmp/layersentry-rv2-ingress/ca.crt /var/tmp/layersentry-rv2-ingress/dc.crt /var/tmp/layersentry-rv2-ingress/dc.key
           DC_INGRESS
           scp -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
