@@ -109,6 +109,9 @@ jobs:
           sudo -n -u oneadmin onedatastore list
           echo IMAGE_INVENTORY
           sudo -n -u oneadmin oneimage list -l ID,NAME,USER,TYPE,REGTIME,STAT,RVMS
+          echo IMAGE_DATASTORE_1
+          sudo -n -u oneadmin onedatastore show 1 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","TYPE","DS_MAD","TM_MAD","TEMPLATE/BRIDGE_LIST","TEMPLATE/SAFE_DIRS","TEMPLATE/RESTRICTED_DIRS"); print(" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
+          $SUDO findmnt -T /var/lib/one/datastores/1 -o TARGET,SOURCE,FSTYPE,OPTIONS
           echo BACKUP_DATASTORE_100
           sudo -n -u oneadmin onedatastore show 100 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); paths=("ID","NAME","TYPE","DS_MAD","TM_MAD","TEMPLATE/RESTIC_COMPRESSION","TEMPLATE/RSYNC_HOST","TEMPLATE/BRIDGE_LIST"); print(" ".join(f"{p.replace(chr(47),chr(95))}={((r.findtext(p) or str(chr(45))).strip())!r}" for p in paths))'
           echo IMAGE_DETAILS
