@@ -1322,7 +1322,7 @@ jobs:
           domain="$1"
           test "$(virsh -c qemu:///system domstate "$domain" | tr -d '[:space:]')" = running
           xml=$(virsh -c qemu:///system dumpxml "$domain")
-          python3 -c 'import sys,xml.etree.ElementTree as E; r=E.fromstring(sys.stdin.read()); l=r.find("./os/loader"); t=r.find("./devices/tpm"); b=t.find("backend") if t is not None else None; assert l is not None and l.get("secure")=="yes"; assert r.find("./os/nvram") is not None; assert t is not None and t.get("model")=="tpm-crb"; assert b is not None and b.get("type")=="emulator" and b.get("version")=="2.0"' <<<"$xml"
+          python3 -c 'import sys,xml.etree.ElementTree as E; r=E.fromstring(sys.stdin.read()); l=r.find("./os/loader"); t=r.find("./devices/tpm"); b=t.find("backend") if t is not None else None; print("SECUREBOOT_VTPM_DOMAIN_XML",dict(l.attrib) if l is not None else None,r.find("./os/nvram") is not None,dict(t.attrib) if t is not None else None,dict(b.attrib) if b is not None else None,file=sys.stderr); assert l is not None and l.get("secure")=="yes"; assert r.find("./os/nvram") is not None; assert t is not None and t.get("model")=="tpm-crb"; assert b is not None and b.get("type")=="emulator" and b.get("version")=="2.0"' <<<"$xml"
           ready=false
           for _ in $(seq 1 180); do
             if virsh -c qemu:///system qemu-agent-command "$domain" '{"execute":"guest-ping"}' >/dev/null 2>&1; then ready=true; break; fi
