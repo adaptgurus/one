@@ -1,4 +1,4 @@
-name: Tester Foundation FireEdge and VIP correction
+name: Tester Foundation native Raft qualification
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,23 +9,23 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  native-provider:
+  native-qualification:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - name: Bind authorized tester and source pins
+      - name: Bind exact tester and source pins
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 2289f9313778624f85a93ecafa9e0050c540ecf1
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 0e5aa001c619aa0e4c9fe7cdb81b07bd8c5b4277
           test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = bbe15fb307819a59b4a959dd775b5636dc09f1ca
-      - name: Apply through existing Foundation provider entrypoint
+      - name: Verify native cluster then test one leader outage with recovery
         shell: bash
         run: |
           set -euo pipefail
           source /home/opc/layersentry-foundation-qual-20260929/venv/bin/activate
           cd /home/opc/layersentry-platform
-          python tools/lab/tester_foundation_apply.py --stage provider
+          python tools/lab/tester_native_qualification.py --failover
