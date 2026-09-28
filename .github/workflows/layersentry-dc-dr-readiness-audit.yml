@@ -1158,3 +1158,75 @@ jobs:
             -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dr_known_hosts" \
             root@172.17.60.40 'set -euo pipefail; test "$(hostname -s)" = layersentrydr; mapfile -t f < <(sudo -n -u oneadmin onevm show 6 --xml | python3 -c '\''import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",sep="\n")'\''); test "${f[0]}" = layersentry-rv2-dr-vm29-g1; test "${f[1]}" = 8'
           echo "REPLICATION_V2_FAILBACK_REBOOT_PERSISTENCE=PASS VM_ID=30 VM_IP=$vm_ip"
+
+  secureboot-vtpm-audit:
+    if: contains(github.event.head_commit.message, '[secureboot-vtpm-audit]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 10
+    steps:
+      - name: Audit exact DC and DR Secure Boot and vTPM capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          chmod 0700 "$work"
+
+          transfer_key=/root/.ssh/layersentry-replication-v2-transfer
+          test -f "$transfer_key"
+          test "$(ssh-keygen -lf "$transfer_key" -E sha256 | awk '{print $2}')" = 'SHA256:muT1yGsF0/TU8ToxLHErVwPcvJyIHPUufPRCK9SLloE'
+          dr_scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.40 2>/dev/null)"
+          test "$(printf '%s\n' "$dr_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:qOEu7khxLLpUIwS4RYyc7p5Vg/27MmZKr3YNtLWVTpI'
+          printf '%s\n' "$dr_scan" >"$work/dr_known_hosts"
+          ssh -i "$transfer_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dr_known_hosts" root@172.17.60.40 'bash -s' <<'DR_AUDIT'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentrydr
+          test "$(id -u)" = 0
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.40/26([[:space:]]|$)'
+          command -v swtpm >/dev/null
+          command -v virsh >/dev/null
+          firmware_count=$(find /usr/share -xdev -type f \( -iname '*secboot*.fd' -o -iname '*secure*.fd' \) 2>/dev/null | wc -l)
+          test "$firmware_count" -gt 0
+          domcaps=$(virsh -c qemu:///system domcapabilities)
+          printf '%s' "$domcaps" | grep -q "secure='yes'"
+          printf '%s' "$domcaps" | grep -q '<tpm supported='
+          echo "SECUREBOOT_VTPM_DR_CAPABILITY=PASS FIRMWARE_COUNT=$firmware_count"
+          DR_AUDIT
+
+          dc_scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)"
+          test "$(printf '%s\n' "$dc_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$dc_scan" >"$work/dc_known_hosts"
+          dc_key=''; dc_user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+                -o "UserKnownHostsFile=$work/dc_known_hosts" -o ConnectTimeout=5 "$candidate_user@172.17.60.30" \
+                'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' >/dev/null 2>&1; then
+                dc_key="$candidate"; dc_user="$candidate_user"; break 2
+              fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$dc_key"
+          ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$work/dc_known_hosts" "$dc_user@172.17.60.30" 'bash -s' <<'DC_AUDIT'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          mapfile -t image < <(sudo -n -u oneadmin oneimage show 3 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",r.findtext("TYPE") or "",r.findtext("SOURCE") or "",sep="\n")')
+          test -n "${image[0]}" && { test "${image[1]}" = 1 || test "${image[1]}" = 2; } && test "${image[2]}" = 0 && test -n "${image[3]}"
+          mapfile -t host < <(sudo -n -u oneadmin onehost show 0 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",sep="\n")')
+          test -n "${host[0]}" && test "${host[1]}" = 2
+          sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "${host[0]}" 'set -euo pipefail; test "$(id -u)" = 0; command -v swtpm >/dev/null; command -v virsh >/dev/null; firmware_count=$(find /usr/share -xdev -type f \( -iname "*secboot*.fd" -o -iname "*secure*.fd" \) 2>/dev/null | wc -l); test "$firmware_count" -gt 0; domcaps=$(virsh -c qemu:///system domcapabilities); printf "%s" "$domcaps" | grep -q "secure='\''yes'\''"; printf "%s" "$domcaps" | grep -q "<tpm supported="; echo "SECUREBOOT_VTPM_DC_CAPABILITY=PASS FIRMWARE_COUNT=$firmware_count"'
+          echo "SECUREBOOT_VTPM_SOURCE_IMAGE=PASS IMAGE_ID=3 IMAGE_NAME=${image[0]} HOST=${host[0]}"
+          DC_AUDIT
