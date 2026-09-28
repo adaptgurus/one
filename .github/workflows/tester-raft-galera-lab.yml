@@ -1,4 +1,4 @@
-name: Tester Foundation Galera runtime correction
+name: Tester Foundation Galera completion and qualification
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -13,21 +13,22 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 25
     steps:
-      - name: Bind exact tester and corrected source
+      - name: Bind exact tester and corrected Foundation source
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 7a37a3cc10ee2dad9fd72d9d2abe60fa61f9b2a1
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 65734c0f0c1376848b47bb6b32499d1ad555078e
           test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
           test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = bbe15fb307819a59b4a959dd775b5636dc09f1ca
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
           export PYTHONPATH=/home/opc/layersentry-platform/deploy
           cd /home/opc/layersentry-platform
           python -m unittest discover -s tests -p test_management_galera_safety.py -v
-      - name: Apply existing Foundation management-HA entrypoint
+          python -m unittest discover -s tests -p test_tester_galera_qualification.py -v
+      - name: Reconcile existing Primary through Foundation management entrypoint
         shell: bash
         run: |
           set -euo pipefail
@@ -35,3 +36,9 @@ jobs:
           export PYTHONPATH=/home/opc/layersentry-platform/deploy
           python /home/opc/layersentry-platform/tools/lab/tester_foundation_apply.py --stage management
           echo MANAGEMENT_APPLY_EXITED_NOT_INDEPENDENT_READINESS
+      - name: Independently test SQL replication quorum recovery and VIP failover
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          python /home/opc/layersentry-platform/tools/lab/tester_galera_qualification.py --exercise
