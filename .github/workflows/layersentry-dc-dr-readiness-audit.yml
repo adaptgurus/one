@@ -1284,7 +1284,31 @@ jobs:
           test -n "$active_host"
           mapfile -t host < <(sudo -n -u oneadmin onehost list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; x=next(x for x in r.findall("HOST") if (x.findtext("NAME") or "")==n); print(x.findtext("ID") or "",x.findtext("STATE") or "",sep="\n")' "$active_host")
           test -n "${host[0]}" && test "${host[1]}" = 2
+          secure_firmware="$(sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$active_host" 'virsh -c qemu:///system domcapabilities --virttype kvm --arch x86_64 --machine q35' | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); v=[(x.text or "") for x in r.findall("./os/loader/value") if "secboot" in (x.text or "").lower() and "tdx" not in (x.text or "").lower()]; print(v[0] if v else "")')"
+          test -n "$secure_firmware" && test "${secure_firmware#/}" != "$secure_firmware"
           vmid="$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")==n),"") )' "$name")"
+          if test -n "$vmid"; then
+            mapfile -t existing < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("TEMPLATE/DISK/IMAGE_ID") or "",r.findtext("TEMPLATE/OS/MACHINE") or "",r.findtext("TEMPLATE/OS/FIRMWARE_SECURE") or "",r.findtext("TEMPLATE/OS/FIRMWARE") or "",r.findtext("TEMPLATE/TPM/MODEL") or "",r.findtext("STATE") or "",sep="\n")')
+            test "${existing[0]}" = "$name" && test "${existing[1]}" = "$image_id" && test "${existing[2]}" = q35 && test "${existing[3]}" = YES && test "${existing[5]}" = tpm-crb
+            if test "${existing[4]}" != "$secure_firmware"; then
+              test "$vmid" = 31
+              if test "${existing[6]}" = 3; then sudo -n -u oneadmin onevm poweroff --hard "$vmid"; else test "${existing[6]}" = 8; fi
+              for _ in $(seq 1 120); do
+                state=$(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE") or "")')
+                test "$state" = 8 && break
+                sleep 2
+              done
+              test "$state" = 8
+              sudo -n -u oneadmin onevm terminate --hard "$vmid"
+              for _ in $(seq 1 120); do
+                state=$(sudo -n -u oneadmin onevm show "$vmid" --xml 2>/dev/null | python3 -c 'import sys,xml.etree.ElementTree as E; d=sys.stdin.read(); print(E.fromstring(d).findtext("STATE") if d.strip() else "gone")' || true)
+                { test "$state" = 6 || test "$state" = gone; } && break
+                sleep 2
+              done
+              test "$state" = 6 || test "$state" = gone
+              vmid=''
+            fi
+          fi
           if test -z "$vmid"; then
             tmpl=$(mktemp)
             trap 'rm -f -- "$tmpl"' EXIT
@@ -1295,15 +1319,14 @@ jobs:
           MEMORY = "4096"
           HYPERVISOR = "kvm"
           DISK = [ IMAGE_ID = "$image_id" ]
-          OS = [ ARCH = "x86_64", MACHINE = "q35", FIRMWARE_SECURE = "YES" ]
+          OS = [ ARCH = "x86_64", MACHINE = "q35", FIRMWARE = "$secure_firmware", FIRMWARE_SECURE = "YES" ]
           TPM = [ MODEL = "tpm-crb" ]
           SCHED_REQUIREMENTS = "NAME = \"$active_host\""
           VM
             chmod 0644 "$tmpl"
             vmid=$(sudo -n -u oneadmin onevm create "$tmpl" | awk '{print $NF}')
           else
-            mapfile -t existing < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("TEMPLATE/DISK/IMAGE_ID") or "",r.findtext("TEMPLATE/OS/MACHINE") or "",r.findtext("TEMPLATE/OS/FIRMWARE_SECURE") or "",r.findtext("TEMPLATE/TPM/MODEL") or "",sep="\n")')
-            test "${existing[0]}" = "$name" && test "${existing[1]}" = "$image_id" && test "${existing[2]}" = q35 && test "${existing[3]}" = YES && test "${existing[4]}" = tpm-crb
+            test "${existing[4]}" = "$secure_firmware"
             state=$(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE") or "")')
             if test "$state" = 8; then sudo -n -u oneadmin onevm resume "$vmid"; else test "$state" = 3; fi
           fi
