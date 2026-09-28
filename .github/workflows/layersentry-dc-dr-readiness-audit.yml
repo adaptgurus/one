@@ -571,7 +571,7 @@ jobs:
           $SUDO chmod 0755 "$ingress/layersentry-replication-v2-qualifier"
           $SUDO chmod 0644 "$ingress/ca.crt" "$ingress/dc.crt"
           $SUDO chmod 0600 "$ingress/dc.key"
-          sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" \
+          sudo -n -u oneadmin ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" \
             'test "$(id -u)" -ne 0 && ip -4 -o addr show | grep -Eq "(^|[[:space:]])10\.10\.10\.16/24([[:space:]]|$)" && install -d -m 0700 /var/tmp/layersentry-rv2-qualification'
           sudo -n -u oneadmin scp -o BatchMode=yes -o ConnectTimeout=5 \
             "$ingress/layersentry-replication-v2-qualifier" "$ingress/ca.crt" "$ingress/dc.crt" "$ingress/dc.key" \
