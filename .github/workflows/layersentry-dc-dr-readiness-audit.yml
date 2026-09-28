@@ -887,6 +887,8 @@ jobs:
             test "${di[0]}" = layersentry-rv2-dc-vm29-g2-data && test "${di[1]}" = 1 && test "${di[2]}" = 2 && test -n "${di[3]}" && $SUDO test -f "${di[3]}"
             sudo -n -u oneadmin qemu-img check -q "${oi[3]}"
             sudo -n -u oneadmin qemu-img check -q "${di[3]}"
+            tvm=$(mktemp)
+            trap 'rm -f -- "$tvm"' EXIT
             echo "REPLICATION_V2_FAILBACK_IMAGES_REUSED OS_IMAGE_ID=$osid DATA_IMAGE_ID=$dataid" >&2
           else
           test -z "$osid" && test -z "$dataid"
