@@ -24,7 +24,7 @@ jobs:
           {
             date -Is
             getenforce
-            sudo -n ls -lZ /var/lib/libvirt/images/layersentry-tester-20260929/*qcow2
+            sudo -n ls -lZ /var/lib/libvirt/images/layersentry-tester-20260929/
             for vm in lsf-fe1 lsf-fe2 lsf-fe3 lsf-kvm1 lsf-kvm2 lsf-kvm3; do
               echo "VM=$vm"
               sudo -n virsh domstate "$vm" --reason
