@@ -1,4 +1,4 @@
-name: Tester Foundation six-node lab substrate
+name: Tester Foundation guest boot diagnostics
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,24 +9,24 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  foundation-substrate:
+  guest-readback:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
-      - name: Reconcile provenance-verified substrate and boot members
+      - name: Inspect actual guest boot without mutation
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          source=/home/opc/layersentry-platform
-          test "$(git -C "$source" rev-parse HEAD)" = 100c29e0a91885af0ec9824e8c14ffe37a81cf2e
-          test -z "$(git -C "$source" status --porcelain --untracked-files=no)"
           w=/home/opc/layersentry-foundation-qual-20260929
-          exec > >(tee "$w/evidence/substrate-verified-resume.log") 2>&1
+          exec > >(tee "$w/evidence/guest-boot-readback.log") 2>&1
           date -Is
-          sudo -n python3 "$source/tools/lab/tester_foundation_substrate.py"
           sudo -n virsh list --all
-          sudo -n virsh net-list --all
-          echo 'SIX_NESTED_GUESTS_CREATED_NOT_CLUSTER_READY'
+          sudo -n virsh domiflist lsf-fe1
+          sudo -n virsh domifstat lsf-fe1 vnet0 || true
+          sudo -n virsh qemu-agent-command lsf-fe1 '{"execute":"guest-ping"}' || true
+          ip neigh show dev virbr-lsf10
+          sudo -n script -q -c 'timeout 12s virsh console lsf-fe1 --force' /dev/null || true
+          echo 'GUEST_BOOT_READBACK_COMPLETE'
