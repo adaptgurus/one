@@ -1,0 +1,86 @@
+name: LayerSentry Secure Boot vTPM replication audit
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/layersentrydr-probe-20260927
+
+jobs:
+  audit:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[secure-vtpm-rv2-audit]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 12
+    steps:
+      - name: Audit exact DC and DR state without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+          work=$(mktemp -d)
+          trap 'rm -rf -- "$work"' EXIT
+          chmod 0700 "$work"
+
+          dc_scan=$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)
+          test "$(printf '%s\n' "$dc_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$dc_scan" >"$work/dc_known_hosts"
+          dc_key=''; dc_user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" -o ConnectTimeout=5 "$candidate_user@172.17.60.30" 'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' >/dev/null 2>&1; then
+                dc_key=$candidate; dc_user=$candidate_user; break 2
+              fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$dc_key"
+          dc=(ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" "$dc_user@172.17.60.30")
+          "${dc[@]}" 'bash -s' <<'DC'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          vmid=33
+          xml=$(sudo -n -u oneadmin onevm show "$vmid" --xml)
+          python3 -c 'import sys,xml.etree.ElementTree as E; r=E.fromstring(sys.stdin.read()); h=r.findall("HISTORY_RECORDS/HISTORY"); d=r.find("TEMPLATE/DISK"); print("DC_VM",r.findtext("ID"),r.findtext("NAME"),r.findtext("STATE"),r.findtext("LCM_STATE"),(h[-1].findtext("HOSTNAME") if h else ""),r.findtext("DEPLOY_ID")); print("DC_DISK",d.findtext("DISK_ID"),d.findtext("SOURCE"),d.findtext("FORMAT"),d.findtext("SIZE"),d.findtext("TARGET")); print("DC_SECURITY",r.findtext("TEMPLATE/OS/FIRMWARE_SECURE"),r.findtext("TEMPLATE/OS/FIRMWARE"),r.findtext("TEMPLATE/OS/MACHINE"),r.findtext("TEMPLATE/TPM/MODEL"))' <<<"$xml"
+          host=$(python3 -c 'import sys,xml.etree.ElementTree as E; r=E.fromstring(sys.stdin.read()); h=r.findall("HISTORY_RECORDS/HISTORY"); print(h[-1].findtext("HOSTNAME") if h else "")' <<<"$xml")
+          domain=$(python3 -c 'import sys,xml.etree.ElementTree as E; print(E.fromstring(sys.stdin.read()).findtext("DEPLOY_ID") or "")' <<<"$xml")
+          test -n "$host" && test -n "$domain"
+          sudo -n -u oneadmin ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$host" "DOMAIN='$domain' bash -s" <<'HV'
+          set -euo pipefail
+          test "$(id -un)" = oneadmin
+          xml=$(virsh -c qemu:///system dumpxml "$DOMAIN")
+          python3 -c 'import sys,xml.etree.ElementTree as E; r=E.fromstring(sys.stdin.read()); l=r.find("./os/loader"); n=r.findtext("./os/nvram") or ""; t=r.find("./devices/tpm"); b=t.find("backend") if t is not None else None; disks=[(x.find("source").get("file",""),x.find("target").get("dev","")) for x in r.findall("./devices/disk") if x.find("source") is not None and x.find("target") is not None]; print("DC_DOMAIN_SECURITY",l.get("secure") if l is not None else "",n,t.get("model") if t is not None else "",b.get("type") if b is not None else "",b.get("version") if b is not None else ""); [print("DC_DOMAIN_DISK",*x) for x in disks]' <<<"$xml"
+          virsh -c qemu:///system domblklist "$DOMAIN" --details
+          find /var/lib/one/datastores/0/33 -maxdepth 3 -type f -printf 'DC_VM_FILE %p %s\n' | sort
+          HV
+          echo "DC_SOAK_ACTIVE=$($SUDO systemctl is-active layersentry-kubeone-soak-20h.service || true)"
+          $SUDO systemctl show layersentry-kubeone-soak-20h.service -p ActiveEnterTimestamp -p MainPID -p Result
+          $SUDO awk -F, 'NR>1 {rows++; if ($11!="PASS") bad++} END {print "DC_SOAK_ROWS="rows+0,"DC_SOAK_FAILURES="bad+0}' /var/lib/layersentry/evidence/kubeone-soak-20h-current/samples.csv
+          echo "DC_FAILBACK_RECEIVER=$($SUDO systemctl is-active layersentry-replication-v2-failback-qualifier.service || true)"
+          DC
+
+          transfer_key=/root/.ssh/layersentry-replication-v2-transfer
+          test "$(ssh-keygen -lf "$transfer_key" -E sha256 | awk '{print $2}')" = 'SHA256:muT1yGsF0/TU8ToxLHErVwPcvJyIHPUufPRCK9SLloE'
+          dr_scan=$(ssh-keyscan -T 5 -t ed25519 172.17.60.40 2>/dev/null)
+          test "$(printf '%s\n' "$dr_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:qOEu7khxLLpUIwS4RYyc7p5Vg/27MmZKr3YNtLWVTpI'
+          printf '%s\n' "$dr_scan" >"$work/dr_known_hosts"
+          ssh -i "$transfer_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dr_known_hosts" root@172.17.60.40 'bash -s' <<'DR'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentrydr
+          test "$(id -u)" = 0
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.40/26([[:space:]]|$)'
+          echo "DR_RECEIVER=$(systemctl is-active layersentry-replication-v2-qualifier.service || true)"
+          systemctl show layersentry-replication-v2-qualifier.service -p ActiveEnterTimestamp -p MainPID -p Result
+          df -Pk /var/lib/one/datastores /var/lib/layersentry
+          sudo -u oneadmin onehost list
+          sudo -u oneadmin onevm list
+          virsh -c qemu:///system domcapabilities --virttype kvm --arch x86_64 --machine q35 | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print("DR_SECURE_CAP", "yes" in [x.text for x in r.findall("./os/loader/enum[@name=\"secure\"]/value")], r.find("./devices/tpm").get("supported"))'
+          DR
