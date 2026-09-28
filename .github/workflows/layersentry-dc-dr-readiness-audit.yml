@@ -841,19 +841,26 @@ jobs:
           sudo -n test -f "$unit"
           sudo -n grep -Fq -- '--listen 172.17.60.30:9446' "$unit"
           sudo -n grep -Fq -- '--root /var/lib/layersentry/replication-v2-failback/filecow' "$unit"
-          sudo -n grep -Fq -- '--nbd /dev/nbd6,/dev/nbd7' "$unit"
+          sudo -n grep -Eq -- '--nbd /dev/nbd[0-9,/]+' "$unit"
           sudo -n modprobe nbd max_part=8 nbds_max=16
-          test -b /dev/nbd8 && test -b /dev/nbd9
-          test "$(cat /sys/block/nbd8/pid 2>/dev/null || true)" = ''
-          test "$(cat /sys/block/nbd9/pid 2>/dev/null || true)" = ''
-          sudo -n cp -a "$unit" "$unit.before-secure-vtpm-20260928"
-          sudo -n sed -i 's#--nbd /dev/nbd6,/dev/nbd7 #--nbd /dev/nbd6,/dev/nbd7,/dev/nbd8,/dev/nbd9 #' "$unit"
-          test "$(sudo -n grep -c -- '--nbd /dev/nbd6,/dev/nbd7,/dev/nbd8,/dev/nbd9' "$unit")" = 1
+          free=0
+          for n in $(seq 6 15); do
+            test -b "/dev/nbd$n"
+            pid="$(cat "/sys/block/nbd$n/pid" 2>/dev/null || true)"
+            printf 'NBD_STATE device=/dev/nbd%s pid=%s\n' "$n" "${pid:-free}"
+            test -z "$pid" && free=$((free + 1))
+          done
+          test "$free" -ge 2
+          backup="$unit.before-secure-vtpm-20260928"
+          sudo -n test -e "$backup" || sudo -n cp -a "$unit" "$backup"
+          sudo -n sed -E -i 's#--nbd [^ ]+#--nbd /dev/nbd6,/dev/nbd7,/dev/nbd8,/dev/nbd9,/dev/nbd10,/dev/nbd11,/dev/nbd12,/dev/nbd13,/dev/nbd14,/dev/nbd15#' "$unit"
+          test "$(sudo -n grep -c -- '--nbd /dev/nbd6,/dev/nbd7,/dev/nbd8,/dev/nbd9,/dev/nbd10,/dev/nbd11,/dev/nbd12,/dev/nbd13,/dev/nbd14,/dev/nbd15' "$unit")" = 1
           sudo -n systemctl daemon-reload
           sudo -n systemctl restart layersentry-replication-v2-failback-qualifier.service
           test "$(sudo -n systemctl is-active layersentry-replication-v2-failback-qualifier.service)" = active
-          sudo -n ss -lntp | grep -Fq '172.17.60.30:9446'
-          printf 'REPLICATION_V2_FAILBACK_RECEIVER_EXPANDED=PASS HOST=%s NBD_POOL=%s\n' "$(hostname -s)" '/dev/nbd6,/dev/nbd7,/dev/nbd8,/dev/nbd9'
+          sockets="$(sudo -n ss -lntp)"
+          grep -Fq '172.17.60.30:9446' <<<"$sockets"
+          printf 'REPLICATION_V2_FAILBACK_RECEIVER_EXPANDED=PASS HOST=%s FREE_BEFORE=%s NBD_POOL=%s\n' "$(hostname -s)" "$free" '/dev/nbd6..15'
           DC_EXPAND
 
   replication-failback-boot:
