@@ -1234,3 +1234,134 @@ jobs:
           sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$active_host" 'set -euo pipefail; command -v swtpm >/dev/null || { echo SECUREBOOT_VTPM_DC_SWTPM=FAIL; exit 21; }; echo SECUREBOOT_VTPM_DC_SWTPM=PASS; command -v virsh >/dev/null || { echo SECUREBOOT_VTPM_DC_VIRSH=FAIL; exit 22; }; echo SECUREBOOT_VTPM_DC_VIRSH=PASS; firmware_count=$(find /usr/share -xdev -type f \( -iname "*secboot*.fd" -o -iname "*secure*.fd" \) 2>/dev/null | wc -l || true); echo "SECUREBOOT_VTPM_DC_FIRMWARE_COUNT=$firmware_count"; test "$firmware_count" -gt 0; domcaps=$(virsh -c qemu:///system domcapabilities --virttype kvm --arch x86_64 --machine q35); python3 -c '\''import sys,xml.etree.ElementTree as E; r=E.fromstring(sys.stdin.read()); assert "yes" in [x.text for x in r.findall("./os/loader/enum[@name=\"secure\"]/value")]; assert r.find("./devices/tpm").get("supported") == "yes"'\'' <<<"$domcaps" || { echo SECUREBOOT_VTPM_DC_DOMCAPS=FAIL; exit 23; }; echo "SECUREBOOT_VTPM_DC_CAPABILITY=PASS FIRMWARE_COUNT=$firmware_count"'
           echo "SECUREBOOT_VTPM_SOURCE_IMAGE=PASS IMAGE_ID=3 IMAGE_NAME=${image[0]} HOST=$active_host"
           DC_AUDIT
+
+  secureboot-vtpm-live:
+    if: contains(github.event.head_commit.message, '[secureboot-vtpm-live]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 15
+    steps:
+      - name: Boot isolated Secure Boot and vTPM VM and verify guest state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          chmod 0700 "$work"
+          dc_scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)"
+          test "$(printf '%s\n' "$dc_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$dc_scan" >"$work/dc_known_hosts"
+          dc_key=''; dc_user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+                -o "UserKnownHostsFile=$work/dc_known_hosts" -o ConnectTimeout=5 "$candidate_user@172.17.60.30" \
+                'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' >/dev/null 2>&1; then
+                dc_key="$candidate"; dc_user="$candidate_user"; break 2
+              fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$dc_key"
+          ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o "UserKnownHostsFile=$work/dc_known_hosts" "$dc_user@172.17.60.30" 'bash -s' <<'DC_LIVE'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          name=layersentry-secure-vtpm-qual-20260928
+          image_id=3
+          mapfile -t image < <(sudo -n -u oneadmin oneimage show "$image_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("STATE") or "",r.findtext("TYPE") or "",sep="\n")')
+          test "${image[0]}" = layersentry-rocky9-kube && { test "${image[1]}" = 1 || test "${image[1]}" = 2; } && test "${image[2]}" = 0
+          active_host="$(sudo -n -u oneadmin onevm show 30 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); h=r.findall("HISTORY_RECORDS/HISTORY"); print((h[-1].findtext("HOSTNAME") if h else "") or "")')"
+          test -n "$active_host"
+          mapfile -t host < <(sudo -n -u oneadmin onehost list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; x=next(x for x in r.findall("HOST") if (x.findtext("NAME") or "")==n); print(x.findtext("ID") or "",x.findtext("STATE") or "",sep="\n")' "$active_host")
+          test -n "${host[0]}" && test "${host[1]}" = 2
+          vmid="$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")==n),"") )' "$name")"
+          if test -z "$vmid"; then
+            tmpl=$(mktemp)
+            trap 'rm -f -- "$tmpl"' EXIT
+            cat >"$tmpl" <<VM
+          NAME = "$name"
+          CPU = "2"
+          VCPU = "2"
+          MEMORY = "4096"
+          HYPERVISOR = "kvm"
+          DISK = [ IMAGE_ID = "$image_id" ]
+          OS = [ ARCH = "x86_64", MACHINE = "q35", FIRMWARE_SECURE = "YES" ]
+          TPM = [ MODEL = "tpm-crb" ]
+          SCHED_REQUIREMENTS = "NAME = \"$active_host\""
+          VM
+            chmod 0644 "$tmpl"
+            vmid=$(sudo -n -u oneadmin onevm create "$tmpl" | awk '{print $NF}')
+          else
+            mapfile -t existing < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("TEMPLATE/DISK/IMAGE_ID") or "",r.findtext("TEMPLATE/OS/MACHINE") or "",r.findtext("TEMPLATE/OS/FIRMWARE_SECURE") or "",r.findtext("TEMPLATE/TPM/MODEL") or "",sep="\n")')
+            test "${existing[0]}" = "$name" && test "${existing[1]}" = "$image_id" && test "${existing[2]}" = q35 && test "${existing[3]}" = YES && test "${existing[4]}" = tpm-crb
+            state=$(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE") or "")')
+            if test "$state" = 8; then sudo -n -u oneadmin onevm resume "$vmid"; else test "$state" = 3; fi
+          fi
+          test "$vmid" -ge 31
+          for _ in $(seq 1 180); do
+            mapfile -t vf < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); h=r.findall("HISTORY_RECORDS/HISTORY"); print(r.findtext("STATE") or "",r.findtext("LCM_STATE") or "",r.findtext("DEPLOY_ID") or "",(h[-1].findtext("HOSTNAME") if h else "") or "",sep="\n")')
+            test "${vf[0]}" != 7
+            if test "${vf[0]}" = 3 && test "${vf[1]}" = 3 && test -n "${vf[2]}" && test "${vf[3]}" = "$active_host"; then break; fi
+            sleep 2
+          done
+          test "${vf[0]}" = 3 && test "${vf[1]}" = 3
+          domain="${vf[2]}"
+          guest_check() {
+            sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$active_host" 'bash -s --' "$domain" <<'HOST_CHECK'
+          set -euo pipefail
+          domain="$1"
+          test "$(virsh -c qemu:///system domstate "$domain" | tr -d '[:space:]')" = running
+          xml=$(virsh -c qemu:///system dumpxml "$domain")
+          python3 -c 'import sys,xml.etree.ElementTree as E; r=E.fromstring(sys.stdin.read()); l=r.find("./os/loader"); t=r.find("./devices/tpm"); b=t.find("backend") if t is not None else None; assert l is not None and l.get("secure")=="yes"; assert r.find("./os/nvram") is not None; assert t is not None and t.get("model")=="tpm-crb"; assert b is not None and b.get("type")=="emulator" and b.get("version")=="2.0"' <<<"$xml"
+          ready=false
+          for _ in $(seq 1 180); do
+            if virsh -c qemu:///system qemu-agent-command "$domain" '{"execute":"guest-ping"}' >/dev/null 2>&1; then ready=true; break; fi
+            sleep 2
+          done
+          test "$ready" = true
+          command='set -eu; test -d /sys/firmware/efi; set -- /sys/firmware/efi/efivars/SecureBoot-*; test -f "$1"; secure=$(od -An -t u1 "$1" | awk "{print \$NF}"); test "$secure" = 1; test -c /dev/tpm0; test "$(cat /sys/class/tpm/tpm0/tpm_version_major)" = 2; printf "BOOT_ID=%s\nSECURE_BOOT=1\nTPM_VERSION=2\n" "$(cat /proc/sys/kernel/random/boot_id)"'
+          request=$(python3 -c 'import json,sys; print(json.dumps({"execute":"guest-exec","arguments":{"path":"/bin/bash","arg":["-c",sys.argv[1]],"capture-output":True}}))' "$command")
+          response=$(virsh -c qemu:///system qemu-agent-command "$domain" "$request")
+          pid=$(python3 -c 'import json,sys; print(json.load(sys.stdin)["return"]["pid"])' <<<"$response")
+          for _ in $(seq 1 60); do
+            status=$(virsh -c qemu:///system qemu-agent-command "$domain" "{\"execute\":\"guest-exec-status\",\"arguments\":{\"pid\":$pid}}")
+            exited=$(python3 -c 'import json,sys; print(str(bool(json.load(sys.stdin)["return"].get("exited"))).lower())' <<<"$status")
+            test "$exited" = true && break
+            sleep 1
+          done
+          python3 -c 'import base64,json,sys; r=json.load(sys.stdin)["return"]; assert r.get("exitcode")==0,base64.b64decode(r.get("err-data","")).decode(errors="replace"); print(base64.b64decode(r.get("out-data","")).decode(),end="")' <<<"$status"
+          HOST_CHECK
+          }
+          first=$(guest_check)
+          grep -q '^SECURE_BOOT=1$' <<<"$first" && grep -q '^TPM_VERSION=2$' <<<"$first"
+          first_boot=$(awk -F= '$1=="BOOT_ID" {print $2}' <<<"$first")
+          test -n "$first_boot"
+          sudo -n -u oneadmin onevm reboot --hard "$vmid"
+          second=''
+          for _ in $(seq 1 120); do
+            second=$(guest_check 2>/dev/null || true)
+            second_boot=$(awk -F= '$1=="BOOT_ID" {print $2}' <<<"$second")
+            if test -n "$second_boot" && test "$second_boot" != "$first_boot"; then break; fi
+            sleep 2
+          done
+          test -n "${second_boot:-}" && test "$second_boot" != "$first_boot"
+          grep -q '^SECURE_BOOT=1$' <<<"$second" && grep -q '^TPM_VERSION=2$' <<<"$second"
+          sudo -n -u oneadmin onevm poweroff --hard "$vmid"
+          for _ in $(seq 1 120); do
+            state=$(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE") or "")')
+            test "$state" = 8 && break
+            sleep 2
+          done
+          test "$state" = 8
+          echo "SECUREBOOT_VTPM_LIVE=PASS VM_ID=$vmid IMAGE_ID=$image_id HOST=$active_host REBOOT_PERSISTENCE=PASS FINAL_STATE=$state"
+          DC_LIVE
