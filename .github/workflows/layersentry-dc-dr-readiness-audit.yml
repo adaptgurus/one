@@ -593,11 +593,10 @@ jobs:
           qemu-img check -q "$data_source"
           os_raw="$base/dc-vm29-os-g1.raw"
           data_raw="$base/dc-vm29-data-g1.raw"
-          test ! -e "$os_raw" && test ! -e "$data_raw"
           free_bytes="$(df -B1 --output=avail "$base" | tail -1 | tr -d '[:space:]')"
           test "$free_bytes" -ge 4294967296
-          qemu-img convert -p -O raw "$os_source" "$os_raw"
-          qemu-img convert -p -O raw "$data_source" "$data_raw"
+          if test -e "$os_raw"; then qemu-img compare -q -f qcow2 -F raw "$os_source" "$os_raw"; else qemu-img convert -p -O raw "$os_source" "$os_raw"; fi
+          if test -e "$data_raw"; then qemu-img compare -q -f qcow2 -F raw "$data_source" "$data_raw"; else qemu-img convert -p -O raw "$data_source" "$data_raw"; fi
           test -s "$os_raw" && test -s "$data_raw"
           echo "REPLICATION_V2_RAW_SOURCE OS_SHA256=$(sha256sum "$os_raw" | awk '{print $1}') DATA_SHA256=$(sha256sum "$data_raw" | awk '{print $1}')"
           "$base/layersentry-replication-v2-qualifier" send \
