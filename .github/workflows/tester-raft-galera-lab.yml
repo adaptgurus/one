@@ -1,4 +1,4 @@
-name: Tester Foundation guest boot diagnostics
+name: Tester Foundation execution hold
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -7,26 +7,21 @@ permissions:
   contents: read
 concurrency:
   group: tester-raft-galera-lab
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
-  guest-readback:
+  hold:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 5
+    timeout-minutes: 2
     steps:
-      - name: Inspect actual guest boot without mutation
+      - name: Record unverified deployment boundary without guest access
         shell: bash
         run: |
           set -euo pipefail
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          w=/home/opc/layersentry-foundation-qual-20260929
-          exec > >(tee "$w/evidence/guest-boot-readback.log") 2>&1
-          date -Is
-          sudo -n virsh list --all
-          sudo -n virsh domiflist lsf-fe1
-          sudo -n virsh domifstat lsf-fe1 vnet0 || true
-          sudo -n virsh qemu-agent-command lsf-fe1 '{"execute":"guest-ping"}' || true
-          ip neigh show dev virbr-lsf10
-          sudo -n script -q -c 'timeout 12s virsh console lsf-fe1 --force' /dev/null || true
-          echo 'GUEST_BOOT_READBACK_COMPLETE'
+          echo 'FOUNDATION_SUBSTRATE_CREATED'
+          echo 'ONEDEPLOY_APPLY_NOT_EXECUTED'
+          echo 'RAFT_CLUSTER_NOT_VERIFIED'
+          echo 'GALERA_CLUSTER_NOT_VERIFIED'
+          echo 'NO_GUEST_ACCESS_OR_INFRASTRUCTURE_MUTATION_IN_THIS_JOB'
