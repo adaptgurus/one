@@ -13,7 +13,7 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 20
     steps:
-      - name: Create exact pinned disposable tester VM substrate
+      - name: Resume exact owned tester members after permission fix
         shell: bash
         run: |
           set -euo pipefail
@@ -21,10 +21,10 @@ jobs:
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
           source=/home/opc/layersentry-platform
-          test "$(git -C "$source" rev-parse HEAD)" = 29535b9c8c98b3e43004b2514c637265a1e30be8
+          test "$(git -C "$source" rev-parse HEAD)" = 85db99c86b126ffe72a2b677fb41124d2ccd029d
           test -z "$(git -C "$source" status --porcelain --untracked-files=no)"
           w=/home/opc/layersentry-foundation-qual-20260929
-          exec > >(tee "$w/evidence/substrate-create.log") 2>&1
+          exec > >(tee "$w/evidence/substrate-resume.log") 2>&1
           date -Is
           sudo -n python3 "$source/tools/lab/tester_foundation_substrate.py"
           sudo -n virsh list --all
