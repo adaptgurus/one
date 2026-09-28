@@ -883,8 +883,8 @@ jobs:
           if test -n "$osid" && test -n "$dataid"; then
             mapfile -t oi < <(sudo -n -u oneadmin oneimage show "$osid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","TYPE","SOURCE")],sep="\n")')
             mapfile -t di < <(sudo -n -u oneadmin oneimage show "$dataid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","TYPE","SOURCE")],sep="\n")')
-            test "${oi[0]}" = layersentry-rv2-dc-vm29-g2-os && test "${oi[1]}" = 1 && test "${oi[2]}" = 0 && test -f "${oi[3]}"
-            test "${di[0]}" = layersentry-rv2-dc-vm29-g2-data && test "${di[1]}" = 1 && test "${di[2]}" = 2 && test -f "${di[3]}"
+            test "${oi[0]}" = layersentry-rv2-dc-vm29-g2-os && test "${oi[1]}" = 1 && test "${oi[2]}" = 0 && test -n "${oi[3]}" && $SUDO test -f "${oi[3]}"
+            test "${di[0]}" = layersentry-rv2-dc-vm29-g2-data && test "${di[1]}" = 1 && test "${di[2]}" = 2 && test -n "${di[3]}" && $SUDO test -f "${di[3]}"
             sudo -n -u oneadmin qemu-img check -q "${oi[3]}"
             sudo -n -u oneadmin qemu-img check -q "${di[3]}"
             echo "REPLICATION_V2_FAILBACK_IMAGES_REUSED OS_IMAGE_ID=$osid DATA_IMAGE_ID=$dataid" >&2
