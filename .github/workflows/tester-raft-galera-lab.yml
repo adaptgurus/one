@@ -1,0 +1,37 @@
+name: Tester Raft Galera lab
+on:
+  push:
+    branches: [ops/tester-raft-galera-20260929]
+    paths: [.github/workflows/tester-raft-galera-lab.yml]
+permissions:
+  contents: read
+concurrency:
+  group: tester-raft-galera-lab
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: [self-hosted, Linux, X64, tester]
+    timeout-minutes: 5
+    steps:
+      - name: Bind authorized tester identity and inspect prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = tester
+          test "$(hostname -s)" = tester
+          test "$(id -un)" = opc
+          echo 'CENTRAL_AUTHORITY=f72f80cc089ae8c198082f5b29edc525725c9e4a'
+          echo 'MODE=READ_ONLY_PREFLIGHT'
+          date -Is
+          id
+          cat /etc/os-release
+          nproc
+          free -h
+          df -h /
+          test -c /dev/kvm
+          stat -c '%A %U %G %n' /dev/kvm
+          echo 'SUDO_POLICY_BEGIN'
+          sudo -n -l
+          echo 'SUDO_POLICY_END'
+          rpm -q qemu-kvm libvirt virt-install mariadb-server galera opennebula || true
+          echo 'PREFLIGHT_COMPLETE_NOT_CLUSTER_READY'
