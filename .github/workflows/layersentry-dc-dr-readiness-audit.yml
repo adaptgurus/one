@@ -689,8 +689,6 @@ jobs:
           ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
           if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
           test "$($SUDO id -u)" = 0
-          test ! -e /etc/systemd/system/layersentry-replication-v2-failback-qualifier.service
-          test ! -e /var/lib/layersentry/replication-v2-failback
           $SUDO install -d -o "$(id -un)" -g "$(id -gn)" -m 0700 /var/tmp/layersentry-rv2-failback-ingress
           DC_PREFLIGHT
 
@@ -708,6 +706,7 @@ jobs:
           ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
           if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
           test "$($SUDO id -u)" = 0
+          trap '$SUDO systemctl status --no-pager layersentry-replication-v2-failback-qualifier.service 2>/dev/null || true; $SUDO journalctl -u layersentry-replication-v2-failback-qualifier.service --no-pager -n 80 2>/dev/null || true' ERR
           ingress=/var/tmp/layersentry-rv2-failback-ingress
           test "$(sha256sum "$ingress/layersentry-replication-v2-qualifier" | awk '{print $1}')" = f87978040089303eca265a23bd7d119c62b617dfe747f1d1f4d961e019c3a182
           $SUDO modprobe nbd max_part=8 nbds_max=16
@@ -748,7 +747,8 @@ jobs:
             $SUDO firewall-cmd --reload
           fi
           $SUDO systemctl daemon-reload
-          $SUDO systemctl enable --now layersentry-replication-v2-failback-qualifier.service
+          $SUDO systemctl enable layersentry-replication-v2-failback-qualifier.service
+          $SUDO systemctl restart layersentry-replication-v2-failback-qualifier.service
           test "$($SUDO systemctl is-active layersentry-replication-v2-failback-qualifier.service)" = active
           $SUDO ss -ltn | grep -F '172.17.60.30:9446'
           echo REPLICATION_V2_FAILBACK_RECEIVER=READY
