@@ -883,8 +883,8 @@ jobs:
           if test -n "$osid" && test -n "$dataid"; then
             mapfile -t oi < <(sudo -n -u oneadmin oneimage show "$osid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","TYPE","SOURCE")],sep="\n")')
             mapfile -t di < <(sudo -n -u oneadmin oneimage show "$dataid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","TYPE","SOURCE")],sep="\n")')
-            test "${oi[0]}" = layersentry-rv2-dc-vm29-g2-os && test "${oi[1]}" = 1 && test "${oi[2]}" = 0 && test -n "${oi[3]}" && $SUDO test -f "${oi[3]}"
-            test "${di[0]}" = layersentry-rv2-dc-vm29-g2-data && test "${di[1]}" = 1 && test "${di[2]}" = 2 && test -n "${di[3]}" && $SUDO test -f "${di[3]}"
+            test "${oi[0]}" = layersentry-rv2-dc-vm29-g2-os && { test "${oi[1]}" = 1 || test "${oi[1]}" = 2; } && test "${oi[2]}" = 0 && test -n "${oi[3]}" && $SUDO test -f "${oi[3]}"
+            test "${di[0]}" = layersentry-rv2-dc-vm29-g2-data && { test "${di[1]}" = 1 || test "${di[1]}" = 2; } && test "${di[2]}" = 2 && test -n "${di[3]}" && $SUDO test -f "${di[3]}"
             sudo -n -u oneadmin qemu-img check -q "${oi[3]}"
             sudo -n -u oneadmin qemu-img check -q "${di[3]}"
             tvm=$(mktemp)
@@ -963,9 +963,17 @@ jobs:
           sudo -n -u oneadmin onedatastore update 1 --append "$ds_restore"
           test "$(sudo -n -u oneadmin onedatastore show 1 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("TEMPLATE/SAFE_DIRS") or "")')" = /var/tmp
           fi
-          test -z "$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")=="layersentry-rv2-dc-vm29-g2"),""))')"
-          pub="$(printf '%s' "$pub64" | base64 -d)"
-          cat >"$tvm" <<VM
+          existing_vmid="$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")=="layersentry-rv2-dc-vm29-g2"),""))')"
+          if test -n "$existing_vmid"; then
+            vmid="$existing_vmid"
+            mapfile -t ev < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(r.findtext("NAME") or "",r.findtext("TEMPLATE/NIC/NETWORK_ID") or "",",".join((x.findtext("IMAGE_ID") or "") for x in r.findall("TEMPLATE/DISK")),sep="\n")')
+            test "${ev[0]}" = layersentry-rv2-dc-vm29-g2
+            test "${ev[1]}" = 0
+            test "${ev[2]}" = "$osid,$dataid"
+            echo "REPLICATION_V2_FAILBACK_VM_REUSED VM_ID=$vmid" >&2
+          else
+            pub="$(printf '%s' "$pub64" | base64 -d)"
+            cat >"$tvm" <<VM
           NAME = "layersentry-rv2-dc-vm29-g2"
           CPU = "2"
           VCPU = "2"
@@ -977,8 +985,9 @@ jobs:
           OS = [ ARCH = "x86_64", MACHINE = "q35" ]
           CONTEXT = [ NETWORK = "YES", NETCFG_TYPE = "nm", SET_HOSTNAME = "layersentry-rv2-dc-vm29-g2", SSH_PUBLIC_KEY = "$pub" ]
           VM
-          chmod 0644 "$tvm"
-          vmid=$(sudo -n -u oneadmin onevm create "$tvm" | awk '{print $NF}')
+            chmod 0644 "$tvm"
+            vmid=$(sudo -n -u oneadmin onevm create "$tvm" | awk '{print $NF}')
+          fi
           test "$vmid" -ge 30
           for _ in $(seq 1 180); do
             mapfile -t vf < <(sudo -n -u oneadmin onevm show "$vmid" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("STATE","LCM_STATE","TEMPLATE/NIC/IP","DEPLOY_ID","HISTORY_RECORDS/HISTORY/HOSTNAME","TEMPLATE/NIC/NETWORK_ID")],sep="\n")')
@@ -997,6 +1006,12 @@ jobs:
           set -euo pipefail
           domain="$1"; ip="$2"; prefix="$3"; mask="$4"; gateway="$5"; pub64="$6"
           test "$(virsh -c qemu:///system domstate "$domain" | tr -d '[:space:]')" = running
+          qga_ready=false
+          for _ in $(seq 1 90); do
+            if virsh -c qemu:///system qemu-agent-command "$domain" '{"execute":"guest-ping"}' >/dev/null 2>&1; then qga_ready=true; break; fi
+            sleep 2
+          done
+          test "$qga_ready" = true
           route=''; gateway_line=''
           if test "$gateway" != __NONE__ && test -n "$gateway"; then route="ip route replace default via $gateway dev eth0;"; gateway_line="  gateway $gateway\\n"; fi
           command="set -eu; ip link set eth0 up; ip addr flush dev eth0 scope global || true; ip addr add $ip/$prefix dev eth0; $route mkdir -p /etc/network /root/.ssh; printf 'auto lo\\niface lo inet loopback\\n\\nauto eth0\\niface eth0 inet static\\n  address $ip\\n  netmask $mask\\n$gateway_line' > /etc/network/interfaces; printf '%s' '$pub64' | base64 -d > /root/.ssh/authorized_keys; chmod 0700 /root/.ssh; chmod 0600 /root/.ssh/authorized_keys; command -v rc-service >/dev/null 2>&1 && rc-service sshd restart || true; sync"
