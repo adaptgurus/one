@@ -11,7 +11,7 @@ target=evidence/smart-installer/20260928/kubeone-20h-soak-live-20260928-01
 [[ ${evidence_dir} == /var/lib/layersentry/evidence/* ]]
 [[ -s ${evidence_dir}/samples.csv && -s ${evidence_dir}/events.log && -s ${evidence_dir}/SUMMARY.env ]]
 source "${evidence_dir}/SUMMARY.env"
-[[ ${SOAK_RESULT} == PASS && ${SOAK_FAILURES} == 0 ]]
+[[ ${SOAK_RESULT} == PASS || ${SOAK_RESULT} == FAIL ]]
 [[ -s ${deploy_key} && -s ${known_hosts} ]]
 if grep -REiq 'BEGIN (RSA|OPENSSH|EC|PRIVATE)|client-key-data|certificate-authority-data|password[[:space:]]*[:=]|token[[:space:]]*[:=]' "${evidence_dir}/samples.csv" "${evidence_dir}/events.log" "${evidence_dir}/SUMMARY.env" "${evidence_dir}/raw"; then
   echo 'refusing to upload possible credential material' >&2
@@ -35,7 +35,7 @@ cp -a "${evidence_dir}/raw" "${work}/repo/${target}/raw"
 git -C "${work}/repo" config user.name 'LayerSentry Evidence Bot'
 git -C "${work}/repo" config user.email 'layersentry-evidence@adaptgurus.local'
 git -C "${work}/repo" add "${target}"
-git -C "${work}/repo" commit -m 'evidence(kubeone): upload verified 20-hour soak logs'
+git -C "${work}/repo" commit -m "evidence(kubeone): upload 20-hour soak logs (${SOAK_RESULT})"
 git -C "${work}/repo" push origin "HEAD:refs/heads/${branch}"
 echo "GITHUB_EVIDENCE_BRANCH=${branch}" >>"${evidence_dir}/SUMMARY.env"
 echo "GITHUB_EVIDENCE_PATH=${target}" >>"${evidence_dir}/SUMMARY.env"

@@ -27,7 +27,8 @@ jobs:
           test -n "${TRAINING_DEPLOY_KEY:-}"
           monitor="$GITHUB_WORKSPACE/.github/scripts/layersentry-kubeone-soak.sh"
           uploader="$GITHUB_WORKSPACE/.github/scripts/layersentry-kubeone-soak-upload.sh"
-          bash -n "$monitor"; bash -n "$uploader"
+          wrapper="$GITHUB_WORKSPACE/.github/scripts/layersentry-kubeone-soak-run.sh"
+          bash -n "$monitor"; bash -n "$uploader"; bash -n "$wrapper"
 
           work=$(mktemp -d)
           trap 'rm -rf -- "$work"' EXIT
@@ -51,7 +52,7 @@ jobs:
 
           printf '%s' "$TRAINING_DEPLOY_KEY" >"$work/training_deploy_key"
           chmod 0600 "$work/training_deploy_key"
-          "${scp_dc[@]}" "$monitor" "$uploader" "$work/training_deploy_key" "$dc_user@172.17.60.30:/tmp/"
+          "${scp_dc[@]}" "$monitor" "$uploader" "$wrapper" "$work/training_deploy_key" "$dc_user@172.17.60.30:/tmp/"
 
           "${ssh_dc[@]}" 'bash -s' <<'REMOTE'
           set -euo pipefail
@@ -71,9 +72,11 @@ jobs:
           $SUDO install -d -m 0700 /var/lib/layersentry/credentials
           $SUDO install -o root -g root -m 0755 /tmp/layersentry-kubeone-soak.sh /usr/local/libexec/layersentry/kubeone-soak.sh
           $SUDO install -o root -g root -m 0755 /tmp/layersentry-kubeone-soak-upload.sh /usr/local/libexec/layersentry/kubeone-soak-upload.sh
+          $SUDO install -o root -g root -m 0755 /tmp/layersentry-kubeone-soak-run.sh /usr/local/libexec/layersentry/kubeone-soak-run.sh
           $SUDO install -o root -g root -m 0600 /tmp/training_deploy_key /var/lib/layersentry/credentials/codexagentlogic-soak-deploy
-          $SUDO rm -f -- /tmp/layersentry-kubeone-soak.sh /tmp/layersentry-kubeone-soak-upload.sh /tmp/training_deploy_key
-          $SUDO curl -fsSL https://api.github.com/meta | $SUDO python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join("github.com "+x for x in d["ssh_keys"]))' | $SUDO tee /var/lib/layersentry/credentials/github-known-hosts >/dev/null
+          $SUDO rm -f -- /tmp/layersentry-kubeone-soak.sh /tmp/layersentry-kubeone-soak-upload.sh /tmp/layersentry-kubeone-soak-run.sh /tmp/training_deploy_key
+          printf '%s\n' 'github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl' | $SUDO tee /var/lib/layersentry/credentials/github-known-hosts >/dev/null
+          test "$($SUDO ssh-keygen -lf /var/lib/layersentry/credentials/github-known-hosts -E sha256 | awk '{print $2}')" = 'SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU'
           $SUDO chmod 0600 /var/lib/layersentry/credentials/github-known-hosts
 
           stage=two_minute_proof
@@ -104,8 +107,7 @@ jobs:
           Environment=SOAK_INTERVAL_SECONDS=60
           Environment=SOAK_CLUSTERS=b
           Environment=SOAK_OUTPUT_DIR=$long
-          ExecStart=/usr/local/libexec/layersentry/kubeone-soak.sh
-          ExecStartPost=/usr/local/libexec/layersentry/kubeone-soak-upload.sh
+          ExecStart=/usr/local/libexec/layersentry/kubeone-soak-run.sh
           TimeoutStartSec=75600
           Restart=no
           StandardOutput=journal
