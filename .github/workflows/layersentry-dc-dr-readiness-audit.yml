@@ -749,7 +749,13 @@ jobs:
           $SUDO systemctl daemon-reload
           $SUDO systemctl enable layersentry-replication-v2-failback-qualifier.service
           $SUDO systemctl restart layersentry-replication-v2-failback-qualifier.service
-          test "$($SUDO systemctl is-active layersentry-replication-v2-failback-qualifier.service)" = active
+          state=''
+          for _ in $(seq 1 30); do
+            state="$($SUDO systemctl is-active layersentry-replication-v2-failback-qualifier.service 2>/dev/null || true)"
+            test "$state" = active && break
+            sleep 1
+          done
+          test "$state" = active
           $SUDO ss -ltn | grep -F '172.17.60.30:9446'
           echo REPLICATION_V2_FAILBACK_RECEIVER=READY
           DC_INSTALL
