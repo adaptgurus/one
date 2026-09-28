@@ -65,9 +65,9 @@ jobs:
           available_kib=$($SUDO df -Pk /var/lib/layersentry | awk 'NR==2 {print $4}')
           test "$available_kib" -ge 1048576
           stage=cluster_b_kubeconfig_preflight
-          test -s /var/lib/layersentry/kubeone/lab/cluster-b/kubeconfig
+          $SUDO test -s /var/lib/layersentry/kubeone/lab/cluster-b/kubeconfig
           stage=kubeone_ssh_key_preflight
-          test -s /var/lib/one/.ssh/id_rsa
+          $SUDO test -s /var/lib/one/.ssh/id_rsa
           stage=kubeone_known_hosts_preflight
           kubeone_known_hosts=''
           for candidate in /var/lib/one/.ssh/known_hosts /root/.ssh/known_hosts; do
