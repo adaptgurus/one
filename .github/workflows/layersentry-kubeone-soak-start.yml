@@ -1,0 +1,138 @@
+name: LayerSentry KubeOne two-minute proof and 20-hour start
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - ops/layersentrydr-probe-20260927
+
+jobs:
+  start:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[kubeone-soak-start]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prove two minutes and start self-contained 20-hour service
+        shell: bash
+        env:
+          TRAINING_DEPLOY_KEY: ${{ secrets.LAYERSENTRY_TRAINING_DEPLOY_KEY }}
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+          test -n "${TRAINING_DEPLOY_KEY:-}"
+          monitor="$GITHUB_WORKSPACE/.github/scripts/layersentry-kubeone-soak.sh"
+          uploader="$GITHUB_WORKSPACE/.github/scripts/layersentry-kubeone-soak-upload.sh"
+          bash -n "$monitor"; bash -n "$uploader"
+
+          work=$(mktemp -d)
+          trap 'rm -rf -- "$work"' EXIT
+          scan=$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)
+          test "$(printf '%s\n' "$scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$scan" >"$work/known_hosts"; chmod 0600 "$work/known_hosts"
+          dc_key=''; dc_user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" -o ConnectTimeout=5 "$candidate_user@172.17.60.30" 'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' >/dev/null 2>&1; then dc_key="$candidate"; dc_user="$candidate_user"; break 2; fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$dc_key"
+          ssh_opts=(-i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts")
+          ssh_dc=(ssh "${ssh_opts[@]}" "$dc_user@172.17.60.30")
+          scp_dc=(scp "${ssh_opts[@]}")
+
+          printf '%s' "$TRAINING_DEPLOY_KEY" >"$work/training_deploy_key"
+          chmod 0600 "$work/training_deploy_key"
+          "${scp_dc[@]}" "$monitor" "$uploader" "$work/training_deploy_key" "$dc_user@172.17.60.30:/tmp/"
+
+          "${ssh_dc[@]}" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          available_kib=$($SUDO df -Pk /var/lib/layersentry | awk 'NR==2 {print $4}')
+          test "$available_kib" -ge 1048576
+          test -s /var/lib/layersentry/kubeone/lab/cluster-b/kubeconfig
+          test -s /var/lib/one/.ssh/id_rsa
+          test -s /var/lib/one/.ssh/known_hosts
+          for target in 10.50.10.102 10.50.10.121; do
+            $SUDO ssh -i /var/lib/one/.ssh/id_rsa -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/var/lib/one/.ssh/known_hosts -o ConnectTimeout=5 root@"$target" -- kubectl --kubeconfig /etc/kubernetes/admin.conf get --raw=/readyz | grep -qx ok
+          done
+
+          $SUDO install -d -m 0755 /usr/local/libexec/layersentry
+          $SUDO install -d -m 0700 /var/lib/layersentry/credentials
+          $SUDO install -o root -g root -m 0755 /tmp/layersentry-kubeone-soak.sh /usr/local/libexec/layersentry/kubeone-soak.sh
+          $SUDO install -o root -g root -m 0755 /tmp/layersentry-kubeone-soak-upload.sh /usr/local/libexec/layersentry/kubeone-soak-upload.sh
+          $SUDO install -o root -g root -m 0600 /tmp/training_deploy_key /var/lib/layersentry/credentials/codexagentlogic-soak-deploy
+          $SUDO rm -f -- /tmp/layersentry-kubeone-soak.sh /tmp/layersentry-kubeone-soak-upload.sh /tmp/training_deploy_key
+          $SUDO curl -fsSL https://api.github.com/meta | $SUDO python3 -c 'import json,sys; d=json.load(sys.stdin); print("\n".join("github.com "+x for x in d["ssh_keys"]))' | $SUDO tee /var/lib/layersentry/credentials/github-known-hosts >/dev/null
+          $SUDO chmod 0600 /var/lib/layersentry/credentials/github-known-hosts
+
+          proof=/var/lib/layersentry/evidence/kubeone-soak-proof-2m-20260928
+          if $SUDO test -e "$proof"; then $SUDO mv -- "$proof" "${proof}.previous.$(date +%s)"; fi
+          $SUDO env SOAK_DURATION_SECONDS=120 SOAK_INTERVAL_SECONDS=15 SOAK_OUTPUT_DIR="$proof" /usr/local/libexec/layersentry/kubeone-soak.sh
+          SOAK_RESULT=$($SUDO awk -F= '$1=="SOAK_RESULT" {print $2}' "$proof/SUMMARY.env")
+          SOAK_FAILURES=$($SUDO awk -F= '$1=="SOAK_FAILURES" {print $2}' "$proof/SUMMARY.env")
+          SOAK_SAMPLES=$($SUDO awk -F= '$1=="SOAK_SAMPLES" {print $2}' "$proof/SUMMARY.env")
+          test "$SOAK_RESULT" = PASS
+          test "$SOAK_FAILURES" = 0
+          test "$SOAK_SAMPLES" -ge 27
+
+          long=/var/lib/layersentry/evidence/kubeone-soak-20h-current
+          if $SUDO systemctl is-active --quiet layersentry-kubeone-soak-20h.service; then echo EXISTING_20H_SOAK_ACTIVE >&2; exit 41; fi
+          if $SUDO test -e "$long"; then $SUDO mv -- "$long" "${long}.previous.$(date +%s)"; fi
+          unit=$($SUDO mktemp)
+          $SUDO tee "$unit" >/dev/null <<UNIT
+          [Unit]
+          Description=LayerSentry KubeOne 20-hour multi-cluster soak
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          Environment=SOAK_DURATION_SECONDS=72000
+          Environment=SOAK_INTERVAL_SECONDS=60
+          Environment=SOAK_OUTPUT_DIR=$long
+          ExecStart=/usr/local/libexec/layersentry/kubeone-soak.sh
+          ExecStartPost=/usr/local/libexec/layersentry/kubeone-soak-upload.sh
+          TimeoutStartSec=75600
+          Restart=no
+          StandardOutput=journal
+          StandardError=journal
+          UNIT
+          $SUDO install -o root -g root -m 0644 "$unit" /etc/systemd/system/layersentry-kubeone-soak-20h.service
+          $SUDO rm -f -- "$unit"
+          $SUDO systemctl daemon-reload
+          $SUDO systemctl reset-failed layersentry-kubeone-soak-20h.service || true
+          $SUDO systemctl start --no-block layersentry-kubeone-soak-20h.service
+          sleep 70
+          $SUDO systemctl is-active --quiet layersentry-kubeone-soak-20h.service
+          rows=$($SUDO awk 'END {print NR-1}' "$long/samples.csv")
+          failures=$($SUDO awk -F, 'NR>1 && $11!="PASS" {n++} END {print n+0}' "$long/samples.csv")
+          test "$rows" -ge 6
+          test "$failures" -eq 0
+          echo "KUBEONE_SOAK_2M=PASS SAMPLES=$SOAK_SAMPLES"
+          echo "KUBEONE_SOAK_20H=ACTIVE INITIAL_ROWS=$rows INITIAL_FAILURES=$failures AVAILABLE_KIB=$available_kib"
+          REMOTE
+
+          out="$RUNNER_TEMP/kubeone-soak-proof-2m-20260928"
+          mkdir -m 0700 "$out"
+          "${ssh_dc[@]}" 'sudo -n tar -C /var/lib/layersentry/evidence/kubeone-soak-proof-2m-20260928 -czf - .' | tar -C "$out" -xzf -
+
+      - name: Upload two-minute proof logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kubeone-soak-proof-2m-20260928
+          path: ${{ runner.temp }}/kubeone-soak-proof-2m-20260928/
+          if-no-files-found: error
+          retention-days: 30
