@@ -117,11 +117,28 @@ jobs:
           echo 'cluster,ready_nodes,total_nodes,kube_system_nonready,total_restarts,api_ready,result' >"$out/current-health/results.csv"
           current_failures=0
           for cluster in a b c; do
-            kubeconfig="/var/lib/layersentry/kubeone/tenant-${cluster}/layersentry-k1${cluster}/layersentry-k1${cluster}-kubeconfig"
-            "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' get nodes -o wide" >"$out/current-health/cluster-${cluster}-nodes.txt"
-            "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' -n kube-system get pods -o wide" >"$out/current-health/cluster-${cluster}-kube-system-pods.txt"
-            "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' get --raw=/readyz" >"$out/current-health/cluster-${cluster}-readyz.txt"
-            "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' version -o json" >"$out/current-health/cluster-${cluster}-version.json"
+            local_kubeconfig=$(find /var/lib/layersentry /root /opt /home -xdev -type f -path "*layersentry-k1${cluster}*" -iname '*kubeconfig*' 2>/dev/null | head -n1 || true)
+            remote_kubeconfig=$("${ssh_dc[@]}" "sudo -n find /var/lib/layersentry /root /opt /home -xdev -type f -path '*layersentry-k1${cluster}*' -iname '*kubeconfig*' 2>/dev/null | head -n1" || true)
+            if test -n "$local_kubeconfig"; then
+              kubeconfig="$local_kubeconfig"
+              kubectl_bin=$(command -v kubectl)
+              "$kubectl_bin" --kubeconfig "$kubeconfig" get nodes -o wide >"$out/current-health/cluster-${cluster}-nodes.txt"
+              "$kubectl_bin" --kubeconfig "$kubeconfig" -n kube-system get pods -o wide >"$out/current-health/cluster-${cluster}-kube-system-pods.txt"
+              "$kubectl_bin" --kubeconfig "$kubeconfig" get --raw=/readyz >"$out/current-health/cluster-${cluster}-readyz.txt"
+              "$kubectl_bin" --kubeconfig "$kubeconfig" version -o json >"$out/current-health/cluster-${cluster}-version.json"
+              echo "cluster-$cluster source=layersentryol7" >>"$out/current-health/SOURCES.txt"
+            elif test -n "$remote_kubeconfig"; then
+              kubeconfig="$remote_kubeconfig"
+              "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' get nodes -o wide" >"$out/current-health/cluster-${cluster}-nodes.txt"
+              "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' -n kube-system get pods -o wide" >"$out/current-health/cluster-${cluster}-kube-system-pods.txt"
+              "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' get --raw=/readyz" >"$out/current-health/cluster-${cluster}-readyz.txt"
+              "${ssh_dc[@]}" "sudo -n /usr/local/bin/kubectl --kubeconfig '$kubeconfig' version -o json" >"$out/current-health/cluster-${cluster}-version.json"
+              echo "cluster-$cluster source=layersentry1" >>"$out/current-health/SOURCES.txt"
+            else
+              echo "$cluster,0,0,999,0,0,MISSING_KUBECONFIG" >>"$out/current-health/results.csv"
+              current_failures=$((current_failures + 1))
+              continue
+            fi
             total=$(awk 'NR>1 {n++} END {print n+0}' "$out/current-health/cluster-${cluster}-nodes.txt")
             ready=$(awk 'NR>1 && $2=="Ready" {n++} END {print n+0}' "$out/current-health/cluster-${cluster}-nodes.txt")
             nonready=$(awk 'NR>1 && $3!="Running" && $3!="Completed" {n++} END {print n+0}' "$out/current-health/cluster-${cluster}-kube-system-pods.txt")
