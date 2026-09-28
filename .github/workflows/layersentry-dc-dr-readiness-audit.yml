@@ -570,6 +570,8 @@ jobs:
           test "$state" = 8
           echo "REPLICATION_V2_SOURCE_FENCED VM_ID=$vm_id STATE=$state HYPERVISOR=$hypervisor"
 
+          $SUDO chown oneadmin:oneadmin "$ingress"
+          $SUDO chmod 0700 "$ingress"
           $SUDO chown oneadmin:oneadmin "$ingress/layersentry-replication-v2-qualifier" "$ingress/ca.crt" "$ingress/dc.crt" "$ingress/dc.key"
           $SUDO chmod 0755 "$ingress/layersentry-replication-v2-qualifier"
           $SUDO chmod 0644 "$ingress/ca.crt" "$ingress/dc.crt"
