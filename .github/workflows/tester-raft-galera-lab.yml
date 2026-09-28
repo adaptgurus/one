@@ -1,4 +1,4 @@
-name: Tester Foundation native Raft qualification
+name: Tester Foundation final database and Raft status
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,11 +9,11 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  native-qualification:
+  final-readback:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 15
+    timeout-minutes: 6
     steps:
-      - name: Bind exact tester and source pins
+      - name: Independently read native and separate Galera status
         shell: bash
         run: |
           set -euo pipefail
@@ -21,18 +21,34 @@ jobs:
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
           test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 88533490ba0608eab2d58f20bca5f865820d49bd
-          test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = bbe15fb307819a59b4a959dd775b5636dc09f1ca
-      - name: Verify exact native host identity regression tests
-        shell: bash
-        run: |
-          set -euo pipefail
           source /home/opc/layersentry-foundation-qual-20260929/venv/bin/activate
           cd /home/opc/layersentry-platform
-          PYTHONPATH=deploy python -m unittest discover -s tests -p test_tester_native_qualification.py -v
-      - name: Verify native cluster then test one leader outage with recovery
-        shell: bash
-        run: |
-          set -euo pipefail
-          source /home/opc/layersentry-foundation-qual-20260929/venv/bin/activate
-          cd /home/opc/layersentry-platform
-          python tools/lab/tester_native_qualification.py --failover
+          python - <<'PY'
+          from pathlib import Path
+          import datetime as dt,importlib.util,json,os
+          spec=importlib.util.spec_from_file_location('q','tools/lab/tester_native_qualification.py')
+          q=importlib.util.module_from_spec(spec);spec.loader.exec_module(q)
+          result={'timestamp_utc':dt.datetime.now(dt.timezone.utc).isoformat(),'production_certified':False,'views':q.snapshot(),'members':{}}
+          sql="SELECT VERSION(); SHOW GLOBAL VARIABLES LIKE 'wsrep_on'; SHOW GLOBAL STATUS WHERE Variable_name IN ('wsrep_cluster_size','wsrep_cluster_status','wsrep_cluster_state_uuid','wsrep_local_state_comment','wsrep_ready','wsrep_connected');"
+          for name in q.NAMES:
+              cp=q.remote(name,['systemctl','show','opennebula','mariadb','layersentry-mariadb','--property=Id,LoadState,ActiveState'])
+              row={'services':q.require(cp,'service readback')}
+              row['selinux']=q.require(q.remote(name,['getenforce']),'SELinux readback').strip()
+              row['native_database']=q.require(q.remote(name,['sudo','-n','mariadb','--protocol=socket','--batch','--skip-column-names','--execute='+sql]),'native database status')
+              socket=q.remote(name,['sudo','-n','test','-S','/run/layersentry-mariadb/mysqld.sock'])
+              row['separate_galera_socket_exists']=socket.returncode==0
+              if socket.returncode==0:
+                  row['galera_database']=q.require(q.remote(name,['sudo','-n','mariadb','--protocol=socket','--socket=/run/layersentry-mariadb/mysqld.sock','--batch','--skip-column-names','--execute='+sql]),'separate Galera status')
+              else:
+                  row['galera_database']='NOT_DEPLOYED_OR_SOCKET_ABSENT'
+              result['members'][name]=row
+          leader=result['views'][q.NAMES[0]]['leader']
+          result['native_hosts']=q.native_json(leader,['onehost','list','--json'])
+          result['native_datastores']=q.native_json(leader,['onedatastore','list','--json'])
+          groups=q.rows(q.native_json(leader,['onegroup','list','--json']).get('GROUP_POOL',{}).get('GROUP'))
+          result['test_canary_groups_remaining']=[{'id':g['ID'],'name':g['NAME']} for g in groups if g.get('NAME','').startswith('lsf-raft-qual-')]
+          result['native_all_views_eligible']=all(v['eligible'] for v in result['views'].values())
+          out=q.WORK/'evidence'/('final-status-'+os.environ['GITHUB_RUN_ID']+'.json')
+          out.write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps({'evidence_file':str(out),'timestamp_utc':result['timestamp_utc'],'native_all_views_eligible':result['native_all_views_eligible'],'test_canary_groups_remaining':result['test_canary_groups_remaining'],'members':result['members']},indent=2))
+          PY
