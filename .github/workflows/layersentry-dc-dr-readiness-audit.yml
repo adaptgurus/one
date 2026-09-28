@@ -440,3 +440,168 @@ jobs:
           test "${#records_sha}" -eq 64
           test "${#payload_sha}" -eq 64
           echo "REPLICATION_V2_SOURCE_READY VM_ID=$vm_id DATA_IMAGE_ID=$data_id IP=$vm_ip DATA_DEVICE=/dev/vdb RECORDS_SHA256=$records_sha PAYLOAD_SHA256=$payload_sha"
+
+  replication-cross-site:
+    if: contains(github.event.head_commit.message, '[replication-cross-site]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 60
+    steps:
+      - name: Transfer disposable VM through Replication v2 mTLS
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          chmod 0700 "$work"
+
+          transfer_key=/root/.ssh/layersentry-replication-v2-transfer
+          test -f "$transfer_key"
+          test "$(stat -c '%a' "$transfer_key")" -le 600
+          test "$(ssh-keygen -lf "$transfer_key" -E sha256 | awk '{print $2}')" = 'SHA256:muT1yGsF0/TU8ToxLHErVwPcvJyIHPUufPRCK9SLloE'
+          dr_scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.40 2>/dev/null)"
+          test "$(printf '%s\n' "$dr_scan" | grep -c '^172\.17\.60\.40 ssh-ed25519 ')" -eq 1
+          test "$(printf '%s\n' "$dr_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:qOEu7khxLLpUIwS4RYyc7p5Vg/27MmZKr3YNtLWVTpI'
+          printf '%s\n' "$dr_scan" >"$work/dr_known_hosts"
+          chmod 0600 "$work/dr_known_hosts"
+          ssh -i "$transfer_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dr_known_hosts" \
+            root@172.17.60.40 \
+            'test "$(hostname -s)" = layersentrydr && test "$(id -u)" = 0 && ip -4 -o addr show dev enp6s18 | grep -Eq "(^|[[:space:]])172\.17\.60\.40/26([[:space:]]|$)" && test "$(systemctl is-active layersentry-replication-v2-qualifier.service)" = active'
+          scp -i "$transfer_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dr_known_hosts" \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/layersentry-replication-v2-qualifier \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/ca.crt \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/dc.crt \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/dc.key \
+            "$work/"
+          test "$(sha256sum "$work/layersentry-replication-v2-qualifier" | awk '{print $1}')" = f87978040089303eca265a23bd7d119c62b617dfe747f1d1f4d961e019c3a182
+          chmod 0600 "$work/dc.key"
+
+          if curl --noproxy '*' --silent --show-error --fail --cacert "$work/ca.crt" \
+            --resolve layersentry-dr-replication-v2:9445:172.17.60.40 \
+            https://layersentry-dr-replication-v2:9445/ >/dev/null 2>&1; then
+            echo REPLICATION_V2_MTLS_NO_CLIENT_NEGATIVE=FAIL >&2
+            exit 81
+          fi
+          status="$(curl --noproxy '*' --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --cacert "$work/ca.crt" --cert "$work/dc.crt" --key "$work/dc.key" \
+            --resolve layersentry-dr-replication-v2:9445:172.17.60.40 \
+            -H 'X-LayerSentry-Source-Site: unauthorized-site' \
+            -H 'X-LayerSentry-Target-Site: dr-qualification' \
+            https://layersentry-dr-replication-v2:9445/internal/v1/replication/receiver/backend-health?session_id=denied)"
+          test "$status" = 403
+          echo REPLICATION_V2_MTLS_NEGATIVES=PASS
+
+          dc_scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)"
+          test "$(printf '%s\n' "$dc_scan" | grep -c '^172\.17\.60\.30 ssh-ed25519 ')" -eq 1
+          test "$(printf '%s\n' "$dc_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$dc_scan" >"$work/dc_known_hosts"
+          chmod 0600 "$work/dc_known_hosts"
+          dc_key=''
+          dc_user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes \
+                -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+                -o ConnectTimeout=5 "$candidate_user@172.17.60.30" \
+                'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' \
+                >/dev/null 2>&1; then
+                dc_key="$candidate"
+                dc_user="$candidate_user"
+                break 2
+              fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 \
+            ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$dc_key"
+
+          ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+            "$dc_user@172.17.60.30" 'bash -s' <<'DC_INGRESS'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          $SUDO install -d -o "$(id -un)" -g "$(id -gn)" -m 0700 /var/tmp/layersentry-rv2-ingress
+          DC_INGRESS
+          scp -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+            "$work/layersentry-replication-v2-qualifier" "$work/ca.crt" "$work/dc.crt" "$work/dc.key" \
+            "$dc_user@172.17.60.30:/var/tmp/layersentry-rv2-ingress/"
+
+          ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+            "$dc_user@172.17.60.30" 'bash -s' <<'DC_TRANSFER'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          ingress=/var/tmp/layersentry-rv2-ingress
+          test "$(sha256sum "$ingress/layersentry-replication-v2-qualifier" | awk '{print $1}')" = f87978040089303eca265a23bd7d119c62b617dfe747f1d1f4d961e019c3a182
+          vm_id=29
+          mapfile -t vm_fields < <(sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(*[(r.findtext(p) or "").strip() for p in ("NAME","STATE","LCM_STATE","HISTORY_RECORDS/HISTORY/HOSTNAME","DEPLOY_ID")],sep="\n")')
+          test "${vm_fields[0]}" = ls-dr-v2-qual-alpine-20260928
+          test "${vm_fields[1]}" = 3 || test "${vm_fields[1]}" = 8
+          test -n "${vm_fields[3]}" && test -n "${vm_fields[4]}"
+          hypervisor="${vm_fields[3]}"
+          test "$hypervisor" = 10.10.10.16
+          if test "${vm_fields[1]}" = 3; then
+            sudo -n -u oneadmin onevm poweroff "$vm_id"
+          fi
+          for _ in $(seq 1 90); do
+            state="$(sudo -n -u oneadmin onevm show "$vm_id" --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("STATE") or "")')"
+            test "$state" = 8 && break
+            sleep 2
+          done
+          test "$state" = 8
+          echo "REPLICATION_V2_SOURCE_FENCED VM_ID=$vm_id STATE=$state HYPERVISOR=$hypervisor"
+
+          $SUDO chown oneadmin:oneadmin "$ingress/layersentry-replication-v2-qualifier" "$ingress/ca.crt" "$ingress/dc.crt" "$ingress/dc.key"
+          $SUDO chmod 0755 "$ingress/layersentry-replication-v2-qualifier"
+          $SUDO chmod 0644 "$ingress/ca.crt" "$ingress/dc.crt"
+          $SUDO chmod 0600 "$ingress/dc.key"
+          sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" \
+            'test "$(id -u)" -ne 0 && ip -4 -o addr show | grep -Eq "(^|[[:space:]])10\.10\.10\.16/24([[:space:]]|$)" && install -d -m 0700 /var/tmp/layersentry-rv2-qualification'
+          sudo -n -u oneadmin scp -o BatchMode=yes -o ConnectTimeout=5 \
+            "$ingress/layersentry-replication-v2-qualifier" "$ingress/ca.crt" "$ingress/dc.crt" "$ingress/dc.key" \
+            "$hypervisor:/var/tmp/layersentry-rv2-qualification/"
+          sudo -n -u oneadmin ssh -o BatchMode=yes -o ConnectTimeout=5 "$hypervisor" 'bash -s' <<'HYPERVISOR_SEND'
+          set -euo pipefail
+          test "$(id -u)" -ne 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])10\.10\.10\.16/24([[:space:]]|$)'
+          base=/var/tmp/layersentry-rv2-qualification
+          test "$(sha256sum "$base/layersentry-replication-v2-qualifier" | awk '{print $1}')" = f87978040089303eca265a23bd7d119c62b617dfe747f1d1f4d961e019c3a182
+          os_source=/var/lib/one/datastores/0/29/disk.0.snap/0
+          data_source=/var/lib/one/datastores/0/29/disk.1.snap/0
+          qemu-img check -q "$os_source"
+          qemu-img check -q "$data_source"
+          os_raw="$base/dc-vm29-os-g1.raw"
+          data_raw="$base/dc-vm29-data-g1.raw"
+          test ! -e "$os_raw" && test ! -e "$data_raw"
+          free_bytes="$(df -B1 --output=avail "$base" | tail -1 | tr -d '[:space:]')"
+          test "$free_bytes" -ge 4294967296
+          qemu-img convert -p -O raw "$os_source" "$os_raw"
+          qemu-img convert -p -O raw "$data_source" "$data_raw"
+          test -s "$os_raw" && test -s "$data_raw"
+          echo "REPLICATION_V2_RAW_SOURCE OS_SHA256=$(sha256sum "$os_raw" | awk '{print $1}') DATA_SHA256=$(sha256sum "$data_raw" | awk '{print $1}')"
+          "$base/layersentry-replication-v2-qualifier" send \
+            --endpoint https://172.17.60.40:9445 \
+            --server-name layersentry-dr-replication-v2 \
+            --ca "$base/ca.crt" --cert "$base/dc.crt" --key "$base/dc.key" \
+            --spool "$base/spool-g1" --session rv2-dc-dr-vm29-g1-20260928 \
+            --local-site dc-qualification --remote-site dr-qualification \
+            --recovery-name ls-rv2-dr-vm29-g1 \
+            --disk "os=$os_raw" --disk "data=$data_raw"
+          HYPERVISOR_SEND
+          DC_TRANSFER
