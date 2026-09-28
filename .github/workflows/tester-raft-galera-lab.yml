@@ -21,12 +21,12 @@ jobs:
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
           cd /home/opc/layersentry-platform
-          test "$(git rev-parse HEAD)" = 54cd3544b75686e5d9e7167b9523df2aa7bdc8c4
+          test "$(git rev-parse HEAD)" = 209c356346a4e1a847164faf89a3b177001cb003
           test -z "$(git status --porcelain)"
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
           export PYTHONPATH="$PWD/deploy:$PWD/tests"
           python -m unittest test_management_ha test_provider_preflight_regressions test_raft_acceptance test_tester_substrate_labels test_layersentry_deploy -v
-      - name: Call existing Foundation provider deployment with encrypted runtime credentials
+      - name: Call existing Foundation after actual EPEL prerequisite correction
         shell: bash
         run: |
           set -euo pipefail
@@ -34,6 +34,6 @@ jobs:
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
           cd /home/opc/layersentry-platform
-          test "$(git rev-parse HEAD)" = 54cd3544b75686e5d9e7167b9523df2aa7bdc8c4
+          test "$(git rev-parse HEAD)" = 209c356346a4e1a847164faf89a3b177001cb003
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
           python tools/lab/tester_foundation_apply.py --stage provider
