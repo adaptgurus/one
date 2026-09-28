@@ -878,11 +878,12 @@ jobs:
           $SUDO test -f "$recovery/disk-data.qcow2"
           $SUDO qemu-img check -q "$recovery/disk-os.qcow2"
           $SUDO qemu-img check -q "$recovery/disk-data.qcow2"
-          stage=/var/tmp/layersentry-rv2-dc-vm29-g2-retry3
-          os_raw="${stage}-os.raw"
-          data_raw="${stage}-data.raw"
-          os_qcow="${stage}-os.qcow2"
-          data_qcow="${stage}-data.qcow2"
+          stage=/var/lib/one/datastores/1/.layersentry-rv2-import
+          $SUDO install -d -o oneadmin -g oneadmin -m 0750 "$stage"
+          os_raw="$stage/layersentry-rv2-dc-vm29-g2-retry4-os.raw"
+          data_raw="$stage/layersentry-rv2-dc-vm29-g2-retry4-data.raw"
+          os_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry4-os.qcow2"
+          data_qcow="$stage/layersentry-rv2-dc-vm29-g2-retry4-data.qcow2"
           test ! -e "$os_raw" && test ! -e "$data_raw" && test ! -e "$os_qcow" && test ! -e "$data_qcow"
           $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-os.qcow2" "$os_raw"
           $SUDO qemu-img convert -f qcow2 -O raw "$recovery/disk-data.qcow2" "$data_raw"
@@ -907,22 +908,24 @@ jobs:
           sudo -n -u oneadmin test -r "$data_qcow"
           sudo -n -u oneadmin qemu-img info "$os_qcow" >/dev/null
           sudo -n -u oneadmin qemu-img info "$data_qcow" >/dev/null
-          test -z "$(ss -ltnH 'sport = :18081')"
-          $SUDO -u oneadmin timeout 300 python3 -m http.server 18081 --bind 172.17.60.30 --directory /var/tmp >/dev/null 2>&1 &
-          http_pid=$!
-          http_ready=FAIL
-          for _ in $(seq 1 20); do
-            if curl --noproxy '*' --silent --show-error --fail --max-time 5 -o /dev/null "http://172.17.60.30:18081/$(basename "$os_qcow")"; then http_ready=PASS; break; fi
-            sleep 1
-          done
-          test "$http_ready" = PASS
           for n in layersentry-rv2-dc-vm29-g2-os layersentry-rv2-dc-vm29-g2-data; do
             test -z "$(sudo -n -u oneadmin oneimage list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); n=sys.argv[1]; print(next((x.findtext("ID") or "" for x in r.findall("IMAGE") if (x.findtext("NAME") or "")==n),""))' "$n")"
           done
-          ti1=$(mktemp); ti2=$(mktemp); tvm=$(mktemp)
-          trap 'rm -f -- "$ti1" "$ti2" "$tvm"' EXIT
-          printf 'NAME = "layersentry-rv2-dc-vm29-g2-os"\nTYPE = "OS"\nPATH = "http://172.17.60.30:18081/%s"\nFORMAT = "qcow2"\nDEV_PREFIX = "vd"\nDESCRIPTION = "Replication v2 DR-to-DC failback generation 2 OS"\n' "$(basename "$os_qcow")" >"$ti1"
-          printf 'NAME = "layersentry-rv2-dc-vm29-g2-data"\nTYPE = "DATABLOCK"\nPATH = "http://172.17.60.30:18081/%s"\nFORMAT = "qcow2"\nDEV_PREFIX = "vd"\nDESCRIPTION = "Replication v2 DR-to-DC failback generation 2 data"\n' "$(basename "$data_qcow")" >"$ti2"
+          original_safe="$(sudo -n -u oneadmin onedatastore show 1 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("TEMPLATE/SAFE_DIRS") or "")')"
+          test "$original_safe" = /var/tmp
+          ti1=$(mktemp); ti2=$(mktemp); tvm=$(mktemp); ds_restore=$(mktemp); ds_update=$(mktemp)
+          printf 'SAFE_DIRS = "/var/tmp"\n' >"$ds_restore"
+          printf 'SAFE_DIRS = "/var/tmp %s"\n' "$stage" >"$ds_update"
+          chmod 0644 "$ti1" "$ti2" "$ds_restore" "$ds_update"
+          cleanup() {
+            sudo -n -u oneadmin onedatastore update 1 --append "$ds_restore" >/dev/null 2>&1 || true
+            rm -f -- "$ti1" "$ti2" "$tvm" "$ds_restore" "$ds_update"
+          }
+          trap cleanup EXIT
+          sudo -n -u oneadmin onedatastore update 1 --append "$ds_update"
+          test "$(sudo -n -u oneadmin onedatastore show 1 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("TEMPLATE/SAFE_DIRS") or "")')" = "/var/tmp $stage"
+          printf 'NAME = "layersentry-rv2-dc-vm29-g2-os"\nTYPE = "OS"\nPATH = "%s"\nFORMAT = "qcow2"\nDEV_PREFIX = "vd"\nDESCRIPTION = "Replication v2 DR-to-DC failback generation 2 OS"\n' "$os_qcow" >"$ti1"
+          printf 'NAME = "layersentry-rv2-dc-vm29-g2-data"\nTYPE = "DATABLOCK"\nPATH = "%s"\nFORMAT = "qcow2"\nDEV_PREFIX = "vd"\nDESCRIPTION = "Replication v2 DR-to-DC failback generation 2 data"\n' "$data_qcow" >"$ti2"
           chmod 0644 "$ti1" "$ti2"
           osid=$(sudo -n -u oneadmin oneimage create -d 1 "$ti1" | awk '{print $NF}')
           dataid=$(sudo -n -u oneadmin oneimage create -d 1 "$ti2" | awk '{print $NF}')
@@ -936,8 +939,8 @@ jobs:
             done
             test "$state" = 1 || test "$state" = 2
           done
-          $SUDO kill "$http_pid" 2>/dev/null || true
-          wait "$http_pid" 2>/dev/null || true
+          sudo -n -u oneadmin onedatastore update 1 --append "$ds_restore"
+          test "$(sudo -n -u oneadmin onedatastore show 1 --xml | python3 -c 'import sys,xml.etree.ElementTree as E; print(E.parse(sys.stdin).getroot().findtext("TEMPLATE/SAFE_DIRS") or "")')" = /var/tmp
           test -z "$(sudo -n -u oneadmin onevm list --xml | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); print(next((x.findtext("ID") or "" for x in r.findall("VM") if (x.findtext("NAME") or "")=="layersentry-rv2-dc-vm29-g2"),""))')"
           pub="$(printf '%s' "$pub64" | base64 -d)"
           cat >"$tvm" <<VM
