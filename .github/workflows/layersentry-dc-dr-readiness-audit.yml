@@ -609,3 +609,162 @@ jobs:
             --disk "os=$os_raw" --disk "data=$data_raw"
           HYPERVISOR_SEND
           DC_TRANSFER
+
+  replication-failback-prepare:
+    if: contains(github.event.head_commit.message, '[replication-failback-prepare]')
+    runs-on: [self-hosted, Linux, X64, layersentryol7]
+    timeout-minutes: 15
+    steps:
+      - name: Install bounded Replication v2 failback receiver on exact DC
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${RUNNER_NAME:-}" = layersentryol7
+          test "$(hostname -s)" = layersentryol7
+          test "$(id -u)" = 0
+          ip -4 -o addr show | grep -Eq '(^|[[:space:]])172\.17\.60\.36/26([[:space:]]|$)'
+
+          work="$(mktemp -d)"
+          trap 'rm -rf -- "$work"' EXIT
+          chmod 0700 "$work"
+          transfer_key=/root/.ssh/layersentry-replication-v2-transfer
+          test -f "$transfer_key"
+          test "$(stat -c '%a' "$transfer_key")" -le 600
+          test "$(ssh-keygen -lf "$transfer_key" -E sha256 | awk '{print $2}')" = 'SHA256:muT1yGsF0/TU8ToxLHErVwPcvJyIHPUufPRCK9SLloE'
+
+          dr_scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.40 2>/dev/null)"
+          test "$(printf '%s\n' "$dr_scan" | grep -c '^172\.17\.60\.40 ssh-ed25519 ')" -eq 1
+          test "$(printf '%s\n' "$dr_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:qOEu7khxLLpUIwS4RYyc7p5Vg/27MmZKr3YNtLWVTpI'
+          printf '%s\n' "$dr_scan" >"$work/dr_known_hosts"
+          chmod 0600 "$work/dr_known_hosts"
+          ssh -i "$transfer_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dr_known_hosts" \
+            root@172.17.60.40 \
+            'test "$(hostname -s)" = layersentrydr && test "$(id -u)" = 0 && ip -4 -o addr show dev enp6s18 | grep -Eq "(^|[[:space:]])172\.17\.60\.40/26([[:space:]]|$)"'
+          scp -i "$transfer_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dr_known_hosts" \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/layersentry-replication-v2-qualifier \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/ca.crt \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/dc-server.crt \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/dc-server.key \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/dr.crt \
+            root@172.17.60.40:/var/lib/layersentry/replication-v2-qualification/transfer/dr.key \
+            "$work/"
+          test "$(sha256sum "$work/layersentry-replication-v2-qualifier" | awk '{print $1}')" = f87978040089303eca265a23bd7d119c62b617dfe747f1d1f4d961e019c3a182
+          chmod 0600 "$work/dc-server.key" "$work/dr.key"
+          openssl verify -CAfile "$work/ca.crt" "$work/dc-server.crt" "$work/dr.crt"
+
+          dc_scan="$(ssh-keyscan -T 5 -t ed25519 172.17.60.30 2>/dev/null)"
+          test "$(printf '%s\n' "$dc_scan" | grep -c '^172\.17\.60\.30 ssh-ed25519 ')" -eq 1
+          test "$(printf '%s\n' "$dc_scan" | ssh-keygen -lf - -E sha256 | awk '{print $2}')" = 'SHA256:6afuQP+psnYc8jzRX6lgK3zi4vZpPDcqLat0vgxwcDw'
+          printf '%s\n' "$dc_scan" >"$work/dc_known_hosts"
+          chmod 0600 "$work/dc_known_hosts"
+          dc_key=''
+          dc_user=''
+          while IFS= read -r candidate; do
+            test -f "$candidate" || continue
+            test "$(stat -c '%a' "$candidate")" -le 600 || continue
+            ssh-keygen -y -f "$candidate" >/dev/null 2>&1 || continue
+            test "$(ssh-keygen -lf "$candidate" -E sha256 | awk '{print $2}')" = 'SHA256:5kGypCbn+e25po9b1DRvS6kxaGc+iQuZH4UE1YfDqNA' || continue
+            for candidate_user in layersentry-deploy root; do
+              if ssh -i "$candidate" -o BatchMode=yes -o IdentitiesOnly=yes \
+                -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+                -o ConnectTimeout=5 "$candidate_user@172.17.60.30" \
+                'test "$(hostname -s)" = layersentry1 && { test "$(id -u)" -eq 0 || sudo -n true; }' \
+                >/dev/null 2>&1; then
+                dc_key="$candidate"
+                dc_user="$candidate_user"
+                break 2
+              fi
+            done
+          done < <(find /root/.ssh /home /opt -xdev -type f -perm -u+r ! -perm /077 \
+            ! -name '*.pub' ! -name '*known_hosts*' 2>/dev/null | sort -u)
+          test -n "$dc_key"
+
+          ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+            "$dc_user@172.17.60.30" 'bash -s' <<'DC_PREFLIGHT'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          test ! -e /etc/systemd/system/layersentry-replication-v2-failback-qualifier.service
+          test ! -e /var/lib/layersentry/replication-v2-failback
+          $SUDO install -d -o "$(id -un)" -g "$(id -gn)" -m 0700 /var/tmp/layersentry-rv2-failback-ingress
+          DC_PREFLIGHT
+
+          scp -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+            "$work/layersentry-replication-v2-qualifier" "$work/ca.crt" \
+            "$work/dc-server.crt" "$work/dc-server.key" "$work/dr.crt" "$work/dr.key" \
+            "$dc_user@172.17.60.30:/var/tmp/layersentry-rv2-failback-ingress/"
+
+          ssh -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
+            "$dc_user@172.17.60.30" 'bash -s' <<'DC_INSTALL'
+          set -euo pipefail
+          test "$(hostname -s)" = layersentry1
+          ip -4 -o addr show dev enp6s18 | grep -Eq '(^|[[:space:]])172\.17\.60\.30/26([[:space:]]|$)'
+          if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
+          test "$($SUDO id -u)" = 0
+          ingress=/var/tmp/layersentry-rv2-failback-ingress
+          test "$(sha256sum "$ingress/layersentry-replication-v2-qualifier" | awk '{print $1}')" = f87978040089303eca265a23bd7d119c62b617dfe747f1d1f4d961e019c3a182
+          $SUDO modprobe nbd max_part=8 nbds_max=16
+          test -b /dev/nbd6 && test -b /dev/nbd7
+          for dev in nbd6 nbd7; do test "$(cat "/sys/block/$dev/pid" 2>/dev/null || true)" = ''; done
+          $SUDO install -d -m 0750 /var/lib/layersentry/replication-v2-failback/pki /var/lib/layersentry/replication-v2-failback/filecow
+          $SUDO install -m 0755 "$ingress/layersentry-replication-v2-qualifier" /usr/local/libexec/layersentry-replication-v2-failback-qualifier
+          $SUDO install -m 0644 "$ingress/ca.crt" /var/lib/layersentry/replication-v2-failback/pki/ca.crt
+          $SUDO install -m 0644 "$ingress/dc-server.crt" /var/lib/layersentry/replication-v2-failback/pki/dc-server.crt
+          $SUDO install -m 0600 "$ingress/dc-server.key" /var/lib/layersentry/replication-v2-failback/pki/dc-server.key
+          $SUDO install -m 0644 "$ingress/dr.crt" /var/lib/layersentry/replication-v2-failback/pki/dr.crt
+          $SUDO install -m 0600 "$ingress/dr.key" /var/lib/layersentry/replication-v2-failback/pki/dr.key
+          unit=$(mktemp)
+          trap 'rm -f -- "$unit"' EXIT
+          cat >"$unit" <<'UNIT'
+          [Unit]
+          Description=LayerSentry Replication v2 bounded DR-to-DC failback receiver
+          After=network-online.target
+          Wants=network-online.target
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/local/libexec/layersentry-replication-v2-failback-qualifier receiver --listen 172.17.60.30:9446 --root /var/lib/layersentry/replication-v2-failback/filecow --nbd /dev/nbd6,/dev/nbd7 --ca /var/lib/layersentry/replication-v2-failback/pki/ca.crt --cert /var/lib/layersentry/replication-v2-failback/pki/dc-server.crt --key /var/lib/layersentry/replication-v2-failback/pki/dc-server.key --local-site dc-qualification --remote-site dr-qualification --peer-identity layersentry-dr-replication-v2
+          Restart=on-failure
+          RestartSec=3
+          NoNewPrivileges=true
+          PrivateTmp=true
+          ProtectSystem=strict
+          ReadWritePaths=/var/lib/layersentry/replication-v2-failback /run/lock
+          ProtectHome=true
+
+          [Install]
+          WantedBy=multi-user.target
+          UNIT
+          $SUDO install -m 0644 "$unit" /etc/systemd/system/layersentry-replication-v2-failback-qualifier.service
+          if $SUDO systemctl is-active --quiet firewalld; then
+            $SUDO firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=172.17.60.40/32 port port=9446 protocol=tcp accept'
+            $SUDO firewall-cmd --reload
+          fi
+          $SUDO systemctl daemon-reload
+          $SUDO systemctl enable --now layersentry-replication-v2-failback-qualifier.service
+          test "$($SUDO systemctl is-active layersentry-replication-v2-failback-qualifier.service)" = active
+          $SUDO ss -ltn | grep -F '172.17.60.30:9446'
+          echo REPLICATION_V2_FAILBACK_RECEIVER=READY
+          DC_INSTALL
+
+          if curl --noproxy '*' --silent --show-error --fail \
+            --cacert "$work/ca.crt" --resolve layersentry-dc-replication-v2-receiver:9446:172.17.60.30 \
+            https://layersentry-dc-replication-v2-receiver:9446/ >/dev/null 2>&1; then
+            echo REPLICATION_V2_FAILBACK_NO_CLIENT_NEGATIVE=FAIL >&2
+            exit 91
+          fi
+          status="$(curl --noproxy '*' --silent --show-error --output /dev/null --write-out '%{http_code}' \
+            --cacert "$work/ca.crt" --cert "$work/dr.crt" --key "$work/dr.key" \
+            --resolve layersentry-dc-replication-v2-receiver:9446:172.17.60.30 \
+            -H 'X-LayerSentry-Source-Site: unauthorized-site' \
+            -H 'X-LayerSentry-Target-Site: dc-qualification' \
+            https://layersentry-dc-replication-v2-receiver:9446/internal/v1/replication/receiver/backend-health?session_id=denied)"
+          test "$status" = 403
+          echo REPLICATION_V2_FAILBACK_MTLS_NEGATIVES=PASS
