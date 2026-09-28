@@ -533,6 +533,8 @@ jobs:
           if test "$(id -u)" -eq 0; then SUDO=''; else sudo -n true; SUDO='sudo -n'; fi
           test "$($SUDO id -u)" = 0
           $SUDO install -d -o "$(id -un)" -g "$(id -gn)" -m 0700 /var/tmp/layersentry-rv2-ingress
+          $SUDO chown "$(id -un):$(id -gn)" /var/tmp/layersentry-rv2-ingress
+          $SUDO chmod 0700 /var/tmp/layersentry-rv2-ingress
           DC_INGRESS
           scp -i "$dc_key" -o BatchMode=yes -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/dc_known_hosts" \
