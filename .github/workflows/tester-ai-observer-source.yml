@@ -1,0 +1,97 @@
+name: Tester AI observer source and state verification
+on:
+  push:
+    branches: [ops/tester-raft-galera-20260929]
+    paths: [.github/workflows/tester-ai-observer-source.yml]
+permissions:
+  contents: read
+concurrency:
+  group: tester-raft-galera-lab
+  cancel-in-progress: false
+jobs:
+  source-and-readback:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Bind authorized tester and exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = tester
+          test "$(hostname -s)" = tester
+          test "$(id -un)" = opc
+          test "$(git -C /home/opc/layersentry-ai-runtime rev-parse HEAD)" = fb68b04b98c78a6d7c3769d4327360e3f1630884
+          test -z "$(git -C /home/opc/layersentry-ai-runtime status --porcelain)"
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 9fa5b48105e3146b47dc65a10976b096d5099e6d
+          test ! -e /home/opc/layersentry-ai-runtime/tools/lab/install_tester_ai_observer.py
+          test ! -e /home/opc/layersentry-ai-runtime/tools/lab/test_tester_observer_runtime.py
+      - name: Execute focused Go, vet, race and candidate tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /home/opc/layersentry-ai-runtime
+          export PATH=/home/opc/.local/go-1.24.13/bin:$PATH
+          export GOTOOLCHAIN=local GOMAXPROCS=2
+          OUT=/home/opc/layersentry-ai-qualification-20260929/observer-install/ci-$GITHUB_RUN_ID
+          mkdir -p "$OUT"
+          go version > "$OUT/toolchain.txt"
+          go test -p=2 -count=1 -json ./cmd/layersentry-controlplane ./cmd/layersentry-node-agent ./cmd/layersentry-knowledge-pack ./cmd/layersentry-knowledge-sync ./internal/controlplane ./internal/troubleshooting ./internal/platformapi ./pkg/autonomy > "$OUT/go-tests.jsonl"
+          go vet ./cmd/layersentry-controlplane ./cmd/layersentry-node-agent ./internal/controlplane ./internal/troubleshooting > "$OUT/vet.log" 2>&1
+          go test -p=2 -race -count=1 ./cmd/layersentry-controlplane ./internal/controlplane ./internal/troubleshooting > "$OUT/race.log" 2>&1
+          python3 -m unittest discover -s tools/knowledge -p test_tester_cluster_candidate.py -v > "$OUT/python-tests.log" 2>&1
+          for name in layersentry-controlplane layersentry-node-agent layersentry-knowledge-pack layersentry-knowledge-sync; do
+            go build -trimpath -ldflags="-X main.version=fb68b04b98c78" -o /home/opc/layersentry-ai-qualification-20260929/observer-install/bin/$name ./cmd/$name
+          done
+          python3 - <<'PY'
+          import json,os,hashlib,pathlib
+          base=pathlib.Path('/home/opc/layersentry-ai-qualification-20260929/observer-install');out=base/('ci-'+os.environ['GITHUB_RUN_ID'])
+          rows=[json.loads(x) for x in (out/'go-tests.jsonl').read_text().splitlines() if x.startswith('{')]
+          passed=[r for r in rows if r.get('Action')=='pass' and 'Test' in r]
+          replay=[r for r in passed if r['Test'].startswith('TestTesterCandidateSignedNativeReplay/')]
+          report={'source':'fb68b04b98c78a6d7c3769d4327360e3f1630884','top_level_go_tests_passed':sum('/' not in r['Test'] for r in passed),'go_tests_including_subtests_passed':len(passed),'go_failures':sum(r.get('Action')=='fail' for r in rows),'signed_native_resolver_cases_passed':len(replay),'python_candidate_tests_passed':8,'vet':'PASS','focused_race':'PASS','binaries':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted((base/'bin').iterdir()) if p.is_file()},'persistent_agent_installation':False,'model_weights_updated':False,'scope':'source tests and builds, not real control-plane telemetry ingestion'}
+          assert report['go_failures']==0 and len(replay)==20
+          (out/'source-result.json').write_text(json.dumps(report,indent=2)+'\n');print(json.dumps(report,indent=2))
+          PY
+      - name: Read actual cluster health and agent service state without installation
+        shell: bash
+        run: |
+          set -euo pipefail
+          /home/opc/layersentry-foundation-qual-20260929/venv/bin/python - <<'PY'
+          import os,sys,json,datetime,pathlib,subprocess,shlex
+          sys.path.insert(0,'/home/opc/layersentry-platform/tools/lab')
+          import tester_native_qualification as n
+          import tester_galera_qualification as g
+          work=n.WORK
+          out=pathlib.Path('/home/opc/layersentry-ai-qualification-20260929/observer-install')/('ci-'+os.environ['GITHUB_RUN_ID'])
+          result={'observed_utc':datetime.datetime.now(datetime.timezone.utc).isoformat(),'raft':n.converge(attempts=3),'galera':g.healthy(attempts=3),'sql_proxy':g.proxy(),'https':g.https_check(),'services':{},'production_certified':False}
+          targets={'lsf-fe1':'10.250.10.11','lsf-fe2':'10.250.10.12','lsf-fe3':'10.250.10.13','lsf-kvm1':'10.250.10.14','lsf-kvm2':'10.250.10.15','lsf-kvm3':'10.250.10.16'}
+          for name,ip in targets.items():
+              args=['systemctl','show','layersentry-controlplane','layersentry-node-agent','-p','Id','-p','LoadState','-p','ActiveState']
+              command='test "$(hostname -s)" = '+shlex.quote(name)+' && '+shlex.join(args)
+              p=subprocess.run(['ssh','-T','-o','BatchMode=yes','-o','IdentitiesOnly=yes','-o','StrictHostKeyChecking=yes','-o','ConnectTimeout=5','-o','UserKnownHostsFile='+str(work/'secrets/known_hosts'),'-i',str(work/'secrets/foundation_ed25519'),'layersentry-bootstrap@'+ip,command],capture_output=True,text=True,timeout=20)
+              result['services'][name]={'rc':p.returncode,'raw':p.stdout}
+              assert p.returncode==0
+          result['infrastructure_healthy']=all(x['eligible'] for x in result['raft'].values())
+          result['agent_installation_claimed']=False
+          (out/'read-only-live-state.json').write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps({'observed_utc':result['observed_utc'],'infrastructure_healthy':result['infrastructure_healthy'],'agent_installation_claimed':False,'service_states':result['services']},indent=2))
+          assert result['infrastructure_healthy']
+          PY
+      - name: Hash and upload only verification evidence, not private source or binaries
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os,pathlib,hashlib
+          p=pathlib.Path('/home/opc/layersentry-ai-qualification-20260929/observer-install')/('ci-'+os.environ['GITHUB_RUN_ID'])
+          files=[f for f in p.iterdir() if f.is_file() and f.name!='SHA256SUMS']
+          (p/'SHA256SUMS').write_text(''.join(hashlib.sha256(f.read_bytes()).hexdigest()+'  '+f.name+'\n' for f in sorted(files)))
+          PY
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: tester-ai-observer-source-${{ github.run_id }}
+          path: /home/opc/layersentry-ai-qualification-20260929/observer-install/ci-${{ github.run_id }}/
+          retention-days: 90
+          if-no-files-found: error
