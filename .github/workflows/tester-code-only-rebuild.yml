@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 jobs:
   rebuild:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: [self-hosted, tester]
     timeout-minutes: 90
     steps:
       - name: Bind exact tester and exact product sources
