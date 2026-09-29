@@ -1,4 +1,4 @@
-name: Tester graceful cold cluster recovery
+name: Tester post-cold-recovery independent audit
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,11 +9,11 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  cold-recovery:
+  independent-audit:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 25
+    timeout-minutes: 8
     steps:
-      - name: Bind exact authorized tester and source objects
+      - name: Bind tester and exact source
         shell: bash
         run: |
           set -euo pipefail
@@ -23,72 +23,58 @@ jobs:
           test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 9fa5b48105e3146b47dc65a10976b096d5099e6d
           test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
           test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = faf53b034f7922746f35b033f2156a997b04fe00
-      - name: Test rejection of unsafe cold recovery plans before maintenance
+      - name: Independently query raw state and perform application SQL proxy transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          python /home/opc/layersentry-platform/tools/lab/tester_cluster_health_audit.py
+      - name: Check new maintenance objects are absent and original power identities retained
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          python - <<'PY'
+          import sys,json,subprocess,os,hashlib
+          from pathlib import Path
+          sys.path.insert(0,'/home/opc/layersentry-platform/tools/lab')
+          import tester_native_qualification as n
+          import tester_galera_qualification as g
+          from tester_cluster_resilience import validate_domain,UUIDS
+          result={'original_vms':{},'restored_databases_remaining':{},'native_cold_groups_remaining':[]}
+          for name in n.NAMES:
+              xml=subprocess.check_output(['sudo','-n','virsh','--connect','qemu:///system','dumpxml',name],text=True)
+              validate_domain(name,xml)
+              state=subprocess.check_output(['sudo','-n','virsh','--connect','qemu:///system','domstate',name],text=True).strip()
+              assert state=='running'
+              result['original_vms'][name]={'uuid':UUIDS[name],'state':state}
+              schemas=g.sql(name,"SELECT schema_name FROM information_schema.schemata WHERE schema_name LIKE 'lsf\\_qual\\_restore\\_%';").splitlines()
+              result['restored_databases_remaining'][name]=schemas
+              assert not schemas
+          groups=n.rows(n.native_json(n.NAMES[0],['onegroup','list','--json']).get('GROUP_POOL',{}).get('GROUP'))
+          result['native_cold_groups_remaining']=[r['NAME'] for r in groups if r['NAME'].startswith('lsf-cold-')]
+          assert not result['native_cold_groups_remaining']
+          result['passed']=True
+          out=n.WORK/'evidence'/('independent-health-'+os.environ['GITHUB_RUN_ID'])/'maintenance-cleanup.json'
+          out.write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps(result,indent=2));print('ARTIFACT_SHA256',hashlib.sha256(out.read_bytes()).hexdigest())
+          PY
+      - name: Execute complete focused Foundation test slice
         shell: bash
         run: |
           set -euo pipefail
           cd /home/opc/layersentry-platform
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          python -m unittest discover -s tests -p test_galera_recovery.py -v
-          python -m py_compile tools/lab/tester_cold_recovery.py
+          export PYTHONPATH=$PWD/deploy
           python - <<'PY'
-          import sys
-          from unittest.mock import patch
-          sys.path.insert(0,'tools/lab')
-          import tester_cold_recovery as q
-          for argv,hostname in [(['q'],'tester'),(['q','--execute'],'foreign-host')]:
-              with patch.object(sys,'argv',argv), patch.object(q.socket,'gethostname',return_value=hostname):
-                  try: q.main()
-                  except RuntimeError as exc:
-                      assert 'authorization required' in str(exc)
-                  else: raise AssertionError('execution guard did not reject')
-          print('NO_EXECUTE_AND_FOREIGN_HOST_GUARDS_PASS')
-          PY
-      - name: Exercise logical restore and explicit graceful cold recovery
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          python - <<'PY'
-          import sys,threading
-          sys.path.insert(0,'/home/opc/layersentry-platform/tools/lab')
-          import tester_cold_recovery as q
-          # Serialize evidence emission for the three concurrent native starts.
-          # This wrapper is part of the exact versioned runner test recipe.
-          mutex=threading.RLock()
-          original=q.Evidence.event
-          def event(self,*args,**kwargs):
-              with mutex:
-                  return original(self,*args,**kwargs)
-          q.Evidence.event=event
-          sys.argv=['tester_cold_recovery.py','--execute']
-          q.main()
-          PY
-      - name: Independently verify event chain and actual result bytes
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$RUNNER_NAME" = tester
-          test "$(hostname -s)" = tester
-          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          python - <<'PY'
-          import os,json,hashlib
+          import unittest,json,os,sys
           from pathlib import Path
-          d=Path('/home/opc/layersentry-foundation-qual-20260929/evidence')/('cold-recovery-'+os.environ['GITHUB_RUN_ID'])
-          previous='0'*64;count=0
-          for line in (d/'events.jsonl').read_text().splitlines():
-              row=json.loads(line);digest=row.pop('sha256')
-              assert row['previous_sha256']==previous
-              assert row['sequence']==count+1
-              assert hashlib.sha256(json.dumps(row,sort_keys=True,separators=(',',':')).encode()).hexdigest()==digest
-              if row['action']=='artifact':
-                  assert hashlib.sha256((d/row['path']).read_bytes()).hexdigest()==row['artifact_sha256']
-              previous=digest;count+=1
-          result=json.loads((d/'result.json').read_text())
-          assert result['event_chain_head']==previous
-          audit={'event_count':count,'chain_head':previous,'event_chain_verified':True,'result_sha256':hashlib.sha256((d/'result.json').read_bytes()).hexdigest(),'passed':result['passed'],'gates':result['gates'],'failures':result['failures']}
-          (d/'independent-chain-audit.json').write_text(json.dumps(audit,indent=2)+'\n')
-          print(json.dumps(audit,indent=2))
-          assert audit['passed']
+          names=['test_raft_acceptance.py','test_provider_preflight_regressions.py','test_management_ha.py','test_tester_substrate_labels.py','test_layersentry_deploy.py','test_tester_native_qualification.py','test_management_galera_safety.py','test_tester_galera_qualification.py','test_galera_health_responder.py','test_galera_recovery.py']
+          suite=unittest.TestSuite()
+          for name in names:suite.addTests(unittest.TestLoader().discover('tests',pattern=name))
+          out=Path('/home/opc/layersentry-foundation-qual-20260929/evidence')/('independent-health-'+os.environ['GITHUB_RUN_ID'])
+          with (out/'focused-tests.log').open('w') as log:r=unittest.TextTestRunner(stream=log,verbosity=2).run(suite)
+          result={'source':'9fa5b48105e3146b47dc65a10976b096d5099e6d','tests':r.testsRun,'failures':len(r.failures),'errors':len(r.errors),'successful':r.wasSuccessful(),'scope':'focused Foundation modules','modules':names}
+          (out/'focused-tests.json').write_text(json.dumps(result,indent=2)+'\n');print(json.dumps(result))
+          sys.exit(0 if r.wasSuccessful() else 1)
           PY
