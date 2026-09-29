@@ -1,0 +1,173 @@
+name: LayerSentry Current AI Agent Production Learning Qualification
+
+on:
+  push:
+    branches:
+      - qual/ai-production-learning-tester-20260929
+    paths:
+      - '.github/workflows/layersentry-ai-agent-tester-qual.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: layersentry-ai-production-learning-tester-qual
+  cancel-in-progress: false
+
+jobs:
+  live:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 15
+    steps:
+      - name: Bind tester and exact artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(hostname)" == "tester" ]]
+          [[ "$(id -un)" == "opc" ]]
+          SRC=/home/opc/layersentry-agent-fb68-qual
+          BIN=/home/opc/layersentry-agent-fb68-artifact/layersentry-workload-agent
+          [[ -f "$SRC/scripts/install-workload-agent-linux.sh" ]]
+          [[ -f "$SRC/deploy/systemd/layersentry-workload-agent.service" ]]
+          [[ -x "$BIN" ]]
+          echo "5b6096439859e6e2d641dae1f152f7ef02255a0daa8c754fabf2848b5e998329  $BIN" | sha256sum -c -
+          [[ "$(systemctl is-active layersentry-workload-agent.service 2>/dev/null || true)" != "active" ]]
+          [[ ! -e /etc/layersentry/workload-agent.env ]]
+          [[ ! -e /usr/local/bin/layersentry-workload-agent ]]
+          ! id layersentry-workload >/dev/null 2>&1
+          echo "TARGET_BINDING_PASS host=$(hostname) user=$(id -un) product_source=fb68b04b98c78a6d7c3769d4327360e3f1630884"
+
+      - name: Install, prove mTLS telemetry, and clean up
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          SRC=/home/opc/layersentry-agent-fb68-qual
+          BIN=/home/opc/layersentry-agent-fb68-artifact/layersentry-workload-agent
+          EXPECTED_SHA=5b6096439859e6e2d641dae1f152f7ef02255a0daa8c754fabf2848b5e998329
+          WORK="/tmp/layersentry-agent-qual-${GITHUB_RUN_ID}"
+          ENVFILE="$WORK/workload-agent.env"
+          PROOF="$WORK/telemetry-proof.json"
+          PORT=19443
+          TENANT="lab-learning"
+          RESOURCE="tester-agent-${GITHUB_RUN_ID}"
+          TOKEN="$(openssl rand -hex 32)"
+          TENANT_HASH="$(printf '%s' "$TENANT" | sha256sum | awk '{print substr($1,1,16)}')"
+          RESOURCE_HASH="$(printf '%s' "$RESOURCE" | sha256sum | awk '{print substr($1,1,16)}')"
+          SPIFFE="spiffe://layersentry/workload-agent/$TENANT_HASH/$RESOURCE_HASH"
+          mkdir -p "$WORK/pki"
+
+          cleanup() {
+            set +e
+            if [[ -n "${SERVER_PID:-}" ]]; then kill "$SERVER_PID" 2>/dev/null || true; fi
+            sudo -n systemctl disable --now layersentry-workload-agent.service >/dev/null 2>&1 || true
+            sudo -n rm -f /etc/systemd/system/layersentry-workload-agent.service
+            sudo -n rm -f /usr/local/bin/layersentry-workload-agent
+            sudo -n rm -f /etc/layersentry/workload-agent.env
+            sudo -n rm -f /etc/layersentry/workload-gateway.token
+            sudo -n rm -f /etc/layersentry/pki/workload-agent.crt /etc/layersentry/pki/workload-agent.key /etc/layersentry/pki/ca.crt
+            sudo -n rm -rf /var/lib/layersentry-workload-agent
+            sudo -n systemctl daemon-reload >/dev/null 2>&1 || true
+            if id layersentry-workload >/dev/null 2>&1; then sudo -n userdel layersentry-workload >/dev/null 2>&1 || true; fi
+            if getent group layersentry-workload >/dev/null 2>&1; then sudo -n groupdel layersentry-workload >/dev/null 2>&1 || true; fi
+          }
+          trap cleanup EXIT
+
+          openssl req -x509 -newkey rsa:2048 -nodes -sha256 -days 1             -subj "/CN=LayerSentry Test CA" -keyout "$WORK/pki/ca.key" -out "$WORK/pki/ca.crt" >/dev/null 2>&1
+
+          openssl req -newkey rsa:2048 -nodes -sha256 -subj "/CN=localhost"             -keyout "$WORK/pki/server.key" -out "$WORK/pki/server.csr" >/dev/null 2>&1
+          cat >"$WORK/pki/server.ext" <<EOF
+          subjectAltName=IP:127.0.0.1,DNS:localhost
+          extendedKeyUsage=serverAuth
+          EOF
+          openssl x509 -req -in "$WORK/pki/server.csr" -CA "$WORK/pki/ca.crt" -CAkey "$WORK/pki/ca.key"             -CAcreateserial -days 1 -sha256 -extfile "$WORK/pki/server.ext" -out "$WORK/pki/server.crt" >/dev/null 2>&1
+
+          openssl req -newkey rsa:2048 -nodes -sha256 -subj "/CN=LayerSentry Workload Agent"             -keyout "$WORK/pki/client.key" -out "$WORK/pki/client.csr" >/dev/null 2>&1
+          cat >"$WORK/pki/client.ext" <<EOF
+          subjectAltName=URI:$SPIFFE
+          extendedKeyUsage=clientAuth
+          EOF
+          openssl x509 -req -in "$WORK/pki/client.csr" -CA "$WORK/pki/ca.crt" -CAkey "$WORK/pki/ca.key"             -CAcreateserial -days 1 -sha256 -extfile "$WORK/pki/client.ext" -out "$WORK/pki/client.crt" >/dev/null 2>&1
+          chmod 0600 "$WORK/pki/client.key"
+          printf '%s\n' "$TOKEN" >"$WORK/gateway.token"
+          chmod 0600 "$WORK/gateway.token"
+
+          cat >"$WORK/mock_receiver.py" <<'PY'
+          import hashlib, http.server, json, os, ssl
+          proof=os.environ["PROOF"]; token=os.environ["TOKEN"]; tenant=os.environ["TENANT"]
+          resource=os.environ["RESOURCE"]; spiffe=os.environ["SPIFFE"]; port=int(os.environ["PORT"])
+          class Handler(http.server.BaseHTTPRequestHandler):
+              def log_message(self, fmt, *args): pass
+              def do_POST(self):
+                  if self.path != "/v1/autopilot/workload-telemetry": self.send_error(404); return
+                  cert=self.connection.getpeercert()
+                  if ("URI", spiffe) not in set(cert.get("subjectAltName", [])): self.send_error(403, "spiffe"); return
+                  if self.headers.get("X-LayerSentry-Gateway-Token") != token: self.send_error(403, "token"); return
+                  if self.headers.get("X-LayerSentry-Tenant") != tenant: self.send_error(403, "tenant"); return
+                  if self.headers.get("X-LayerSentry-Roles") != "workload-agent": self.send_error(403, "role"); return
+                  n=int(self.headers.get("Content-Length", "0"))
+                  if n <= 0 or n > 1048576: self.send_error(400, "size"); return
+                  raw=self.rfile.read(n); data=json.loads(raw)
+                  if data.get("resource_id") != resource: self.send_error(400, "resource"); return
+                  result={"resource_id":resource,"environment":data.get("environment"),"boot_id":data.get("boot_id"),
+                          "integrity_present":bool(data.get("integrity")),"body_sha256":hashlib.sha256(raw).hexdigest(),
+                          "spiffe":spiffe}
+                  tmp=proof+".tmp"
+                  with open(tmp,"w",encoding="utf-8") as f:
+                      json.dump(result,f,sort_keys=True); f.flush(); os.fsync(f.fileno())
+                  os.replace(tmp,proof)
+                  self.send_response(204); self.end_headers()
+          ctx=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); ctx.minimum_version=ssl.TLSVersion.TLSv1_3
+          ctx.load_cert_chain(os.environ["SERVER_CERT"], os.environ["SERVER_KEY"])
+          ctx.load_verify_locations(cafile=os.environ["CA"]); ctx.verify_mode=ssl.CERT_REQUIRED
+          srv=http.server.ThreadingHTTPServer(("127.0.0.1",port),Handler); srv.socket=ctx.wrap_socket(srv.socket,server_side=True)
+          srv.serve_forever()
+          PY
+
+          PROOF="$PROOF" TOKEN="$TOKEN" TENANT="$TENANT" RESOURCE="$RESOURCE" SPIFFE="$SPIFFE" PORT="$PORT"           SERVER_CERT="$WORK/pki/server.crt" SERVER_KEY="$WORK/pki/server.key" CA="$WORK/pki/ca.crt"             python3 "$WORK/mock_receiver.py" >"$WORK/server.log" 2>&1 &
+          SERVER_PID=$!
+          sleep 1
+          kill -0 "$SERVER_PID"
+
+          sudo -n install -d -m 0750 /etc/layersentry /etc/layersentry/pki
+          sudo -n install -m 0600 "$WORK/gateway.token" /etc/layersentry/workload-gateway.token
+          sudo -n install -m 0644 "$WORK/pki/client.crt" /etc/layersentry/pki/workload-agent.crt
+          sudo -n install -m 0600 "$WORK/pki/client.key" /etc/layersentry/pki/workload-agent.key
+          sudo -n install -m 0644 "$WORK/pki/ca.crt" /etc/layersentry/pki/ca.crt
+
+          cat >"$ENVFILE" <<EOF
+          LAYERSENTRY_WORKLOAD_ENDPOINT=https://127.0.0.1:$PORT/v1/autopilot/workload-telemetry
+          LAYERSENTRY_WORKLOAD_GATEWAY_TOKEN_FILE=/etc/layersentry/workload-gateway.token
+          LAYERSENTRY_WORKLOAD_TENANT=$TENANT
+          LAYERSENTRY_WORKLOAD_RESOURCE_ID=$RESOURCE
+          LAYERSENTRY_WORKLOAD_ENVIRONMENT=test
+          LAYERSENTRY_WORKLOAD_TLS_CERT=/etc/layersentry/pki/workload-agent.crt
+          LAYERSENTRY_WORKLOAD_TLS_KEY=/etc/layersentry/pki/workload-agent.key
+          LAYERSENTRY_WORKLOAD_TLS_CA=/etc/layersentry/pki/ca.crt
+          LAYERSENTRY_WORKLOAD_INTERVAL=10s
+          LAYERSENTRY_WORKLOAD_STATE_DIR=/var/lib/layersentry-workload-agent
+          LAYERSENTRY_WORKLOAD_WRITE_PROBE_DIRS=/var/lib/layersentry-workload-agent
+          EOF
+          chmod 0600 "$ENVFILE"
+
+          echo "$EXPECTED_SHA  $BIN" | sha256sum -c -
+          sudo -n env LAYERSENTRY_WORKLOAD_AGENT_SHA256="$EXPECTED_SHA"             bash "$SRC/scripts/install-workload-agent-linux.sh" "$BIN" "$ENVFILE" "$SRC/deploy/systemd/layersentry-workload-agent.service"
+
+          systemctl is-active --quiet layersentry-workload-agent.service
+          [[ "$(systemctl show layersentry-workload-agent.service -p User --value)" == "layersentry-workload" ]]
+          [[ "$(systemctl show layersentry-workload-agent.service -p NoNewPrivileges --value)" == "yes" ]]
+          for i in $(seq 1 15); do [[ -s "$PROOF" ]] && break; sleep 2; done
+          [[ -s "$PROOF" ]]
+          python3 - "$PROOF" "$RESOURCE" "$SPIFFE" <<'PY'
+          import json,sys
+          p=json.load(open(sys.argv[1],encoding="utf-8"))
+          assert p["resource_id"]==sys.argv[2]
+          assert p["spiffe"]==sys.argv[3]
+          assert p["environment"]=="test"
+          assert p["integrity_present"] is True
+          assert len(p["body_sha256"])==64
+          print("WORKLOAD_AGENT_TELEMETRY_VERIFIED",p["resource_id"],p["body_sha256"])
+          PY
+          systemctl show layersentry-workload-agent.service -p User -p Group -p NoNewPrivileges -p MemoryMax -p CPUQuotaPerSecUSec
+          echo "WORKLOAD_AGENT_DISPOSABLE_LIVE_VERIFIED product_source=fb68b04b98c78a6d7c3769d4327360e3f1630884 artifact_sha256=$EXPECTED_SHA"
