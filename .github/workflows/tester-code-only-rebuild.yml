@@ -1,0 +1,67 @@
+name: Tester code-only fresh Raft Galera rebuild
+on:
+  push:
+    branches: [ops/tester-raft-galera-20260929]
+    paths: [.github/workflows/tester-code-only-rebuild.yml]
+permissions:
+  contents: read
+concurrency:
+  group: tester-code-only-fresh-rebuild
+  cancel-in-progress: false
+jobs:
+  rebuild:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 90
+    steps:
+      - name: Bind exact tester and exact product sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = tester
+          test "$(hostname -s)" = tester
+          test "$(id -un)" = opc
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 2c977590ff33f6951fee3de23153120dfe2e2e11
+          test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
+          test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = faf53b034f7922746f35b033f2156a997b04fe00
+          python3 -m py_compile /home/opc/layersentry-platform/tools/lab/tester_code_only_rebuild.py
+      - name: Fresh rebuild through Foundation and OneDeploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/home/opc/layersentry-foundation-qual-20260929/evidence/fresh-code-rebuild-$GITHUB_RUN_ID
+          mkdir -p "$OUT"
+          export LAYERSENTRY_REBUILD_SOURCE_COMMIT=2c977590ff33f6951fee3de23153120dfe2e2e11
+          sudo -n -E python3 /home/opc/layersentry-platform/tools/lab/tester_code_only_rebuild.py             2>&1 | tee "$OUT/rebuild.log"
+      - name: Independent final readback
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          OUT=/home/opc/layersentry-foundation-qual-20260929/evidence/fresh-code-rebuild-$GITHUB_RUN_ID
+          python /home/opc/layersentry-platform/tools/lab/tester_cluster_health_audit.py             2>&1 | tee "$OUT/final-audit.log"
+      - name: Capture exact domain identity after rebuild
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT=/home/opc/layersentry-foundation-qual-20260929/evidence/fresh-code-rebuild-$GITHUB_RUN_ID
+          mkdir -p "$OUT"
+          {
+            date -Is
+            virsh --connect qemu:///system list --all
+            for vm in lsf-fe1 lsf-fe2 lsf-fe3 lsf-kvm1 lsf-kvm2 lsf-kvm3; do
+              echo "=== $vm ==="
+              virsh --connect qemu:///system domuuid "$vm" || true
+              virsh --connect qemu:///system domstate "$vm" || true
+            done
+          } > "$OUT/domain-readback.log"
+          sha256sum "$OUT"/* > "$OUT/SHA256SUMS"
+      - name: Upload rebuild evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: tester-code-only-rebuild-${{ github.run_id }}
+          path: /home/opc/layersentry-foundation-qual-20260929/evidence/fresh-code-rebuild-${{ github.run_id }}/
+          retention-days: 90
+          if-no-files-found: error
