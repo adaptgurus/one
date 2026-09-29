@@ -30,7 +30,29 @@ test('instantiate path resolves browser choice against authoritative template an
   const source = read('src/modules/containers/VmTemplates/Instantiate.js')
   assert.match(source, /resolvePublishedGpuRequest/)
   assert.match(source, /apiTemplateData\?\.TEMPLATE/)
-  assert.match(source, /filteredTemplate\.PCI = \[\.\.\.existingPci, \.\.\.gpuRequest\.pci\]/)
+  assert.match(
+    source,
+    /const authoritativePci = apiTemplateData\?\.TEMPLATE\?\.PCI/
+  )
+  assert.match(source, /delete filteredTemplate\.PCI/)
+  assert.match(
+    source,
+    /filteredTemplate\.PCI = \[\.\.\.authoritativePci, \.\.\.gpuRequest\.pci\]/
+  )
+  assert.match(source, /filteredTemplate\.PCI = authoritativePci/)
+  assert.doesNotMatch(source, /const existingPci = filteredTemplate\.PCI/)
   assert.match(source, /delete filteredTemplate\.LAYERSENTRY_GPU_PROFILES/)
   assert.match(source, /PUBLISHED_TEMPLATE_PROFILE/)
+})
+
+test('cloud GPU path never treats browser-supplied raw PCI as authoritative', () => {
+  const source = read('src/modules/containers/VmTemplates/Instantiate.js')
+  const deleteRaw = source.indexOf('delete filteredTemplate.PCI')
+  const appendResolved = source.indexOf(
+    'filteredTemplate.PCI = [...authoritativePci, ...gpuRequest.pci]'
+  )
+
+  assert.ok(deleteRaw >= 0)
+  assert.ok(appendResolved > deleteRaw)
+  assert.match(source, /_.cloneDeep\(apiTemplateData\.TEMPLATE\.PCI\)/)
 })
