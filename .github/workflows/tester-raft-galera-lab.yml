@@ -1,4 +1,4 @@
-name: Tester bounded quorum-loss qualification
+name: Tester post-quorum independent audit
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,11 +9,11 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  quorum-safety:
+  independent-audit:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 12
+    timeout-minutes: 8
     steps:
-      - name: Bind authorized empty tester lab and immutable source
+      - name: Bind authorized tester and exact source
         shell: bash
         run: |
           set -euo pipefail
@@ -23,183 +23,71 @@ jobs:
           test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 9fa5b48105e3146b47dc65a10976b096d5099e6d
           test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
           test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = faf53b034f7922746f35b033f2156a997b04fe00
-      - name: Temporarily pause two original VMs and test minority write rejection
+      - name: Fresh raw-state audit and authenticated application SQL transaction
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
+          python /home/opc/layersentry-platform/tools/lab/tester_cluster_health_audit.py
+      - name: Independently confirm no paused members no test groups and timer removal
         shell: bash
         run: |
           set -euo pipefail
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
           python - <<'PY'
-          import sys,os,json,time,uuid,re,fcntl,subprocess,hashlib,socket,shlex
+          import os,sys,json,subprocess,hashlib
           from pathlib import Path
           sys.path.insert(0,'/home/opc/layersentry-platform/tools/lab')
           import tester_native_qualification as n
-          import tester_galera_qualification as g
-          from tester_cluster_resilience import Evidence,UUIDS,validate_domain
-          assert os.environ['RUNNER_NAME']=='tester' and socket.gethostname().split('.')[0]=='tester' and os.getuid()==1000
-          lock=(n.WORK/'.execution.lock').open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
-          cfg=json.loads((n.WORK/'site.json').read_text())
-          assert cfg['control_plane']['frontends']==[{'name':x,'address':n.IPS[x]} for x in n.NAMES]
-          e=Evidence(n.WORK/'evidence'/('quorum-pause-'+os.environ['GITHUB_RUN_ID']))
-          e.result.update({'source':'9fa5b48105e3146b47dc65a10976b096d5099e6d','workflow_commit':os.environ['GITHUB_SHA'],'fault_model':'two_guest_vCPU_pauses_not_network_partition_or_disk_power_loss','automatic_VM_provisioning':False})
-          original=n.remote
-          def remote(name,argv,**kw):
-              try:
-                  cp=original(name,argv,**kw)
-                  e.event('command',target=name,argv=argv,rc=cp.returncode,stdout=cp.stdout,stderr=cp.stderr)
-                  return cp
-              except subprocess.TimeoutExpired:
-                  e.event('command_timeout',target=name,argv=argv,outcome='UNKNOWN');raise
-          n.remote=remote;g.remote=remote
-          def local(argv,check=True):
-              cp=subprocess.run(argv,text=True,capture_output=True,timeout=35)
-              e.event('command',target='tester',argv=argv,rc=cp.returncode,stdout=cp.stdout,stderr=cp.stderr)
-              if check:n.require(cp,'local guarded action')
-              return cp
-          def hyper(action,name):
-              if action not in {'domstate','suspend','resume'} or name not in UUIDS:raise RuntimeError('foreign hypervisor action refused')
-              xml=subprocess.check_output(['sudo','-n','virsh','-c','qemu:///system','dumpxml',name],text=True,timeout=15)
+          from tester_cluster_resilience import validate_domain,UUIDS
+          out=n.WORK/'evidence'/('independent-health-'+os.environ['GITHUB_RUN_ID'])
+          result={'VMs':{},'native_quorum_test_groups':[],'failsafe_timer_active':None,'passed':False}
+          for name in n.NAMES:
+              xml=subprocess.check_output(['sudo','-n','virsh','-c','qemu:///system','dumpxml',name],text=True)
               validate_domain(name,xml)
-              return local(['sudo','-n','virsh','-c','qemu:///system',action,UUIDS[name]]).stdout.strip()
-          def live():return {'raft':n.converge(attempts=45),'galera':g.healthy(attempts=45),'proxy':g.proxy(),'https':g.https_check()}
-          def sqlcp(name,statement):
-              return remote(name,['sudo','-n','timeout','12s','mariadb','--no-defaults','--protocol=socket','--socket='+g.SOCKET,'-NBe',statement],timeout=18)
-          token=uuid.uuid4().hex[:16];table='lsf_qual_quorum_'+token;normal_group='lsf-quorum-baseline-'+token;attempt_group='lsf-quorum-attempt-'+token
-          owned=False;baseline_group_id=None;attempt_sent=False;paused=[];timer=None;fault_begun=None
-          baseline_payload=uuid.uuid4().hex;refused_payload=uuid.uuid4().hex
-          def rows_check(ids):
-              for name in n.NAMES:
-                  text=g.sql(name,f'SET SESSION wsrep_sync_wait=1; SELECT id,payload FROM layersentry.`{table}` ORDER BY id;')
-                  values=dict(x.split('\t',1) for x in text.splitlines())
-                  if values!=ids:raise RuntimeError('canary reconciliation mismatch on '+name)
-          try:
-              base=live();e.artifact('baseline.json',base)
-              if n.rows(n.native_json(n.NAMES[0],['onevm','list','--json']).get('VM_POOL',{}).get('VM')):raise RuntimeError('nonempty workload pool; refuse fault injection')
-              for name in n.NAMES:
-                  if hyper('domstate',name)!='running':raise RuntimeError('original VM is not running')
-              leader=base['raft'][n.NAMES[0]]['leader'];survivor=leader if leader in {'lsf-fe1','lsf-fe2'} else 'lsf-fe1'
-              targets=[x for x in n.NAMES if x!=survivor]
-              if len(targets)!=2 or survivor in targets:raise RuntimeError('invalid pause set')
-              e.gate('healthy_baseline_and_exact_three_VM_identity','PASS',survivor=survivor,initial_raft_leader=leader)
-              g.sql(survivor,f'CREATE TABLE layersentry.`{table}` (id INT PRIMARY KEY,payload VARCHAR(64) NOT NULL) ENGINE=InnoDB;');owned=True
-              g.sql(survivor,f"INSERT INTO layersentry.`{table}` VALUES (1,'{baseline_payload}');")
-              rows_check({'1':baseline_payload})
-              text=n.require(remote(survivor,['onegroup','create',normal_group],native=True,vip=True),'baseline native write')
-              match=re.search(r'(?m)^ID:\s*(\d+)\s*$',text)
-              if not match:raise RuntimeError('baseline native allocated ID unknown')
-              baseline_group_id=match.group(1)
-              for name in n.NAMES:
-                  if n.native_json(name,['onegroup','show',baseline_group_id,'--json'])['GROUP']['NAME']!=normal_group:raise RuntimeError('baseline native replication incomplete')
-              # An outer-host timer is a failsafe, not an HA controller. It can only
-              # resume these two validated UUIDs, and is removed after recovery.
-              timer='lsf-quorum-restore-'+os.environ['GITHUB_RUN_ID']
-              commands=[]
-              for name in targets:
-                  ident=UUIDS[name]
-                  commands.append('if [ "$(/usr/bin/virsh -c qemu:///system domstate '+ident+')" = paused ]; then /usr/bin/virsh -c qemu:///system resume '+ident+'; fi')
-              local(['sudo','-n','systemd-run','--quiet','--unit='+timer,'--on-active=180s','--timer-property=AccuracySec=1s','/usr/bin/bash','-c','; '.join(commands)])
-              local(['sudo','-n','systemctl','is-active',timer+'.timer'])
-              fault_begun=time.monotonic()
-              for name in targets:
-                  paused.append(name);hyper('suspend',name)
-                  if hyper('domstate',name)!='paused':raise RuntimeError('pause not observed')
-              e.event('two_original_VMs_paused',members=targets,survivor=survivor,maximum_pause_seconds=180,disk_or_network_config_changed=False)
-              status_sql="SHOW GLOBAL STATUS WHERE Variable_name IN ('wsrep_cluster_status','wsrep_ready','wsrep_connected','wsrep_cluster_size','wsrep_cluster_state_uuid','wsrep_last_committed');"
-              last=None;end=time.monotonic()+80
-              while time.monotonic()<end:
-                  cp=sqlcp(survivor,status_sql)
-                  if cp.returncode==0:
-                      last=g.parse_status(cp.stdout)
-                      if last.get('wsrep_cluster_status')=='non-Primary' and last.get('wsrep_ready')=='OFF':break
-                  time.sleep(2)
-              else:raise RuntimeError('survivor did not report non-Primary/ready OFF: '+json.dumps(last))
-              if last['wsrep_cluster_state_uuid']!=base['galera'][survivor]['wsrep_cluster_state_uuid']:raise RuntimeError('unexpected cluster UUID after pause')
-              e.artifact('minority-galera.json',last)
-              e.gate('lone_Galera_survivor_enters_nonPrimary','PASS',observed=last)
-              rejected=sqlcp(survivor,f"INSERT INTO layersentry.`{table}` VALUES (2,'{refused_payload}');")
-              explicit_sql_rejection=rejected.returncode not in {0,124,137} and bool(re.search(r'(1047|WSREP.*not.*prepared)',rejected.stderr,re.I))
-              e.gate('minority_Galera_write_explicitly_rejected','PASS' if explicit_sql_rejection else 'FAIL',rc=rejected.returncode,error=rejected.stderr.strip())
-              if not explicit_sql_rejection:raise RuntimeError('SQL write did not receive an explicit quorum rejection')
-              cp=remote(survivor,['sudo','-n','timeout','12s','mariadb','--defaults-extra-file=/etc/haproxy/layersentry-monitor.cnf','--connect-timeout=3','--protocol=tcp','-h','10.250.10.21','-P','3310','-NBe','SELECT @@hostname,@@port;'],timeout=18)
-              proxy_rejected=cp.returncode!=0
-              e.gate('SQL_proxy_does_not_serve_minority','PASS' if proxy_rejected else 'FAIL',rc=cp.returncode,timeout_is_not_SQL_rejection_proof=cp.returncode in {124,137})
-              if not proxy_rejected:raise RuntimeError('SQL proxy served without majority')
-              attempt_sent=True
-              cp=remote(survivor,['timeout','12s','onegroup','create',attempt_group],native=True,timeout=18)
-              explicit_native=cp.returncode not in {0,124,137} and bool(re.search(r'(leader|quorum|replicat|not.*running)',cp.stderr+' '+cp.stdout,re.I))
-              e.result['native_minority_response']={'rc':cp.returncode,'stdout':cp.stdout,'stderr':cp.stderr,'explicit_rejection':explicit_native}
-              e.gate('native_minority_write_response','PASS' if explicit_native else 'NOT_PROVEN',rc=cp.returncode,timeout_is_not_rejection=cp.returncode in {124,137})
-              e.result['native_no_quorum_write_proven']=explicit_native
-          except Exception as exc:
-              e.result['failures'].append(str(exc));e.event('failure',detail=str(exc))
-          finally:
-              # Always resume before attempting remote data verification.
-              recovery_errors=[]
-              for name in paused:
-                  try:
-                      state=hyper('domstate',name)
-                      if state=='paused':hyper('resume',name)
-                      if hyper('domstate',name)!='running':raise RuntimeError('original VM not running')
-                  except Exception as exc:recovery_errors.append(name+': '+str(exc))
-              if not recovery_errors and timer:
-                  local(['sudo','-n','systemctl','stop',timer+'.timer'],check=False)
-                  local(['sudo','-n','systemctl','reset-failed',timer+'.service'],check=False)
-              e.event('explicit_resume_finished',members=paused,errors=recovery_errors,elapsed_since_pause_start_seconds=round(time.monotonic()-fault_begun,3) if fault_begun else None,guest_service_restart=False,bootstrap=False)
-              try:
-                  if recovery_errors:raise RuntimeError('; '.join(recovery_errors))
-                  final=live();e.artifact('recovered-clusters.json',final)
-                  if owned:
-                      rows_check({'1':baseline_payload})
-                      e.gate('refused_SQL_row_absent_after_all_members_rejoin','PASS',acknowledged_rows=1,refused_row_id=2)
-                      value=uuid.uuid4().hex
-                      g.sql(n.NAMES[0],f"INSERT INTO layersentry.`{table}` VALUES (3,'{value}');")
-                      rows_check({'1':baseline_payload,'3':value})
-                      e.gate('new_writes_replicate_after_quorum_restoration','PASS',manual_bootstrap=False,manual_service_restart=False)
-                  groups=n.rows(n.native_json(n.NAMES[0],['onegroup','list','--json']).get('GROUP_POOL',{}).get('GROUP'))
-                  observed=[r for r in groups if r['NAME']==attempt_group]
-                  e.result['native_attempt_objects_after_recovery']=[{'ID':r['ID'],'NAME':r['NAME']} for r in observed]
-                  if observed and e.result.get('native_no_quorum_write_proven'):
-                      raise RuntimeError('native request reported rejected but object exists after recovery')
-                  if owned:g.sql(n.NAMES[0],f'DROP TABLE layersentry.`{table}`;')
-                  for group in groups:
-                      if group['NAME'] in {normal_group,attempt_group}:
-                          record=n.native_json(n.NAMES[0],['onegroup','show',group['ID'],'--json'])['GROUP']
-                          if record['NAME']!=group['NAME']:raise RuntimeError('group identity changed before cleanup')
-                          n.require(remote(n.NAMES[0],['onegroup','delete',group['ID']],native=True),'owned native cleanup')
-                  for name in n.NAMES:
-                      if owned and g.sql(name,"SET SESSION wsrep_sync_wait=1; SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='layersentry' AND table_name='"+table+"';").strip()!='0':raise RuntimeError('SQL cleanup not confirmed')
-                      names=[r['NAME'] for r in n.rows(n.native_json(name,['onegroup','list','--json']).get('GROUP_POOL',{}).get('GROUP'))]
-                      if {normal_group,attempt_group}.intersection(names):raise RuntimeError('native cleanup not confirmed')
-                      n.require(remote(name,['systemctl','is-active','opennebula','mariadb','layersentry-mariadb']),'services after resume')
-                      if n.require(remote(name,['getenforce']),'SELinux readback').strip()!='Enforcing':raise RuntimeError('SELinux changed')
-                  e.artifact('final.json',live());e.gate('original_VMs_services_data_and_cleanup_crosscheck','PASS')
-              except Exception as exc:
-                  e.result['failures'].append('recovery: '+str(exc));e.gate('original_VMs_services_data_and_cleanup_crosscheck','FAIL',error=str(exc))
-              e.result['all_executed_gates_passed']=not e.result['failures'] and all(x['status']=='PASS' for x in e.result['gates'].values())
-              e.save()
-              previous='0'*64;count=0
-              for line in (e.out/'events.jsonl').read_text().splitlines():
-                  row=json.loads(line);digest=row.pop('sha256');assert row['previous_sha256']==previous and row['sequence']==count+1
-                  assert hashlib.sha256(json.dumps(row,sort_keys=True,separators=(',',':')).encode()).hexdigest()==digest
-                  if row['action']=='artifact':assert hashlib.sha256((e.out/row['path']).read_bytes()).hexdigest()==row['artifact_sha256']
-                  previous=digest;count+=1
-              assert previous==e.result['event_chain_head']
-              (e.out/'independent-chain-audit.json').write_text(json.dumps({'verified':True,'event_count':count,'chain_head':previous,'events_sha256':hashlib.sha256((e.out/'events.jsonl').read_bytes()).hexdigest()},indent=2)+'\n')
-              (e.out/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(e.out.iterdir()) if p.is_file() and p.name!='SHA256SUMS'))
-              # Only this newly generated test evidence is eligible for upload.
-              # It contains generated canaries and status fields, never secrets.
-              for p in e.out.iterdir():
-                  if p.is_file():
-                      raw=p.read_bytes()
-                      for marker in [b'BEGIN OPENSSH PRIVATE KEY',b'BEGIN RSA PRIVATE KEY',b'Authorization: Bearer',b'github_pat_',b'ghp_']:
-                          if marker in raw:raise RuntimeError('secret-like marker; publication refused')
-              print(json.dumps(e.result,indent=2))
-          if not e.result['all_executed_gates_passed']:raise SystemExit(1)
+              state=subprocess.check_output(['sudo','-n','virsh','-c','qemu:///system','domstate',UUIDS[name]],text=True).strip()
+              result['VMs'][name]={'uuid':UUIDS[name],'state':state}
+              assert state=='running'
+          groups=n.rows(n.native_json(n.NAMES[0],['onegroup','list','--json']).get('GROUP_POOL',{}).get('GROUP'))
+          result['native_quorum_test_groups']=[r['NAME'] for r in groups if r['NAME'].startswith('lsf-quorum-')]
+          assert not result['native_quorum_test_groups']
+          p=subprocess.run(['sudo','-n','systemctl','is-active','lsf-quorum-restore-36528659790.timer'],text=True,capture_output=True)
+          result['failsafe_timer_active']=p.stdout.strip()
+          assert result['failsafe_timer_active'] in {'inactive','unknown'}
+          result['passed']=True
+          (out/'quorum-cleanup.json').write_text(json.dumps(result,indent=2)+'\n')
+          print(json.dumps(result,indent=2))
           PY
-      - name: Upload complete newly generated status and event evidence
+      - name: Verify and prepare only this new audit for artifact publication
+        id: publication
         if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RUNNER_NAME" = tester
+          test "$(hostname -s)" = tester
+          python3 - <<'PY'
+          import os,json,hashlib,re
+          from pathlib import Path
+          out=Path('/home/opc/layersentry-foundation-qual-20260929/evidence')/('independent-health-'+os.environ['GITHUB_RUN_ID'])
+          allowed={'audit.json','quorum-cleanup.json','SHA256SUMS'}
+          assert out.is_dir() and {p.name for p in out.iterdir()}.issubset(allowed)
+          assert (out/'audit.json').is_file()
+          for p in out.iterdir():
+              assert p.is_file() and not p.is_symlink()
+              raw=p.read_bytes()
+              for marker in [b'BEGIN OPENSSH PRIVATE KEY',b'BEGIN RSA PRIVATE KEY',b'Authorization: Bearer',b'github_pat_',b'ghp_']:
+                  assert marker not in raw,'secret-like marker; publication refused'
+          (out/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(out.iterdir()) if p.name!='SHA256SUMS'))
+          # An output is emitted only after validation; upload does not execute
+          # when this step fails, including any failed secret-marker check.
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('accepted=true\n')
+          PY
+      - name: Upload new independently collected audit with checksums
+        if: always() && steps.publication.outputs.accepted == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: tester-quorum-pause-${{ github.run_id }}
-          path: /home/opc/layersentry-foundation-qual-20260929/evidence/quorum-pause-${{ github.run_id }}/
-          if-no-files-found: error
+          name: tester-post-quorum-audit-${{ github.run_id }}
+          path: /home/opc/layersentry-foundation-qual-20260929/evidence/independent-health-${{ github.run_id }}/
           retention-days: 90
+          if-no-files-found: error
