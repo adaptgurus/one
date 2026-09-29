@@ -142,8 +142,15 @@ export function InstantiateVmTemplate() {
             )
 
             // Catalog metadata belongs to the source VM template, not the
-            // resulting VM instance. Never carry physical-address-like data
-            // from a browser request into PCI constraints.
+            // resulting VM instance. The browser is never authoritative for
+            // native PCI constraints: discard any browser-derived PCI vector
+            // and rebuild it only from the provider-authoritative source
+            // template plus the resolved LayerSentry GPU profile.
+            const authoritativePci = apiTemplateData?.TEMPLATE?.PCI
+              ? [].concat(_.cloneDeep(apiTemplateData.TEMPLATE.PCI))
+              : []
+
+            delete filteredTemplate.PCI
             delete filteredTemplate.LAYERSENTRY_GPU_PROFILES
             delete filteredTemplate.LAYERSENTRY_GPU_REQUEST
 
@@ -155,16 +162,14 @@ export function InstantiateVmTemplate() {
 
             if (!gpuRequest.valid) throw new Error(GPU_REQUEST_ERROR)
             if (gpuRequest.requested) {
-              const existingPci = filteredTemplate.PCI
-                ? [].concat(filteredTemplate.PCI)
-                : []
-
-              filteredTemplate.PCI = [...existingPci, ...gpuRequest.pci]
+              filteredTemplate.PCI = [...authoritativePci, ...gpuRequest.pci]
               filteredTemplate.LAYERSENTRY_GPU_REQUEST = {
                 PROFILE_ID: gpuRequest.profileId,
                 COUNT: String(gpuRequest.count),
                 SOURCE: 'PUBLISHED_TEMPLATE_PROFILE',
               }
+            } else if (authoritativePci.length > 0) {
+              filteredTemplate.PCI = authoritativePci
             }
 
             const protection = normalizeProtectionRequest({
