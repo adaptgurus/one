@@ -1,4 +1,4 @@
-name: Tester post-quorum independent audit
+name: Tester native Raft quorum commit barrier
 on:
   push:
     branches: [ops/tester-raft-galera-20260929]
@@ -9,11 +9,11 @@ concurrency:
   group: tester-raft-galera-lab
   cancel-in-progress: false
 jobs:
-  independent-audit:
+  raft-commit-barrier:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 8
+    timeout-minutes: 10
     steps:
-      - name: Bind authorized tester and exact source
+      - name: Bind tester and exact inspected helper source
         shell: bash
         run: |
           set -euo pipefail
@@ -23,42 +23,135 @@ jobs:
           test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 9fa5b48105e3146b47dc65a10976b096d5099e6d
           test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
           test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = faf53b034f7922746f35b033f2156a997b04fe00
-      - name: Fresh raw-state audit and authenticated application SQL transaction
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
-          python /home/opc/layersentry-platform/tools/lab/tester_cluster_health_audit.py
-      - name: Independently confirm no paused members no test groups and timer removal
+      - name: Verify uncommitted request waits for majority and reconcile after timeout
         shell: bash
         run: |
           set -euo pipefail
           export PATH=/home/opc/layersentry-foundation-qual-20260929/venv/bin:$PATH
           python - <<'PY'
-          import os,sys,json,subprocess,hashlib
-          from pathlib import Path
+          import sys,os,json,time,uuid,fcntl,subprocess,hashlib,socket
           sys.path.insert(0,'/home/opc/layersentry-platform/tools/lab')
           import tester_native_qualification as n
-          from tester_cluster_resilience import validate_domain,UUIDS
-          out=n.WORK/'evidence'/('independent-health-'+os.environ['GITHUB_RUN_ID'])
-          result={'VMs':{},'native_quorum_test_groups':[],'failsafe_timer_active':None,'passed':False}
-          for name in n.NAMES:
-              xml=subprocess.check_output(['sudo','-n','virsh','-c','qemu:///system','dumpxml',name],text=True)
-              validate_domain(name,xml)
-              state=subprocess.check_output(['sudo','-n','virsh','-c','qemu:///system','domstate',UUIDS[name]],text=True).strip()
-              result['VMs'][name]={'uuid':UUIDS[name],'state':state}
-              assert state=='running'
-          groups=n.rows(n.native_json(n.NAMES[0],['onegroup','list','--json']).get('GROUP_POOL',{}).get('GROUP'))
-          result['native_quorum_test_groups']=[r['NAME'] for r in groups if r['NAME'].startswith('lsf-quorum-')]
-          assert not result['native_quorum_test_groups']
-          p=subprocess.run(['sudo','-n','systemctl','is-active','lsf-quorum-restore-36528659790.timer'],text=True,capture_output=True)
-          result['failsafe_timer_active']=p.stdout.strip()
-          assert result['failsafe_timer_active'] in {'inactive','unknown'}
-          result['passed']=True
-          (out/'quorum-cleanup.json').write_text(json.dumps(result,indent=2)+'\n')
-          print(json.dumps(result,indent=2))
+          import tester_galera_qualification as g
+          from tester_cluster_resilience import Evidence,UUIDS,validate_domain
+          assert socket.gethostname().split('.')[0]=='tester' and os.getuid()==1000 and os.environ['RUNNER_NAME']=='tester'
+          lock=(n.WORK/'.execution.lock').open('a');fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+          cfg=json.loads((n.WORK/'site.json').read_text());assert cfg['control_plane']['frontends']==[{'name':x,'address':n.IPS[x]} for x in n.NAMES]
+          e=Evidence(n.WORK/'evidence'/('raft-commit-barrier-'+os.environ['GITHUB_RUN_ID']))
+          e.result.update({'source':'9fa5b48105e3146b47dc65a10976b096d5099e6d','workflow_commit':os.environ['GITHUB_SHA'],'fault_model':'two_original_VM_pauses','hypothesis':'client timeout is unknown; direct leader COMMIT must stay fixed without majority','prior_ambiguous_run':36528659790,'network_partition_test':False})
+          original=n.remote
+          def remote(name,argv,**kw):
+              try:
+                  cp=original(name,argv,**kw);e.event('command',target=name,argv=argv,rc=cp.returncode,stdout=cp.stdout,stderr=cp.stderr);return cp
+              except subprocess.TimeoutExpired:
+                  e.event('command_timeout',target=name,argv=argv,outcome='UNKNOWN');raise
+          n.remote=remote;g.remote=remote
+          def local(argv,check=True):
+              cp=subprocess.run(argv,capture_output=True,text=True,timeout=30)
+              e.event('command',target='tester',argv=argv,rc=cp.returncode,stdout=cp.stdout,stderr=cp.stderr)
+              if check:n.require(cp,'guarded local command')
+              return cp
+          def hyper(action,name):
+              if action not in {'domstate','suspend','resume'} or name not in UUIDS:raise RuntimeError('foreign VM action')
+              xml=subprocess.check_output(['sudo','-n','virsh','-c','qemu:///system','dumpxml',name],text=True,timeout=15);validate_domain(name,xml)
+              return local(['sudo','-n','virsh','-c','qemu:///system',action,UUIDS[name]]).stdout.strip()
+          def state(name):
+              # Local native authentication stays inside the enrolled guest;
+              # only nonsecret Raft status fields leave the guest.
+              program="""import os,pathlib,socket,xmlrpc.client,xml.etree.ElementTree as ET,json
+          socket.setdefaulttimeout(4)
+          auth=pathlib.Path(os.environ.get('ONE_AUTH','/var/lib/one/.one/one_auth')).read_text().strip()
+          response=xmlrpc.client.ServerProxy('http://127.0.0.1:2633/RPC2').one.zone.raftstatus(auth)
+          if not isinstance(response,list) or not response or response[0] is not True:raise RuntimeError('local raft status failed')
+          root=ET.fromstring(response[1]);print(json.dumps({x.tag:x.text for x in root}))
+          """
+              value=json.loads(n.require(remote(name,['python3','-c',program],native=True,timeout=10),'local native status'))
+              for field in ['SERVER_ID','STATE','TERM','COMMIT','LOG_INDEX']:
+                  if not str(value.get(field,'')).isdigit():raise RuntimeError('invalid native status field '+field)
+              return value
+          paused=[];timer=None;attempted=False;name='lsf-quorum-barrier-'+uuid.uuid4().hex[:16];failure=None
+          try:
+              before={'raft':n.converge(attempts=30),'galera':g.healthy(attempts=30),'proxy':g.proxy(),'https':g.https_check()}
+              e.artifact('baseline.json',before)
+              if n.rows(n.native_json(n.NAMES[0],['onevm','list','--json']).get('VM_POOL',{}).get('VM')):raise RuntimeError('workload pool nonempty')
+              leader=before['raft'][n.NAMES[0]]['leader'];targets=[x for x in n.NAMES if x!=leader]
+              for node in n.NAMES:
+                  if hyper('domstate',node)!='running':raise RuntimeError('VM not running')
+              baseline=state(leader)
+              if baseline['STATE']!='3':raise RuntimeError('leader changed before test')
+              e.gate('baseline_and_direct_native_API','PASS',leader=leader,state=baseline)
+              timer='lsf-raft-barrier-restore-'+os.environ['GITHUB_RUN_ID']
+              commands=['if [ "$(/usr/bin/virsh -c qemu:///system domstate '+UUIDS[x]+')" = paused ]; then /usr/bin/virsh -c qemu:///system resume '+UUIDS[x]+'; fi' for x in targets]
+              local(['sudo','-n','systemd-run','--quiet','--unit='+timer,'--on-active=150s','--timer-property=AccuracySec=1s','/usr/bin/bash','-c','; '.join(commands)])
+              local(['sudo','-n','systemctl','is-active',timer+'.timer'])
+              for node in targets:
+                  paused.append(node);hyper('suspend',node)
+                  if hyper('domstate',node)!='paused':raise RuntimeError('pause not observed')
+              e.event('two_followers_paused',leader=leader,followers=targets,network_rules_changed=False)
+              time.sleep(3);initial=state(leader);e.artifact('before_attempt_local_raft.json',initial)
+              attempted=True
+              cp=remote(leader,['timeout','12s','onegroup','create',name],native=True,timeout=18)
+              e.result['request_response']={'rc':cp.returncode,'stdout':cp.stdout,'stderr':cp.stderr,'object_name':name,'request_count':1}
+              samples=[]
+              for _ in range(3):
+                  for node in targets:
+                      if hyper('domstate',node)!='paused':raise RuntimeError('majority returned before sample')
+                  samples.append(state(leader));time.sleep(2)
+              e.artifact('without_majority_local_raft_samples.json',samples)
+              no_ack=cp.returncode!=0
+              commit_stable=all(r['COMMIT']==initial['COMMIT'] for r in samples)
+              uncommitted=all(int(r['LOG_INDEX'])>int(r['COMMIT']) for r in samples)
+              e.gate('no_success_acknowledgement_without_majority','PASS' if no_ack else 'FAIL',rc=cp.returncode,timeout_not_cancellation=cp.returncode==124)
+              e.gate('direct_COMMIT_does_not_advance_without_majority','PASS' if commit_stable else 'FAIL',before=initial['COMMIT'],samples=[r['COMMIT'] for r in samples])
+              e.gate('pending_log_entry_not_yet_committed','PASS' if uncommitted else 'NOT_PROVEN',samples=[{'log':r['LOG_INDEX'],'commit':r['COMMIT']} for r in samples])
+              if not no_ack or not commit_stable:raise RuntimeError('native acknowledgement/commit safety assertion failed')
+          except Exception as exc:
+              e.result['failures'].append(str(exc));e.event('failure',detail=str(exc))
+          finally:
+              recovery_errors=[]
+              for node in paused:
+                  try:
+                      if hyper('domstate',node)=='paused':hyper('resume',node)
+                      if hyper('domstate',node)!='running':raise RuntimeError('VM not resumed')
+                  except Exception as exc:recovery_errors.append(node+': '+str(exc))
+              if timer and not recovery_errors:local(['sudo','-n','systemctl','stop',timer+'.timer'],check=False)
+              e.event('restore_paused_members',members=paused,errors=recovery_errors,manual_service_restart=False,bootstrap=False)
+              try:
+                  if recovery_errors:raise RuntimeError('; '.join(recovery_errors))
+                  recovered={'raft':n.converge(attempts=45),'galera':g.healthy(attempts=45),'proxy':g.proxy(),'https':g.https_check()}
+                  e.artifact('after_majority_return.json',recovered)
+                  groups=n.rows(n.native_json(n.NAMES[0],['onegroup','list','--json']).get('GROUP_POOL',{}).get('GROUP'))
+                  found=[r for r in groups if r['NAME']==name]
+                  if attempted:
+                      if len(found)!=1:raise RuntimeError('timed-out request was not resolved to exactly one object')
+                      record=found[0]
+                      for node in n.NAMES:
+                          if n.native_json(node,['onegroup','show',record['ID'],'--json'])['GROUP']['NAME']!=name:raise RuntimeError('reconciled object not replicated')
+                      if int(recovered['raft'][n.NAMES[0]]['servers'][0]['COMMIT'])<=int(initial['COMMIT']):raise RuntimeError('commit did not advance after recovery')
+                      e.gate('single_pending_request_commits_after_majority_returns','PASS',id=record['ID'],name=name,blind_retry_count=0)
+                  for record in found:
+                      n.require(remote(n.NAMES[0],['onegroup','delete',record['ID']],native=True),'exact native canary cleanup')
+                  for node in n.NAMES:
+                      remaining=[r for r in n.rows(n.native_json(node,['onegroup','list','--json']).get('GROUP_POOL',{}).get('GROUP')) if r['NAME']==name]
+                      if remaining:raise RuntimeError('native canary remains')
+                      n.require(remote(node,['systemctl','is-active','opennebula','mariadb','layersentry-mariadb']),'restored services')
+                  e.artifact('final.json',{'raft':n.converge(attempts=30),'galera':g.healthy(attempts=30),'proxy':g.proxy(),'https':g.https_check()})
+                  e.gate('original_members_rejoined_and_canary_absent','PASS')
+              except Exception as exc:
+                  e.result['failures'].append('recovery: '+str(exc));e.gate('original_members_rejoined_and_canary_absent','FAIL',error=str(exc))
+              e.result['passed']=not e.result['failures'] and all(v['status']=='PASS' for v in e.result['gates'].values());e.save()
+              previous='0'*64;count=0
+              for line in (e.out/'events.jsonl').read_text().splitlines():
+                  row=json.loads(line);digest=row.pop('sha256');assert row['previous_sha256']==previous and row['sequence']==count+1
+                  assert hashlib.sha256(json.dumps(row,sort_keys=True,separators=(',',':')).encode()).hexdigest()==digest
+                  if row['action']=='artifact':assert hashlib.sha256((e.out/row['path']).read_bytes()).hexdigest()==row['artifact_sha256']
+                  previous=digest;count+=1
+              assert previous==e.result['event_chain_head']
+              (e.out/'chain-audit.json').write_text(json.dumps({'verified':True,'events':count,'chain_head':previous,'events_sha256':hashlib.sha256((e.out/'events.jsonl').read_bytes()).hexdigest()},indent=2)+'\n')
+              print(json.dumps(e.result,indent=2))
+          if not e.result['passed']:raise SystemExit(1)
           PY
-      - name: Verify and prepare only this new audit for artifact publication
+      - name: Validate new evidence files before publication
         id: publication
         if: always()
         shell: bash
@@ -67,27 +160,24 @@ jobs:
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           python3 - <<'PY'
-          import os,json,hashlib,re
+          import os,hashlib
           from pathlib import Path
-          out=Path('/home/opc/layersentry-foundation-qual-20260929/evidence')/('independent-health-'+os.environ['GITHUB_RUN_ID'])
-          allowed={'audit.json','quorum-cleanup.json','SHA256SUMS'}
-          assert out.is_dir() and {p.name for p in out.iterdir()}.issubset(allowed)
-          assert (out/'audit.json').is_file()
-          for p in out.iterdir():
+          d=Path('/home/opc/layersentry-foundation-qual-20260929/evidence')/('raft-commit-barrier-'+os.environ['GITHUB_RUN_ID'])
+          allowed={'baseline.json','before_attempt_local_raft.json','without_majority_local_raft_samples.json','after_majority_return.json','final.json','result.json','events.jsonl','chain-audit.json'}
+          assert d.is_dir() and {p.name for p in d.iterdir()}.issubset(allowed)
+          for p in d.iterdir():
               assert p.is_file() and not p.is_symlink()
-              raw=p.read_bytes()
+              b=p.read_bytes()
               for marker in [b'BEGIN OPENSSH PRIVATE KEY',b'BEGIN RSA PRIVATE KEY',b'Authorization: Bearer',b'github_pat_',b'ghp_']:
-                  assert marker not in raw,'secret-like marker; publication refused'
-          (out/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(out.iterdir()) if p.name!='SHA256SUMS'))
-          # An output is emitted only after validation; upload does not execute
-          # when this step fails, including any failed secret-marker check.
-          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('accepted=true\n')
+                  assert marker not in b,'publication refused'
+          (d/'SHA256SUMS').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest()+'  '+p.name+'\n' for p in sorted(d.iterdir()) if p.name!='SHA256SUMS'))
+          with open(os.environ['GITHUB_OUTPUT'],'a') as out:out.write('accepted=true\n')
           PY
-      - name: Upload new independently collected audit with checksums
+      - name: Upload complete new Raft commit-barrier observations
         if: always() && steps.publication.outputs.accepted == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: tester-post-quorum-audit-${{ github.run_id }}
-          path: /home/opc/layersentry-foundation-qual-20260929/evidence/independent-health-${{ github.run_id }}/
-          retention-days: 90
+          name: tester-raft-commit-barrier-${{ github.run_id }}
+          path: /home/opc/layersentry-foundation-qual-20260929/evidence/raft-commit-barrier-${{ github.run_id }}/
           if-no-files-found: error
+          retention-days: 90
