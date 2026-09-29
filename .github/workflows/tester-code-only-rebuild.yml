@@ -20,7 +20,7 @@ jobs:
           test "$RUNNER_NAME" = tester
           test "$(hostname -s)" = tester
           test "$(id -un)" = opc
-          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 2c977590ff33f6951fee3de23153120dfe2e2e11
+          test "$(git -C /home/opc/layersentry-platform rev-parse HEAD)" = 5ac8e217468f39677823db9badb6af28f367190b
           test -z "$(git -C /home/opc/layersentry-platform status --porcelain)"
           test "$(git -C /home/opc/one-deploy rev-parse HEAD)" = faf53b034f7922746f35b033f2156a997b04fe00
           python3 -m py_compile /home/opc/layersentry-platform/tools/lab/tester_code_only_rebuild.py
@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           OUT=/home/opc/layersentry-foundation-qual-20260929/evidence/fresh-code-rebuild-$GITHUB_RUN_ID
           mkdir -p "$OUT"
-          export LAYERSENTRY_REBUILD_SOURCE_COMMIT=2c977590ff33f6951fee3de23153120dfe2e2e11
+          export LAYERSENTRY_REBUILD_SOURCE_COMMIT=5ac8e217468f39677823db9badb6af28f367190b
           sudo -n -E python3 /home/opc/layersentry-platform/tools/lab/tester_code_only_rebuild.py             2>&1 | tee "$OUT/rebuild.log"
       - name: Independent final readback
         if: success()
