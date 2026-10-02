@@ -701,6 +701,9 @@ class OptimizerParser:
                 or attrs.get("RACK")
             )
             failure_domain = explicit_failure_domain or f"host:{host.id}"
+            drs_ready = str(
+                attrs.get("LAYERSENTRY_DRS_READY", "YES")
+            ).upper() not in {"NO", "FALSE", "0"}
             result.append(
                 HostCapacity(
                     id=int(host.id),
@@ -728,7 +731,10 @@ class OptimizerParser:
                     cluster_id=int(host.cluster_id),
                     failure_domain=failure_domain,
                     failure_domain_labeled=bool(explicit_failure_domain),
-                    healthy=int(host.state) == 2,
+                    # A recovered Host can remain MONITORED but explicitly
+                    # withheld from DRS until storage/network/trust warm-up is
+                    # complete.
+                    healthy=int(host.state) == 2 and drs_ready,
                     committed_memory=float(host.host_share.mem_usage or 0) / 1000,
                     committed_cpu=float(host.host_share.cpu_usage or 0) / 100,
                 )
