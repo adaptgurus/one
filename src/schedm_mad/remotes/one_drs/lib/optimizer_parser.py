@@ -875,6 +875,7 @@ class OptimizerParser:
                 child.qname.upper(): str(child.text or "").strip()
                 for child in (host.template.children if host.template else [])
             }
+            explicit_failure_domain = bool(domain_key and attrs.get(domain_key))
             failure_domain = attrs.get(domain_key) or f"host:{host.id}"
             result.append(
                 HostCapacity(
@@ -902,6 +903,7 @@ class OptimizerParser:
                     ),
                     cluster_id=int(host.cluster_id),
                     failure_domain=failure_domain,
+                    failure_domain_explicit=explicit_failure_domain,
                     healthy=int(host.state) == 2,
                 )
             )
