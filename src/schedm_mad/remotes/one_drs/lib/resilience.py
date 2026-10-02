@@ -347,6 +347,13 @@ def validate_resilience(
                 for domain, members in domains.items()
                 if domain not in set(failed_domains)
             )
+            if remaining_hosts <= policy.host_failure_tolerance:
+                raise ValueError(
+                    "resilience admission failed: combined failure policy "
+                    f"after domains {sorted(failed_domains)} leaves only "
+                    f"{remaining_hosts} hosts for additional tolerance "
+                    f"{policy.host_failure_tolerance}"
+                )
             combined_scenarios += _scenario_count(
                 remaining_hosts, policy.host_failure_tolerance
             )
