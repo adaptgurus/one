@@ -92,6 +92,7 @@ class OptimizerParser:
             "MIN_HEALTHY_HOSTS": 1,
             "FAILURE_DOMAIN_SPREAD": False,
             "REQUIRE_FAILURE_DOMAIN_LABELS": False,
+            "COMBINED_FAILURE_MODES": False,
             "MAX_GROUP_MIGRATIONS": -1,
             "MAX_FAILURE_SCENARIOS": 1024,
         },
@@ -403,6 +404,13 @@ class OptimizerParser:
                 resilience_config["REQUIRE_FAILURE_DOMAIN_LABELS"] is True
                 or str(
                     resilience_config["REQUIRE_FAILURE_DOMAIN_LABELS"]
+                ).upper()
+                == "YES"
+            ),
+            combined_failure_modes=(
+                resilience_config["COMBINED_FAILURE_MODES"] is True
+                or str(
+                    resilience_config["COMBINED_FAILURE_MODES"]
                 ).upper()
                 == "YES"
             ),
@@ -822,6 +830,7 @@ class OptimizerParser:
                 "ENABLED",
                 "FAILURE_DOMAIN_SPREAD",
                 "REQUIRE_FAILURE_DOMAIN_LABELS",
+                "COMBINED_FAILURE_MODES",
             }:
                 result[name] = str(child.text).upper() == "YES"
         policy = next(
