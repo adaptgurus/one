@@ -56,6 +56,8 @@ class HostCapacity:
     failure_domain: str = ""
     failure_domain_labeled: bool = False
     healthy: bool = True
+    committed_memory: Optional[float] = None
+    committed_cpu: Optional[float] = None
 
 
 # @dataclass(frozen=True, slots=True)
