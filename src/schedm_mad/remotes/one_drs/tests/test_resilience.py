@@ -92,6 +92,25 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 ResiliencePolicy(host_failure_tolerance=2),
             )
 
+    def test_pending_workload_counts_toward_failover_demand(self):
+        hosts = [
+            host(1, 10, 100, "rack-a"),
+            host(2, 10, 100, "rack-b"),
+            host(3, 10, 100, "rack-c"),
+        ]
+        pending = VMRequirements(
+            id=9,
+            state=VMState.PENDING,
+            cpu_ratio=12,
+            memory=150,
+        )
+        with self.assertRaisesRegex(ValueError, "memory demand"):
+            validate_resilience(
+                hosts,
+                [pending],
+                ResiliencePolicy(host_failure_tolerance=1),
+            )
+
     def test_reserve_headroom_is_enforced(self):
         hosts = [
             host(1, 10, 100, "rack-a"),
