@@ -26,6 +26,7 @@ class ResiliencePolicy:
     min_healthy_hosts: int = 1
     failure_domain_spread: bool = False
     require_failure_domain_labels: bool = False
+    combined_failure_modes: bool = False
     max_group_migrations: int | None = None
     max_failure_scenarios: int = 1024
 
@@ -40,8 +41,8 @@ class ResiliencePolicy:
             raise ValueError("memory_reserve_percent must be in [0, 100)")
         if self.min_healthy_hosts < 1:
             raise ValueError("min_healthy_hosts must be >= 1")
-        if self.max_group_migrations is not None and self.max_group_migrations < 1:
-            raise ValueError("max_group_migrations must be >= 1 or disabled")
+        if self.max_group_migrations is not None and self.max_group_migrations < 0:
+            raise ValueError("max_group_migrations must be >= 0 or disabled")
         if self.max_failure_scenarios < 1:
             raise ValueError("max_failure_scenarios must be >= 1")
 
@@ -104,9 +105,23 @@ def _eligible_survivors(
     vm: VMRequirements,
     survivor_ids: set[int],
 ) -> set[int]:
-    if vm.host_ids is None:
-        return set(survivor_ids)
-    return set(vm.host_ids) & survivor_ids
+    eligible = (
+        set(survivor_ids)
+        if vm.host_ids is None
+        else set(vm.host_ids) & survivor_ids
+    )
+
+    # If a storage requirement has no shared datastore candidate and carries
+    # explicit host-local datastore matches, only those hosts are valid
+    # recovery targets. This prevents aggregate CPU/RAM headroom from
+    # pretending a local-storage VM is freely movable.
+    for storage in vm.storage.values():
+        if storage.shared_dstore_ids:
+            continue
+        if storage.local_dstore_ids is not None:
+            eligible &= set(storage.local_dstore_ids)
+
+    return eligible
 
 
 def _has_distinct_assignment(
@@ -303,7 +318,26 @@ def validate_resilience(
         if policy.failure_domain_tolerance
         else 0
     )
-    total_scenarios = host_scenarios + domain_scenarios
+    combined_scenarios = 0
+    if (
+        policy.combined_failure_modes
+        and policy.failure_domain_tolerance
+        and policy.host_failure_tolerance
+    ):
+        domain_names = sorted(domains)
+        for failed_domains in combinations(
+            domain_names, policy.failure_domain_tolerance
+        ):
+            remaining_hosts = sum(
+                len(members)
+                for domain, members in domains.items()
+                if domain not in set(failed_domains)
+            )
+            combined_scenarios += _scenario_count(
+                remaining_hosts, policy.host_failure_tolerance
+            )
+
+    total_scenarios = host_scenarios + domain_scenarios + combined_scenarios
     if total_scenarios > policy.max_failure_scenarios:
         raise ValueError(
             "resilience admission failed: configured failure policy requires "
@@ -371,6 +405,45 @@ def validate_resilience(
             min_domain_memory = min(min_domain_memory, memory)
             min_domain_cpu = min(min_domain_cpu, cpu)
             checked += 1
+
+    if (
+        policy.combined_failure_modes
+        and policy.failure_domain_tolerance
+        and policy.host_failure_tolerance
+    ):
+        domain_names = sorted(domains)
+        for failed_domains in combinations(
+            domain_names, policy.failure_domain_tolerance
+        ):
+            failed_domain_set = set(failed_domains)
+            domain_survivors = [
+                host
+                for domain, members in domains.items()
+                if domain not in failed_domain_set
+                for host in members
+            ]
+            survivor_by_id = {host.id: host for host in domain_survivors}
+            for failed_hosts in combinations(
+                sorted(survivor_by_id), policy.host_failure_tolerance
+            ):
+                failed_host_set = set(failed_hosts)
+                survivors = [
+                    host
+                    for host_id, host in survivor_by_id.items()
+                    if host_id not in failed_host_set
+                ]
+                _evaluate_scenario(
+                    survivors,
+                    vm_requirements,
+                    vm_groups,
+                    policy,
+                    memory_demand,
+                    cpu_demand,
+                    "combined loss domains="
+                    f"{sorted(failed_domain_set)} hosts="
+                    f"{sorted(failed_host_set)}",
+                )
+                checked += 1
 
     return ResilienceReport(
         healthy_hosts=len(healthy),
