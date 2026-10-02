@@ -64,8 +64,8 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 memory=Capacity(total=100, usage=10),
                 failure_domain="rack-c",
                 healthy=True,
-                committed_memory=0,
-                committed_cpu=0,
+                committed_memory=30,
+                committed_cpu=2,
             ),
         ]
         with self.assertRaisesRegex(ValueError, "memory demand"):
