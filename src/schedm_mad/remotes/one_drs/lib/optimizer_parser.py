@@ -517,11 +517,18 @@ class OptimizerParser:
         return vm_requirements
 
     def _parse_vm_groups(self) -> list[VMGroup]:
-        # IDs of the required VMs
-        allowed_vm_ids = {vm.id for vm in self.scheduler_driver_action.requirements.vm}
-        # OpenNebla VM Groups
-        # groups = {group_id: {role_name: set(vm_ids)}}
-        groups = {}
+        """Translate native VM Group semantics for the current scheduler mode.
+
+        PLACE anchors pending members against already-running members.
+        OPTIMIZE keeps all requested group members as joint decision variables;
+        it must not convert their current hosts into permanent exclusions.
+        """
+
+        allowed_vm_ids = {
+            int(vm.id) for vm in self.scheduler_driver_action.requirements.vm
+        }
+
+        groups: dict[int, dict[str, set[int]]] = {}
         for vm in self.scheduler_driver_action.vm_pool.vm:
             if not vm.template.vmgroup:
                 continue
@@ -529,24 +536,29 @@ class OptimizerParser:
                 child.qname.upper(): child.text
                 for child in vm.template.vmgroup.children
             }
-            gid, role = int(attrs.get("VMGROUP_ID")), attrs.get("ROLE")
-            groups.setdefault(gid, {}).setdefault(role, set()).add(vm.id)
-        # Auxiliar dict for creating role to role affinity
-        aux_vmg = {}
-        # vmg = list[VMGroup]
-        vmg, idx = [], 0
-        # Dicts for Host-VM Affinity
-        # affined_hosts = {vm_id: set(host_ids)}
-        # anti_affined_hosts = {vm_id: set(host_ids)}
-        affined_hosts, anti_affined_hosts = {}, {}
-        # Create VM Groups for VM-VM and Host-VM Affinity
+            gid = int(attrs.get("VMGROUP_ID"))
+            role = attrs.get("ROLE")
+            groups.setdefault(gid, {}).setdefault(role, set()).add(int(vm.id))
+
+        # All explicitly-declared VM-to-VM relationships. Roles without POLICY
+        # are kept only as references for role-to-role rules; they are not
+        # silently converted into anti-affinity.
+        relations: list[VMGroup] = []
+        role_refs: dict[tuple[int, str], VMGroup] = {}
+        affined_hosts: dict[int, set[int]] = {}
+        anti_affined_hosts: dict[int, set[int]] = {}
+        idx = 0
+
         for group in self.scheduler_driver_action.vm_group_pool.vm_group:
             gid = int(group.id)
             if gid not in groups:
                 continue
             for role_obj in group.roles.role:
-                if role_obj.name not in groups[gid]:
+                role_name = role_obj.name
+                if role_name not in groups[gid]:
                     continue
+                members = set(groups[gid][role_name])
+
                 if (
                     role_obj.host_affined is not None
                     or role_obj.host_anti_affined is not None
@@ -556,115 +568,151 @@ class OptimizerParser:
                         if role_obj.host_affined is not None
                         else anti_affined_hosts
                     )
-                    host_list = (
-                        role_obj.host_affined or role_obj.host_anti_affined
-                    ).split(",")
-                    for vm_id in groups[gid][role_obj.name]:
-                        # Affined or anti-affined host policies
-                        target_hosts.setdefault(vm_id, set()).update(
-                            map(int, host_list)
-                        )
-                if role_obj.policy:
-                    vm_group = VMGroup(
+                    host_list = role_obj.host_affined or role_obj.host_anti_affined
+                    parsed_hosts = {
+                        int(value.strip())
+                        for value in str(host_list).split(",")
+                        if value.strip()
+                    }
+                    for vm_id in members:
+                        target_hosts.setdefault(vm_id, set()).update(parsed_hosts)
+
+                policy = str(role_obj.policy or "").strip().upper()
+                if policy in {"AFFINED", "ANTI_AFFINED"}:
+                    relation = VMGroup(
                         id=idx,
-                        affined=role_obj.policy.upper() == "AFFINED",
-                        vm_ids=groups[gid][role_obj.name],
+                        affined=policy == "AFFINED",
+                        vm_ids=members,
                     )
-                    vmg.append(vm_group)
-                    aux_vmg[(gid, role_obj.name)] = vm_group
+                    relations.append(relation)
+                    role_refs[(gid, role_name)] = relation
                     idx += 1
                 else:
-                    # Only for Role-Role affinity or VM-Host affinity
-                    vm_group = VMGroup(
-                        id=idx, affined=False, vm_ids=groups[gid][role_obj.name]
+                    # Reference only. The affinity bit has no semantic meaning
+                    # until an explicit role-to-role relation is created.
+                    role_refs[(gid, role_name)] = VMGroup(
+                        id=-1, affined=False, vm_ids=members
                     )
-                    aux_vmg[(gid, role_obj.name)] = vm_group
-                    idx += 1
-        # Create VM Groups for Role-Role affinity
+
+        def role_names(value) -> list[str]:
+            return [
+                item.strip()
+                for item in str(value or "").split(",")
+                if item.strip()
+            ]
+
+        # Role-to-role rules are explicit cross-role relationships.
         for group in self.scheduler_driver_action.vm_group_pool.vm_group:
             gid = int(group.id)
-            if gid not in groups:
+            if gid not in groups or not group.template:
                 continue
-            if not group.template:
-                continue
-            template_attr = [
-                {child.qname.upper(): child.text} for child in group.template.children
-            ]
-            for attr in template_attr:
-                # Affined role to role
-                if "AFFINED" in attr:
-                    affined_role = VMGroup(id=idx, affined=True, vm_ids=set())
-                    for role in attr["AFFINED"].split(", "):
-                        if (gid, role) in aux_vmg:
-                            affined_role.vm_ids.update(aux_vmg[(gid, role)].vm_ids)
-                    # Add affined_role only if there are req vm with affined roles
-                    if affined_role.vm_ids:
-                        vmg.append(affined_role)
-                        idx += 1
-                # Anti affined role to role
-                elif "ANTI_AFFINED" in attr:
-                    anti_affined_role = VMGroup(id=idx, affined=False, vm_ids=set())
-                    for role in attr["ANTI_AFFINED"].split(", "):
-                        if (gid, role) in aux_vmg:
-                            # Join anti-affined VMGroups
-                            if not aux_vmg[(gid, role)].affined:
-                                anti_affined_role.vm_ids.update(
-                                    aux_vmg[(gid, role)].vm_ids
-                                )
-                            # Create special anti-affined rules for affined roles
-                            else:
-                                for _role in attr["ANTI_AFFINED"].split(", "):
-                                    if _role == role:
-                                        continue
-                                    for vm_id in aux_vmg[(gid, _role)].vm_ids:
-                                        idx += 1
-                                        extra_vmg = VMGroup(
-                                            idx,
-                                            False,
-                                            {
-                                                sorted(aux_vmg[(gid, role)].vm_ids)[0],
-                                                vm_id,
-                                            },
+
+            for child in group.template.children:
+                name = child.qname.upper()
+                names = role_names(child.text)
+                refs = [
+                    role_refs[(gid, role)]
+                    for role in names
+                    if (gid, role) in role_refs
+                ]
+                if len(refs) < 2:
+                    continue
+
+                if name == "AFFINED":
+                    members: set[int] = set()
+                    for ref in refs:
+                        members.update(ref.vm_ids)
+                    relations.append(
+                        VMGroup(id=idx, affined=True, vm_ids=members)
+                    )
+                    idx += 1
+
+                elif name == "ANTI_AFFINED":
+                    # Cross-role anti-affinity must not accidentally impose
+                    # anti-affinity *within* a role that is itself AFFINED.
+                    for left_pos in range(len(refs)):
+                        for right_pos in range(left_pos + 1, len(refs)):
+                            left = refs[left_pos].vm_ids
+                            right = refs[right_pos].vm_ids
+                            for left_vm in left:
+                                for right_vm in right:
+                                    relations.append(
+                                        VMGroup(
+                                            id=idx,
+                                            affined=False,
+                                            vm_ids={left_vm, right_vm},
                                         )
-                                        vmg.append(extra_vmg)
-                    # Add anti_affined_role only if there are req vm with anti_affined roles
-                    if anti_affined_role.vm_ids:
-                        vmg.append(anti_affined_role)
-                        idx += 1
-        # List of VMGroups that conatin only required VMs
-        result, idx = [], 0
+                                    )
+                                    idx += 1
+
         current_placement = self._curr_alloc
-        for vm_group in vmg:
-            target_hosts = affined_hosts if vm_group.affined else anti_affined_hosts
-            new_group = VMGroup(idx, vm_group.affined, set())
-            for vm_id in vm_group.vm_ids:
-                if vm_id in allowed_vm_ids:
-                    for aux_vm_id in vm_group.vm_ids:
+        result: list[VMGroup] = []
+
+        if self.mode.upper() == "OPTIMIZE":
+            # All requested members are movable together. Current placement is
+            # an objective/initial state, not a hard affinity constraint.
+            for relation in relations:
+                members = relation.vm_ids & allowed_vm_ids
+                if len(members) > 1:
+                    result.append(
+                        VMGroup(
+                            id=len(result),
+                            affined=relation.affined,
+                            vm_ids=set(members),
+                        )
+                    )
+        else:
+            # Initial placement: running group members are fixed external
+            # anchors while pending members are the actual decision variables.
+            for relation in relations:
+                target_hosts = (
+                    affined_hosts if relation.affined else anti_affined_hosts
+                )
+                pending_members = relation.vm_ids & allowed_vm_ids
+
+                for vm_id in pending_members:
+                    for aux_vm_id in relation.vm_ids:
+                        if aux_vm_id == vm_id:
+                            continue
                         if aux_vm_id in current_placement:
-                            # Affined or anti-affined host by the placed VMs
                             target_hosts.setdefault(vm_id, set()).add(
                                 current_placement[aux_vm_id]
                             )
-                    # Return only required VMs
-                    # NOTE: If the role has at least 1 running VM, we won't
-                    # create a VMGroup for the requested VMs
-                    if not (vm_group.vm_ids & current_placement.keys()):
-                        new_group.vm_ids.add(vm_id)
-            if new_group.vm_ids:
-                result.append(new_group)
-                idx += 1
-        # Merge affined VMGroups
-        for i in range(len(result)):
-            for j in range(i + 1, len(result)):
-                if (
-                    result[i].vm_ids.intersection(result[j].vm_ids)
-                    and result[i].affined
-                    and result[j].affined
-                ):
-                    result[i].vm_ids.update(result[j].vm_ids)
-                    result.pop(j)
-        # Return a unique list that contain the affined and antiaffined roles
-        # and the dicts with the affined and anti_affined hosts
+
+                if not (relation.vm_ids & current_placement.keys()):
+                    if len(pending_members) > 1:
+                        result.append(
+                            VMGroup(
+                                id=len(result),
+                                affined=relation.affined,
+                                vm_ids=set(pending_members),
+                            )
+                        )
+
+        # Merge overlapping AFFINED relations transitively without mutating a
+        # list under fixed-range iteration. Anti-affinity relations remain
+        # separate constraints.
+        changed = True
+        while changed:
+            changed = False
+            for i in range(len(result)):
+                if not result[i].affined:
+                    continue
+                for j in range(i + 1, len(result)):
+                    if (
+                        result[j].affined
+                        and result[i].vm_ids & result[j].vm_ids
+                    ):
+                        result[i].vm_ids.update(result[j].vm_ids)
+                        result.pop(j)
+                        changed = True
+                        break
+                if changed:
+                    break
+
+        for idx, relation in enumerate(result):
+            relation.id = idx
+
         return result, affined_hosts, anti_affined_hosts
 
     def _parse_host_capacities(
