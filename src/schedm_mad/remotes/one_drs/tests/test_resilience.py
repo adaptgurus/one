@@ -303,7 +303,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 hosts,
                 [vm(1, 2, 4)],
                 policy(host_failure_tolerance=2),
-                cluster_host_count=4,
+                consumed_host_failures=1,
             )
 
     def test_consumed_failure_budget_can_be_explicitly_acknowledged(self):
@@ -319,9 +319,9 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 host_failure_tolerance=2,
                 pause_on_degraded=False,
             ),
-            cluster_host_count=4,
+            consumed_host_failures=1,
         )
-        self.assertEqual(report.active_unavailable_hosts, 1)
+        self.assertEqual(report.consumed_host_failures, 1)
         self.assertEqual(report.remaining_host_failure_tolerance, 1)
 
     def test_excluded_workload_does_not_consume_failover_reserve(self):
