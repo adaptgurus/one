@@ -170,6 +170,10 @@ class VMRequirements:
     # protected VM carrying device requirements must be explicitly qualified
     # for redundant device recovery before it can inherit an N+K guarantee.
     resilience_device_qualified: bool = False
+    # Shared storage is naturally portable from a scheduler perspective.
+    # Local/non-shared storage requires an explicit replication/recovery
+    # qualification before the VM may inherit an N+K guarantee.
+    resilience_storage_qualified: bool = True
 
     def find_host_matches(
         self,
