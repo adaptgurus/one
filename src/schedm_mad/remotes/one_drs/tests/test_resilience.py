@@ -10,6 +10,7 @@ from lib.mapper.model import (
     Allocation,
     Capacity,
     HostCapacity,
+    PCIDeviceRequirement,
     VMGroup,
     VMRequirements,
     VMState,
@@ -22,31 +23,59 @@ from lib.resilience import (
 )
 
 
-def host(host_id, cpu, memory, domain, healthy=True):
+def host(host_id, cpu, memory, domain, healthy=True, explicit=True):
     return HostCapacity(
         id=host_id,
         cpu=Capacity(total=cpu, usage=0),
         memory=Capacity(total=memory, usage=0),
         failure_domain=domain,
+        failure_domain_explicit=explicit,
         healthy=healthy,
     )
 
 
-def vm(vm_id, cpu, memory, protected=True, state=VMState.RUNNING):
+def vm(
+    vm_id,
+    cpu,
+    memory,
+    protected=True,
+    state=VMState.RUNNING,
+    device=False,
+    device_qualified=False,
+    storage_qualified=True,
+):
     return VMRequirements(
         id=vm_id,
         state=state,
         cpu_ratio=cpu,
         memory=memory,
+        pci_devices=(
+            [PCIDeviceRequirement(vendor_id="10de")] if device else []
+        ),
         resilience_protected=protected,
+        resilience_device_qualified=device_qualified,
+        resilience_storage_qualified=storage_qualified,
     )
 
 
 def policy(**kwargs):
+    # Most focused tests exercise one pre-admission layer at a time. Exact
+    # scenario proof has dedicated tests below.
+    kwargs.setdefault("exact_recovery_proof", False)
     return ResiliencePolicy(enabled=True, **kwargs)
 
 
+def all_candidates(hosts, vms):
+    ids = {h.id for h in hosts if h.healthy}
+    return {item.id: set(ids) for item in vms}
+
+
 class ResilienceAdmissionTests(unittest.TestCase):
+    def test_default_policy_is_disabled_and_exact_proof_defaults_on(self):
+        default = ResiliencePolicy()
+        self.assertFalse(default.enabled)
+        self.assertTrue(default.exact_recovery_proof)
+
     def test_disabled_policy_preserves_single_host_compatibility(self):
         report = validate_resilience(
             [host(1, 4, 16, "rack-a")],
@@ -103,6 +132,38 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 candidate_hosts={1: {1}},
             )
 
+    def test_device_failover_requires_explicit_qualification(self):
+        hosts = [
+            host(1, 16, 64, "rack-a"),
+            host(2, 16, 64, "rack-b"),
+        ]
+        item = vm(1, 2, 4, device=True)
+        with self.assertRaisesRegex(
+            ResilienceAdmissionError, "device failover is not qualified"
+        ):
+            validate_resilience(
+                hosts,
+                [item],
+                policy(host_failure_tolerance=1),
+                candidate_hosts={1: {1, 2}},
+            )
+
+    def test_local_storage_failover_requires_explicit_qualification(self):
+        hosts = [
+            host(1, 16, 64, "rack-a"),
+            host(2, 16, 64, "rack-b"),
+        ]
+        item = vm(1, 2, 4, storage_qualified=False)
+        with self.assertRaisesRegex(
+            ResilienceAdmissionError, "storage whose data failover is not"
+        ):
+            validate_resilience(
+                hosts,
+                [item],
+                policy(host_failure_tolerance=1),
+                candidate_hosts={1: {1, 2}},
+            )
+
     def test_affined_group_requires_common_recovery_hosts(self):
         hosts = [
             host(1, 16, 64, "rack-a"),
@@ -118,6 +179,26 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 vms,
                 policy(host_failure_tolerance=1),
                 candidate_hosts={1: {1, 2}, 2: {2, 3}},
+                vm_groups=[
+                    VMGroup(id=7, affined=True, vm_ids={1, 2})
+                ],
+            )
+
+    def test_affined_group_common_host_must_fit_whole_group(self):
+        hosts = [
+            host(1, 4, 8, "rack-a"),
+            host(2, 4, 8, "rack-b"),
+            host(3, 16, 64, "rack-c"),
+        ]
+        vms = [vm(1, 3, 6), vm(2, 3, 6)]
+        with self.assertRaisesRegex(
+            ResilienceAdmissionError, "fit the whole group"
+        ):
+            validate_resilience(
+                hosts,
+                vms,
+                policy(host_failure_tolerance=1),
+                candidate_hosts={1: {1, 2}, 2: {1, 2}},
                 vm_groups=[
                     VMGroup(id=7, affined=True, vm_ids={1, 2})
                 ],
@@ -147,6 +228,33 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 ],
             )
 
+    def test_hall_condition_catches_heterogeneous_candidate_trap(self):
+        hosts = [
+            host(1, 16, 64, "rack-a"),
+            host(2, 16, 64, "rack-b"),
+            host(3, 16, 64, "rack-c"),
+            host(4, 16, 64, "rack-d"),
+        ]
+        vms = [vm(1, 2, 4), vm(2, 2, 4), vm(3, 2, 4)]
+        # Union has 4 hosts (= N+1), but VMs 1 and 2 share only two
+        # candidates, so one Host loss can make distinct placement impossible.
+        with self.assertRaisesRegex(
+            ResilienceAdmissionError, "failure-safe distinct placement"
+        ):
+            validate_resilience(
+                hosts,
+                vms,
+                policy(host_failure_tolerance=1),
+                candidate_hosts={
+                    1: {1, 2},
+                    2: {1, 2},
+                    3: {3, 4},
+                },
+                vm_groups=[
+                    VMGroup(id=9, affined=False, vm_ids={1, 2, 3})
+                ],
+            )
+
     def test_failure_domain_candidate_redundancy(self):
         hosts = [
             host(1, 16, 64, "rack-a"),
@@ -164,6 +272,22 @@ class ResilienceAdmissionTests(unittest.TestCase):
                     failure_domain_tolerance=1,
                 ),
                 candidate_hosts={1: {1, 2}},
+            )
+
+    def test_domain_policy_fails_closed_on_unlabeled_host(self):
+        hosts = [
+            host(1, 16, 64, "rack-a"),
+            host(2, 16, 64, "host:2", explicit=False),
+            host(3, 16, 64, "rack-b"),
+        ]
+        with self.assertRaisesRegex(
+            ResilienceAdmissionError, "missing on Hosts"
+        ):
+            validate_resilience(
+                hosts,
+                [vm(1, 2, 4)],
+                policy(failure_domain_tolerance=1),
+                candidate_hosts={1: {1, 2, 3}},
             )
 
     def test_degraded_cluster_pauses_ordinary_optimization(self):
@@ -239,6 +363,69 @@ class ResilienceAdmissionTests(unittest.TestCase):
                     host_failure_tolerance=1,
                     memory_reserve_percent=20,
                 ),
+            )
+
+    def test_exact_proof_catches_capacity_fragmentation(self):
+        hosts = [
+            host(1, 10, 100, "rack-a"),
+            host(2, 10, 100, "rack-b"),
+        ]
+        vms = [vm(1, 6, 10), vm(2, 6, 10), vm(3, 6, 10)]
+        # Aggregate CPU is 20 >= 18 and every VM has two candidates, but
+        # three 6-CPU VMs cannot fit on two 10-CPU Hosts.
+        with self.assertRaisesRegex(
+            ResilienceAdmissionError, "exact recovery placement proof"
+        ):
+            validate_resilience(
+                hosts,
+                vms,
+                ResiliencePolicy(
+                    enabled=True,
+                    host_failure_tolerance=0,
+                    exact_recovery_proof=True,
+                ),
+                candidate_hosts=all_candidates(hosts, vms),
+            )
+
+    def test_exact_proof_covers_dual_host_loss(self):
+        hosts = [
+            host(1, 10, 100, "rack-a"),
+            host(2, 10, 100, "rack-b"),
+            host(3, 10, 100, "rack-c"),
+            host(4, 10, 100, "rack-d"),
+        ]
+        vms = [vm(1, 5, 20), vm(2, 5, 20)]
+        report = validate_resilience(
+            hosts,
+            vms,
+            ResiliencePolicy(
+                enabled=True,
+                host_failure_tolerance=2,
+                exact_recovery_proof=True,
+            ),
+            candidate_hosts=all_candidates(hosts, vms),
+        )
+        self.assertEqual(report.remaining_host_failure_tolerance, 2)
+
+    def test_exact_proof_scenario_budget_fails_closed(self):
+        hosts = [
+            host(i, 10, 100, f"rack-{i}")
+            for i in range(1, 13)
+        ]
+        vms = [vm(1, 1, 1)]
+        with self.assertRaisesRegex(
+            ResilienceAdmissionError, "scenarios exceed the bounded limit"
+        ):
+            validate_resilience(
+                hosts,
+                vms,
+                ResiliencePolicy(
+                    enabled=True,
+                    host_failure_tolerance=2,
+                    exact_recovery_proof=True,
+                    max_exact_failure_scenarios=64,
+                ),
+                candidate_hosts=all_candidates(hosts, vms),
             )
 
     def test_topology_spread_balances_instead_of_one_per_domain(self):
