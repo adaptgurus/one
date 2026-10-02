@@ -489,6 +489,7 @@ class OptimizerParser:
                 list(vm_reqs_dict.values()),
                 resilience_policy,
                 candidate_hosts=candidate_hosts,
+                vm_groups=vmg,
                 cluster_host_count=cluster_host_count,
             )
             self.log_general(
