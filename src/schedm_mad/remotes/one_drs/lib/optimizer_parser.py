@@ -84,13 +84,16 @@ class OptimizerParser:
         "MEMORY_SYSTEM_DS_SCALE": 0,
         "DIFFERENT_VNETS": True,
         "RESILIENCE": {
+            "ENABLED": False,
             "HOST_FAILURE_TOLERANCE": 1,
             "FAILURE_DOMAIN_TOLERANCE": 0,
             "CPU_RESERVE_PERCENT": 0,
             "MEMORY_RESERVE_PERCENT": 0,
             "MIN_HEALTHY_HOSTS": 1,
-            "FAILURE_DOMAIN_SPREAD": True,
+            "FAILURE_DOMAIN_SPREAD": False,
             "MAX_GROUP_MIGRATIONS": 1,
+            "PAUSE_ON_DEGRADED": True,
+            "FAILURE_DOMAIN_ATTRIBUTE": "LAYERSENTRY_FAILURE_DOMAIN",
         },
     }
 
