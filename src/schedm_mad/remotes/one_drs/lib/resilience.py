@@ -11,7 +11,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Collection, Mapping
 
-from .mapper.model import HostCapacity, VMRequirements
+from .mapper.model import HostCapacity, VMGroup, VMRequirements
 
 
 class ResilienceAdmissionError(ValueError):
@@ -120,6 +120,7 @@ def validate_resilience(
     policy: ResiliencePolicy,
     *,
     candidate_hosts: Mapping[int, Collection[int]] | None = None,
+    vm_groups: Collection[VMGroup] | None = None,
     cluster_host_count: int | None = None,
 ) -> ResilienceReport:
     """Validate cluster resilience without changing placement.
@@ -208,6 +209,38 @@ def validate_resilience(
                         f"resilience admission failed: VM {vm.id} has "
                         f"{len(domains)} eligible failure domain(s), "
                         f"{required_domains} required"
+                    )
+
+        protected_ids = {vm.id for vm in protected}
+        for group in vm_groups or ():
+            members = sorted(group.vm_ids & protected_ids)
+            if len(members) < 2:
+                continue
+            member_candidates = [
+                {
+                    int(hid)
+                    for hid in candidate_hosts.get(vm_id, ())
+                    if int(hid) in healthy_ids
+                }
+                for vm_id in members
+            ]
+            if group.affined:
+                common = set.intersection(*member_candidates)
+                if len(common) < required_hosts:
+                    raise ResilienceAdmissionError(
+                        "resilience admission failed: affined VM group "
+                        f"{group.id} has only {len(common)} common recovery "
+                        f"host(s), {required_hosts} required"
+                    )
+            else:
+                union = set().union(*member_candidates)
+                required_distinct = len(members) + remaining_host_tolerance
+                if len(union) < required_distinct:
+                    raise ResilienceAdmissionError(
+                        "resilience admission failed: anti-affined VM group "
+                        f"{group.id} has {len(union)} distinct recovery host(s), "
+                        f"{required_distinct} required to preserve host "
+                        "anti-affinity after failures"
                     )
 
     memory_demand, cpu_demand = _demand(protected)
