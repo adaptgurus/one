@@ -449,6 +449,7 @@ class OptimizerParser:
         vnet_capacities = self._parse_vnet_capacities()
 
         if resilience_policy.enabled:
+            self._validate_resilience_inventory(vm_reqs_dict)
             host_by_id = {host.id: host for host in host_capacities}
             dstore_by_id = {
                 dstore.id: dstore for dstore in shared_dstore_capacities
@@ -579,37 +580,19 @@ class OptimizerParser:
                 )
 
                 host_ids = set(vm_req.hosts.id)
-                resilience_protected = True
-                # Device-free VMs are trivially qualified for this check.
-                # Device-bearing VMs require an explicit LayerSentry
-                # qualification marker because matching a PCI ID at plan time
-                # does not prove spare capacity survives a Host failure.
-                resilience_device_qualified = not bool(vm.template.pci)
+                excluded, device_marker, storage_marker = (
+                    self._resilience_vm_markers(vm)
+                )
+                resilience_protected = not excluded
+                # Device-free/shared-storage VMs are qualified by construction.
+                # Device/local-storage paths require explicit tested overrides.
+                resilience_device_qualified = (
+                    not bool(vm.template.pci) or device_marker
+                )
                 resilience_storage_qualified = (
                     int(vm.id) not in self._used_local_dstores
+                    or storage_marker
                 )
-                if vm.user_template is not None:
-                    for item in vm.user_template.any_element:
-                        name = item.qname.upper()
-                        value = str(item.text or "").strip().upper()
-                        if (
-                            name == "LAYERSENTRY_RESILIENCE"
-                            and value in {"EXCLUDED", "NO", "DISABLED"}
-                        ) or (
-                            name == "LAYERSENTRY_HA_PROTECTED"
-                            and value == "NO"
-                        ):
-                            resilience_protected = False
-                        if (
-                            name == "LAYERSENTRY_DEVICE_HA_QUALIFIED"
-                            and value == "YES"
-                        ):
-                            resilience_device_qualified = True
-                        if (
-                            name == "LAYERSENTRY_STORAGE_HA_QUALIFIED"
-                            and value == "YES"
-                        ):
-                            resilience_storage_qualified = True
 
                 if (
                     self.mode.upper() == "OPTIMIZE"
@@ -1079,6 +1062,63 @@ class OptimizerParser:
             )
             for pci in pci_list
         ]
+
+    @staticmethod
+    def _resilience_vm_markers(vm) -> tuple[bool, bool, bool]:
+        """Return (excluded, device_ha_qualified, storage_ha_qualified)."""
+        excluded = False
+        device_qualified = False
+        storage_qualified = False
+
+        user_template = getattr(vm, "user_template", None)
+        for item in getattr(user_template, "any_element", []) or []:
+            name = item.qname.upper()
+            value = str(item.text or "").strip().upper()
+            if (
+                name == "LAYERSENTRY_RESILIENCE"
+                and value in {"EXCLUDED", "NO", "DISABLED"}
+            ) or (
+                name == "LAYERSENTRY_HA_PROTECTED"
+                and value == "NO"
+            ):
+                excluded = True
+            elif (
+                name == "LAYERSENTRY_DEVICE_HA_QUALIFIED"
+                and value == "YES"
+            ):
+                device_qualified = True
+            elif (
+                name == "LAYERSENTRY_STORAGE_HA_QUALIFIED"
+                and value == "YES"
+            ):
+                storage_qualified = True
+
+        return excluded, device_qualified, storage_qualified
+
+    def _validate_resilience_inventory(
+        self, vm_requirements: dict[int, VMRequirements]
+    ) -> None:
+        """Fail closed if an active protected VM lacks scheduler requirements."""
+        missing: list[int] = []
+        for raw_vm in self.scheduler_driver_action.vm_pool.vm:
+            vm_id = int(raw_vm.id)
+            if vm_id in vm_requirements:
+                continue
+
+            # Only active/running and pending workloads consume HA reserve.
+            if int(raw_vm.state) not in {1, 3}:
+                continue
+
+            excluded, _, _ = self._resilience_vm_markers(raw_vm)
+            if not excluded:
+                missing.append(vm_id)
+
+        if missing:
+            raise ValueError(
+                "resilience inventory incomplete: active protected VM(s) "
+                f"{sorted(missing)} are present in VM_POOL but absent from "
+                "REQUIREMENTS; refusing partial-cluster HA certification"
+            )
 
     @staticmethod
     def _map_vm_state(state: int, lcm_state: int) -> VMState:
