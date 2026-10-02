@@ -651,20 +651,17 @@ class OptimizerParser:
         # and the dicts with the affined and anti_affined hosts
         return result, affined_hosts, anti_affined_hosts
 
-    def _parse_host_capacities(self) -> list[HostCapacity]:
+    def _parse_host_capacities(
+        self, failure_domain_attribute: str = "LAYERSENTRY_FAILURE_DOMAIN"
+    ) -> list[HostCapacity]:
         result = []
+        domain_key = str(failure_domain_attribute or "").strip().upper()
         for host in self.scheduler_driver_action.host_pool.host:
             attrs = {
                 child.qname.upper(): str(child.text or "").strip()
                 for child in (host.template.children if host.template else [])
             }
-            failure_domain = (
-                attrs.get("LAYERSENTRY_FAILURE_DOMAIN")
-                or attrs.get("FAILURE_DOMAIN")
-                or attrs.get("ZONE")
-                or attrs.get("RACK")
-                or f"host:{host.id}"
-            )
+            failure_domain = attrs.get(domain_key) or f"host:{host.id}"
             result.append(
                 HostCapacity(
                     id=int(host.id),
