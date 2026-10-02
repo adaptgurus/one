@@ -724,6 +724,8 @@ class OptimizerParser:
                     failure_domain=failure_domain,
                     failure_domain_labeled=bool(explicit_failure_domain),
                     healthy=int(host.state) == 2,
+                    committed_memory=float(host.host_share.mem_usage or 0) / 1000,
+                    committed_cpu=float(host.host_share.cpu_usage or 0) / 100,
                 )
             )
         return result
