@@ -54,6 +54,7 @@ class HostCapacity:
     pci_devices: list[PCIDevice] = field(default_factory=list)
     cluster_id: int = 0
     failure_domain: str = ""
+    failure_domain_explicit: bool = False
     healthy: bool = True
 
 
@@ -162,6 +163,18 @@ class VMRequirements:
     nic_matches: dict[int, list[int]] = field(default_factory=dict)
     # Net usage.
     net_usage: float = float('nan')
+    # Workloads explicitly excluded from LayerSentry HA/DRS resilience
+    # admission (for example license-bound or non-restartable VMs) remain
+    # schedulable but do not contribute to the advertised N+K guarantee.
+    resilience_protected: bool = True
+    # PCI/GPU/SR-IOV failover cannot be inferred from CPU/RAM alone. A
+    # protected VM carrying device requirements must be explicitly qualified
+    # for redundant device recovery before it can inherit an N+K guarantee.
+    resilience_device_qualified: bool = False
+    # Shared storage is naturally portable from a scheduler perspective.
+    # Local/non-shared storage requires an explicit replication/recovery
+    # qualification before the VM may inherit an N+K guarantee.
+    resilience_storage_qualified: bool = True
 
     def find_host_matches(
         self,

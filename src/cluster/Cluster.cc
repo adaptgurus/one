@@ -197,6 +197,112 @@ int Cluster::post_update_template(std::string& error, Template *_old_tmpl)
         }
     }
 
+    // LayerSentry OneDRS resilience extensions are optional, but when present
+    // they must fail at cluster-template admission rather than crashing or
+    // silently clamping a later optimizer run.
+    static const std::vector<std::string> resilience_bool_attr = {
+        "RESILIENCE_ENABLED",
+        "FAILURE_DOMAIN_SPREAD",
+        "PAUSE_ON_DEGRADED",
+        "EXACT_RECOVERY_PROOF"
+    };
+
+    for (const auto& name : resilience_bool_attr)
+    {
+        if (!validate_field(name, std::regex("^(yes|no|)$")))
+        {
+            return -1;
+        }
+    }
+
+    const auto validate_nonnegative_integer =
+        [&](const std::string& field_name, long long min_value)
+    {
+        if (!validate_field(field_name, std::regex(R"(^(d+|)$)")))
+        {
+            return false;
+        }
+
+        const auto raw = one_util::trim(one_drs->vector_value(field_name));
+
+        if (raw.empty())
+        {
+            return true;
+        }
+
+        try
+        {
+            if (std::stoll(raw) < min_value)
+            {
+                error = "Error cluster template contains invalid " + field_name;
+                return false;
+            }
+        }
+        catch (...)
+        {
+            error = "Error cluster template contains invalid " + field_name;
+            return false;
+        }
+
+        return true;
+    };
+
+    for (const auto& name : {
+            "HOST_FAILURE_TOLERANCE",
+            "FAILURE_DOMAIN_TOLERANCE",
+            "MAX_GROUP_MIGRATIONS",
+            "CONSUMED_HOST_FAILURES"})
+    {
+        if (!validate_nonnegative_integer(name, 0))
+        {
+            return -1;
+        }
+    }
+
+    for (const auto& name : {"MIN_HEALTHY_HOSTS", "MAX_EXACT_FAILURE_SCENARIOS"})
+    {
+        if (!validate_nonnegative_integer(name, 1))
+        {
+            return -1;
+        }
+    }
+
+    for (const auto& name : {"CPU_RESERVE_PERCENT", "MEMORY_RESERVE_PERCENT"})
+    {
+        if (!validate_field(name, std::regex(R"(^(d+(.d+)?|)$)")))
+        {
+            return -1;
+        }
+
+        const auto raw = one_util::trim(one_drs->vector_value(name));
+
+        if (!raw.empty())
+        {
+            try
+            {
+                const auto value = std::stod(raw);
+
+                if (value < 0.0 || value >= 100.0)
+                {
+                    error = "Error cluster template contains invalid " + std::string(name);
+                    return -1;
+                }
+            }
+            catch (...)
+            {
+                error = "Error cluster template contains invalid " + std::string(name);
+                return -1;
+            }
+        }
+    }
+
+    if (!validate_field(
+            "FAILURE_DOMAIN_ATTRIBUTE",
+            std::regex("^([a-z0-9_]+|)$")))
+    {
+        return -1;
+    }
+
     // Check Cluster doesn't contains pinned hosts
     auto hpool = Nebula::instance().get_hpool();
     for (const auto& host_id : hosts.get_collection())

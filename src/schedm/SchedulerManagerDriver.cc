@@ -70,11 +70,31 @@ void SchedulerManagerDriver::optimize(int cluster_id) const
         return;
     }
 
+    bool resilience_enabled = false;
+
+    if (auto cluster = clpool->get_ro(cluster_id))
+    {
+        if (auto one_drs = cluster->get_template_attribute("ONE_DRS"))
+        {
+            one_drs->vector_value("RESILIENCE_ENABLED", resilience_enabled);
+        }
+    }
+
     match(sr, "Optimize: ");
 
-    if (sr.match.vms.empty())
+    if (sr.match.vms.empty() && !resilience_enabled)
     {
         return;
+    }
+
+    if (resilience_enabled)
+    {
+        // HA proof requires the complete cluster inventory, not only resources
+        // matched by at least one movable VM. REQUIREMENTS remains the native
+        // mobility/eligibility set; VM_POOL also carries unmatched/locked VMs
+        // so the Python layer can fail closed instead of certifying a subset.
+        sr.match.match_host.insert(sr.hpool.ids.begin(), sr.hpool.ids.end());
+        sr.match.vms.insert(sr.vmpool.ids.begin(), sr.vmpool.ids.end());
     }
 
     std::ostringstream oss;

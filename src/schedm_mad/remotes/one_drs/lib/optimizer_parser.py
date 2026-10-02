@@ -84,13 +84,19 @@ class OptimizerParser:
         "MEMORY_SYSTEM_DS_SCALE": 0,
         "DIFFERENT_VNETS": True,
         "RESILIENCE": {
+            "ENABLED": False,
             "HOST_FAILURE_TOLERANCE": 1,
             "FAILURE_DOMAIN_TOLERANCE": 0,
             "CPU_RESERVE_PERCENT": 0,
             "MEMORY_RESERVE_PERCENT": 0,
             "MIN_HEALTHY_HOSTS": 1,
-            "FAILURE_DOMAIN_SPREAD": True,
+            "FAILURE_DOMAIN_SPREAD": False,
             "MAX_GROUP_MIGRATIONS": 1,
+            "PAUSE_ON_DEGRADED": True,
+            "FAILURE_DOMAIN_ATTRIBUTE": "LAYERSENTRY_FAILURE_DOMAIN",
+            "EXACT_RECOVERY_PROOF": True,
+            "MAX_EXACT_FAILURE_SCENARIOS": 64,
+            "CONSUMED_HOST_FAILURES": 0,
         },
     }
 
@@ -277,6 +283,8 @@ class OptimizerParser:
         }
 
     def build_optimizer(self) -> ILPOptimizer:
+        cluster_config = {}
+
         if self.mode.upper() == "PLACE":
             criteria = self.config["MODE"]["POLICY"].lower()
             if criteria.upper() == "BALANCE":
@@ -306,10 +314,11 @@ class OptimizerParser:
                 self.config["MODE"]["DS_MIGRATION_THRESHOLD"],
             )
             smp = self.config["MODE"].get("PRIORITIZE_STORAGE_MIGRATIONS", "")
-            if smp is True or str(smp).upper() == "YES":
-                migration_priority = "storage"
-            else:
-                migration_priority = "host"
+            migration_priority = (
+                "storage"
+                if smp is True or str(smp).upper() == "YES"
+                else "host"
+            )
             self.config["PREDICTIVE"] = cluster_config.get(
                 "PREDICTIVE", self.config["PREDICTIVE"]
             )
@@ -318,35 +327,39 @@ class OptimizerParser:
                 if policy.upper() == "BALANCE"
                 else policy.lower()
             )
-            self._plan_id = self.scheduler_driver_action.cluster_pool.cluster[0].id
-        vmg, affined_hosts, anti_affined_hosts = self._parse_vm_groups()
-        vm_reqs_dict = self._parse_vm_requirements()
-        for vm_req in self.scheduler_driver_action.requirements.vm:
-            if vm_req.id in affined_hosts:
-                # Available hosts are only the affined hosts
-                new_host_ids = affined_hosts[vm_req.id]
-            elif vm_req.id in anti_affined_hosts:
-                # Remove anti-affined hosts from the available host_ids
-                current_ids = vm_reqs_dict[vm_req.id].host_ids
-                new_host_ids = current_ids - anti_affined_hosts[vm_req.id]
-            else:
-                continue
-            vm_reqs_dict[vm_req.id] = replace(
-                vm_reqs_dict[vm_req.id], host_ids=new_host_ids
+            self._plan_id = (
+                self.scheduler_driver_action.cluster_pool.cluster[0].id
             )
 
-        if allowed_migrations == -1:
-            migrations = None
-        else:
-            migrations = allowed_migrations
-        if allowed_host_migrations == -1:
-            host_migrations = None
-        else:
-            host_migrations = allowed_host_migrations
-        if allowed_storage_migrations == -1:
-            storage_migrations = None
-        else:
-            storage_migrations = allowed_storage_migrations
+        vmg, affined_hosts, anti_affined_hosts = self._parse_vm_groups()
+        vm_reqs_dict = self._parse_vm_requirements()
+
+        for vm_req in self.scheduler_driver_action.requirements.vm:
+            vm_id = int(vm_req.id)
+            if vm_id not in vm_reqs_dict:
+                continue
+            if vm_id in affined_hosts:
+                new_host_ids = set(affined_hosts[vm_id])
+            elif vm_id in anti_affined_hosts:
+                current_ids = vm_reqs_dict[vm_id].host_ids or set()
+                new_host_ids = current_ids - anti_affined_hosts[vm_id]
+            else:
+                continue
+            vm_reqs_dict[vm_id] = replace(
+                vm_reqs_dict[vm_id], host_ids=new_host_ids
+            )
+
+        migrations = None if allowed_migrations == -1 else allowed_migrations
+        host_migrations = (
+            None
+            if allowed_host_migrations == -1
+            else allowed_host_migrations
+        )
+        storage_migrations = (
+            None
+            if allowed_storage_migrations == -1
+            else allowed_storage_migrations
+        )
 
         used_local_dstores = self._used_local_dstores
         used_shared_dstores = self._used_shared_dstores
@@ -360,20 +373,43 @@ class OptimizerParser:
                 alloc = Allocation(vm_id, host_id)
             curr_placement.append(alloc)
 
-        host_capacities = self._parse_host_capacities()
         resilience_config = self.config["RESILIENCE"].copy()
         if self.mode.upper() == "OPTIMIZE":
-            cluster_config = self._parse_cluster()
-            for key in resilience_config:
-                if key in cluster_config and cluster_config[key] is not None:
-                    resilience_config[key] = cluster_config[key]
+            key_map = {
+                "RESILIENCE_ENABLED": "ENABLED",
+                "HOST_FAILURE_TOLERANCE": "HOST_FAILURE_TOLERANCE",
+                "FAILURE_DOMAIN_TOLERANCE": "FAILURE_DOMAIN_TOLERANCE",
+                "CPU_RESERVE_PERCENT": "CPU_RESERVE_PERCENT",
+                "MEMORY_RESERVE_PERCENT": "MEMORY_RESERVE_PERCENT",
+                "MIN_HEALTHY_HOSTS": "MIN_HEALTHY_HOSTS",
+                "FAILURE_DOMAIN_SPREAD": "FAILURE_DOMAIN_SPREAD",
+                "MAX_GROUP_MIGRATIONS": "MAX_GROUP_MIGRATIONS",
+                "PAUSE_ON_DEGRADED": "PAUSE_ON_DEGRADED",
+                "FAILURE_DOMAIN_ATTRIBUTE": "FAILURE_DOMAIN_ATTRIBUTE",
+                "EXACT_RECOVERY_PROOF": "EXACT_RECOVERY_PROOF",
+                "MAX_EXACT_FAILURE_SCENARIOS": "MAX_EXACT_FAILURE_SCENARIOS",
+                "CONSUMED_HOST_FAILURES": "CONSUMED_HOST_FAILURES",
+            }
+            for source_key, target_key in key_map.items():
+                if cluster_config.get(source_key) is not None:
+                    resilience_config[target_key] = cluster_config[source_key]
+        else:
+            # PLACE batches can span multiple clusters. Applying one cluster's
+            # N+K policy to a global pending batch is mathematically invalid.
+            # LayerSentry performs cluster-scoped admission before VM creation;
+            # OneDRS enforces the resilience profile during cluster OPTIMIZE.
+            resilience_config["ENABLED"] = False
+
+        def as_bool(value) -> bool:
+            return value is True or str(value).strip().upper() == "YES"
 
         resilience_policy = ResiliencePolicy(
-            host_failure_tolerance=int(
-                resilience_config["HOST_FAILURE_TOLERANCE"]
+            enabled=as_bool(resilience_config["ENABLED"]),
+            host_failure_tolerance=max(
+                0, int(resilience_config["HOST_FAILURE_TOLERANCE"])
             ),
-            failure_domain_tolerance=int(
-                resilience_config["FAILURE_DOMAIN_TOLERANCE"]
+            failure_domain_tolerance=max(
+                0, int(resilience_config["FAILURE_DOMAIN_TOLERANCE"])
             ),
             cpu_reserve_percent=float(
                 resilience_config["CPU_RESERVE_PERCENT"]
@@ -384,44 +420,123 @@ class OptimizerParser:
             min_healthy_hosts=max(
                 1, int(resilience_config["MIN_HEALTHY_HOSTS"])
             ),
-            failure_domain_spread=(
-                resilience_config["FAILURE_DOMAIN_SPREAD"] is True
-                or str(resilience_config["FAILURE_DOMAIN_SPREAD"]).upper()
-                == "YES"
+            failure_domain_spread=as_bool(
+                resilience_config["FAILURE_DOMAIN_SPREAD"]
             ),
             max_group_migrations=max(
                 0, int(resilience_config["MAX_GROUP_MIGRATIONS"])
             ),
+            pause_on_degraded=as_bool(
+                resilience_config["PAUSE_ON_DEGRADED"]
+            ),
+            failure_domain_attribute=str(
+                resilience_config["FAILURE_DOMAIN_ATTRIBUTE"]
+            ).strip().upper(),
+            exact_recovery_proof=as_bool(
+                resilience_config["EXACT_RECOVERY_PROOF"]
+            ),
+            max_exact_failure_scenarios=max(
+                1,
+                int(resilience_config["MAX_EXACT_FAILURE_SCENARIOS"]),
+            ),
         )
-        report = validate_resilience(
-            host_capacities,
-            list(vm_reqs_dict.values()),
-            resilience_policy,
+
+        host_capacities = self._parse_host_capacities(
+            resilience_policy.failure_domain_attribute
         )
-        self.log_general(
-            "INFO",
-            "Resilience admission passed: "
-            f"healthy_hosts={report.healthy_hosts} "
-            f"host_failures={report.host_failure_tolerance} "
-            f"domain_failures={report.failure_domain_tolerance}",
-        )
+        shared_dstore_capacities = self._parse_shared_dstore_capacities()
+        image_dstore_capacities = self._parse_image_dstore_capacities()
+        vnet_capacities = self._parse_vnet_capacities()
+
+        if resilience_policy.enabled:
+            self._validate_resilience_inventory(vm_reqs_dict)
+            host_by_id = {host.id: host for host in host_capacities}
+            dstore_by_id = {
+                dstore.id: dstore for dstore in shared_dstore_capacities
+            }
+            candidate_hosts: dict[int, set[int]] = {}
+
+            for vm_req in vm_reqs_dict.values():
+                matches = vm_req.find_host_matches(
+                    host_capacities, vnet_capacities, free=False
+                )
+                candidates = set(matches.hosts)
+
+                # A failover host is useful only if every storage requirement
+                # can be satisfied there. This catches local-only and
+                # cluster-inaccessible datastore paths that aggregate CPU/RAM
+                # admission would otherwise miss.
+                storage_matches = vm_req.find_storage_matches(
+                    [
+                        host_by_id[hid]
+                        for hid in candidates
+                        if hid in host_by_id
+                    ],
+                    shared_dstore_capacities,
+                    free=False,
+                )
+                for storage_match in storage_matches:
+                    viable: set[int] = set(storage_match.local_dstores)
+                    for dstore_id in storage_match.shared_dstores:
+                        dstore = dstore_by_id.get(dstore_id)
+                        if dstore is None:
+                            continue
+                        for host_id in candidates:
+                            host = host_by_id.get(host_id)
+                            if (
+                                host is not None
+                                and host.cluster_id in dstore.cluster_ids
+                            ):
+                                viable.add(host_id)
+                    candidates &= viable
+
+                candidate_hosts[vm_req.id] = candidates
+
+            report = validate_resilience(
+                host_capacities,
+                list(vm_reqs_dict.values()),
+                resilience_policy,
+                candidate_hosts=candidate_hosts,
+                vm_groups=vmg,
+                consumed_host_failures=max(
+                    0,
+                    int(resilience_config["CONSUMED_HOST_FAILURES"]),
+                ),
+                solver=self.config["SOLVER"],
+            )
+            self.log_general(
+                "INFO",
+                "Resilience admission passed: "
+                f"healthy_hosts={report.healthy_hosts} "
+                f"protected_vms={report.protected_vms} "
+                f"remaining_host_failures="
+                f"{report.remaining_host_failure_tolerance} "
+                f"domain_failures={report.failure_domain_tolerance}",
+            )
 
         return ILPOptimizer(
             current_placement=curr_placement,
             vm_requirements=list(vm_reqs_dict.values()),
             vm_groups=vmg,
             host_capacities=host_capacities,
-            dstore_capacities=self._parse_shared_dstore_capacities(),
-            image_dstore_capacities=self._parse_image_dstore_capacities(),
-            vnet_capacities=self._parse_vnet_capacities(),
+            dstore_capacities=shared_dstore_capacities,
+            image_dstore_capacities=image_dstore_capacities,
+            vnet_capacities=vnet_capacities,
             criteria=criteria,
             preemptive=False,
             allowed_migrations=migrations,
             allowed_host_migrations=host_migrations,
             allowed_storage_migrations=storage_migrations,
             migration_priority=migration_priority,
-            failure_domain_spread=resilience_policy.failure_domain_spread,
-            max_group_migrations=resilience_policy.max_group_migrations,
+            failure_domain_spread=(
+                resilience_policy.enabled
+                and resilience_policy.failure_domain_spread
+            ),
+            max_group_migrations=(
+                resilience_policy.max_group_migrations
+                if resilience_policy.enabled
+                else None
+            ),
             solver=self.config["SOLVER"],
         )
 
@@ -465,6 +580,20 @@ class OptimizerParser:
                 )
 
                 host_ids = set(vm_req.hosts.id)
+                excluded, device_marker, storage_marker = (
+                    self._resilience_vm_markers(vm)
+                )
+                resilience_protected = not excluded
+                # Device-free/shared-storage VMs are qualified by construction.
+                # Device/local-storage paths require explicit tested overrides.
+                resilience_device_qualified = (
+                    not bool(vm.template.pci) or device_marker
+                )
+                resilience_storage_qualified = (
+                    int(vm.id) not in self._used_local_dstores
+                    or storage_marker
+                )
+
                 if (
                     self.mode.upper() == "OPTIMIZE"
                     and vm.user_template is not None
@@ -494,15 +623,25 @@ class OptimizerParser:
                     share_vnets=not self.config["DIFFERENT_VNETS"],
                     nic_matches={nic.id: nic.vnets.id for nic in vm_req.nic},
                     net_usage=net_usage,
+                    resilience_protected=resilience_protected,
+                    resilience_device_qualified=resilience_device_qualified,
+                    resilience_storage_qualified=resilience_storage_qualified,
                 )
         return vm_requirements
 
     def _parse_vm_groups(self) -> list[VMGroup]:
-        # IDs of the required VMs
-        allowed_vm_ids = {vm.id for vm in self.scheduler_driver_action.requirements.vm}
-        # OpenNebla VM Groups
-        # groups = {group_id: {role_name: set(vm_ids)}}
-        groups = {}
+        """Translate native VM Group semantics for the current scheduler mode.
+
+        PLACE anchors pending members against already-running members.
+        OPTIMIZE keeps all requested group members as joint decision variables;
+        it must not convert their current hosts into permanent exclusions.
+        """
+
+        allowed_vm_ids = {
+            int(vm.id) for vm in self.scheduler_driver_action.requirements.vm
+        }
+
+        groups: dict[int, dict[str, set[int]]] = {}
         for vm in self.scheduler_driver_action.vm_pool.vm:
             if not vm.template.vmgroup:
                 continue
@@ -510,24 +649,29 @@ class OptimizerParser:
                 child.qname.upper(): child.text
                 for child in vm.template.vmgroup.children
             }
-            gid, role = int(attrs.get("VMGROUP_ID")), attrs.get("ROLE")
-            groups.setdefault(gid, {}).setdefault(role, set()).add(vm.id)
-        # Auxiliar dict for creating role to role affinity
-        aux_vmg = {}
-        # vmg = list[VMGroup]
-        vmg, idx = [], 0
-        # Dicts for Host-VM Affinity
-        # affined_hosts = {vm_id: set(host_ids)}
-        # anti_affined_hosts = {vm_id: set(host_ids)}
-        affined_hosts, anti_affined_hosts = {}, {}
-        # Create VM Groups for VM-VM and Host-VM Affinity
+            gid = int(attrs.get("VMGROUP_ID"))
+            role = attrs.get("ROLE")
+            groups.setdefault(gid, {}).setdefault(role, set()).add(int(vm.id))
+
+        # All explicitly-declared VM-to-VM relationships. Roles without POLICY
+        # are kept only as references for role-to-role rules; they are not
+        # silently converted into anti-affinity.
+        relations: list[VMGroup] = []
+        role_refs: dict[tuple[int, str], VMGroup] = {}
+        affined_hosts: dict[int, set[int]] = {}
+        anti_affined_hosts: dict[int, set[int]] = {}
+        idx = 0
+
         for group in self.scheduler_driver_action.vm_group_pool.vm_group:
             gid = int(group.id)
             if gid not in groups:
                 continue
             for role_obj in group.roles.role:
-                if role_obj.name not in groups[gid]:
+                role_name = role_obj.name
+                if role_name not in groups[gid]:
                     continue
+                members = set(groups[gid][role_name])
+
                 if (
                     role_obj.host_affined is not None
                     or role_obj.host_anti_affined is not None
@@ -537,131 +681,196 @@ class OptimizerParser:
                         if role_obj.host_affined is not None
                         else anti_affined_hosts
                     )
-                    host_list = (
-                        role_obj.host_affined or role_obj.host_anti_affined
-                    ).split(",")
-                    for vm_id in groups[gid][role_obj.name]:
-                        # Affined or anti-affined host policies
-                        target_hosts.setdefault(vm_id, set()).update(
-                            map(int, host_list)
-                        )
-                if role_obj.policy:
-                    vm_group = VMGroup(
+                    host_list = role_obj.host_affined or role_obj.host_anti_affined
+                    parsed_hosts = {
+                        int(value.strip())
+                        for value in str(host_list).split(",")
+                        if value.strip()
+                    }
+                    for vm_id in members:
+                        target_hosts.setdefault(vm_id, set()).update(parsed_hosts)
+
+                policy = str(role_obj.policy or "").strip().upper()
+                if policy in {"AFFINED", "ANTI_AFFINED"}:
+                    relation = VMGroup(
                         id=idx,
-                        affined=role_obj.policy.upper() == "AFFINED",
-                        vm_ids=groups[gid][role_obj.name],
+                        affined=policy == "AFFINED",
+                        vm_ids=members,
                     )
-                    vmg.append(vm_group)
-                    aux_vmg[(gid, role_obj.name)] = vm_group
+                    relations.append(relation)
+                    role_refs[(gid, role_name)] = relation
                     idx += 1
                 else:
-                    # Only for Role-Role affinity or VM-Host affinity
-                    vm_group = VMGroup(
-                        id=idx, affined=False, vm_ids=groups[gid][role_obj.name]
+                    # Reference only. The affinity bit has no semantic meaning
+                    # until an explicit role-to-role relation is created.
+                    role_refs[(gid, role_name)] = VMGroup(
+                        id=-1, affined=False, vm_ids=members
                     )
-                    aux_vmg[(gid, role_obj.name)] = vm_group
-                    idx += 1
-        # Create VM Groups for Role-Role affinity
+
+        def role_names(value) -> list[str]:
+            return [
+                item.strip()
+                for item in str(value or "").split(",")
+                if item.strip()
+            ]
+
+        # Role-to-role rules are explicit cross-role relationships.
         for group in self.scheduler_driver_action.vm_group_pool.vm_group:
             gid = int(group.id)
-            if gid not in groups:
+            if gid not in groups or not group.template:
                 continue
-            if not group.template:
-                continue
-            template_attr = [
-                {child.qname.upper(): child.text} for child in group.template.children
-            ]
-            for attr in template_attr:
-                # Affined role to role
-                if "AFFINED" in attr:
-                    affined_role = VMGroup(id=idx, affined=True, vm_ids=set())
-                    for role in attr["AFFINED"].split(", "):
-                        if (gid, role) in aux_vmg:
-                            affined_role.vm_ids.update(aux_vmg[(gid, role)].vm_ids)
-                    # Add affined_role only if there are req vm with affined roles
-                    if affined_role.vm_ids:
-                        vmg.append(affined_role)
-                        idx += 1
-                # Anti affined role to role
-                elif "ANTI_AFFINED" in attr:
-                    anti_affined_role = VMGroup(id=idx, affined=False, vm_ids=set())
-                    for role in attr["ANTI_AFFINED"].split(", "):
-                        if (gid, role) in aux_vmg:
-                            # Join anti-affined VMGroups
-                            if not aux_vmg[(gid, role)].affined:
-                                anti_affined_role.vm_ids.update(
-                                    aux_vmg[(gid, role)].vm_ids
-                                )
-                            # Create special anti-affined rules for affined roles
-                            else:
-                                for _role in attr["ANTI_AFFINED"].split(", "):
-                                    if _role == role:
-                                        continue
-                                    for vm_id in aux_vmg[(gid, _role)].vm_ids:
-                                        idx += 1
-                                        extra_vmg = VMGroup(
-                                            idx,
-                                            False,
-                                            {
-                                                sorted(aux_vmg[(gid, role)].vm_ids)[0],
-                                                vm_id,
-                                            },
+
+            for child in group.template.children:
+                name = child.qname.upper()
+                names = role_names(child.text)
+                refs = [
+                    role_refs[(gid, role)]
+                    for role in names
+                    if (gid, role) in role_refs
+                ]
+                if len(refs) < 2:
+                    continue
+
+                if name == "AFFINED":
+                    members: set[int] = set()
+                    for ref in refs:
+                        members.update(ref.vm_ids)
+                    relations.append(
+                        VMGroup(id=idx, affined=True, vm_ids=members)
+                    )
+                    idx += 1
+
+                elif name == "ANTI_AFFINED":
+                    # Cross-role anti-affinity must not accidentally impose
+                    # anti-affinity *within* a role that is itself AFFINED.
+                    for left_pos in range(len(refs)):
+                        for right_pos in range(left_pos + 1, len(refs)):
+                            left = refs[left_pos].vm_ids
+                            right = refs[right_pos].vm_ids
+                            for left_vm in left:
+                                for right_vm in right:
+                                    relations.append(
+                                        VMGroup(
+                                            id=idx,
+                                            affined=False,
+                                            vm_ids={left_vm, right_vm},
                                         )
-                                        vmg.append(extra_vmg)
-                    # Add anti_affined_role only if there are req vm with anti_affined roles
-                    if anti_affined_role.vm_ids:
-                        vmg.append(anti_affined_role)
-                        idx += 1
-        # List of VMGroups that conatin only required VMs
-        result, idx = [], 0
+                                    )
+                                    idx += 1
+
         current_placement = self._curr_alloc
-        for vm_group in vmg:
-            target_hosts = affined_hosts if vm_group.affined else anti_affined_hosts
-            new_group = VMGroup(idx, vm_group.affined, set())
-            for vm_id in vm_group.vm_ids:
-                if vm_id in allowed_vm_ids:
-                    for aux_vm_id in vm_group.vm_ids:
+        result: list[VMGroup] = []
+
+        if self.mode.upper() == "OPTIMIZE":
+            # Requested members are movable together. Group members omitted
+            # from REQUIREMENTS (for example locked/protected VMs) remain
+            # fixed anchors and must still constrain the movable members.
+            for relation in relations:
+                members = relation.vm_ids & allowed_vm_ids
+                fixed_members = relation.vm_ids - allowed_vm_ids
+                fixed_hosts = {
+                    current_placement[vm_id]
+                    for vm_id in fixed_members
+                    if vm_id in current_placement
+                }
+
+                if relation.affined and len(fixed_hosts) > 1:
+                    raise ValueError(
+                        "VM Group affinity drift: fixed members of relation "
+                        f"{relation.id} are already on different hosts"
+                    )
+
+                if fixed_hosts:
+                    target_hosts = (
+                        affined_hosts
+                        if relation.affined
+                        else anti_affined_hosts
+                    )
+                    for vm_id in members:
+                        target_hosts.setdefault(vm_id, set()).update(
+                            fixed_hosts
+                        )
+
+                if len(members) > 1:
+                    result.append(
+                        VMGroup(
+                            id=len(result),
+                            affined=relation.affined,
+                            vm_ids=set(members),
+                        )
+                    )
+        else:
+            # Initial placement: running group members are fixed external
+            # anchors while pending members are the actual decision variables.
+            for relation in relations:
+                target_hosts = (
+                    affined_hosts if relation.affined else anti_affined_hosts
+                )
+                pending_members = relation.vm_ids & allowed_vm_ids
+
+                for vm_id in pending_members:
+                    for aux_vm_id in relation.vm_ids:
+                        if aux_vm_id == vm_id:
+                            continue
                         if aux_vm_id in current_placement:
-                            # Affined or anti-affined host by the placed VMs
                             target_hosts.setdefault(vm_id, set()).add(
                                 current_placement[aux_vm_id]
                             )
-                    # Return only required VMs
-                    # NOTE: If the role has at least 1 running VM, we won't
-                    # create a VMGroup for the requested VMs
-                    if not (vm_group.vm_ids & current_placement.keys()):
-                        new_group.vm_ids.add(vm_id)
-            if new_group.vm_ids:
-                result.append(new_group)
-                idx += 1
-        # Merge affined VMGroups
-        for i in range(len(result)):
-            for j in range(i + 1, len(result)):
-                if (
-                    result[i].vm_ids.intersection(result[j].vm_ids)
-                    and result[i].affined
-                    and result[j].affined
-                ):
-                    result[i].vm_ids.update(result[j].vm_ids)
-                    result.pop(j)
-        # Return a unique list that contain the affined and antiaffined roles
-        # and the dicts with the affined and anti_affined hosts
+
+                if not (relation.vm_ids & current_placement.keys()):
+                    if len(pending_members) > 1:
+                        result.append(
+                            VMGroup(
+                                id=len(result),
+                                affined=relation.affined,
+                                vm_ids=set(pending_members),
+                            )
+                        )
+
+        # Merge overlapping AFFINED relations transitively without mutating a
+        # list under fixed-range iteration. Anti-affinity relations remain
+        # separate constraints.
+        changed = True
+        while changed:
+            changed = False
+            for i in range(len(result)):
+                if not result[i].affined:
+                    continue
+                for j in range(i + 1, len(result)):
+                    if (
+                        result[j].affined
+                        and result[i].vm_ids & result[j].vm_ids
+                    ):
+                        result[i].vm_ids.update(result[j].vm_ids)
+                        result.pop(j)
+                        changed = True
+                        break
+                if changed:
+                    break
+
+        result = [
+            VMGroup(
+                id=idx,
+                affined=relation.affined,
+                vm_ids=set(relation.vm_ids),
+            )
+            for idx, relation in enumerate(result)
+        ]
+
         return result, affined_hosts, anti_affined_hosts
 
-    def _parse_host_capacities(self) -> list[HostCapacity]:
+    def _parse_host_capacities(
+        self, failure_domain_attribute: str = "LAYERSENTRY_FAILURE_DOMAIN"
+    ) -> list[HostCapacity]:
         result = []
+        domain_key = str(failure_domain_attribute or "").strip().upper()
         for host in self.scheduler_driver_action.host_pool.host:
             attrs = {
                 child.qname.upper(): str(child.text or "").strip()
                 for child in (host.template.children if host.template else [])
             }
-            failure_domain = (
-                attrs.get("LAYERSENTRY_FAILURE_DOMAIN")
-                or attrs.get("FAILURE_DOMAIN")
-                or attrs.get("ZONE")
-                or attrs.get("RACK")
-                or f"host:{host.id}"
-            )
+            explicit_failure_domain = bool(domain_key and attrs.get(domain_key))
+            failure_domain = attrs.get(domain_key) or f"host:{host.id}"
             result.append(
                 HostCapacity(
                     id=int(host.id),
@@ -688,6 +897,7 @@ class OptimizerParser:
                     ),
                     cluster_id=int(host.cluster_id),
                     failure_domain=failure_domain,
+                    failure_domain_explicit=explicit_failure_domain,
                     healthy=int(host.state) == 2,
                 )
             )
@@ -785,12 +995,21 @@ class OptimizerParser:
                 "FAILURE_DOMAIN_TOLERANCE",
                 "MIN_HEALTHY_HOSTS",
                 "MAX_GROUP_MIGRATIONS",
+                "MAX_EXACT_FAILURE_SCENARIOS",
+                "CONSUMED_HOST_FAILURES",
             }:
                 result[name] = max(0, int(child.text))
             elif name in {"CPU_RESERVE_PERCENT", "MEMORY_RESERVE_PERCENT"}:
                 result[name] = max(0.0, min(99.0, float(child.text)))
-            elif name == "FAILURE_DOMAIN_SPREAD":
+            elif name in {
+                "RESILIENCE_ENABLED",
+                "FAILURE_DOMAIN_SPREAD",
+                "PAUSE_ON_DEGRADED",
+                "EXACT_RECOVERY_PROOF",
+            }:
                 result[name] = str(child.text).upper() == "YES"
+            elif name == "FAILURE_DOMAIN_ATTRIBUTE":
+                result[name] = str(child.text or "").strip().upper()
         policy = next(
             (
                 child.text
@@ -809,11 +1028,11 @@ class OptimizerParser:
         )
         weights = self._get_weights(one_drs)
 
-        result |= {
-            "POLICY": policy,
-            "WEIGHTS": weights,
-            "PREDICTIVE": predictive,
-        }
+        result["WEIGHTS"] = weights
+        if policy is not None:
+            result["POLICY"] = policy
+        if predictive is not None:
+            result["PREDICTIVE"] = predictive
         return result
 
     @staticmethod
@@ -843,6 +1062,63 @@ class OptimizerParser:
             )
             for pci in pci_list
         ]
+
+    @staticmethod
+    def _resilience_vm_markers(vm) -> tuple[bool, bool, bool]:
+        """Return (excluded, device_ha_qualified, storage_ha_qualified)."""
+        excluded = False
+        device_qualified = False
+        storage_qualified = False
+
+        user_template = getattr(vm, "user_template", None)
+        for item in getattr(user_template, "any_element", []) or []:
+            name = item.qname.upper()
+            value = str(item.text or "").strip().upper()
+            if (
+                name == "LAYERSENTRY_RESILIENCE"
+                and value in {"EXCLUDED", "NO", "DISABLED"}
+            ) or (
+                name == "LAYERSENTRY_HA_PROTECTED"
+                and value == "NO"
+            ):
+                excluded = True
+            elif (
+                name == "LAYERSENTRY_DEVICE_HA_QUALIFIED"
+                and value == "YES"
+            ):
+                device_qualified = True
+            elif (
+                name == "LAYERSENTRY_STORAGE_HA_QUALIFIED"
+                and value == "YES"
+            ):
+                storage_qualified = True
+
+        return excluded, device_qualified, storage_qualified
+
+    def _validate_resilience_inventory(
+        self, vm_requirements: dict[int, VMRequirements]
+    ) -> None:
+        """Fail closed if an active protected VM lacks scheduler requirements."""
+        missing: list[int] = []
+        for raw_vm in self.scheduler_driver_action.vm_pool.vm:
+            vm_id = int(raw_vm.id)
+            if vm_id in vm_requirements:
+                continue
+
+            # Only active/running and pending workloads consume HA reserve.
+            if int(raw_vm.state) not in {1, 3}:
+                continue
+
+            excluded, _, _ = self._resilience_vm_markers(raw_vm)
+            if not excluded:
+                missing.append(vm_id)
+
+        if missing:
+            raise ValueError(
+                "resilience inventory incomplete: active protected VM(s) "
+                f"{sorted(missing)} are present in VM_POOL but absent from "
+                "REQUIREMENTS; refusing partial-cluster HA certification"
+            )
 
     @staticmethod
     def _map_vm_state(state: int, lcm_state: int) -> VMState:
