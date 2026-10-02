@@ -41,6 +41,7 @@ from lib.mapper.model import (
     VNetCapacity,
 )
 from lib.models.scheduler_driver_action import SchedulerDriverAction
+from lib.resilience import ResiliencePolicy, validate_resilience
 
 
 class OptimizerParser:
@@ -82,6 +83,15 @@ class OptimizerParser:
         "PREDICTIVE": 0,
         "MEMORY_SYSTEM_DS_SCALE": 0,
         "DIFFERENT_VNETS": True,
+        "RESILIENCE": {
+            "HOST_FAILURE_TOLERANCE": 1,
+            "FAILURE_DOMAIN_TOLERANCE": 0,
+            "CPU_RESERVE_PERCENT": 0,
+            "MEMORY_RESERVE_PERCENT": 0,
+            "MIN_HEALTHY_HOSTS": 1,
+            "FAILURE_DOMAIN_SPREAD": True,
+            "MAX_GROUP_MIGRATIONS": 1,
+        },
     }
 
     __slots__ = (
@@ -256,6 +266,9 @@ class OptimizerParser:
         sched_config["PREDICTIVE"] = config_data.get(
             "PREDICTIVE", cls.DEFAULT_CONFIG["PREDICTIVE"]
         )
+        resilience = cls.DEFAULT_CONFIG["RESILIENCE"].copy()
+        resilience.update(config_data.get("RESILIENCE", {}) or {})
+        sched_config["RESILIENCE"] = resilience
 
         return {
             "MODE": mode_config,
@@ -347,11 +360,57 @@ class OptimizerParser:
                 alloc = Allocation(vm_id, host_id)
             curr_placement.append(alloc)
 
+        host_capacities = self._parse_host_capacities()
+        resilience_config = self.config["RESILIENCE"].copy()
+        if self.mode.upper() == "OPTIMIZE":
+            cluster_config = self._parse_cluster()
+            for key in resilience_config:
+                if key in cluster_config and cluster_config[key] is not None:
+                    resilience_config[key] = cluster_config[key]
+
+        resilience_policy = ResiliencePolicy(
+            host_failure_tolerance=int(
+                resilience_config["HOST_FAILURE_TOLERANCE"]
+            ),
+            failure_domain_tolerance=int(
+                resilience_config["FAILURE_DOMAIN_TOLERANCE"]
+            ),
+            cpu_reserve_percent=float(
+                resilience_config["CPU_RESERVE_PERCENT"]
+            ),
+            memory_reserve_percent=float(
+                resilience_config["MEMORY_RESERVE_PERCENT"]
+            ),
+            min_healthy_hosts=max(
+                1, int(resilience_config["MIN_HEALTHY_HOSTS"])
+            ),
+            failure_domain_spread=(
+                resilience_config["FAILURE_DOMAIN_SPREAD"] is True
+                or str(resilience_config["FAILURE_DOMAIN_SPREAD"]).upper()
+                == "YES"
+            ),
+            max_group_migrations=max(
+                0, int(resilience_config["MAX_GROUP_MIGRATIONS"])
+            ),
+        )
+        report = validate_resilience(
+            host_capacities,
+            list(vm_reqs_dict.values()),
+            resilience_policy,
+        )
+        self.log_general(
+            "INFO",
+            "Resilience admission passed: "
+            f"healthy_hosts={report.healthy_hosts} "
+            f"host_failures={report.host_failure_tolerance} "
+            f"domain_failures={report.failure_domain_tolerance}",
+        )
+
         return ILPOptimizer(
             current_placement=curr_placement,
             vm_requirements=list(vm_reqs_dict.values()),
             vm_groups=vmg,
-            host_capacities=self._parse_host_capacities(),
+            host_capacities=host_capacities,
             dstore_capacities=self._parse_shared_dstore_capacities(),
             image_dstore_capacities=self._parse_image_dstore_capacities(),
             vnet_capacities=self._parse_vnet_capacities(),
@@ -361,6 +420,8 @@ class OptimizerParser:
             allowed_host_migrations=host_migrations,
             allowed_storage_migrations=storage_migrations,
             migration_priority=migration_priority,
+            failure_domain_spread=resilience_policy.failure_domain_spread,
+            max_group_migrations=resilience_policy.max_group_migrations,
             solver=self.config["SOLVER"],
         )
 
@@ -588,33 +649,49 @@ class OptimizerParser:
         return result, affined_hosts, anti_affined_hosts
 
     def _parse_host_capacities(self) -> list[HostCapacity]:
-        return [
-            HostCapacity(
-                id=int(host.id),
-                memory=Capacity(
-                    total=host.host_share.max_mem / 1000,
-                    usage=self._apply_predictive_adjustment(
-                        float(host.monitoring.capacity.used_memory or 0),
-                        float(host.monitoring.capacity.used_memory_forecast or 0),
-                    )
-                    / 1000,
-                ),
-                cpu=Capacity(
-                    total=host.host_share.max_cpu / 100,
-                    usage=self._apply_predictive_adjustment(
-                        float(host.host_share.cpu_usage or 0),
-                        float(host.monitoring.capacity.used_cpu_forecast or 0),
-                    )
-                    / 100,
-                ),
-                dstores=self._parse_local_dstore_capacities(host),
-                # disk_io=Capacity(total=self._build_disk_io_capacity(host), usage=0.0),
-                net=Capacity(total=self._build_net_capacity(host), usage=0.0),
-                pci_devices=self._build_pci_devices(host.host_share.pci_devices.pci),
-                cluster_id=int(host.cluster_id),
+        result = []
+        for host in self.scheduler_driver_action.host_pool.host:
+            attrs = {
+                child.qname.upper(): str(child.text or "").strip()
+                for child in (host.template.children if host.template else [])
+            }
+            failure_domain = (
+                attrs.get("LAYERSENTRY_FAILURE_DOMAIN")
+                or attrs.get("FAILURE_DOMAIN")
+                or attrs.get("ZONE")
+                or attrs.get("RACK")
+                or f"host:{host.id}"
             )
-            for host in self.scheduler_driver_action.host_pool.host
-        ]
+            result.append(
+                HostCapacity(
+                    id=int(host.id),
+                    memory=Capacity(
+                        total=host.host_share.max_mem / 1000,
+                        usage=self._apply_predictive_adjustment(
+                            float(host.monitoring.capacity.used_memory or 0),
+                            float(host.monitoring.capacity.used_memory_forecast or 0),
+                        )
+                        / 1000,
+                    ),
+                    cpu=Capacity(
+                        total=host.host_share.max_cpu / 100,
+                        usage=self._apply_predictive_adjustment(
+                            float(host.host_share.cpu_usage or 0),
+                            float(host.monitoring.capacity.used_cpu_forecast or 0),
+                        )
+                        / 100,
+                    ),
+                    dstores=self._parse_local_dstore_capacities(host),
+                    net=Capacity(total=self._build_net_capacity(host), usage=0.0),
+                    pci_devices=self._build_pci_devices(
+                        host.host_share.pci_devices.pci
+                    ),
+                    cluster_id=int(host.cluster_id),
+                    failure_domain=failure_domain,
+                    healthy=int(host.state) == 2,
+                )
+            )
+        return result
 
     def _parse_local_dstore_capacities(self, host) -> dict[int, Capacity]:
         # Returns the capacities of the host system local datastores.
@@ -703,6 +780,17 @@ class OptimizerParser:
                 result["HOST_MIGRATION_THRESHOLD"] = max(-1, int(child.text))
             elif name == "DS_MIGRATION_THRESHOLD":
                 result["DS_MIGRATION_THRESHOLD"] = max(-1, int(child.text))
+            elif name in {
+                "HOST_FAILURE_TOLERANCE",
+                "FAILURE_DOMAIN_TOLERANCE",
+                "MIN_HEALTHY_HOSTS",
+                "MAX_GROUP_MIGRATIONS",
+            }:
+                result[name] = max(0, int(child.text))
+            elif name in {"CPU_RESERVE_PERCENT", "MEMORY_RESERVE_PERCENT"}:
+                result[name] = max(0.0, min(99.0, float(child.text)))
+            elif name == "FAILURE_DOMAIN_SPREAD":
+                result[name] = str(child.text).upper() == "YES"
         policy = next(
             (
                 child.text
