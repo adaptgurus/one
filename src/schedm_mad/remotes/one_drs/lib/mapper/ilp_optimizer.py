@@ -90,6 +90,8 @@ class ILPOptimizer(Mapper):
         "_w_migr",
         "_ws_migr",
         "_opt_placement",
+        "_failure_domain_spread",
+        "_max_group_migrations",
     )
 
     if TYPE_CHECKING:
@@ -140,6 +142,8 @@ class ILPOptimizer(Mapper):
         _w_migr: float
         _ws_migr: float
         _opt_placement: dict[int, Optional[Allocation]]
+        _failure_domain_spread: bool
+        _max_group_migrations: Optional[int]
 
     def __init__(
         self,
@@ -159,6 +163,8 @@ class ILPOptimizer(Mapper):
         migration_priority: Optional[Literal["host", "storage"]] = None,
         balance_constraints: Optional[Mapping[str, float]] = None,
         preemptive: bool = False,
+        failure_domain_spread: bool = False,
+        max_group_migrations: Optional[int] = None,
         **kwargs
     ) -> None:
         # Capturing the inputs.
@@ -214,6 +220,8 @@ class ILPOptimizer(Mapper):
         self._affined_vms = affined_vms
         self._affined_vm_groups = affined_vm_groups
         self._anti_affined_vm_groups = anti_affined_vm_groups
+        self._failure_domain_spread = bool(failure_domain_spread)
+        self._max_group_migrations = max_group_migrations
 
         # Whether migrations are allowed.
         # TODO: Add `migrations` as a parameter.
@@ -732,6 +740,33 @@ class ILPOptimizer(Mapper):
                         f"anti_affined_on_host_{host_id}"
                     )
 
+        # When failure-domain spreading is enabled, anti-affined VMs are
+        # also kept apart across the declared host failure domains (rack/zone).
+        # This extends native host anti-affinity without creating a second
+        # scheduler or changing affinity semantics when hosts are unlabeled.
+        if self._failure_domain_spread:
+            domain_hosts: ddict[str, set[int]] = ddict(set)
+            for host_id, host_cap in all_host_caps.items():
+                domain = host_cap.failure_domain or f"host:{host_id}"
+                domain_hosts[domain].add(host_id)
+
+            for vmg_id, vmg in self._anti_affined_vm_groups.items():
+                for domain, candidate_hosts in domain_hosts.items():
+                    terms = []
+                    for vm_id in vmg.vm_ids:
+                        for host_id in candidate_hosts:
+                            var = x_next.get((vm_id, host_id))
+                            if var is not None:
+                                terms.append(var)
+                    if len(terms) > 1:
+                        safe_domain = "".join(
+                            ch if ch.isalnum() else "_" for ch in domain
+                        )
+                        model += (
+                            sum_(terms) <= 1,
+                            f"vm_group_{vmg_id}_failure_domain_{safe_domain}_spread"
+                        )
+
         # Grouping `z`-variables.
         # TODO: Consider using `itertools.groupby`.
         z_req: dict[tuple[int, int], LinExpr] = {}
@@ -1020,6 +1055,29 @@ class ILPOptimizer(Mapper):
                 sum_n_migr + sum_ns_migr <= self._nt_migr_ub,
                 f"max_number_of_all_migrations_{self._nt_migr_ub}_constraint"
             )
+
+        # Limit simultaneous disruption inside each VM group. This mirrors
+        # production disruption-budget practice: a plan must not migrate many
+        # replicas/quorum members of the same group at once.
+        if self._max_group_migrations is not None:
+            all_groups = {
+                **self._affined_vm_groups,
+                **{
+                    -1 - gid: group
+                    for gid, group in self._anti_affined_vm_groups.items()
+                },
+            }
+            for group_id, group in all_groups.items():
+                migrations = [
+                    n_migr[vm_id]
+                    for vm_id in group.vm_ids
+                    if vm_id in n_migr
+                ]
+                if migrations:
+                    model += (
+                        sum_(migrations) <= self._max_group_migrations,
+                        f"vm_group_{group_id}_migration_disruption_budget"
+                    )
 
         # A VM cannot change both host and datastore during one
         # optimization process.
