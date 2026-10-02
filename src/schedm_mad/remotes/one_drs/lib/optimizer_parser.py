@@ -42,7 +42,11 @@ from lib.mapper.model import (
     VNetCapacity,
 )
 from lib.models.scheduler_driver_action import SchedulerDriverAction
-from lib.resilience import ResiliencePolicy, validate_resilience
+from lib.resilience import (
+    ResiliencePolicy,
+    migration_cooldown_holds,
+    validate_resilience,
+)
 
 
 class OptimizerParser:
@@ -382,17 +386,6 @@ class OptimizerParser:
             now = int(time.time())
             for vm_id, vm_req in tuple(vm_reqs_dict.items()):
                 current_host = self._curr_alloc.get(vm_id)
-                if current_host not in healthy_ids:
-                    # Failures, maintenance holds and warm-up exclusions must
-                    # never be blocked by anti-ping-pong cooldown.
-                    continue
-                if (
-                    vm_req.host_ids is not None
-                    and current_host not in vm_req.host_ids
-                ):
-                    # The current placement violates a hard eligibility rule;
-                    # reconciliation is more important than cooldown.
-                    continue
                 vm_obj = vm_pool.get(vm_id)
                 history = (
                     vm_obj.history_records.history
@@ -403,7 +396,14 @@ class OptimizerParser:
                     continue
                 latest = max(history, key=lambda item: int(item.seq or 0))
                 started = int(latest.stime or 0)
-                if started <= 0 or now - started >= migration_cooldown_seconds:
+                if not migration_cooldown_holds(
+                    current_host=current_host,
+                    eligible_host_ids=vm_req.host_ids,
+                    healthy_host_ids=healthy_ids,
+                    last_placement_time=started,
+                    cooldown_seconds=migration_cooldown_seconds,
+                    now=now,
+                ):
                     continue
                 vm_reqs_dict[vm_id] = replace(
                     vm_req, host_ids={current_host}
