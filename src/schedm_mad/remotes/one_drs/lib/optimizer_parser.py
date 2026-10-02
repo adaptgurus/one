@@ -96,6 +96,7 @@ class OptimizerParser:
             "FAILURE_DOMAIN_ATTRIBUTE": "LAYERSENTRY_FAILURE_DOMAIN",
             "EXACT_RECOVERY_PROOF": True,
             "MAX_EXACT_FAILURE_SCENARIOS": 64,
+            "CONSUMED_HOST_FAILURES": 0,
         },
     }
 
@@ -387,6 +388,7 @@ class OptimizerParser:
                 "FAILURE_DOMAIN_ATTRIBUTE": "FAILURE_DOMAIN_ATTRIBUTE",
                 "EXACT_RECOVERY_PROOF": "EXACT_RECOVERY_PROOF",
                 "MAX_EXACT_FAILURE_SCENARIOS": "MAX_EXACT_FAILURE_SCENARIOS",
+                "CONSUMED_HOST_FAILURES": "CONSUMED_HOST_FAILURES",
             }
             for source_key, target_key in key_map.items():
                 if cluster_config.get(source_key) is not None:
@@ -489,19 +491,16 @@ class OptimizerParser:
 
                 candidate_hosts[vm_req.id] = candidates
 
-            cluster_host_count = None
-            if self.mode.upper() == "OPTIMIZE":
-                clusters = self.scheduler_driver_action.cluster_pool.cluster
-                if clusters:
-                    cluster_host_count = len(clusters[0].hosts.id)
-
             report = validate_resilience(
                 host_capacities,
                 list(vm_reqs_dict.values()),
                 resilience_policy,
                 candidate_hosts=candidate_hosts,
                 vm_groups=vmg,
-                cluster_host_count=cluster_host_count,
+                consumed_host_failures=max(
+                    0,
+                    int(resilience_config["CONSUMED_HOST_FAILURES"]),
+                ),
                 solver=self.config["SOLVER"],
             )
             self.log_general(
@@ -1014,6 +1013,7 @@ class OptimizerParser:
                 "MIN_HEALTHY_HOSTS",
                 "MAX_GROUP_MIGRATIONS",
                 "MAX_EXACT_FAILURE_SCENARIOS",
+                "CONSUMED_HOST_FAILURES",
             }:
                 result[name] = max(0, int(child.text))
             elif name in {"CPU_RESERVE_PERCENT", "MEMORY_RESERVE_PERCENT"}:
