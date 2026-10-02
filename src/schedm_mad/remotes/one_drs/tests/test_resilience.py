@@ -38,6 +38,43 @@ def vm(vm_id, cpu, memory):
 
 
 class ResilienceAdmissionTests(unittest.TestCase):
+    def test_committed_capacity_not_real_usage_drives_ha_admission(self):
+        hosts = [
+            HostCapacity(
+                id=1,
+                cpu=Capacity(total=10, usage=1),
+                memory=Capacity(total=100, usage=10),
+                failure_domain="rack-a",
+                healthy=True,
+                committed_memory=90,
+                committed_cpu=8,
+            ),
+            HostCapacity(
+                id=2,
+                cpu=Capacity(total=10, usage=1),
+                memory=Capacity(total=100, usage=10),
+                failure_domain="rack-b",
+                healthy=True,
+                committed_memory=90,
+                committed_cpu=8,
+            ),
+            HostCapacity(
+                id=3,
+                cpu=Capacity(total=10, usage=1),
+                memory=Capacity(total=100, usage=10),
+                failure_domain="rack-c",
+                healthy=True,
+                committed_memory=0,
+                committed_cpu=0,
+            ),
+        ]
+        with self.assertRaisesRegex(ValueError, "memory demand"):
+            validate_resilience(
+                hosts,
+                [],
+                ResiliencePolicy(enabled=True, host_failure_tolerance=1),
+            )
+
     def test_local_storage_recovery_reachability_is_enforced(self):
         hosts = [
             host(1, 16, 64, "rack-a"),
