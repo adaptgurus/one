@@ -1,0 +1,29 @@
+name: OneDRS Resilience Verification
+
+on:
+  pull_request:
+    paths:
+      - "src/schedm_mad/remotes/one_drs/**"
+      - ".github/workflows/onedrs-resilience.yml"
+  push:
+    branches: [master]
+    paths:
+      - "src/schedm_mad/remotes/one_drs/**"
+      - ".github/workflows/onedrs-resilience.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  resilience:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Syntax check
+        run: |
+          python -m py_compile             src/schedm_mad/remotes/one_drs/lib/resilience.py             src/schedm_mad/remotes/one_drs/lib/mapper/model.py             src/schedm_mad/remotes/one_drs/lib/mapper/ilp_optimizer.py             src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py             src/schedm_mad/remotes/one_drs/tests/test_resilience.py
+      - name: Multi-failure unit tests
+        run: python -m unittest src/schedm_mad/remotes/one_drs/tests/test_resilience.py
