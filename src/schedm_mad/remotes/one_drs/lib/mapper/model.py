@@ -54,6 +54,7 @@ class HostCapacity:
     pci_devices: list[PCIDevice] = field(default_factory=list)
     cluster_id: int = 0
     failure_domain: str = ""
+    failure_domain_explicit: bool = False
     healthy: bool = True
 
 
