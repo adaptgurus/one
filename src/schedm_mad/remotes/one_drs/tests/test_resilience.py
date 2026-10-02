@@ -9,6 +9,7 @@ from lib.mapper.ilp_optimizer import ILPOptimizer
 from lib.mapper.model import (
     Allocation,
     Capacity,
+    DStoreRequirement,
     HostCapacity,
     VMGroup,
     VMRequirements,
@@ -37,6 +38,65 @@ def vm(vm_id, cpu, memory):
 
 
 class ResilienceAdmissionTests(unittest.TestCase):
+    def test_local_storage_recovery_reachability_is_enforced(self):
+        hosts = [
+            host(1, 16, 64, "rack-a"),
+            host(2, 16, 64, "rack-b"),
+            host(3, 16, 64, "rack-c"),
+        ]
+        local_only = VMRequirements(
+            id=41,
+            state=VMState.RUNNING,
+            cpu_ratio=2,
+            memory=8,
+            storage={
+                0: DStoreRequirement(
+                    id=0,
+                    vm_id=41,
+                    size=10,
+                    local_dstore_ids={1: [100]},
+                    shared_dstore_ids=[],
+                )
+            },
+        )
+        with self.assertRaisesRegex(ValueError, "no eligible surviving host"):
+            validate_resilience(
+                hosts,
+                [local_only],
+                ResiliencePolicy(enabled=True, host_failure_tolerance=1),
+            )
+
+    def test_combined_rack_plus_host_failure_is_checked(self):
+        hosts = [
+            host(1, 10, 50, "rack-a"),
+            host(2, 10, 50, "rack-a"),
+            host(3, 10, 50, "rack-b"),
+            host(4, 10, 50, "rack-c"),
+            host(5, 10, 50, "rack-d"),
+        ]
+        # 120 GiB survives either one host loss (200 GiB) or one rack loss
+        # (150 GiB), but not rack-a plus one more host (100 GiB).
+        workloads = [vm(1, 4, 40), vm(2, 4, 40), vm(3, 4, 40)]
+        with self.assertRaisesRegex(ValueError, "combined loss"):
+            validate_resilience(
+                hosts,
+                workloads,
+                ResiliencePolicy(
+                    enabled=True,
+                    host_failure_tolerance=1,
+                    failure_domain_tolerance=1,
+                    combined_failure_modes=True,
+                ),
+            )
+
+    def test_zero_group_migration_budget_is_valid_freeze(self):
+        policy = ResiliencePolicy(
+            enabled=True,
+            host_failure_tolerance=0,
+            max_group_migrations=0,
+        )
+        self.assertEqual(policy.max_group_migrations, 0)
+
     def test_resilience_disabled_preserves_single_host_lab(self):
         report = validate_resilience(
             [host(1, 4, 16, "")],
