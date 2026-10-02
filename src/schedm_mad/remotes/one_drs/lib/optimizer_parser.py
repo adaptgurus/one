@@ -710,8 +710,14 @@ class OptimizerParser:
                 if changed:
                     break
 
-        for idx, relation in enumerate(result):
-            relation.id = idx
+        result = [
+            VMGroup(
+                id=idx,
+                affined=relation.affined,
+                vm_ids=set(relation.vm_ids),
+            )
+            for idx, relation in enumerate(result)
+        ]
 
         return result, affined_hosts, anti_affined_hosts
 
