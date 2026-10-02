@@ -468,6 +468,21 @@ class OptimizerParser:
                 )
 
                 host_ids = set(vm_req.hosts.id)
+                resilience_protected = True
+                if vm.user_template is not None:
+                    for item in vm.user_template.any_element:
+                        name = item.qname.upper()
+                        value = str(item.text or "").strip().upper()
+                        if (
+                            name == "LAYERSENTRY_RESILIENCE"
+                            and value in {"EXCLUDED", "NO", "DISABLED"}
+                        ) or (
+                            name == "LAYERSENTRY_HA_PROTECTED"
+                            and value == "NO"
+                        ):
+                            resilience_protected = False
+                            break
+
                 if (
                     self.mode.upper() == "OPTIMIZE"
                     and vm.user_template is not None
@@ -497,6 +512,7 @@ class OptimizerParser:
                     share_vnets=not self.config["DIFFERENT_VNETS"],
                     nic_matches={nic.id: nic.vnets.id for nic in vm_req.nic},
                     net_usage=net_usage,
+                    resilience_protected=resilience_protected,
                 )
         return vm_requirements
 
