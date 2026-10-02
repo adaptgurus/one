@@ -93,8 +93,22 @@ def _demand(
         for vm in vm_requirements
         if vm.state is not VMState.PENDING
     )
-    host_mem = sum(float(host.memory.usage) for host in hosts)
-    host_cpu = sum(float(host.cpu.usage) for host in hosts)
+    host_mem = sum(
+        float(
+            host.committed_memory
+            if host.committed_memory is not None
+            else host.memory.usage
+        )
+        for host in hosts
+    )
+    host_cpu = sum(
+        float(
+            host.committed_cpu
+            if host.committed_cpu is not None
+            else host.cpu.usage
+        )
+        for host in hosts
+    )
     return (
         max(host_mem, existing_req_mem) + pending_mem,
         max(host_cpu, existing_req_cpu) + pending_cpu,
