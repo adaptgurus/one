@@ -196,6 +196,14 @@ def validate_resilience(
                     "LAYERSENTRY_DEVICE_HA_QUALIFIED=YES only after exact "
                     "device-pool recovery qualification"
                 )
+            if not vm.resilience_storage_qualified:
+                raise ResilienceAdmissionError(
+                    "resilience admission failed: VM "
+                    f"{vm.id} depends on local/non-shared storage whose data "
+                    "failover is not qualified; set "
+                    "LAYERSENTRY_STORAGE_HA_QUALIFIED=YES only after exact "
+                    "replication/recovery qualification"
+                )
             candidates = {
                 int(hid)
                 for hid in candidate_hosts.get(vm.id, ())
