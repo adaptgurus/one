@@ -1060,14 +1060,11 @@ class ILPOptimizer(Mapper):
         # production disruption-budget practice: a plan must not migrate many
         # replicas/quorum members of the same group at once.
         if self._max_group_migrations is not None:
-            all_groups = {
-                **self._affined_vm_groups,
-                **{
-                    -1 - gid: group
-                    for gid, group in self._anti_affined_vm_groups.items()
-                },
-            }
-            for group_id, group in all_groups.items():
+            # Apply replica disruption budgets only to anti-affined groups.
+            # Affined groups may need to move as one atomic co-location unit;
+            # limiting them to one VM per plan can make maintenance evacuation
+            # mathematically impossible.
+            for group_id, group in self._anti_affined_vm_groups.items():
                 migrations = [
                     n_migr[vm_id]
                     for vm_id in group.vm_ids

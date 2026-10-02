@@ -19,6 +19,7 @@ from collections import defaultdict
 import io
 import platform
 import sys
+import time
 from dataclasses import replace
 from typing import Any
 
@@ -41,7 +42,11 @@ from lib.mapper.model import (
     VNetCapacity,
 )
 from lib.models.scheduler_driver_action import SchedulerDriverAction
-from lib.resilience import ResiliencePolicy, validate_resilience
+from lib.resilience import (
+    ResiliencePolicy,
+    migration_cooldown_holds,
+    validate_resilience,
+)
 
 
 class OptimizerParser:
@@ -76,6 +81,7 @@ class OptimizerParser:
             "MIGRATION_THRESHOLD": -1,
             "HOST_MIGRATION_THRESHOLD": -1,
             "DS_MIGRATION_THRESHOLD": 0,
+            "MIGRATION_COOLDOWN_SECONDS": 0,
             "WEIGHTS": {
                 "CPU_USAGE": 1,
             },
@@ -84,13 +90,17 @@ class OptimizerParser:
         "MEMORY_SYSTEM_DS_SCALE": 0,
         "DIFFERENT_VNETS": True,
         "RESILIENCE": {
-            "HOST_FAILURE_TOLERANCE": 1,
+            "ENABLED": False,
+            "HOST_FAILURE_TOLERANCE": 0,
             "FAILURE_DOMAIN_TOLERANCE": 0,
             "CPU_RESERVE_PERCENT": 0,
             "MEMORY_RESERVE_PERCENT": 0,
             "MIN_HEALTHY_HOSTS": 1,
-            "FAILURE_DOMAIN_SPREAD": True,
-            "MAX_GROUP_MIGRATIONS": 1,
+            "FAILURE_DOMAIN_SPREAD": False,
+            "REQUIRE_FAILURE_DOMAIN_LABELS": False,
+            "COMBINED_FAILURE_MODES": False,
+            "MAX_GROUP_MIGRATIONS": -1,
+            "MAX_FAILURE_SCENARIOS": 1024,
         },
     }
 
@@ -287,6 +297,7 @@ class OptimizerParser:
             allowed_migrations = -1
             allowed_host_migrations = -1
             allowed_storage_migrations = 0
+            migration_cooldown_seconds = 0
             migration_priority = None
         else:
             cluster_config = self._parse_cluster()
@@ -304,6 +315,10 @@ class OptimizerParser:
             allowed_storage_migrations = cluster_config.get(
                 "DS_MIGRATION_THRESHOLD",
                 self.config["MODE"]["DS_MIGRATION_THRESHOLD"],
+            )
+            migration_cooldown_seconds = cluster_config.get(
+                "MIGRATION_COOLDOWN_SECONDS",
+                self.config["MODE"].get("MIGRATION_COOLDOWN_SECONDS", 0),
             )
             smp = self.config["MODE"].get("PRIORITIZE_STORAGE_MIGRATIONS", "")
             if smp is True or str(smp).upper() == "YES":
@@ -361,14 +376,65 @@ class OptimizerParser:
             curr_placement.append(alloc)
 
         host_capacities = self._parse_host_capacities()
-        resilience_config = self.config["RESILIENCE"].copy()
-        if self.mode.upper() == "OPTIMIZE":
-            cluster_config = self._parse_cluster()
-            for key in resilience_config:
-                if key in cluster_config and cluster_config[key] is not None:
-                    resilience_config[key] = cluster_config[key]
 
+        if self.mode.upper() == "OPTIMIZE" and migration_cooldown_seconds > 0:
+            healthy_ids = {host.id for host in host_capacities if host.healthy}
+            vm_pool = {
+                int(vm.id): vm
+                for vm in self.scheduler_driver_action.vm_pool.vm
+            }
+            now = int(time.time())
+            for vm_id, vm_req in tuple(vm_reqs_dict.items()):
+                current_host = self._curr_alloc.get(vm_id)
+                vm_obj = vm_pool.get(vm_id)
+                history = (
+                    vm_obj.history_records.history
+                    if vm_obj is not None and vm_obj.history_records
+                    else []
+                )
+                if not history:
+                    continue
+                latest = max(history, key=lambda item: int(item.seq or 0))
+                started = int(latest.stime or 0)
+                if not migration_cooldown_holds(
+                    current_host=current_host,
+                    eligible_host_ids=vm_req.host_ids,
+                    healthy_host_ids=healthy_ids,
+                    last_placement_time=started,
+                    cooldown_seconds=migration_cooldown_seconds,
+                    now=now,
+                ):
+                    continue
+                vm_reqs_dict[vm_id] = replace(
+                    vm_req, host_ids={current_host}
+                )
+                self.log_vm(
+                    "INFO",
+                    vm_id,
+                    "Host migration suppressed by OneDRS cooldown; "
+                    f"{migration_cooldown_seconds - (now - started)}s remaining",
+                )
+
+        resilience_config = self.config["RESILIENCE"].copy()
+        # Resilience is a cluster admission contract, so it must govern both
+        # initial PLACE and later OPTIMIZE operations. Restricting cluster
+        # overrides to OPTIMIZE would let a new VM bypass N+K admission.
+        cluster_resilience = self._parse_cluster()
+        for key in resilience_config:
+            if (
+                key in cluster_resilience
+                and cluster_resilience[key] is not None
+            ):
+                resilience_config[key] = cluster_resilience[key]
+
+        max_group_migrations = int(
+            resilience_config["MAX_GROUP_MIGRATIONS"]
+        )
         resilience_policy = ResiliencePolicy(
+            enabled=(
+                resilience_config["ENABLED"] is True
+                or str(resilience_config["ENABLED"]).upper() == "YES"
+            ),
             host_failure_tolerance=int(
                 resilience_config["HOST_FAILURE_TOLERANCE"]
             ),
@@ -389,14 +455,32 @@ class OptimizerParser:
                 or str(resilience_config["FAILURE_DOMAIN_SPREAD"]).upper()
                 == "YES"
             ),
-            max_group_migrations=max(
-                0, int(resilience_config["MAX_GROUP_MIGRATIONS"])
+            require_failure_domain_labels=(
+                resilience_config["REQUIRE_FAILURE_DOMAIN_LABELS"] is True
+                or str(
+                    resilience_config["REQUIRE_FAILURE_DOMAIN_LABELS"]
+                ).upper()
+                == "YES"
+            ),
+            combined_failure_modes=(
+                resilience_config["COMBINED_FAILURE_MODES"] is True
+                or str(
+                    resilience_config["COMBINED_FAILURE_MODES"]
+                ).upper()
+                == "YES"
+            ),
+            max_group_migrations=(
+                None if max_group_migrations < 0 else max_group_migrations
+            ),
+            max_failure_scenarios=max(
+                1, int(resilience_config["MAX_FAILURE_SCENARIOS"])
             ),
         )
         report = validate_resilience(
             host_capacities,
             list(vm_reqs_dict.values()),
             resilience_policy,
+            vm_groups=vmg,
         )
         self.log_general(
             "INFO",
@@ -410,7 +494,12 @@ class OptimizerParser:
             current_placement=curr_placement,
             vm_requirements=list(vm_reqs_dict.values()),
             vm_groups=vmg,
-            host_capacities=host_capacities,
+            # Never offer ERROR/DISABLED/OFFLINE hosts as placement targets.
+            # They remain in the resilience inventory so existing failures are
+            # accounted for, but OneDRS may place only on MONITORED hosts.
+            host_capacities=[
+                host for host in host_capacities if host.healthy
+            ],
             dstore_capacities=self._parse_shared_dstore_capacities(),
             image_dstore_capacities=self._parse_image_dstore_capacities(),
             vnet_capacities=self._parse_vnet_capacities(),
@@ -655,13 +744,16 @@ class OptimizerParser:
                 child.qname.upper(): str(child.text or "").strip()
                 for child in (host.template.children if host.template else [])
             }
-            failure_domain = (
+            explicit_failure_domain = (
                 attrs.get("LAYERSENTRY_FAILURE_DOMAIN")
                 or attrs.get("FAILURE_DOMAIN")
                 or attrs.get("ZONE")
                 or attrs.get("RACK")
-                or f"host:{host.id}"
             )
+            failure_domain = explicit_failure_domain or f"host:{host.id}"
+            drs_ready = str(
+                attrs.get("LAYERSENTRY_DRS_READY", "YES")
+            ).upper() not in {"NO", "FALSE", "0"}
             result.append(
                 HostCapacity(
                     id=int(host.id),
@@ -688,7 +780,13 @@ class OptimizerParser:
                     ),
                     cluster_id=int(host.cluster_id),
                     failure_domain=failure_domain,
-                    healthy=int(host.state) == 2,
+                    failure_domain_labeled=bool(explicit_failure_domain),
+                    # A recovered Host can remain MONITORED but explicitly
+                    # withheld from DRS until storage/network/trust warm-up is
+                    # complete.
+                    healthy=int(host.state) == 2 and drs_ready,
+                    committed_memory=float(host.host_share.mem_usage or 0) / 1000,
+                    committed_cpu=float(host.host_share.cpu_usage or 0) / 100,
                 )
             )
         return result
@@ -780,16 +878,25 @@ class OptimizerParser:
                 result["HOST_MIGRATION_THRESHOLD"] = max(-1, int(child.text))
             elif name == "DS_MIGRATION_THRESHOLD":
                 result["DS_MIGRATION_THRESHOLD"] = max(-1, int(child.text))
+            elif name == "MIGRATION_COOLDOWN_SECONDS":
+                result["MIGRATION_COOLDOWN_SECONDS"] = max(0, int(child.text))
             elif name in {
                 "HOST_FAILURE_TOLERANCE",
                 "FAILURE_DOMAIN_TOLERANCE",
                 "MIN_HEALTHY_HOSTS",
-                "MAX_GROUP_MIGRATIONS",
+                "MAX_FAILURE_SCENARIOS",
             }:
                 result[name] = max(0, int(child.text))
+            elif name == "MAX_GROUP_MIGRATIONS":
+                result[name] = max(-1, int(child.text))
             elif name in {"CPU_RESERVE_PERCENT", "MEMORY_RESERVE_PERCENT"}:
                 result[name] = max(0.0, min(99.0, float(child.text)))
-            elif name == "FAILURE_DOMAIN_SPREAD":
+            elif name in {
+                "ENABLED",
+                "FAILURE_DOMAIN_SPREAD",
+                "REQUIRE_FAILURE_DOMAIN_LABELS",
+                "COMBINED_FAILURE_MODES",
+            }:
                 result[name] = str(child.text).upper() == "YES"
         policy = next(
             (

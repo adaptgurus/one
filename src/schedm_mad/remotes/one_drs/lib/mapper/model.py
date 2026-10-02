@@ -54,7 +54,10 @@ class HostCapacity:
     pci_devices: list[PCIDevice] = field(default_factory=list)
     cluster_id: int = 0
     failure_domain: str = ""
+    failure_domain_labeled: bool = False
     healthy: bool = True
+    committed_memory: Optional[float] = None
+    committed_cpu: Optional[float] = None
 
 
 # @dataclass(frozen=True, slots=True)
