@@ -27,6 +27,20 @@ def vm(vm_id, gid, role):
     )
 
 
+def raw_vm(vm_id, state=3, markers=None):
+    return SimpleNamespace(
+        id=vm_id,
+        state=state,
+        lcm_state=3,
+        user_template=SimpleNamespace(
+            any_element=[
+                child(name, value)
+                for name, value in (markers or [])
+            ]
+        ),
+    )
+
+
 def role(name, policy=None, host_affined=None, host_anti_affined=None):
     return SimpleNamespace(
         name=name,
@@ -60,6 +74,51 @@ def parser(mode, vms, groups, allowed_ids, current=None):
         ),
     )
     return value
+
+
+class ResilienceInventoryTests(unittest.TestCase):
+    def test_active_unmatched_vm_blocks_partial_ha_proof(self):
+        p = OptimizerParser.__new__(OptimizerParser)
+        p.scheduler_driver_action = SimpleNamespace(
+            vm_pool=SimpleNamespace(vm=[raw_vm(41)])
+        )
+        with self.assertRaisesRegex(ValueError, "inventory incomplete"):
+            p._validate_resilience_inventory({})
+
+    def test_explicitly_excluded_unmatched_vm_is_allowed(self):
+        p = OptimizerParser.__new__(OptimizerParser)
+        p.scheduler_driver_action = SimpleNamespace(
+            vm_pool=SimpleNamespace(
+                vm=[
+                    raw_vm(
+                        41,
+                        markers=[("LAYERSENTRY_RESILIENCE", "EXCLUDED")],
+                    )
+                ]
+            )
+        )
+        p._validate_resilience_inventory({})
+
+    def test_powered_off_unmatched_vm_does_not_consume_ha_reserve(self):
+        p = OptimizerParser.__new__(OptimizerParser)
+        p.scheduler_driver_action = SimpleNamespace(
+            vm_pool=SimpleNamespace(vm=[raw_vm(41, state=8)])
+        )
+        p._validate_resilience_inventory({})
+
+    def test_resilience_markers_are_independent(self):
+        item = raw_vm(
+            41,
+            markers=[
+                ("LAYERSENTRY_HA_PROTECTED", "NO"),
+                ("LAYERSENTRY_DEVICE_HA_QUALIFIED", "YES"),
+                ("LAYERSENTRY_STORAGE_HA_QUALIFIED", "YES"),
+            ],
+        )
+        self.assertEqual(
+            OptimizerParser._resilience_vm_markers(item),
+            (True, True, True),
+        )
 
 
 class VMGroupTranslationTests(unittest.TestCase):
