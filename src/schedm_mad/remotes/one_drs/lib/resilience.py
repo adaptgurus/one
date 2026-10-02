@@ -70,7 +70,7 @@ class ResilienceReport:
     enabled: bool
     healthy_hosts: int
     protected_vms: int
-    active_unavailable_hosts: int
+    consumed_host_failures: int
     configured_host_failure_tolerance: int
     remaining_host_failure_tolerance: int
     failure_domain_tolerance: int
@@ -370,7 +370,7 @@ def validate_resilience(
     *,
     candidate_hosts: Mapping[int, Collection[int]] | None = None,
     vm_groups: Collection[VMGroup] | None = None,
-    cluster_host_count: int | None = None,
+    consumed_host_failures: int = 0,
     solver=None,
 ) -> ResilienceReport:
     """Validate cluster resilience without changing placement.
@@ -378,8 +378,9 @@ def validate_resilience(
     candidate_hosts should be the final host candidates after native
     requirements, CPU/RAM, PCI/device and storage portability filtering.
 
-    cluster_host_count is authoritative membership including unavailable or
-    disabled members, allowing consumed failure budget to be distinguished.
+    consumed_host_failures is an explicit incident-state input from the
+    authoritative recovery owner. It must not be inferred from Host state
+    because DISABLED/INIT/OFFLINE can mean maintenance, bootstrap or failure.
     """
 
     healthy = [host for host in host_capacities if host.healthy]
@@ -391,7 +392,7 @@ def validate_resilience(
             enabled=False,
             healthy_hosts=len(healthy),
             protected_vms=len(protected),
-            active_unavailable_hosts=0,
+            consumed_host_failures=0,
             configured_host_failure_tolerance=policy.host_failure_tolerance,
             remaining_host_failure_tolerance=0,
             failure_domain_tolerance=policy.failure_domain_tolerance,
@@ -424,20 +425,23 @@ def validate_resilience(
                 f"{unlabeled}"
             )
 
-    active_unavailable = 0
-    if cluster_host_count is not None:
-        active_unavailable = max(0, int(cluster_host_count) - len(healthy))
-
-    if active_unavailable and policy.pause_on_degraded:
+    consumed_failures = max(0, int(consumed_host_failures))
+    if consumed_failures > policy.host_failure_tolerance:
         raise ResilienceDegradedError(
-            "resilience degraded: "
-            f"{active_unavailable} cluster host(s) already unavailable; "
-            "ordinary OneDRS optimization is paused until the recovery owner "
-            "restores or acknowledges capacity"
+            "resilience degraded: authoritative consumed Host failures "
+            f"{consumed_failures} exceed configured tolerance "
+            f"{policy.host_failure_tolerance}"
+        )
+
+    if consumed_failures and policy.pause_on_degraded:
+        raise ResilienceDegradedError(
+            "resilience degraded: authoritative recovery state reports "
+            f"{consumed_failures} consumed Host failure(s); ordinary OneDRS "
+            "optimization is paused until recovery state is acknowledged"
         )
 
     remaining_host_tolerance = max(
-        0, policy.host_failure_tolerance - active_unavailable
+        0, policy.host_failure_tolerance - consumed_failures
     )
 
     if remaining_host_tolerance >= len(healthy):
@@ -681,7 +685,7 @@ def validate_resilience(
         enabled=True,
         healthy_hosts=len(healthy),
         protected_vms=len(protected),
-        active_unavailable_hosts=active_unavailable,
+        consumed_host_failures=consumed_failures,
         configured_host_failure_tolerance=policy.host_failure_tolerance,
         remaining_host_failure_tolerance=remaining_host_tolerance,
         failure_domain_tolerance=policy.failure_domain_tolerance,
