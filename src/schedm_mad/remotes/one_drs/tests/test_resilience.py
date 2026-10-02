@@ -54,7 +54,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
             host(4, 16, 64, "rack-d"),
         ]
         vms = [vm(1, 20, 80), vm(2, 20, 80)]
-        with self.assertRaisesRegex(ValueError, "N\+2"):
+        with self.assertRaisesRegex(ValueError, r"N\+2"):
             validate_resilience(
                 hosts,
                 vms,
