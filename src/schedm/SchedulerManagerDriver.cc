@@ -77,10 +77,12 @@ void SchedulerManagerDriver::optimize(int cluster_id) const
         return;
     }
 
-    // Resilience admission needs all scheduler-visible Hosts in this cluster,
-    // including healthy Hosts that happen not to match a specific VM. Keep
-    // PLACE payloads compact; widen only the OPTIMIZE Host serialization set.
+    // Resilience admission needs the full cluster inventory. Keep PLACE
+    // payloads compact; widen only OPTIMIZE. REQUIREMENTS still identifies
+    // movable/eligible VMs, while VM_POOL retains unmatched/locked workloads
+    // so the resilience layer cannot certify only a schedulable subset.
     sr.match.match_host.insert(sr.hpool.ids.begin(), sr.hpool.ids.end());
+    sr.match.vms.insert(sr.vmpool.ids.begin(), sr.vmpool.ids.end());
 
     std::ostringstream oss;
 
