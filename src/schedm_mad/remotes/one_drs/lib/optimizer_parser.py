@@ -574,6 +574,9 @@ class OptimizerParser:
                 # qualification marker because matching a PCI ID at plan time
                 # does not prove spare capacity survives a Host failure.
                 resilience_device_qualified = not bool(vm.template.pci)
+                resilience_storage_qualified = (
+                    int(vm.id) not in self._used_local_dstores
+                )
                 if vm.user_template is not None:
                     for item in vm.user_template.any_element:
                         name = item.qname.upper()
@@ -591,6 +594,11 @@ class OptimizerParser:
                             and value == "YES"
                         ):
                             resilience_device_qualified = True
+                        if (
+                            name == "LAYERSENTRY_STORAGE_HA_QUALIFIED"
+                            and value == "YES"
+                        ):
+                            resilience_storage_qualified = True
 
                 if (
                     self.mode.upper() == "OPTIMIZE"
@@ -623,6 +631,7 @@ class OptimizerParser:
                     net_usage=net_usage,
                     resilience_protected=resilience_protected,
                     resilience_device_qualified=resilience_device_qualified,
+                    resilience_storage_qualified=resilience_storage_qualified,
                 )
         return vm_requirements
 
