@@ -10,7 +10,15 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 from itertools import combinations
-from typing import Collection, Mapping
+from math import ceil
+from typing import Collection, Mapping, Optional
+
+from pulp import (
+    LpMinimize,
+    LpProblem,
+    LpVariable,
+    lpSum,
+)
 
 from .mapper.model import HostCapacity, VMGroup, VMRequirements
 
@@ -35,6 +43,8 @@ class ResiliencePolicy:
     max_group_migrations: int = 1
     pause_on_degraded: bool = True
     failure_domain_attribute: str = "LAYERSENTRY_FAILURE_DOMAIN"
+    exact_recovery_proof: bool = True
+    max_exact_failure_scenarios: int = 64
 
     def __post_init__(self) -> None:
         if self.host_failure_tolerance < 0:
@@ -51,6 +61,8 @@ class ResiliencePolicy:
             raise ValueError("max_group_migrations must be >= 0")
         if not self.failure_domain_attribute.strip():
             raise ValueError("failure_domain_attribute is required")
+        if self.max_exact_failure_scenarios < 1:
+            raise ValueError("max_exact_failure_scenarios must be >= 1")
 
 
 @dataclass(frozen=True)
@@ -115,6 +127,242 @@ def _candidate_union(
     return result & healthy_ids
 
 
+def _failure_scenarios(
+    healthy: Collection[HostCapacity],
+    host_failures: int,
+    domain_failures: int,
+) -> list[frozenset[int]]:
+    """Return independent Host-loss and domain-loss scenarios.
+
+    HOST_FAILURE_TOLERANCE and FAILURE_DOMAIN_TOLERANCE are separate
+    guarantees. They are not silently combined into a stronger K-host +
+    D-domain simultaneous guarantee.
+    """
+
+    healthy_ids = sorted(host.id for host in healthy)
+    scenarios: set[frozenset[int]] = set()
+
+    if host_failures > 0:
+        for failed in combinations(healthy_ids, host_failures):
+            scenarios.add(frozenset(failed))
+    else:
+        scenarios.add(frozenset())
+
+    if domain_failures > 0:
+        domains: dict[str, set[int]] = defaultdict(set)
+        for host in healthy:
+            domains[host.failure_domain].add(host.id)
+        domain_names = sorted(domains)
+        for failed_domains in combinations(domain_names, domain_failures):
+            failed_hosts: set[int] = set()
+            for domain in failed_domains:
+                failed_hosts.update(domains[domain])
+            scenarios.add(frozenset(failed_hosts))
+
+    return sorted(scenarios, key=lambda value: (len(value), tuple(sorted(value))))
+
+
+def _exact_recovery_feasible(
+    healthy: Collection[HostCapacity],
+    protected: Collection[VMRequirements],
+    candidate_hosts: Mapping[int, Collection[int]],
+    vm_groups: Collection[VMGroup],
+    policy: ResiliencePolicy,
+    host_failures: int,
+    *,
+    solver=None,
+) -> None:
+    """Prove restart placement for every configured failure scenario.
+
+    A single feasibility model contains one independent placement copy per
+    failure scenario, so solver timeout applies to the whole proof instead of
+    once per scenario.
+    """
+
+    if not protected:
+        return
+
+    scenarios = _failure_scenarios(
+        healthy,
+        host_failures,
+        policy.failure_domain_tolerance,
+    )
+    if len(scenarios) > policy.max_exact_failure_scenarios:
+        raise ResilienceAdmissionError(
+            "resilience admission cannot exactly prove the configured failure "
+            f"model: {len(scenarios)} scenarios exceed the bounded limit "
+            f"{policy.max_exact_failure_scenarios}; raise the reviewed limit "
+            "or qualify a larger-cluster admission profile"
+        )
+
+    host_by_id = {host.id: host for host in healthy}
+    protected_by_id = {vm.id: vm for vm in protected}
+    protected_ids = set(protected_by_id)
+    groups = [
+        VMGroup(
+            id=group.id,
+            affined=group.affined,
+            vm_ids=set(group.vm_ids & protected_ids),
+        )
+        for group in vm_groups
+        if len(group.vm_ids & protected_ids) > 1
+    ]
+
+    model = LpProblem("onedrs_resilience_recovery_proof", LpMinimize)
+    variables: dict[tuple[int, int, int], LpVariable] = {}
+
+    for scenario_id, failed in enumerate(scenarios):
+        surviving_ids = set(host_by_id) - set(failed)
+        scenario_candidates: dict[int, set[int]] = {
+            vm.id: {
+                int(host_id)
+                for host_id in candidate_hosts.get(vm.id, ())
+                if int(host_id) in surviving_ids
+            }
+            for vm in protected
+        }
+
+        # Affinity is a same-host requirement. Restrict every member to the
+        # common candidate set before creating decision variables.
+        for group in groups:
+            if not group.affined:
+                continue
+            common = set.intersection(
+                *(scenario_candidates[vm_id] for vm_id in group.vm_ids)
+            )
+            for vm_id in group.vm_ids:
+                scenario_candidates[vm_id] &= common
+
+        for vm in protected:
+            candidates = scenario_candidates[vm.id]
+            if not candidates:
+                raise ResilienceAdmissionError(
+                    "resilience admission failed: failure scenario "
+                    f"{scenario_id} removes every recovery host for VM {vm.id}"
+                )
+            for host_id in candidates:
+                variables[scenario_id, vm.id, host_id] = LpVariable(
+                    f"r_{scenario_id}_{vm.id}_{host_id}",
+                    cat="Binary",
+                )
+
+            model += (
+                lpSum(
+                    variables[scenario_id, vm.id, host_id]
+                    for host_id in candidates
+                )
+                == 1,
+                f"scenario_{scenario_id}_vm_{vm.id}_one_host",
+            )
+
+        # Exact CPU/RAM packing closes aggregate-capacity fragmentation gaps.
+        for host_id in surviving_ids:
+            host = host_by_id[host_id]
+            assigned = [
+                (
+                    protected_by_id[vm_id],
+                    var,
+                )
+                for (sid, vm_id, hid), var in variables.items()
+                if sid == scenario_id and hid == host_id
+            ]
+            if not assigned:
+                continue
+            model += (
+                lpSum(vm.memory * var for vm, var in assigned)
+                <= host.memory.total,
+                f"scenario_{scenario_id}_host_{host_id}_memory",
+            )
+            model += (
+                lpSum(vm.cpu_ratio * var for vm, var in assigned)
+                <= host.cpu.total,
+                f"scenario_{scenario_id}_host_{host_id}_cpu",
+            )
+
+        for group in groups:
+            if group.affined:
+                members = sorted(group.vm_ids)
+                first = members[0]
+                relevant_hosts = set().union(
+                    *(scenario_candidates[vm_id] for vm_id in members)
+                )
+                for host_id in relevant_hosts:
+                    base = variables.get(
+                        (scenario_id, first, host_id),
+                        0,
+                    )
+                    for vm_id in members[1:]:
+                        other = variables.get(
+                            (scenario_id, vm_id, host_id),
+                            0,
+                        )
+                        model += (
+                            base == other,
+                            f"scenario_{scenario_id}_affinity_{group.id}_"
+                            f"{first}_{vm_id}_{host_id}",
+                        )
+            else:
+                for host_id in surviving_ids:
+                    terms = [
+                        variables[scenario_id, vm_id, host_id]
+                        for vm_id in group.vm_ids
+                        if (scenario_id, vm_id, host_id) in variables
+                    ]
+                    if len(terms) > 1:
+                        model += (
+                            lpSum(terms) <= 1,
+                            f"scenario_{scenario_id}_anti_{group.id}_"
+                            f"{host_id}",
+                        )
+
+                if policy.failure_domain_spread:
+                    domains: dict[str, set[int]] = defaultdict(set)
+                    for host_id in surviving_ids:
+                        host = host_by_id[host_id]
+                        domains[host.failure_domain].add(host_id)
+                    active_domains = [
+                        domain
+                        for domain, host_ids in domains.items()
+                        if any(
+                            scenario_candidates[vm_id] & host_ids
+                            for vm_id in group.vm_ids
+                        )
+                    ]
+                    if active_domains:
+                        limit = ceil(len(group.vm_ids) / len(active_domains))
+                        for domain in active_domains:
+                            terms = [
+                                variables[scenario_id, vm_id, host_id]
+                                for vm_id in group.vm_ids
+                                for host_id in domains[domain]
+                                if (
+                                    scenario_id,
+                                    vm_id,
+                                    host_id,
+                                ) in variables
+                            ]
+                            if terms:
+                                safe_domain = "".join(
+                                    ch if ch.isalnum() else "_"
+                                    for ch in domain
+                                )
+                                model += (
+                                    lpSum(terms) <= limit,
+                                    f"scenario_{scenario_id}_spread_"
+                                    f"{group.id}_{safe_domain}",
+                                )
+
+    # Feasibility only.
+    model += 0
+    status = model.solve(solver=solver) if solver is not None else model.solve()
+    if status != 1:
+        raise ResilienceAdmissionError(
+            "resilience admission failed: exact recovery placement proof is "
+            f"not feasible for all {len(scenarios)} configured failure "
+            f"scenario(s), solver_status={status}"
+        )
+
+
 def validate_resilience(
     host_capacities: Collection[HostCapacity],
     vm_requirements: Collection[VMRequirements],
@@ -123,6 +371,7 @@ def validate_resilience(
     candidate_hosts: Mapping[int, Collection[int]] | None = None,
     vm_groups: Collection[VMGroup] | None = None,
     cluster_host_count: int | None = None,
+    solver=None,
 ) -> ResilienceReport:
     """Validate cluster resilience without changing placement.
 
@@ -328,6 +577,22 @@ def validate_resilience(
                                 f"{required} required for failure-safe "
                                 "distinct placement"
                             )
+
+    if policy.exact_recovery_proof and protected:
+        if candidate_hosts is None:
+            raise ResilienceAdmissionError(
+                "resilience admission requires authoritative per-VM recovery "
+                "candidates when exact recovery proof is enabled"
+            )
+        _exact_recovery_feasible(
+            healthy,
+            protected,
+            candidate_hosts,
+            list(vm_groups or ()),
+            policy,
+            remaining_host_tolerance,
+            solver=solver,
+        )
 
     memory_demand, cpu_demand = _demand(protected)
 
