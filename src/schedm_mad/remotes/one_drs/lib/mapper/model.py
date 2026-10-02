@@ -166,6 +166,10 @@ class VMRequirements:
     # admission (for example license-bound or non-restartable VMs) remain
     # schedulable but do not contribute to the advertised N+K guarantee.
     resilience_protected: bool = True
+    # PCI/GPU/SR-IOV failover cannot be inferred from CPU/RAM alone. A
+    # protected VM carrying device requirements must be explicitly qualified
+    # for redundant device recovery before it can inherit an N+K guarantee.
+    resilience_device_qualified: bool = False
 
     def find_host_matches(
         self,
