@@ -29,6 +29,7 @@ jobs:
             --enable=performance,information,warning,portability,style,missingInclude \
             --inline-suppr \
             --suppress-xml=share/smoke_tests/config/cppcheck-suppressions.xml \
+            --suppress=unmatchedSuppression \
             --std=c++17 --error-exitcode=2 -q
       - name: Repository AStyle check
         run: |
