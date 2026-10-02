@@ -366,11 +366,16 @@ class OptimizerParser:
 
         host_capacities = self._parse_host_capacities()
         resilience_config = self.config["RESILIENCE"].copy()
-        if self.mode.upper() == "OPTIMIZE":
-            cluster_config = self._parse_cluster()
-            for key in resilience_config:
-                if key in cluster_config and cluster_config[key] is not None:
-                    resilience_config[key] = cluster_config[key]
+        # Resilience is a cluster admission contract, so it must govern both
+        # initial PLACE and later OPTIMIZE operations. Restricting cluster
+        # overrides to OPTIMIZE would let a new VM bypass N+K admission.
+        cluster_resilience = self._parse_cluster()
+        for key in resilience_config:
+            if (
+                key in cluster_resilience
+                and cluster_resilience[key] is not None
+            ):
+                resilience_config[key] = cluster_resilience[key]
 
         max_group_migrations = int(
             resilience_config["MAX_GROUP_MIGRATIONS"]
