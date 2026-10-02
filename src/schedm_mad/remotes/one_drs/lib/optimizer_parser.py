@@ -280,6 +280,8 @@ class OptimizerParser:
         }
 
     def build_optimizer(self) -> ILPOptimizer:
+        cluster_config = {}
+
         if self.mode.upper() == "PLACE":
             criteria = self.config["MODE"]["POLICY"].lower()
             if criteria.upper() == "BALANCE":
@@ -309,10 +311,11 @@ class OptimizerParser:
                 self.config["MODE"]["DS_MIGRATION_THRESHOLD"],
             )
             smp = self.config["MODE"].get("PRIORITIZE_STORAGE_MIGRATIONS", "")
-            if smp is True or str(smp).upper() == "YES":
-                migration_priority = "storage"
-            else:
-                migration_priority = "host"
+            migration_priority = (
+                "storage"
+                if smp is True or str(smp).upper() == "YES"
+                else "host"
+            )
             self.config["PREDICTIVE"] = cluster_config.get(
                 "PREDICTIVE", self.config["PREDICTIVE"]
             )
@@ -321,35 +324,39 @@ class OptimizerParser:
                 if policy.upper() == "BALANCE"
                 else policy.lower()
             )
-            self._plan_id = self.scheduler_driver_action.cluster_pool.cluster[0].id
-        vmg, affined_hosts, anti_affined_hosts = self._parse_vm_groups()
-        vm_reqs_dict = self._parse_vm_requirements()
-        for vm_req in self.scheduler_driver_action.requirements.vm:
-            if vm_req.id in affined_hosts:
-                # Available hosts are only the affined hosts
-                new_host_ids = affined_hosts[vm_req.id]
-            elif vm_req.id in anti_affined_hosts:
-                # Remove anti-affined hosts from the available host_ids
-                current_ids = vm_reqs_dict[vm_req.id].host_ids
-                new_host_ids = current_ids - anti_affined_hosts[vm_req.id]
-            else:
-                continue
-            vm_reqs_dict[vm_req.id] = replace(
-                vm_reqs_dict[vm_req.id], host_ids=new_host_ids
+            self._plan_id = (
+                self.scheduler_driver_action.cluster_pool.cluster[0].id
             )
 
-        if allowed_migrations == -1:
-            migrations = None
-        else:
-            migrations = allowed_migrations
-        if allowed_host_migrations == -1:
-            host_migrations = None
-        else:
-            host_migrations = allowed_host_migrations
-        if allowed_storage_migrations == -1:
-            storage_migrations = None
-        else:
-            storage_migrations = allowed_storage_migrations
+        vmg, affined_hosts, anti_affined_hosts = self._parse_vm_groups()
+        vm_reqs_dict = self._parse_vm_requirements()
+
+        for vm_req in self.scheduler_driver_action.requirements.vm:
+            vm_id = int(vm_req.id)
+            if vm_id not in vm_reqs_dict:
+                continue
+            if vm_id in affined_hosts:
+                new_host_ids = set(affined_hosts[vm_id])
+            elif vm_id in anti_affined_hosts:
+                current_ids = vm_reqs_dict[vm_id].host_ids or set()
+                new_host_ids = current_ids - anti_affined_hosts[vm_id]
+            else:
+                continue
+            vm_reqs_dict[vm_id] = replace(
+                vm_reqs_dict[vm_id], host_ids=new_host_ids
+            )
+
+        migrations = None if allowed_migrations == -1 else allowed_migrations
+        host_migrations = (
+            None
+            if allowed_host_migrations == -1
+            else allowed_host_migrations
+        )
+        storage_migrations = (
+            None
+            if allowed_storage_migrations == -1
+            else allowed_storage_migrations
+        )
 
         used_local_dstores = self._used_local_dstores
         used_shared_dstores = self._used_shared_dstores
@@ -363,20 +370,40 @@ class OptimizerParser:
                 alloc = Allocation(vm_id, host_id)
             curr_placement.append(alloc)
 
-        host_capacities = self._parse_host_capacities()
         resilience_config = self.config["RESILIENCE"].copy()
         if self.mode.upper() == "OPTIMIZE":
-            cluster_config = self._parse_cluster()
-            for key in resilience_config:
-                if key in cluster_config and cluster_config[key] is not None:
-                    resilience_config[key] = cluster_config[key]
+            key_map = {
+                "RESILIENCE_ENABLED": "ENABLED",
+                "HOST_FAILURE_TOLERANCE": "HOST_FAILURE_TOLERANCE",
+                "FAILURE_DOMAIN_TOLERANCE": "FAILURE_DOMAIN_TOLERANCE",
+                "CPU_RESERVE_PERCENT": "CPU_RESERVE_PERCENT",
+                "MEMORY_RESERVE_PERCENT": "MEMORY_RESERVE_PERCENT",
+                "MIN_HEALTHY_HOSTS": "MIN_HEALTHY_HOSTS",
+                "FAILURE_DOMAIN_SPREAD": "FAILURE_DOMAIN_SPREAD",
+                "MAX_GROUP_MIGRATIONS": "MAX_GROUP_MIGRATIONS",
+                "PAUSE_ON_DEGRADED": "PAUSE_ON_DEGRADED",
+                "FAILURE_DOMAIN_ATTRIBUTE": "FAILURE_DOMAIN_ATTRIBUTE",
+            }
+            for source_key, target_key in key_map.items():
+                if cluster_config.get(source_key) is not None:
+                    resilience_config[target_key] = cluster_config[source_key]
+        else:
+            # PLACE batches can span multiple clusters. Applying one cluster's
+            # N+K policy to a global pending batch is mathematically invalid.
+            # LayerSentry performs cluster-scoped admission before VM creation;
+            # OneDRS enforces the resilience profile during cluster OPTIMIZE.
+            resilience_config["ENABLED"] = False
+
+        def as_bool(value) -> bool:
+            return value is True or str(value).strip().upper() == "YES"
 
         resilience_policy = ResiliencePolicy(
-            host_failure_tolerance=int(
-                resilience_config["HOST_FAILURE_TOLERANCE"]
+            enabled=as_bool(resilience_config["ENABLED"]),
+            host_failure_tolerance=max(
+                0, int(resilience_config["HOST_FAILURE_TOLERANCE"])
             ),
-            failure_domain_tolerance=int(
-                resilience_config["FAILURE_DOMAIN_TOLERANCE"]
+            failure_domain_tolerance=max(
+                0, int(resilience_config["FAILURE_DOMAIN_TOLERANCE"])
             ),
             cpu_reserve_percent=float(
                 resilience_config["CPU_RESERVE_PERCENT"]
@@ -387,44 +414,116 @@ class OptimizerParser:
             min_healthy_hosts=max(
                 1, int(resilience_config["MIN_HEALTHY_HOSTS"])
             ),
-            failure_domain_spread=(
-                resilience_config["FAILURE_DOMAIN_SPREAD"] is True
-                or str(resilience_config["FAILURE_DOMAIN_SPREAD"]).upper()
-                == "YES"
+            failure_domain_spread=as_bool(
+                resilience_config["FAILURE_DOMAIN_SPREAD"]
             ),
             max_group_migrations=max(
                 0, int(resilience_config["MAX_GROUP_MIGRATIONS"])
             ),
+            pause_on_degraded=as_bool(
+                resilience_config["PAUSE_ON_DEGRADED"]
+            ),
+            failure_domain_attribute=str(
+                resilience_config["FAILURE_DOMAIN_ATTRIBUTE"]
+            ).strip().upper(),
         )
-        report = validate_resilience(
-            host_capacities,
-            list(vm_reqs_dict.values()),
-            resilience_policy,
+
+        host_capacities = self._parse_host_capacities(
+            resilience_policy.failure_domain_attribute
         )
-        self.log_general(
-            "INFO",
-            "Resilience admission passed: "
-            f"healthy_hosts={report.healthy_hosts} "
-            f"host_failures={report.host_failure_tolerance} "
-            f"domain_failures={report.failure_domain_tolerance}",
-        )
+        shared_dstore_capacities = self._parse_shared_dstore_capacities()
+        image_dstore_capacities = self._parse_image_dstore_capacities()
+        vnet_capacities = self._parse_vnet_capacities()
+
+        if resilience_policy.enabled:
+            host_by_id = {host.id: host for host in host_capacities}
+            dstore_by_id = {
+                dstore.id: dstore for dstore in shared_dstore_capacities
+            }
+            candidate_hosts: dict[int, set[int]] = {}
+
+            for vm_req in vm_reqs_dict.values():
+                matches = vm_req.find_host_matches(
+                    host_capacities, vnet_capacities, free=False
+                )
+                candidates = set(matches.hosts)
+
+                # A failover host is useful only if every storage requirement
+                # can be satisfied there. This catches local-only and
+                # cluster-inaccessible datastore paths that aggregate CPU/RAM
+                # admission would otherwise miss.
+                storage_matches = vm_req.find_storage_matches(
+                    [
+                        host_by_id[hid]
+                        for hid in candidates
+                        if hid in host_by_id
+                    ],
+                    shared_dstore_capacities,
+                    free=False,
+                )
+                for storage_match in storage_matches:
+                    viable: set[int] = set(storage_match.local_dstores)
+                    for dstore_id in storage_match.shared_dstores:
+                        dstore = dstore_by_id.get(dstore_id)
+                        if dstore is None:
+                            continue
+                        for host_id in candidates:
+                            host = host_by_id.get(host_id)
+                            if (
+                                host is not None
+                                and host.cluster_id in dstore.cluster_ids
+                            ):
+                                viable.add(host_id)
+                    candidates &= viable
+
+                candidate_hosts[vm_req.id] = candidates
+
+            cluster_host_count = None
+            if self.mode.upper() == "OPTIMIZE":
+                clusters = self.scheduler_driver_action.cluster_pool.cluster
+                if clusters:
+                    cluster_host_count = len(clusters[0].hosts.id)
+
+            report = validate_resilience(
+                host_capacities,
+                list(vm_reqs_dict.values()),
+                resilience_policy,
+                candidate_hosts=candidate_hosts,
+                cluster_host_count=cluster_host_count,
+            )
+            self.log_general(
+                "INFO",
+                "Resilience admission passed: "
+                f"healthy_hosts={report.healthy_hosts} "
+                f"protected_vms={report.protected_vms} "
+                f"remaining_host_failures="
+                f"{report.remaining_host_failure_tolerance} "
+                f"domain_failures={report.failure_domain_tolerance}",
+            )
 
         return ILPOptimizer(
             current_placement=curr_placement,
             vm_requirements=list(vm_reqs_dict.values()),
             vm_groups=vmg,
             host_capacities=host_capacities,
-            dstore_capacities=self._parse_shared_dstore_capacities(),
-            image_dstore_capacities=self._parse_image_dstore_capacities(),
-            vnet_capacities=self._parse_vnet_capacities(),
+            dstore_capacities=shared_dstore_capacities,
+            image_dstore_capacities=image_dstore_capacities,
+            vnet_capacities=vnet_capacities,
             criteria=criteria,
             preemptive=False,
             allowed_migrations=migrations,
             allowed_host_migrations=host_migrations,
             allowed_storage_migrations=storage_migrations,
             migration_priority=migration_priority,
-            failure_domain_spread=resilience_policy.failure_domain_spread,
-            max_group_migrations=resilience_policy.max_group_migrations,
+            failure_domain_spread=(
+                resilience_policy.enabled
+                and resilience_policy.failure_domain_spread
+            ),
+            max_group_migrations=(
+                resilience_policy.max_group_migrations
+                if resilience_policy.enabled
+                else None
+            ),
             solver=self.config["SOLVER"],
         )
 
