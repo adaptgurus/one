@@ -224,7 +224,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
             host(4, 16, 64, "rack-d"),
         ]
         vms = [vm(1, 20, 80), vm(2, 20, 80)]
-        with self.assertRaisesRegex(ValueError, r"N\+2"):
+        with self.assertRaisesRegex(ValueError, "host loss"):
             validate_resilience(
                 hosts,
                 vms,
@@ -238,8 +238,10 @@ class ResilienceAdmissionTests(unittest.TestCase):
             host(3, 16, 64, "rack-b"),
             host(4, 16, 64, "rack-c"),
         ]
-        vms = [vm(1, 20, 150)]
-        with self.assertRaisesRegex(ValueError, "failure domain"):
+        # Every VM fits individually and N+1 host loss has enough capacity,
+        # but losing rack-a removes two hosts and leaves only 128 GiB.
+        vms = [vm(1, 5, 45), vm(2, 5, 45), vm(3, 5, 45)]
+        with self.assertRaisesRegex(ValueError, "failure-domain loss"):
             validate_resilience(
                 hosts,
                 vms,
