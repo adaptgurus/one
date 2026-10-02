@@ -260,11 +260,11 @@ def _exact_recovery_feasible(
             host = host_by_id[host_id]
             assigned = [
                 (
-                    protected_by_id[vm_id],
-                    var,
+                    vm,
+                    variables[scenario_id, vm.id, host_id],
                 )
-                for (sid, vm_id, hid), var in variables.items()
-                if sid == scenario_id and hid == host_id
+                for vm in protected
+                if (scenario_id, vm.id, host_id) in variables
             ]
             if not assigned:
                 continue
