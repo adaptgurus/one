@@ -77,6 +77,11 @@ void SchedulerManagerDriver::optimize(int cluster_id) const
         return;
     }
 
+    // Resilience admission needs all scheduler-visible Hosts in this cluster,
+    // including healthy Hosts that happen not to match a specific VM. Keep
+    // PLACE payloads compact; widen only the OPTIMIZE Host serialization set.
+    sr.match.match_host.insert(sr.hpool.ids.begin(), sr.hpool.ids.end());
+
     std::ostringstream oss;
 
     scheduler_message(sr, oss);
@@ -95,12 +100,7 @@ int SchedulerManagerDriver::scheduler_message(SchedRequest& sr, std::ostringstre
 
     sr.vmpool.to_xml(oss, sr.match.vms);
 
-    // Send the complete scheduler-visible Host pool, not only the union of
-    // Hosts matched by at least one VM. OneDRS still uses REQUIREMENTS/HOSTS
-    // per VM for placement eligibility, while resilience admission needs the
-    // full healthy cluster capacity and must not infer failures from a
-    // workload-specific candidate subset.
-    sr.hpool.to_xml(oss, sr.hpool.ids);
+    sr.hpool.to_xml(oss, sr.match.match_host);
 
     //Include Image and System datastores to compute SELF LN/CP methods
     dspool->dump(temp, "", 0, -1, false);
