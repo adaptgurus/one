@@ -33,6 +33,14 @@ jobs:
             --std=c++17 --error-exitcode=2 -q
       - name: Repository AStyle check
         run: |
-          astyle --options=share/linters/.astylerc --formatted --verbose \
-            src/schedm/SchedulerManagerDriver.cc src/cluster/Cluster.cc
-          git --no-pager diff --exit-code
+          mkdir -p /tmp/onedrs-astyle/src/schedm /tmp/onedrs-astyle/src/cluster
+          cp src/schedm/SchedulerManagerDriver.cc /tmp/onedrs-astyle/src/schedm/
+          cp src/cluster/Cluster.cc /tmp/onedrs-astyle/src/cluster/
+          astyle --options="$GITHUB_WORKSPACE/share/linters/.astylerc" \
+            --formatted --verbose \
+            "/tmp/onedrs-astyle/src/schedm/*.cc" \
+            "/tmp/onedrs-astyle/src/cluster/*.cc"
+          cmp src/schedm/SchedulerManagerDriver.cc \
+            /tmp/onedrs-astyle/src/schedm/SchedulerManagerDriver.cc
+          cmp src/cluster/Cluster.cc \
+            /tmp/onedrs-astyle/src/cluster/Cluster.cc
