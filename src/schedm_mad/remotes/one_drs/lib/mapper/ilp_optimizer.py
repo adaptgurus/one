@@ -3,6 +3,7 @@
 from collections import defaultdict as ddict
 from collections.abc import Callable, Collection, Mapping
 from itertools import chain, combinations
+from math import ceil
 from typing import TYPE_CHECKING, Any, Literal, Optional, Union
 
 from pulp import (
@@ -740,10 +741,11 @@ class ILPOptimizer(Mapper):
                         f"anti_affined_on_host_{host_id}"
                     )
 
-        # When failure-domain spreading is enabled, anti-affined VMs are
-        # also kept apart across the declared host failure domains (rack/zone).
-        # This extends native host anti-affinity without creating a second
-        # scheduler or changing affinity semantics when hosts are unlabeled.
+        # Failure-domain spread is a topology-spread constraint, not a
+        # blanket "one VM per rack" rule. For N replicas across D eligible
+        # domains, cap each domain at ceil(N/D). This yields 1/1/1 for three
+        # replicas across three racks, but correctly permits 2/2/2 for six
+        # replicas across three racks.
         if self._failure_domain_spread:
             domain_hosts: ddict[str, set[int]] = ddict(set)
             for host_id, host_cap in all_host_caps.items():
@@ -751,21 +753,32 @@ class ILPOptimizer(Mapper):
                 domain_hosts[domain].add(host_id)
 
             for vmg_id, vmg in self._anti_affined_vm_groups.items():
+                active_domains: dict[str, list] = {}
                 for domain, candidate_hosts in domain_hosts.items():
-                    terms = []
-                    for vm_id in vmg.vm_ids:
-                        for host_id in candidate_hosts:
-                            var = x_next.get((vm_id, host_id))
-                            if var is not None:
-                                terms.append(var)
-                    if len(terms) > 1:
-                        safe_domain = "".join(
-                            ch if ch.isalnum() else "_" for ch in domain
-                        )
-                        model += (
-                            sum_(terms) <= 1,
-                            f"vm_group_{vmg_id}_failure_domain_{safe_domain}_spread"
-                        )
+                    terms = [
+                        x_next[vm_id, host_id]
+                        for vm_id in vmg.vm_ids
+                        for host_id in candidate_hosts
+                        if (vm_id, host_id) in x_next
+                    ]
+                    if terms:
+                        active_domains[domain] = terms
+
+                if not active_domains:
+                    continue
+
+                domain_limit = ceil(
+                    len(vmg.vm_ids) / len(active_domains)
+                )
+                for domain, terms in active_domains.items():
+                    safe_domain = "".join(
+                        ch if ch.isalnum() else "_" for ch in domain
+                    )
+                    model += (
+                        sum_(terms) <= domain_limit,
+                        f"vm_group_{vmg_id}_failure_domain_"
+                        f"{safe_domain}_spread"
+                    )
 
         # Grouping `z`-variables.
         # TODO: Consider using `itertools.groupby`.
