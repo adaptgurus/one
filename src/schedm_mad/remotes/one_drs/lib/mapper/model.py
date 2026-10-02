@@ -162,6 +162,10 @@ class VMRequirements:
     nic_matches: dict[int, list[int]] = field(default_factory=dict)
     # Net usage.
     net_usage: float = float('nan')
+    # Workloads explicitly excluded from LayerSentry HA/DRS resilience
+    # admission (for example license-bound or non-restartable VMs) remain
+    # schedulable but do not contribute to the advertised N+K guarantee.
+    resilience_protected: bool = True
 
     def find_host_matches(
         self,
