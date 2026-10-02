@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from itertools import combinations
 from typing import Collection, Mapping
 
 from .mapper.model import HostCapacity, VMGroup, VMRequirements
@@ -226,15 +227,32 @@ def validate_resilience(
             ]
             if group.affined:
                 common = set.intersection(*member_candidates)
+                group_memory = sum(
+                    float(vm.memory)
+                    for vm in protected
+                    if vm.id in members
+                )
+                group_cpu = sum(
+                    float(vm.cpu_ratio)
+                    for vm in protected
+                    if vm.id in members
+                )
+                common = {
+                    host_id
+                    for host_id in common
+                    if host_by_id[host_id].memory.total >= group_memory
+                    and host_by_id[host_id].cpu.total >= group_cpu
+                }
                 if len(common) < required_hosts:
                     raise ResilienceAdmissionError(
                         "resilience admission failed: affined VM group "
                         f"{group.id} has only {len(common)} common recovery "
-                        f"host(s), {required_hosts} required"
+                        f"host(s) able to fit the whole group, "
+                        f"{required_hosts} required"
                     )
             else:
-                union = set().union(*member_candidates)
                 required_distinct = len(members) + remaining_host_tolerance
+                union = set().union(*member_candidates)
                 if len(union) < required_distinct:
                     raise ResilienceAdmissionError(
                         "resilience admission failed: anti-affined VM group "
@@ -242,6 +260,43 @@ def validate_resilience(
                         f"{required_distinct} required to preserve host "
                         "anti-affinity after failures"
                     )
+
+                # Robust Hall condition. A group remains matchable after any K
+                # host failures iff every subset S of VMs has at least
+                # |S| + K neighboring candidate Hosts. Identical candidate
+                # sets use the cheap exact form; heterogeneous groups are
+                # exhaustively checked up to a bounded size.
+                first = member_candidates[0]
+                if all(candidates == first for candidates in member_candidates):
+                    continue
+
+                max_exact_members = 12
+                if len(members) > max_exact_members:
+                    raise ResilienceAdmissionError(
+                        "resilience admission cannot exactly prove N+K for "
+                        f"heterogeneous anti-affined VM group {group.id} with "
+                        f"{len(members)} members; split the group, normalize "
+                        "eligibility, or qualify it through an explicit "
+                        "large-group policy"
+                    )
+
+                for subset_size in range(1, len(members) + 1):
+                    for positions in combinations(
+                        range(len(members)), subset_size
+                    ):
+                        neighborhood: set[int] = set()
+                        for position in positions:
+                            neighborhood.update(member_candidates[position])
+                        required = subset_size + remaining_host_tolerance
+                        if len(neighborhood) < required:
+                            subset = [members[pos] for pos in positions]
+                            raise ResilienceAdmissionError(
+                                "resilience admission failed: anti-affined "
+                                f"group {group.id} subset {subset} has only "
+                                f"{len(neighborhood)} recovery host(s), "
+                                f"{required} required for failure-safe "
+                                "distinct placement"
+                            )
 
     memory_demand, cpu_demand = _demand(protected)
 
