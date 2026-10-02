@@ -37,6 +37,133 @@ def vm(vm_id, cpu, memory):
 
 
 class ResilienceAdmissionTests(unittest.TestCase):
+    def test_resilience_disabled_preserves_single_host_lab(self):
+        report = validate_resilience(
+            [host(1, 4, 16, "")],
+            [vm(1, 2, 8)],
+            ResiliencePolicy(enabled=False),
+        )
+        self.assertEqual(report.scenarios_checked, 0)
+
+    def test_vm_recovery_reachability_blocks_pinned_single_target(self):
+        hosts = [
+            host(1, 16, 64, "rack-a"),
+            host(2, 16, 64, "rack-b"),
+            host(3, 16, 64, "rack-c"),
+        ]
+        pinned = VMRequirements(
+            id=21,
+            state=VMState.RUNNING,
+            cpu_ratio=2,
+            memory=8,
+            host_ids={1},
+        )
+        with self.assertRaisesRegex(ValueError, "no eligible surviving host"):
+            validate_resilience(
+                hosts,
+                [pinned],
+                ResiliencePolicy(enabled=True, host_failure_tolerance=1),
+            )
+
+    def test_failure_domain_labels_can_be_required(self):
+        hosts = [
+            host(1, 16, 64, ""),
+            host(2, 16, 64, "rack-b"),
+            host(3, 16, 64, "rack-c"),
+        ]
+        hosts[0] = HostCapacity(
+            id=hosts[0].id,
+            cpu=hosts[0].cpu,
+            memory=hosts[0].memory,
+            failure_domain="host:1",
+            failure_domain_labeled=False,
+            healthy=True,
+        )
+        hosts[1] = HostCapacity(
+            id=hosts[1].id,
+            cpu=hosts[1].cpu,
+            memory=hosts[1].memory,
+            failure_domain="rack-b",
+            failure_domain_labeled=True,
+            healthy=True,
+        )
+        hosts[2] = HostCapacity(
+            id=hosts[2].id,
+            cpu=hosts[2].cpu,
+            memory=hosts[2].memory,
+            failure_domain="rack-c",
+            failure_domain_labeled=True,
+            healthy=True,
+        )
+        with self.assertRaisesRegex(ValueError, "explicit failure-domain labels"):
+            validate_resilience(
+                hosts,
+                [vm(1, 2, 4)],
+                ResiliencePolicy(
+                    enabled=True,
+                    host_failure_tolerance=1,
+                    failure_domain_spread=True,
+                    require_failure_domain_labels=True,
+                ),
+            )
+
+    def test_anti_affinity_recovery_requires_distinct_survivors(self):
+        hosts = [
+            host(1, 16, 64, "rack-a"),
+            host(2, 16, 64, "rack-b"),
+            host(3, 16, 64, "rack-c"),
+        ]
+        a = VMRequirements(
+            id=31,
+            state=VMState.RUNNING,
+            cpu_ratio=2,
+            memory=4,
+            host_ids={1, 2},
+        )
+        b = VMRequirements(
+            id=32,
+            state=VMState.RUNNING,
+            cpu_ratio=2,
+            memory=4,
+            host_ids={1, 2},
+        )
+        group = VMGroup(id=9, affined=False, vm_ids={31, 32})
+        with self.assertRaisesRegex(ValueError, "distinct surviving hosts"):
+            validate_resilience(
+                hosts,
+                [a, b],
+                ResiliencePolicy(enabled=True, host_failure_tolerance=1),
+                vm_groups=[group],
+            )
+
+    def test_affined_group_is_not_subject_to_replica_disruption_budget(self):
+        hosts = [
+            host(1, 16, 64, "rack-a"),
+            host(2, 16, 64, "rack-b"),
+        ]
+        optimizer = ILPOptimizer(
+            current_placement=[Allocation(1, 1), Allocation(2, 1)],
+            vm_requirements=[vm(1, 2, 4), vm(2, 2, 4)],
+            vm_groups=[VMGroup(id=8, affined=True, vm_ids={1, 2})],
+            host_capacities=hosts,
+            dstore_capacities=[],
+            image_dstore_capacities=[],
+            vnet_capacities=[],
+            criteria="pack",
+            allowed_migrations=2,
+            allowed_host_migrations=2,
+            allowed_storage_migrations=0,
+            max_group_migrations=1,
+        )
+        optimizer._add_variables()
+        optimizer._create_expressions()
+        optimizer._add_constraints()
+        names = set(optimizer._model.constraints)
+        self.assertFalse(
+            any("migration_disruption_budget" in name for name in names),
+            names,
+        )
+
     def test_ilp_contains_failure_domain_and_group_disruption_constraints(self):
         hosts = [
             host(1, 16, 64, "rack-a"),
@@ -84,7 +211,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
         report = validate_resilience(
             hosts,
             vms,
-            ResiliencePolicy(host_failure_tolerance=2),
+            ResiliencePolicy(enabled=True, host_failure_tolerance=2),
         )
         self.assertEqual(report.healthy_hosts, 5)
         self.assertEqual(report.host_failure_tolerance, 2)
@@ -101,7 +228,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
             validate_resilience(
                 hosts,
                 vms,
-                ResiliencePolicy(host_failure_tolerance=2),
+                ResiliencePolicy(enabled=True, host_failure_tolerance=2),
             )
 
     def test_blocks_correlated_failure_domain_loss(self):
@@ -117,6 +244,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 hosts,
                 vms,
                 ResiliencePolicy(
+                    enabled=True,
                     host_failure_tolerance=1,
                     failure_domain_tolerance=1,
                 ),
@@ -132,7 +260,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
             validate_resilience(
                 hosts,
                 [vm(1, 2, 4)],
-                ResiliencePolicy(host_failure_tolerance=2),
+                ResiliencePolicy(enabled=True, host_failure_tolerance=2),
             )
 
     def test_pending_workload_counts_toward_failover_demand(self):
@@ -151,7 +279,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
             validate_resilience(
                 hosts,
                 [pending],
-                ResiliencePolicy(host_failure_tolerance=1),
+                ResiliencePolicy(enabled=True, host_failure_tolerance=1),
             )
 
     def test_reserve_headroom_is_enforced(self):
@@ -165,6 +293,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 hosts,
                 [vm(1, 5, 170)],
                 ResiliencePolicy(
+                    enabled=True,
                     host_failure_tolerance=1,
                     memory_reserve_percent=20,
                 ),
