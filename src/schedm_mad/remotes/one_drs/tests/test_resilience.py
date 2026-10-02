@@ -68,7 +68,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
             host(3, 16, 64, "rack-b"),
             host(4, 16, 64, "rack-c"),
         ]
-        vms = [vm(1, 20, 100)]
+        vms = [vm(1, 20, 150)]
         with self.assertRaisesRegex(ValueError, "failure domain"):
             validate_resilience(
                 hosts,
@@ -102,7 +102,7 @@ class ResilienceAdmissionTests(unittest.TestCase):
             id=9,
             state=VMState.PENDING,
             cpu_ratio=12,
-            memory=150,
+            memory=210,
         )
         with self.assertRaisesRegex(ValueError, "memory demand"):
             validate_resilience(
