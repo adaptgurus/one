@@ -569,6 +569,11 @@ class OptimizerParser:
 
                 host_ids = set(vm_req.hosts.id)
                 resilience_protected = True
+                # Device-free VMs are trivially qualified for this check.
+                # Device-bearing VMs require an explicit LayerSentry
+                # qualification marker because matching a PCI ID at plan time
+                # does not prove spare capacity survives a Host failure.
+                resilience_device_qualified = not bool(vm.template.pci)
                 if vm.user_template is not None:
                     for item in vm.user_template.any_element:
                         name = item.qname.upper()
@@ -581,7 +586,11 @@ class OptimizerParser:
                             and value == "NO"
                         ):
                             resilience_protected = False
-                            break
+                        if (
+                            name == "LAYERSENTRY_DEVICE_HA_QUALIFIED"
+                            and value == "YES"
+                        ):
+                            resilience_device_qualified = True
 
                 if (
                     self.mode.upper() == "OPTIMIZE"
@@ -613,6 +622,7 @@ class OptimizerParser:
                     nic_matches={nic.id: nic.vnets.id for nic in vm_req.nic},
                     net_usage=net_usage,
                     resilience_protected=resilience_protected,
+                    resilience_device_qualified=resilience_device_qualified,
                 )
         return vm_requirements
 
