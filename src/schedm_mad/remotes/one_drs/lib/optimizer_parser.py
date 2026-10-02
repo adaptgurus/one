@@ -749,10 +749,35 @@ class OptimizerParser:
         result: list[VMGroup] = []
 
         if self.mode.upper() == "OPTIMIZE":
-            # All requested members are movable together. Current placement is
-            # an objective/initial state, not a hard affinity constraint.
+            # Requested members are movable together. Group members omitted
+            # from REQUIREMENTS (for example locked/protected VMs) remain
+            # fixed anchors and must still constrain the movable members.
             for relation in relations:
                 members = relation.vm_ids & allowed_vm_ids
+                fixed_members = relation.vm_ids - allowed_vm_ids
+                fixed_hosts = {
+                    current_placement[vm_id]
+                    for vm_id in fixed_members
+                    if vm_id in current_placement
+                }
+
+                if relation.affined and len(fixed_hosts) > 1:
+                    raise ValueError(
+                        "VM Group affinity drift: fixed members of relation "
+                        f"{relation.id} are already on different hosts"
+                    )
+
+                if fixed_hosts:
+                    target_hosts = (
+                        affined_hosts
+                        if relation.affined
+                        else anti_affined_hosts
+                    )
+                    for vm_id in members:
+                        target_hosts.setdefault(vm_id, set()).update(
+                            fixed_hosts
+                        )
+
                 if len(members) > 1:
                     result.append(
                         VMGroup(
