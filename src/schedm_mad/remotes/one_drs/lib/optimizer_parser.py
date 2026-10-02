@@ -792,8 +792,14 @@ class OptimizerParser:
                 result[name] = max(0, int(child.text))
             elif name in {"CPU_RESERVE_PERCENT", "MEMORY_RESERVE_PERCENT"}:
                 result[name] = max(0.0, min(99.0, float(child.text)))
-            elif name == "FAILURE_DOMAIN_SPREAD":
+            elif name in {
+                "RESILIENCE_ENABLED",
+                "FAILURE_DOMAIN_SPREAD",
+                "PAUSE_ON_DEGRADED",
+            }:
                 result[name] = str(child.text).upper() == "YES"
+            elif name == "FAILURE_DOMAIN_ATTRIBUTE":
+                result[name] = str(child.text or "").strip().upper()
         policy = next(
             (
                 child.text
