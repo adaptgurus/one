@@ -5,7 +5,15 @@ import unittest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from lib.mapper.model import Capacity, HostCapacity, VMRequirements, VMState
+from lib.mapper.ilp_optimizer import ILPOptimizer
+from lib.mapper.model import (
+    Allocation,
+    Capacity,
+    HostCapacity,
+    VMGroup,
+    VMRequirements,
+    VMState,
+)
 from lib.resilience import ResiliencePolicy, validate_resilience
 
 
@@ -29,6 +37,41 @@ def vm(vm_id, cpu, memory):
 
 
 class ResilienceAdmissionTests(unittest.TestCase):
+    def test_ilp_contains_failure_domain_and_group_disruption_constraints(self):
+        hosts = [
+            host(1, 16, 64, "rack-a"),
+            host(2, 16, 64, "rack-a"),
+            host(3, 16, 64, "rack-b"),
+        ]
+        vms = [vm(1, 2, 4), vm(2, 2, 4)]
+        optimizer = ILPOptimizer(
+            current_placement=[Allocation(1, 1), Allocation(2, 2)],
+            vm_requirements=vms,
+            vm_groups=[VMGroup(id=7, affined=False, vm_ids={1, 2})],
+            host_capacities=hosts,
+            dstore_capacities=[],
+            image_dstore_capacities=[],
+            vnet_capacities=[],
+            criteria="pack",
+            allowed_migrations=2,
+            allowed_host_migrations=2,
+            allowed_storage_migrations=0,
+            failure_domain_spread=True,
+            max_group_migrations=1,
+        )
+        optimizer._add_variables()
+        optimizer._create_expressions()
+        optimizer._add_constraints()
+        names = set(optimizer._model.constraints)
+        self.assertTrue(
+            any("failure_domain_rack_a_spread" in name for name in names),
+            names,
+        )
+        self.assertTrue(
+            any("migration_disruption_budget" in name for name in names),
+            names,
+        )
+
     def test_survives_two_host_failures(self):
         hosts = [
             host(1, 16, 64, "rack-a"),
