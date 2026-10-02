@@ -19,6 +19,7 @@ from collections import defaultdict
 import io
 import platform
 import sys
+import time
 from dataclasses import replace
 from typing import Any
 
@@ -76,6 +77,7 @@ class OptimizerParser:
             "MIGRATION_THRESHOLD": -1,
             "HOST_MIGRATION_THRESHOLD": -1,
             "DS_MIGRATION_THRESHOLD": 0,
+            "MIGRATION_COOLDOWN_SECONDS": 0,
             "WEIGHTS": {
                 "CPU_USAGE": 1,
             },
@@ -291,6 +293,7 @@ class OptimizerParser:
             allowed_migrations = -1
             allowed_host_migrations = -1
             allowed_storage_migrations = 0
+            migration_cooldown_seconds = 0
             migration_priority = None
         else:
             cluster_config = self._parse_cluster()
@@ -308,6 +311,10 @@ class OptimizerParser:
             allowed_storage_migrations = cluster_config.get(
                 "DS_MIGRATION_THRESHOLD",
                 self.config["MODE"]["DS_MIGRATION_THRESHOLD"],
+            )
+            migration_cooldown_seconds = cluster_config.get(
+                "MIGRATION_COOLDOWN_SECONDS",
+                self.config["MODE"].get("MIGRATION_COOLDOWN_SECONDS", 0),
             )
             smp = self.config["MODE"].get("PRIORITIZE_STORAGE_MIGRATIONS", "")
             if smp is True or str(smp).upper() == "YES":
@@ -365,6 +372,49 @@ class OptimizerParser:
             curr_placement.append(alloc)
 
         host_capacities = self._parse_host_capacities()
+
+        if self.mode.upper() == "OPTIMIZE" and migration_cooldown_seconds > 0:
+            healthy_ids = {host.id for host in host_capacities if host.healthy}
+            vm_pool = {
+                int(vm.id): vm
+                for vm in self.scheduler_driver_action.vm_pool.vm
+            }
+            now = int(time.time())
+            for vm_id, vm_req in tuple(vm_reqs_dict.items()):
+                current_host = self._curr_alloc.get(vm_id)
+                if current_host not in healthy_ids:
+                    # Failures, maintenance holds and warm-up exclusions must
+                    # never be blocked by anti-ping-pong cooldown.
+                    continue
+                if (
+                    vm_req.host_ids is not None
+                    and current_host not in vm_req.host_ids
+                ):
+                    # The current placement violates a hard eligibility rule;
+                    # reconciliation is more important than cooldown.
+                    continue
+                vm_obj = vm_pool.get(vm_id)
+                history = (
+                    vm_obj.history_records.history
+                    if vm_obj is not None and vm_obj.history_records
+                    else []
+                )
+                if not history:
+                    continue
+                latest = max(history, key=lambda item: int(item.seq or 0))
+                started = int(latest.stime or 0)
+                if started <= 0 or now - started >= migration_cooldown_seconds:
+                    continue
+                vm_reqs_dict[vm_id] = replace(
+                    vm_req, host_ids={current_host}
+                )
+                self.log_vm(
+                    "INFO",
+                    vm_id,
+                    "Host migration suppressed by OneDRS cooldown; "
+                    f"{migration_cooldown_seconds - (now - started)}s remaining",
+                )
+
         resilience_config = self.config["RESILIENCE"].copy()
         # Resilience is a cluster admission contract, so it must govern both
         # initial PLACE and later OPTIMIZE operations. Restricting cluster
@@ -828,6 +878,8 @@ class OptimizerParser:
                 result["HOST_MIGRATION_THRESHOLD"] = max(-1, int(child.text))
             elif name == "DS_MIGRATION_THRESHOLD":
                 result["DS_MIGRATION_THRESHOLD"] = max(-1, int(child.text))
+            elif name == "MIGRATION_COOLDOWN_SECONDS":
+                result["MIGRATION_COOLDOWN_SECONDS"] = max(0, int(child.text))
             elif name in {
                 "HOST_FAILURE_TOLERANCE",
                 "FAILURE_DOMAIN_TOLERANCE",
