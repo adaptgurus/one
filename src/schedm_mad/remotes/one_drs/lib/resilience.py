@@ -188,6 +188,14 @@ def validate_resilience(
         host_by_id = {host.id: host for host in healthy}
 
         for vm in protected:
+            if vm.pci_devices and not vm.resilience_device_qualified:
+                raise ResilienceAdmissionError(
+                    "resilience admission failed: VM "
+                    f"{vm.id} has PCI/GPU/SR-IOV requirements but redundant "
+                    "device failover is not qualified; set "
+                    "LAYERSENTRY_DEVICE_HA_QUALIFIED=YES only after exact "
+                    "device-pool recovery qualification"
+                )
             candidates = {
                 int(hid)
                 for hid in candidate_hosts.get(vm.id, ())
