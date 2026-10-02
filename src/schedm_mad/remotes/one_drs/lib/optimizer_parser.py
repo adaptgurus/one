@@ -985,11 +985,11 @@ class OptimizerParser:
         )
         weights = self._get_weights(one_drs)
 
-        result |= {
-            "POLICY": policy,
-            "WEIGHTS": weights,
-            "PREDICTIVE": predictive,
-        }
+        result["WEIGHTS"] = weights
+        if policy is not None:
+            result["POLICY"] = policy
+        if predictive is not None:
+            result["PREDICTIVE"] = predictive
         return result
 
     @staticmethod
