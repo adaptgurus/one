@@ -103,6 +103,24 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 ResiliencePolicy(enabled=True, host_failure_tolerance=1),
             )
 
+    def test_impossible_compound_failure_policy_fails_closed(self):
+        hosts = [
+            host(1, 10, 50, "rack-a"),
+            host(2, 10, 50, "rack-a"),
+            host(3, 10, 50, "rack-b"),
+        ]
+        with self.assertRaisesRegex(ValueError, "combined failure policy"):
+            validate_resilience(
+                hosts,
+                [vm(1, 2, 10)],
+                ResiliencePolicy(
+                    enabled=True,
+                    host_failure_tolerance=1,
+                    failure_domain_tolerance=1,
+                    combined_failure_modes=True,
+                ),
+            )
+
     def test_combined_rack_plus_host_failure_is_checked(self):
         hosts = [
             host(1, 10, 50, "rack-a"),
