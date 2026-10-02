@@ -15,7 +15,11 @@ from lib.mapper.model import (
     VMRequirements,
     VMState,
 )
-from lib.resilience import ResiliencePolicy, validate_resilience
+from lib.resilience import (
+    ResiliencePolicy,
+    migration_cooldown_holds,
+    validate_resilience,
+)
 
 
 def host(host_id, cpu, memory, domain, healthy=True):
@@ -38,6 +42,48 @@ def vm(vm_id, cpu, memory):
 
 
 class ResilienceAdmissionTests(unittest.TestCase):
+    def test_migration_cooldown_only_holds_for_healthy_eligible_host(self):
+        self.assertTrue(
+            migration_cooldown_holds(
+                current_host=1,
+                eligible_host_ids={1, 2},
+                healthy_host_ids={1, 2},
+                last_placement_time=950,
+                cooldown_seconds=100,
+                now=1000,
+            )
+        )
+        self.assertFalse(
+            migration_cooldown_holds(
+                current_host=1,
+                eligible_host_ids={1, 2},
+                healthy_host_ids={2},
+                last_placement_time=950,
+                cooldown_seconds=100,
+                now=1000,
+            )
+        )
+        self.assertFalse(
+            migration_cooldown_holds(
+                current_host=1,
+                eligible_host_ids={2},
+                healthy_host_ids={1, 2},
+                last_placement_time=950,
+                cooldown_seconds=100,
+                now=1000,
+            )
+        )
+        self.assertFalse(
+            migration_cooldown_holds(
+                current_host=1,
+                eligible_host_ids={1, 2},
+                healthy_host_ids={1, 2},
+                last_placement_time=800,
+                cooldown_seconds=100,
+                now=1000,
+            )
+        )
+
     def test_committed_capacity_not_real_usage_drives_ha_admission(self):
         hosts = [
             HostCapacity(
