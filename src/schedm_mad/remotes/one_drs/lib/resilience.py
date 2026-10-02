@@ -71,16 +71,11 @@ def _demand(vm_requirements: Collection[VMRequirements], hosts: Collection[HostC
     # Requested VM resources are preferred for admission control. Current host
     # usage is also included conservatively so a partial requirements set cannot
     # accidentally understate the cluster demand.
-    req_mem = sum(
-        float(vm.memory)
-        for vm in vm_requirements
-        if vm.state is not VMState.PENDING
-    )
-    req_cpu = sum(
-        float(vm.cpu_ratio)
-        for vm in vm_requirements
-        if vm.state is not VMState.PENDING
-    )
+    # Admission includes both running and pending/requested VMs. Excluding
+    # pending VMs would understate the post-placement demand and could admit a
+    # cluster that cannot actually preserve the configured N+K reserve.
+    req_mem = sum(float(vm.memory) for vm in vm_requirements)
+    req_cpu = sum(float(vm.cpu_ratio) for vm in vm_requirements)
     host_mem = sum(float(host.memory.usage) for host in hosts)
     host_cpu = sum(float(host.cpu.usage) for host in hosts)
     return max(req_mem, host_mem), max(req_cpu, host_cpu)
