@@ -217,6 +217,28 @@ def _validate_placement_reachability(
             )
 
 
+def migration_cooldown_holds(
+    current_host: int | None,
+    eligible_host_ids: set[int] | None,
+    healthy_host_ids: set[int],
+    last_placement_time: int,
+    cooldown_seconds: int,
+    now: int,
+) -> bool:
+    if cooldown_seconds <= 0 or current_host is None:
+        return False
+    if current_host not in healthy_host_ids:
+        return False
+    if (
+        eligible_host_ids is not None
+        and current_host not in eligible_host_ids
+    ):
+        return False
+    if last_placement_time <= 0:
+        return False
+    return now - last_placement_time < cooldown_seconds
+
+
 def _scenario_count(n: int, failures: int) -> int:
     if failures <= 0:
         return 1
