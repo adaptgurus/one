@@ -84,13 +84,16 @@ class OptimizerParser:
         "MEMORY_SYSTEM_DS_SCALE": 0,
         "DIFFERENT_VNETS": True,
         "RESILIENCE": {
-            "HOST_FAILURE_TOLERANCE": 1,
+            "ENABLED": False,
+            "HOST_FAILURE_TOLERANCE": 0,
             "FAILURE_DOMAIN_TOLERANCE": 0,
             "CPU_RESERVE_PERCENT": 0,
             "MEMORY_RESERVE_PERCENT": 0,
             "MIN_HEALTHY_HOSTS": 1,
-            "FAILURE_DOMAIN_SPREAD": True,
-            "MAX_GROUP_MIGRATIONS": 1,
+            "FAILURE_DOMAIN_SPREAD": False,
+            "REQUIRE_FAILURE_DOMAIN_LABELS": False,
+            "MAX_GROUP_MIGRATIONS": -1,
+            "MAX_FAILURE_SCENARIOS": 1024,
         },
     }
 
@@ -368,7 +371,14 @@ class OptimizerParser:
                 if key in cluster_config and cluster_config[key] is not None:
                     resilience_config[key] = cluster_config[key]
 
+        max_group_migrations = int(
+            resilience_config["MAX_GROUP_MIGRATIONS"]
+        )
         resilience_policy = ResiliencePolicy(
+            enabled=(
+                resilience_config["ENABLED"] is True
+                or str(resilience_config["ENABLED"]).upper() == "YES"
+            ),
             host_failure_tolerance=int(
                 resilience_config["HOST_FAILURE_TOLERANCE"]
             ),
@@ -389,14 +399,25 @@ class OptimizerParser:
                 or str(resilience_config["FAILURE_DOMAIN_SPREAD"]).upper()
                 == "YES"
             ),
-            max_group_migrations=max(
-                0, int(resilience_config["MAX_GROUP_MIGRATIONS"])
+            require_failure_domain_labels=(
+                resilience_config["REQUIRE_FAILURE_DOMAIN_LABELS"] is True
+                or str(
+                    resilience_config["REQUIRE_FAILURE_DOMAIN_LABELS"]
+                ).upper()
+                == "YES"
+            ),
+            max_group_migrations=(
+                None if max_group_migrations < 0 else max_group_migrations
+            ),
+            max_failure_scenarios=max(
+                1, int(resilience_config["MAX_FAILURE_SCENARIOS"])
             ),
         )
         report = validate_resilience(
             host_capacities,
             list(vm_reqs_dict.values()),
             resilience_policy,
+            vm_groups=vmg,
         )
         self.log_general(
             "INFO",
@@ -410,7 +431,12 @@ class OptimizerParser:
             current_placement=curr_placement,
             vm_requirements=list(vm_reqs_dict.values()),
             vm_groups=vmg,
-            host_capacities=host_capacities,
+            # Never offer ERROR/DISABLED/OFFLINE hosts as placement targets.
+            # They remain in the resilience inventory so existing failures are
+            # accounted for, but OneDRS may place only on MONITORED hosts.
+            host_capacities=[
+                host for host in host_capacities if host.healthy
+            ],
             dstore_capacities=self._parse_shared_dstore_capacities(),
             image_dstore_capacities=self._parse_image_dstore_capacities(),
             vnet_capacities=self._parse_vnet_capacities(),
@@ -655,13 +681,13 @@ class OptimizerParser:
                 child.qname.upper(): str(child.text or "").strip()
                 for child in (host.template.children if host.template else [])
             }
-            failure_domain = (
+            explicit_failure_domain = (
                 attrs.get("LAYERSENTRY_FAILURE_DOMAIN")
                 or attrs.get("FAILURE_DOMAIN")
                 or attrs.get("ZONE")
                 or attrs.get("RACK")
-                or f"host:{host.id}"
             )
+            failure_domain = explicit_failure_domain or f"host:{host.id}"
             result.append(
                 HostCapacity(
                     id=int(host.id),
@@ -688,6 +714,7 @@ class OptimizerParser:
                     ),
                     cluster_id=int(host.cluster_id),
                     failure_domain=failure_domain,
+                    failure_domain_labeled=bool(explicit_failure_domain),
                     healthy=int(host.state) == 2,
                 )
             )
@@ -784,12 +811,18 @@ class OptimizerParser:
                 "HOST_FAILURE_TOLERANCE",
                 "FAILURE_DOMAIN_TOLERANCE",
                 "MIN_HEALTHY_HOSTS",
-                "MAX_GROUP_MIGRATIONS",
+                "MAX_FAILURE_SCENARIOS",
             }:
                 result[name] = max(0, int(child.text))
+            elif name == "MAX_GROUP_MIGRATIONS":
+                result[name] = max(-1, int(child.text))
             elif name in {"CPU_RESERVE_PERCENT", "MEMORY_RESERVE_PERCENT"}:
                 result[name] = max(0.0, min(99.0, float(child.text)))
-            elif name == "FAILURE_DOMAIN_SPREAD":
+            elif name in {
+                "ENABLED",
+                "FAILURE_DOMAIN_SPREAD",
+                "REQUIRE_FAILURE_DOMAIN_LABELS",
+            }:
                 result[name] = str(child.text).upper() == "YES"
         policy = next(
             (
