@@ -94,6 +94,8 @@ class OptimizerParser:
             "MAX_GROUP_MIGRATIONS": 1,
             "PAUSE_ON_DEGRADED": True,
             "FAILURE_DOMAIN_ATTRIBUTE": "LAYERSENTRY_FAILURE_DOMAIN",
+            "EXACT_RECOVERY_PROOF": True,
+            "MAX_EXACT_FAILURE_SCENARIOS": 64,
         },
     }
 
@@ -383,6 +385,8 @@ class OptimizerParser:
                 "MAX_GROUP_MIGRATIONS": "MAX_GROUP_MIGRATIONS",
                 "PAUSE_ON_DEGRADED": "PAUSE_ON_DEGRADED",
                 "FAILURE_DOMAIN_ATTRIBUTE": "FAILURE_DOMAIN_ATTRIBUTE",
+                "EXACT_RECOVERY_PROOF": "EXACT_RECOVERY_PROOF",
+                "MAX_EXACT_FAILURE_SCENARIOS": "MAX_EXACT_FAILURE_SCENARIOS",
             }
             for source_key, target_key in key_map.items():
                 if cluster_config.get(source_key) is not None:
@@ -426,6 +430,13 @@ class OptimizerParser:
             failure_domain_attribute=str(
                 resilience_config["FAILURE_DOMAIN_ATTRIBUTE"]
             ).strip().upper(),
+            exact_recovery_proof=as_bool(
+                resilience_config["EXACT_RECOVERY_PROOF"]
+            ),
+            max_exact_failure_scenarios=max(
+                1,
+                int(resilience_config["MAX_EXACT_FAILURE_SCENARIOS"]),
+            ),
         )
 
         host_capacities = self._parse_host_capacities(
@@ -491,6 +502,7 @@ class OptimizerParser:
                 candidate_hosts=candidate_hosts,
                 vm_groups=vmg,
                 cluster_host_count=cluster_host_count,
+                solver=self.config["SOLVER"],
             )
             self.log_general(
                 "INFO",
@@ -1001,6 +1013,7 @@ class OptimizerParser:
                 "FAILURE_DOMAIN_TOLERANCE",
                 "MIN_HEALTHY_HOSTS",
                 "MAX_GROUP_MIGRATIONS",
+                "MAX_EXACT_FAILURE_SCENARIOS",
             }:
                 result[name] = max(0, int(child.text))
             elif name in {"CPU_RESERVE_PERCENT", "MEMORY_RESERVE_PERCENT"}:
@@ -1009,6 +1022,7 @@ class OptimizerParser:
                 "RESILIENCE_ENABLED",
                 "FAILURE_DOMAIN_SPREAD",
                 "PAUSE_ON_DEGRADED",
+                "EXACT_RECOVERY_PROOF",
             }:
                 result[name] = str(child.text).upper() == "YES"
             elif name == "FAILURE_DOMAIN_ATTRIBUTE":
