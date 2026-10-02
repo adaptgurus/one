@@ -160,6 +160,21 @@ def validate_resilience(
             f"minimum is {policy.min_healthy_hosts}"
         )
 
+    if (
+        policy.failure_domain_tolerance > 0
+        or policy.failure_domain_spread
+    ):
+        unlabeled = [
+            host.id for host in healthy if not host.failure_domain_explicit
+        ]
+        if unlabeled:
+            raise ResilienceAdmissionError(
+                "resilience admission failed: rack/zone protection requested "
+                "but configured failure-domain attribute "
+                f"{policy.failure_domain_attribute!r} is missing on Hosts "
+                f"{unlabeled}"
+            )
+
     active_unavailable = 0
     if cluster_host_count is not None:
         active_unavailable = max(0, int(cluster_host_count) - len(healthy))
