@@ -1,0 +1,36 @@
+name: Inspect Disposable Source Recovery Paths
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    if: github.event.pull_request.head.ref == 'qual/hyperv-migration-live-20260924'
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 10
+    steps:
+      - name: Inspect Hyper-V integration and host VHD tooling
+        shell: powershell
+        run: |
+          $ErrorActionPreference='Continue'
+          $name='ls-migration-source-test'
+          Write-Host '===VM==='
+          Get-VM -Name $name | Select-Object Name,State,Generation,Status | Format-List
+          Write-Host '===INTEGRATION==='
+          Get-VMIntegrationService -VMName $name | Select-Object Name,Enabled,PrimaryStatusDescription,SecondaryStatusDescription | Format-Table -AutoSize
+          Write-Host '===WMI_GUEST_SERVICE==='
+          Get-VMIntegrationService -VMName $name | Where-Object {$_.Name -match 'Guest|Service'} | Format-List *
+          Write-Host '===WSL==='
+          & wsl.exe --status
+          Write-Host "WSL_STATUS_EXIT=$LASTEXITCODE"
+          & wsl.exe -l -v
+          Write-Host "WSL_LIST_EXIT=$LASTEXITCODE"
+          Write-Host '===TOOLS==='
+          foreach($cmd in @('wsl.exe','diskpart.exe','Mount-VHD','Copy-VMFile')){
+            $c=Get-Command $cmd -ErrorAction SilentlyContinue
+            Write-Host "$cmd=$($c.Source)"
+          }
