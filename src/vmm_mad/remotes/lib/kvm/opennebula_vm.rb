@@ -19,6 +19,7 @@ require_relative '../lib/opennebula_vm'
 
 require 'json'
 require 'tempfile'
+require_relative 'host_network_migration'
 
 # rubocop:disable Style/ClassAndModuleChildren
 # rubocop:disable Style/ClassVars
@@ -169,6 +170,8 @@ module VirtualMachineManagerKVM
     #
     class KvmDomain
 
+        include HostNetworkMigration
+
         attr_reader :domain
 
         def initialize(domain)
@@ -300,10 +303,14 @@ module VirtualMachineManagerKVM
         #   @param host[String] name of the target host
         #   @param per_vm_opts[String] optional per-VM migration options
         def live_migrate(host, per_vm_opts = '')
-            cmd = "migrate --live #{ENV.fetch('MIGRATE_OPTIONS', '')} #{per_vm_opts} #{@domain}"
+            global = ENV.fetch('MIGRATE_OPTIONS', '')
+            transport = protected_migration_options(host, global, per_vm_opts)
+            cmd = "migrate --live #{global} #{per_vm_opts} #{transport} #{@domain}"
             cmd << " #{virsh_uri(host)}"
 
-            virsh_retry(cmd, 'active block job', virsh_tries)
+            observe_protected_migration(host) do
+                virsh_retry(cmd, 'active block job', virsh_tries)
+            end
         end
 
         # Live migrate the domain to the target host (LOCAL STORAGE variant)
@@ -311,14 +318,21 @@ module VirtualMachineManagerKVM
         #   @param devs[Array] of the disks that will be copied
         #   @param per_vm_opts[String] optional per-VM migration options
         def live_migrate_disks(host, devs, per_vm_opts = '')
-            cmd = "migrate --live #{ENV.fetch('MIGRATE_OPTIONS', '')} #{per_vm_opts} --suspend"
+            global = ENV.fetch('MIGRATE_OPTIONS', '')
+            transport = protected_migration_options(host, global, per_vm_opts)
+            # Disk streaming requires its own admitted native path proof. Until
+            # that lane is qualified, fail before native migration effects.
+            raise StandardError, 'Protected local-disk migration transport is not qualified' unless devs.empty?
+            cmd = "migrate --live #{global} #{per_vm_opts} #{transport} --suspend"
             cmd << " #{@domain} #{virsh_uri(host)}"
 
             if !devs.empty?
                 cmd << " --copy-storage-all --migrate-disks #{devs.join(',')}"
             end
 
-            virsh_retry(cmd, 'active block job', virsh_tries)
+            observe_protected_migration(host) do
+                virsh_retry(cmd, 'active block job', virsh_tries)
+            end
         end
 
         # Live migrate the given disks between the given VM directories.

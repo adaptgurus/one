@@ -1,0 +1,24 @@
+{
+  "scope": "SOURCE_FIXTURES_NOT_INSTALLED_OR_LIVE",
+  "native_library_compatibility": "migration methods identical between installed OpenNebula 7.4.1 source 27b39092cc92b9b87fe27d9bf024c21c981bb266 and this branch base f6053d7a0651bd8d36af32114b10252867b7f534",
+  "checks": {
+    "ruby_syntax": "PASS",
+    "owner_module_tests": "5 tests / 54 assertions / 0 failures / 0 errors / 0 skips",
+    "deploy_shell_syntax": "PASS",
+    "diff_check": "PASS"
+  },
+  "implemented": [
+    "native existing migration owner invokes finite root role helper before libvirt migration",
+    "fixed approved --migrateuri and --listen-address; conflicting native override rejected",
+    "concurrent exact-VM QEMU socket observation with source/destination/generation/UUID/PID/freshness checks",
+    "missing proof preserves successful native result to avoid destructive target cleanup or replay",
+    "existing reviewed security-state preboot hook committed without runtime claim"
+  ],
+  "not_qualified": [
+    "native installation/sudo enrollment",
+    "durable operation/history-epoch receipt and LayerSentry completion-gate consumption",
+    "local-disk migration streaming transport currently closed until its own admitted path proof",
+    "actual native live migration and storage packet readback",
+    "security-state restore and guest Secure Boot/vTPM proof"
+  ]
+}
