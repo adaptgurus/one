@@ -1,6 +1,7 @@
 import pathlib
 import sys
 import unittest
+from types import SimpleNamespace
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -43,6 +44,87 @@ def vm(vm_id, cpu, memory):
 
 
 class ResilienceAdmissionTests(unittest.TestCase):
+    def test_place_resolves_single_candidate_cluster(self):
+        parser = OptimizerParser.__new__(OptimizerParser)
+        parser.scheduler_driver_action = SimpleNamespace(
+            cluster_pool=SimpleNamespace(cluster=[])
+        )
+        parser.config = {"RESILIENCE": {"ENABLED": False}}
+        hosts = [
+            HostCapacity(
+                id=1, cpu=Capacity(16, 0), memory=Capacity(64, 0),
+                cluster_id=0,
+            ),
+            HostCapacity(
+                id=2, cpu=Capacity(16, 0), memory=Capacity(64, 0),
+                cluster_id=0,
+            ),
+        ]
+        req = VMRequirements(
+            id=50, state=VMState.PENDING, cpu_ratio=1, memory=1,
+            host_ids={1, 2},
+        )
+        self.assertEqual(
+            parser._resolve_place_cluster_id(hosts, [req]),
+            0,
+        )
+
+    def test_place_fails_closed_when_resilient_candidates_span_clusters(self):
+        enabled = SimpleNamespace(
+            qname="ONE_DRS",
+            children=[SimpleNamespace(qname="ENABLED", text="YES")],
+        )
+        disabled = SimpleNamespace(
+            qname="ONE_DRS",
+            children=[SimpleNamespace(qname="ENABLED", text="NO")],
+        )
+        parser = OptimizerParser.__new__(OptimizerParser)
+        parser.scheduler_driver_action = SimpleNamespace(
+            cluster_pool=SimpleNamespace(
+                cluster=[
+                    SimpleNamespace(
+                        id=0, template=SimpleNamespace(children=[enabled])
+                    ),
+                    SimpleNamespace(
+                        id=1, template=SimpleNamespace(children=[disabled])
+                    ),
+                ]
+            )
+        )
+        parser.config = {
+            "RESILIENCE": {"ENABLED": False},
+            "MODE": {"POLICY": "BALANCE", "WEIGHTS": {"CPU": 1}},
+            "PREDICTIVE": 0,
+        }
+        hosts = [
+            HostCapacity(
+                id=1, cpu=Capacity(16, 0), memory=Capacity(64, 0),
+                cluster_id=0,
+            ),
+            HostCapacity(
+                id=2, cpu=Capacity(16, 0), memory=Capacity(64, 0),
+                cluster_id=1,
+            ),
+        ]
+        req = VMRequirements(
+            id=51, state=VMState.PENDING, cpu_ratio=1, memory=1,
+            host_ids={1, 2},
+        )
+        with self.assertRaisesRegex(ValueError, "spans multiple clusters"):
+            parser._resolve_place_cluster_id(hosts, [req])
+
+    def test_parse_cluster_missing_metadata_fails_closed(self):
+        parser = OptimizerParser.__new__(OptimizerParser)
+        parser.scheduler_driver_action = SimpleNamespace(
+            cluster_pool=SimpleNamespace(cluster=[])
+        )
+        parser.config = {
+            "MODE": {"POLICY": "BALANCE", "WEIGHTS": {"CPU": 1}},
+            "PREDICTIVE": 0,
+        }
+        with self.assertRaisesRegex(ValueError, "missing CLUSTER_POOL"):
+            parser._parse_cluster(0)
+
     def test_transient_monitoring_host_remains_drs_healthy(self):
         self.assertTrue(OptimizerParser._host_drs_healthy(1, True))
         self.assertTrue(OptimizerParser._host_drs_healthy(2, True))
