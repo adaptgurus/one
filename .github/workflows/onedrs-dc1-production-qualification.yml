@@ -1,0 +1,65 @@
+name: OneDRS dc1 Production Qualification
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-dc1-prod-qualification
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    if: github.event.pull_request.head.ref == 'qual/onedrs-dc1-prod-20261006'
+    runs-on: [self-hosted, Linux, X64, dc1]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 42021b22d78f529f4b3c42a966957ab4704badc3
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Bind exact dc1 runner and source
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner=$RUNNER_NAME hostname=$(hostname) user=$(id -un)"
+          test "$(hostname -s)" = "dc1"
+          test "$(git rev-parse HEAD)" = "42021b22d78f529f4b3c42a966957ab4704badc3"
+          sudo -n true
+          echo "DC1_RUNNER_BINDING=PASS"
+
+      - name: Read-only dc2 dc3 dc4 authority preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          for host in dc2 dc3 dc4; do
+            echo "===== $host ====="
+            sudo -n ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 root@$host               'hostname -s; rpm -q opennebula opennebula-node-kvm 2>&1 || true; systemctl is-active opennebula 2>/dev/null || true; systemctl is-active libvirtd virtqemud 2>/dev/null || true; ip -br addr | grep -E "ls-migration|ls-ovn" || true'
+          done
+          echo "COMPUTE_SSH_PREFLIGHT=PASS"
+
+      - name: Inspect prior OneDRS RPM build authority
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo -n bash -lc '
+            echo "== prior build tree =="
+            find /root/onedrs-rpm-build -maxdepth 4 -type f \( -name "*.spec" -o -name "*.rpm" -o -name "*.tar*" -o -name "*.patch" \) -printf "%p\n" 2>/dev/null | sort | head -200
+            echo "== installed frontend packages =="
+            for host in dc1 dc2 dc3; do
+              echo "---$host---"
+              if [ "$host" = dc1 ]; then
+                rpm -q opennebula
+              else
+                ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$host rpm -q opennebula
+              fi
+            done
+            echo "== scheduler config =="
+            grep -n "ARGUMENTS.*one_drs" /etc/one/oned.conf
+          '
+          echo "RPM_BUILD_PREFLIGHT=PASS"
