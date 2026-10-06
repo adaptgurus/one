@@ -1,0 +1,65 @@
+name: OneDRS dc1-dc4 Production Qualification
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-dc1-dc4-production
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    if: github.event.pull_request.head.ref == 'qual/onedrs-dc1-dc4-20261006'
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bind exact dc1 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner=$RUNNER_NAME hostname=$(hostname) user=$(id -un)"
+          test "$RUNNER_NAME" = "dc1"
+          test "$(hostname)" = "dc1"
+          sudo -n true
+          echo "DC1_RUNNER=PASS"
+
+      - name: Verify dc2-dc4 strict SSH trust
+        shell: bash
+        run: |
+          set -euo pipefail
+          for h in dc2 dc3 dc4; do
+            echo "=== $h ==="
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 root@"$h" 'hostname; date -Is; systemctl is-active opennebula 2>/dev/null || true; systemctl is-active libvirtd virtqemud openvswitch ovn-controller 2>/dev/null || true'
+          done
+
+      - name: Inspect OneDRS build and package state
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "=== dc1 package/source ==="
+          rpm -q opennebula opennebula-node-kvm 2>&1 || true
+          git rev-parse HEAD
+          find /root /var/tmp -maxdepth 6 -type f \( -name 'opennebula-7.4.1-1.ls.onedrs*.rpm' -o -name '*.spec' -o -name '*onedrs*build*.sh' \) -print 2>/dev/null | head -250
+          for h in dc2 dc3; do
+            echo "=== $h package/build ==="
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@"$h" "rpm -q opennebula opennebula-node-kvm 2>&1 || true; find /root /var/tmp -maxdepth 6 -type f \\( -name 'opennebula-7.4.1-1.ls.onedrs*.rpm' -o -name '*.spec' -o -name '*onedrs*build*.sh' \\) -print 2>/dev/null | head -250"
+          done
+          echo "=== dc4 role ==="
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc4 "rpm -q opennebula opennebula-node-kvm 2>&1 || true"
+
+      - name: Inspect current scheduler and live cluster state
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          grep -n 'ARGUMENTS.*one_drs' /etc/one/oned.conf || true
+          onehost list
+          onevm list
+          onecluster show 0 -x | sed -n '/<TEMPLATE>/,/<\/TEMPLATE>/p'
+          onezone show 0 || true
