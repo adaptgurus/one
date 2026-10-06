@@ -325,8 +325,8 @@ class OptimizerParser:
                 migration_priority = "storage"
             else:
                 migration_priority = "host"
-            self.config["PREDICTIVE"] = cluster_config.get(
-                "PREDICTIVE", self.config["PREDICTIVE"]
+            self.config["PREDICTIVE"] = self._effective_predictive(
+                cluster_config, self.config["PREDICTIVE"]
             )
             criteria = (
                 self._normalize_weights(cluster_config["WEIGHTS"])
@@ -784,7 +784,9 @@ class OptimizerParser:
                     # A recovered Host can remain MONITORED but explicitly
                     # withheld from DRS until storage/network/trust warm-up is
                     # complete.
-                    healthy=int(host.state) == 2 and drs_ready,
+                    healthy=self._host_drs_healthy(
+                        int(host.state), drs_ready
+                    ),
                     committed_memory=float(host.host_share.mem_usage or 0) / 1000,
                     committed_cpu=float(host.host_share.cpu_usage or 0) / 100,
                 )
@@ -979,6 +981,18 @@ class OptimizerParser:
             for child in one_drs.children
             if child.qname.upper() in weight_map
         }
+
+    @staticmethod
+    def _effective_predictive(cluster_config, default):
+        predictive = cluster_config.get("PREDICTIVE")
+        return default if predictive is None else predictive
+
+    @staticmethod
+    def _host_drs_healthy(state, drs_ready):
+        # Native optimize includes state 1 (MONITORING_MONITORED) and
+        # state 2 (MONITORED). Treat the transient monitoring state as
+        # eligible so an ordinary probe cycle does not consume HA reserve.
+        return int(state) in {1, 2} and bool(drs_ready)
 
     @staticmethod
     def _sanity_check(value):

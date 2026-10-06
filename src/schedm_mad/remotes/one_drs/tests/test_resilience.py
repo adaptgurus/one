@@ -6,6 +6,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
 from lib.mapper.ilp_optimizer import ILPOptimizer
+from lib.optimizer_parser import OptimizerParser
 from lib.mapper.model import (
     Allocation,
     Capacity,
@@ -42,6 +43,28 @@ def vm(vm_id, cpu, memory):
 
 
 class ResilienceAdmissionTests(unittest.TestCase):
+    def test_transient_monitoring_host_remains_drs_healthy(self):
+        self.assertTrue(OptimizerParser._host_drs_healthy(1, True))
+        self.assertTrue(OptimizerParser._host_drs_healthy(2, True))
+        self.assertFalse(OptimizerParser._host_drs_healthy(1, False))
+        self.assertFalse(OptimizerParser._host_drs_healthy(3, True))
+
+    def test_missing_cluster_predictive_preserves_global_default(self):
+        self.assertEqual(
+            OptimizerParser._effective_predictive(
+                {"PREDICTIVE": None},
+                0,
+            ),
+            0,
+        )
+        self.assertEqual(
+            OptimizerParser._effective_predictive(
+                {"PREDICTIVE": 0.4},
+                0,
+            ),
+            0.4,
+        )
+
     def test_migration_cooldown_only_holds_for_healthy_eligible_host(self):
         self.assertTrue(
             migration_cooldown_holds(
