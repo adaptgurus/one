@@ -15,6 +15,7 @@
 # See the License for the specific language governing permissions and        #
 # limitations under the License.                                             #
 #--------------------------------------------------------------------------- #
+require 'base64'
 require 'securerandom'
 require 'pathname'
 require 'opennebula'
@@ -159,9 +160,16 @@ module TransferManager
                 </DS_DRIVER_ACTION_DATA>
             EOS
 
+            # Never interpolate raw XML into a shell-quoted command. VM/user
+            # metadata can legally contain single quotes (for example error text),
+            # which would otherwise terminate the shell quote and break restore.
+            # Base64 uses a shell-safe alphabet; decode it back to stdin for the
+            # datastore helper.
+            driver_action64 = Base64.strict_encode64(driver_action)
+
             Action.ssh('datastore_action',
                        :host => nil,
-                       :cmds => "echo '#{driver_action}' | #{ds_cmd}",
+                       :cmds => "printf '%s' '#{driver_action64}' | base64 --decode | #{ds_cmd}",
                        :forward  => false,
                        :nostdout => false,
                        :nostderr => false)
