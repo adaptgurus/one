@@ -1,0 +1,185 @@
+name: OneDRS Real Canary Migration and dc4 Maintenance
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261006
+    paths:
+      - ".github/workflows/onedrs-real-migration.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-real-migration
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bind dc1
+        id: bind
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname)" = dc1 ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+            echo "DC1_AUTHORITY=PASS"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP_WRONG_RUNNER=PASS"
+          fi
+
+      - name: Real OneDRS canary migration and dc4 maintenance
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/var/lock/layersentry-onedrs-real-migration.lock
+          if ! flock -n 9; then exit 0; fi
+          MARK=/var/tmp/layersentry-onedrs-real-$GITHUB_RUN_ID.done
+          if [ -f "$MARK" ]; then exit 0; fi
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+
+          # All non-canary workload movement remains blocked.
+          for id in 0 1 5 6 7 8 9 10 11; do
+            onevm show "$id" >/dev/null 2>&1 || continue
+            printf '%s\n' 'ONEDRS_BLOCKED="YES"' 'LAYERSENTRY_ONEDRS_BLOCK_REASON="PRODUCTION_QUALIFICATION_GUARD"' >/var/tmp/onedrs-block.tmpl
+            onevm update "$id" /var/tmp/onedrs-block.tmpl --append
+          done
+
+          CANARY=20
+          onevm show "$CANARY" -x >/var/tmp/canary-before.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          r=ET.parse("/var/tmp/canary-before.xml").getroot()
+          if int(r.findtext("STATE") or -1)!=3 or int(r.findtext("LCM_STATE") or -1)!=3:
+              raise SystemExit("canary 20 is not ACTIVE/RUNNING")
+          hs=r.findall("./HISTORY_RECORDS/HISTORY")
+          last=max(hs,key=lambda x:int(x.findtext("SEQ") or -1))
+          print("CANARY_BEFORE host",last.findtext("HID"),"seq",last.findtext("SEQ"))
+          open("/var/tmp/canary-before-host","w").write(last.findtext("HID"))
+          open("/var/tmp/canary-before-seq","w").write(last.findtext("SEQ"))
+          PY
+
+          echo 'ONEDRS_BLOCKED="NO"' >/var/tmp/onedrs-allow.tmpl
+          onevm update "$CANARY" /var/tmp/onedrs-allow.tmpl --append
+
+          # Exercise the initial-placement/reschedule owner (-p one_drs).
+          onevm resched "$CANARY"
+          moved=0
+          for _ in $(seq 1 100); do
+            onevm show "$CANARY" -x >/var/tmp/canary-now.xml
+            if python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          r=ET.parse("/var/tmp/canary-now.xml").getroot()
+          before_host=int(open("/var/tmp/canary-before-host").read())
+          before_seq=int(open("/var/tmp/canary-before-seq").read())
+          hs=r.findall("./HISTORY_RECORDS/HISTORY")
+          if not hs: raise SystemExit(1)
+          last=max(hs,key=lambda x:int(x.findtext("SEQ") or -1))
+          host=int(last.findtext("HID") or -1); seq=int(last.findtext("SEQ") or -1)
+          state=int(r.findtext("STATE") or -1); lcm=int(r.findtext("LCM_STATE") or -1)
+          if state==3 and lcm==3 and seq>before_seq and host!=before_host:
+              print("CANARY_RESCHEDULE host",before_host,"->",host,"seq",before_seq,"->",seq)
+              raise SystemExit(0)
+          raise SystemExit(1)
+          PY
+            then
+              moved=1
+              break
+            fi
+            sleep 3
+          done
+          test "$moved" -eq 1
+          echo "ONEDRS_REAL_RESCHEDULE=PASS"
+
+          # Immediate optimize must not migrate the just-moved canary again.
+          onevm show "$CANARY" -x >/var/tmp/canary-postmove.xml
+          POSTSEQ="$(python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          r=ET.parse("/var/tmp/canary-postmove.xml").getroot()
+          h=max(r.findall("./HISTORY_RECORDS/HISTORY"),key=lambda x:int(x.findtext("SEQ") or -1))
+          print(h.findtext("SEQ"))
+          PY
+          )"
+          onecluster plandelete 0 >/dev/null 2>&1 || true
+          onecluster optimize 0
+          sleep 5
+          onecluster show 0 -x >/var/tmp/postmove-plan.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          r=ET.parse("/var/tmp/postmove-plan.xml").getroot()
+          p=r.find("./PLAN")
+          for a in ([] if p is None else p.findall("./ACTION")):
+              if int(a.findtext("VM_ID"))==20:
+                  raise SystemExit("recently moved canary 20 appeared in immediate optimize plan")
+          print("COOLDOWN_NO_PINGPONG=PASS")
+          PY
+
+          # dc4 may be disabled only if every VM actually on it is a disposable canary.
+          onevm list -x >/var/tmp/vms-before-dc4-maint.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          allowed={19,20,21,22,23}
+          r=ET.parse("/var/tmp/vms-before-dc4-maint.xml").getroot()
+          on4=[]
+          for vm in r.findall("./VM"):
+              hs=vm.findall("./HISTORY_RECORDS/HISTORY")
+              if not hs: continue
+              last=max(hs,key=lambda x:int(x.findtext("SEQ") or -1))
+              if int(last.findtext("HID") or -1)==3 and int(vm.findtext("STATE") or -1)==3:
+                  on4.append(int(vm.findtext("ID")))
+          print("DC4_ACTIVE_VMS",on4)
+          if any(v not in allowed for v in on4):
+              raise SystemExit(f"dc4 has protected VM(s): {on4}")
+          print("DC4_CANARY_ONLY=PASS")
+          PY
+
+          restore_host() { onehost enable 3 >/dev/null 2>&1 || true; }
+          trap restore_host EXIT
+          onehost disable 3
+          sleep 2
+          onehost show 3 | grep -E 'STATE.*DISABLED|STATE.*: DISABLED' || onehost list | grep '172.17.60.78.*dsbl'
+          onecluster plandelete 0 >/dev/null 2>&1 || true
+          set +e
+          onecluster optimize 0 >/var/tmp/dc4-disabled-optimize.out 2>&1
+          RC=$?
+          set -e
+          cat /var/tmp/dc4-disabled-optimize.out
+          if [ "$RC" -eq 0 ]; then
+            sleep 3
+            onecluster show 0 -x >/var/tmp/dc4-disabled-plan.xml
+            python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          r=ET.parse("/var/tmp/dc4-disabled-plan.xml").getroot()
+          p=r.find("./PLAN")
+          if p is not None and p.findall("./ACTION"):
+              raise SystemExit("disabled dc4 produced actionable DRS plan")
+          print("DC4_DISABLED_NO_ACTION=PASS")
+          PY
+          else
+            echo "DC4_DISABLED_FAIL_CLOSED=PASS"
+          fi
+          onehost enable 3
+          trap - EXIT
+
+          for _ in $(seq 1 30); do
+            if onehost list | grep -q '172.17.60.78.* on'; then break; fi
+            sleep 2
+          done
+          onehost list | grep '172.17.60.78.* on'
+          onecluster plandelete 0 >/dev/null 2>&1 || true
+          onecluster optimize 0 >/var/tmp/dc4-enabled-optimize.out 2>&1
+          echo "DC4_MAINTENANCE_REJOIN=PASS"
+
+          touch "$MARK"
+          echo "ONEDRS_REAL_MIGRATION_MAINTENANCE=PASS"
