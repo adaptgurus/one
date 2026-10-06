@@ -1,0 +1,55 @@
+name: OneDRS PLACE Runtime Diagnostic
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261006
+    paths:
+      - ".github/workflows/onedrs-place-runtime-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bind dc1
+        id: bind
+        shell: bash
+        run: |
+          if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname)" = dc1 ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Inspect PLACE runtime
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          echo "== log files =="
+          find /var/log/one -maxdepth 1 -type f -printf '%f %s\n' | sort
+          echo "== scheduler processes =="
+          ps -ef | grep -E 'one_sched|one_drs|oned' | grep -v grep
+          echo "== oned recent placement =="
+          grep -Ei 'sched|one_drs|placement|resched|VM 20|vm 20| 20 |ERROR|cannot allocate|no host|resilience admission' /var/log/one/oned.log | tail -500 || true
+          echo "== all scheduler-like logs =="
+          for f in /var/log/one/*sched* /var/log/one/scheduler*; do
+            [ -f "$f" ] || continue
+            echo "----- $f -----"
+            tail -500 "$f"
+          done
+          echo "== remotes executable =="
+          ls -l /var/lib/one/remotes/scheduler/one_drs/place /var/lib/one/remotes/scheduler/one_drs/optimize
+          head -80 /var/lib/one/remotes/scheduler/one_drs/place
+          echo "== cluster/VM state =="
+          onecluster show 0 -x | sed -n '/<ONE_DRS>/,/<\/ONE_DRS>/p'
+          onevm show 20
