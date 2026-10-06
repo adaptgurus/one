@@ -1,9 +1,7 @@
 name: OneDRS dc1-dc4 Deploy and Validate
 
 on:
-  push:
-    branches:
-      - qual/onedrs-dc1-dc4-20261006
+  workflow_dispatch:
 
 permissions:
   contents: read
