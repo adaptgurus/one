@@ -77,18 +77,37 @@ jobs:
 
           raft_gate() {
             for _ in $(seq 1 45); do
-              if ONE_AUTH=/var/lib/one/.one/one_auth onezone show 0 2>/dev/null | awk '
-                $1 ~ /^[0-2]$/ && ($2=="dc1" || $2=="dc2" || $2=="dc3") {
-                  n++; if (($3=="leader" || $3=="follower") && $5==$6) good++; if ($3=="leader") leaders++
-                }
-                END { exit !(n==3 && good==3 && leaders==1) }
-              '; then
-                ONE_AUTH=/var/lib/one/.one/one_auth onezone show 0
+              zone="$(ONE_AUTH=/var/lib/one/.one/one_auth onezone show 0 2>/dev/null || true)"
+              if ZONE="$zone" python3 - <<'PY'
+          import os, re, sys
+          rows = {}
+          for line in os.environ.get("ZONE", "").splitlines():
+              m = re.match(r"^\s*([0-2])\s+(dc[123])\s+(leader|follower)\s+(\d+)\s+(\d+)\s+(\d+)\s+", line)
+              if m:
+                  sid, name, state, term, index, commit = m.groups()
+                  rows[name] = (state, int(term), int(index), int(commit))
+          if set(rows) != {"dc1", "dc2", "dc3"}:
+              raise SystemExit(1)
+          if sum(1 for r in rows.values() if r[0] == "leader") != 1:
+              raise SystemExit(1)
+          terms = {r[1] for r in rows.values()}
+          if len(terms) != 1:
+              raise SystemExit(1)
+          commits = [r[3] for r in rows.values()]
+          if max(commits) - min(commits) > 5:
+              raise SystemExit(1)
+          for state, term, index, commit in rows.values():
+              if index < commit or index - commit > 10:
+                  raise SystemExit(1)
+          PY
+              then
+                printf '%s\n' "$zone"
                 return 0
               fi
               sleep 2
             done
-            echo "Raft convergence gate failed" >&2
+            echo "Raft health gate failed (leader/term/commit lag)" >&2
+            ONE_AUTH=/var/lib/one/.one/one_auth onezone show 0 || true
             return 1
           }
 
