@@ -1,0 +1,176 @@
+name: OneDRS dc4 Final Live Qualification
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261007
+    paths:
+      - ".github/workflows/onedrs-dc4-live-final.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-dc4-live-final
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bind dc1
+        id: bind
+        shell: bash
+        run: |
+          if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname -s)" = dc1 ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run final live qualification
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/var/lock/layersentry-onedrs-live-final.lock
+          if ! flock -n 9; then echo "another dc1 slot owns final qual"; exit 0; fi
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          EXPECT_PKG=opennebula-7.4.1-4.ls.onedrs.3fafece.el9.x86_64
+
+          for h in dc1 dc2 dc3; do
+            if [ "$h" = dc1 ]; then p=$(rpm -q opennebula); else p=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h 'rpm -q opennebula'); fi
+            echo "$h $p"
+            test "$p" = "$EXPECT_PKG"
+          done
+          grep -q -- '-p one_drs -o one_drs' /etc/one/oned.conf
+          onecluster show 0 -x > /var/tmp/final-cluster.xml
+          test "$(grep -c '<ONE_DRS>' /var/tmp/final-cluster.xml)" -eq 1
+          grep -Fq '<ENABLED><![CDATA[YES]]></ENABLED>' /var/tmp/final-cluster.xml
+          grep -Fq '<HOST_FAILURE_TOLERANCE><![CDATA[1]]></HOST_FAILURE_TOLERANCE>' /var/tmp/final-cluster.xml
+          grep -Fq '<FAILURE_DOMAIN_TOLERANCE><![CDATA[1]]></FAILURE_DOMAIN_TOLERANCE>' /var/tmp/final-cluster.xml
+          grep -Fq '<FAILURE_DOMAIN_SPREAD><![CDATA[YES]]></FAILURE_DOMAIN_SPREAD>' /var/tmp/final-cluster.xml
+          grep -Fq '<MIGRATION_COOLDOWN_SECONDS><![CDATA[600]]></MIGRATION_COOLDOWN_SECONDS>' /var/tmp/final-cluster.xml
+
+          for pair in dc2:10.200.20.2 dc3:10.200.20.3 dc4:10.200.20.4; do
+            h=$(printf '%s' "$pair" | cut -d: -f1)
+            ip=$(printf '%s' "$pair" | cut -d: -f2)
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h \
+              "grep -Fq 'migration_address = \"$ip\"' /etc/libvirt/qemu.conf; firewall-cmd --zone=ls-migrate --query-port=49152-49215/tcp; firewall-cmd --zone=ls-migrate --query-interface=ls-migration"
+          done
+
+          for id in 0 1 6 7 8 9 10 11; do
+            onevm show "$id" >/dev/null 2>&1 || continue
+            onevm show "$id" | grep -q 'ONEDRS_BLOCKED="YES"'
+          done
+
+          pick=""
+          before_host=""
+          before_seq=""
+          before_ip=""
+          for id in 19 20 21 22 23; do
+            xml=$(onevm show "$id" -x 2>/dev/null || true)
+            [ -n "$xml" ] || continue
+            facts=$(XML="$xml" python3 - <<'PY'
+          import os,xml.etree.ElementTree as E
+          r=E.fromstring(os.environ["XML"])
+          hs=r.findall("./HISTORY_RECORDS/HISTORY")
+          h=max(hs,key=lambda x:int(x.findtext("SEQ") or -1)) if hs else None
+          print(r.findtext("STATE") or "-",r.findtext("LCM_STATE") or "-",h.findtext("HID") if h is not None else "-",h.findtext("SEQ") if h is not None else "-",r.findtext("./TEMPLATE/NIC/IP") or "-")
+          PY
+          )
+            read -r state lcm hid seq ip <<<"$facts"
+            if [ "$state" = 3 ] && [ "$lcm" = 3 ] && { [ "$hid" = 1 ] || [ "$hid" = 2 ]; }; then
+              pick=$id; before_host=$hid; before_seq=$seq; before_ip=$ip; break
+            fi
+          done
+          test -n "$pick"
+          echo "CANARY=$pick BEFORE_HOST=$before_host BEFORE_SEQ=$before_seq IP=$before_ip"
+
+          ping_gate=0
+          if [ "$before_ip" != "-" ] && ping -c 2 -W 2 "$before_ip" >/dev/null 2>&1; then
+            ping_gate=1
+            echo "CANARY_PRE_MIGRATION_PING=PASS"
+          else
+            echo "CANARY_PRE_MIGRATION_PING=NOT_APPLICABLE"
+          fi
+
+          cat >/var/tmp/canary-to-dc4.tmpl <<'EOF'
+          ONEDRS_BLOCKED="NO"
+          SCHED_REQUIREMENTS="ID = 3"
+          EOF
+          onevm update "$pick" /var/tmp/canary-to-dc4.tmpl --append
+          onevm resched "$pick"
+
+          moved=0
+          for _ in $(seq 1 90); do
+            xml=$(onevm show "$pick" -x)
+            facts=$(XML="$xml" python3 - <<'PY'
+          import os,xml.etree.ElementTree as E
+          r=E.fromstring(os.environ["XML"])
+          hs=r.findall("./HISTORY_RECORDS/HISTORY")
+          h=max(hs,key=lambda x:int(x.findtext("SEQ") or -1)) if hs else None
+          print(r.findtext("STATE") or "-",r.findtext("LCM_STATE") or "-",h.findtext("HID") if h is not None else "-",h.findtext("SEQ") if h is not None else "-")
+          PY
+          )
+            read -r state lcm hid seq <<<"$facts"
+            if [ "$state" = 3 ] && [ "$lcm" = 3 ] && [ "$hid" = 3 ] && [ "$seq" -gt "$before_seq" ]; then moved=1; break; fi
+            sleep 2
+          done
+          test "$moved" -eq 1
+          echo "ONEDRS_PLACE_TO_DC4=PASS vm=$pick"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc4 "virsh domstate one-$pick | grep -qi running"
+
+          if [ "$ping_gate" -eq 1 ]; then
+            for _ in $(seq 1 15); do ping -c 2 -W 2 "$before_ip" >/dev/null 2>&1 && break; sleep 2; done
+            ping -c 2 -W 2 "$before_ip" >/dev/null
+            echo "CANARY_POST_MIGRATION_PING=PASS"
+          fi
+
+          if tail -n 500 /var/log/one/oned.log | grep -E 'IndexError: list index out of range|Scheduler place operation error' | grep -q .; then
+            echo "recent PLACE scheduler error detected" >&2
+            tail -n 500 /var/log/one/oned.log | grep -E 'IndexError: list index out of range|Scheduler place operation error' || true
+            exit 1
+          fi
+          echo "PLACE_RUNTIME_ERROR_FREE=PASS"
+
+          cat >/var/tmp/canary-unpin.tmpl <<'EOF'
+          SCHED_REQUIREMENTS=""
+          ONEDRS_BLOCKED="NO"
+          EOF
+          onevm update "$pick" /var/tmp/canary-unpin.tmpl --append
+          onecluster plandelete 0 >/dev/null 2>&1 || true
+          onecluster optimize 0
+          sleep 4
+          onecluster show 0 -x > /var/tmp/postmove-plan.xml
+          if grep -A20 -B5 "<VM_ID>$pick</VM_ID>" /var/tmp/postmove-plan.xml | grep -q '<ACTION>'; then
+            echo "moved canary selected again inside cooldown" >&2
+            exit 1
+          fi
+          echo "MIGRATION_COOLDOWN_NO_PINGPONG=PASS"
+
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="NO"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-c"' >/var/tmp/dc4-not-ready.tmpl
+          onehost update 3 /var/tmp/dc4-not-ready.tmpl --append
+          onecluster plandelete 0 >/dev/null 2>&1 || true
+          set +e
+          onecluster optimize 0 >/var/tmp/dc4-unready-opt.out 2>&1
+          opt_rc=$?
+          set -e
+          sleep 3
+          onecluster show 0 -x > /var/tmp/dc4-unready-plan.xml
+          if grep -q '<ACTION>' /var/tmp/dc4-unready-plan.xml; then
+            echo "unsafe action generated while dc4 unready" >&2
+            exit 1
+          fi
+          echo "DC4_NOT_READY_FAIL_CLOSED=PASS rc=$opt_rc"
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="YES"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-c"' >/var/tmp/dc4-ready.tmpl
+          onehost update 3 /var/tmp/dc4-ready.tmpl --append
+          onehost show 3 | grep -q 'LAYERSENTRY_DRS_READY="YES"'
+          echo "DC4_REJOIN=PASS"
+          echo "ONEDRS_DC4_LIVE_FINAL=PASS"
