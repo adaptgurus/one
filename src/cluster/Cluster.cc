@@ -207,14 +207,25 @@ int Cluster::post_update_template(std::string& error, Template *_old_tmpl)
     static const std::vector<std::string> resilience_nonnegative_int_attr = {
         "HOST_FAILURE_TOLERANCE",
         "FAILURE_DOMAIN_TOLERANCE",
-        "MIN_HEALTHY_HOSTS",
-        "MAX_FAILURE_SCENARIOS",
         "MIGRATION_COOLDOWN_SECONDS"
     };
 
     for (const auto& field : resilience_nonnegative_int_attr)
     {
         if (!validate_field(field, std::regex(R"(^(|\d+)$)")))
+        {
+            return -1;
+        }
+    }
+
+    static const std::vector<std::string> resilience_positive_int_attr = {
+        "MIN_HEALTHY_HOSTS",
+        "MAX_FAILURE_SCENARIOS"
+    };
+
+    for (const auto& field : resilience_positive_int_attr)
+    {
+        if (!validate_field(field, std::regex(R"(^(|[1-9]\d*)$)")))
         {
             return -1;
         }
