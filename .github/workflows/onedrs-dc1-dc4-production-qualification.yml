@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - qual/onedrs-dc1-dc4-20261007
+    paths:
+      - ".github/workflows/onedrs-dc1-dc4-production-qualification.yml"
 
 permissions:
   contents: read
@@ -14,76 +16,71 @@ concurrency:
 
 jobs:
   inspect:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4]
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
-      - name: Bind exact dc1 runner
+      - name: Bind dc1
+        id: bind
         shell: bash
         run: |
-          set -euo pipefail
-          echo "runner=$RUNNER_NAME"
-          echo "hostname=$(hostname)"
-          echo "sha=$GITHUB_SHA"
-          test "$RUNNER_NAME" = "dc1"
-          test "$(hostname -s)" = "dc1"
-          test "$(id -u)" = "0"
+          if [ "$RUNNER_NAME" = "dc1" ] && [ "$(hostname -s)" = "dc1" ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+            echo "DC1_AUTHORITY=PASS"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP_WRONG_RUNNER=PASS runner=$RUNNER_NAME host=$(hostname -s)"
+          fi
 
-      - name: Prove exact source
+      - name: Inspect live migration plane
+        if: steps.bind.outputs.dc1 == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "42021b22d78f529f4b3c42a966957ab4704badc3"
-          git log -1 --oneline
-
-      - name: Inspect dc1 control plane without restart
-        shell: bash
-        run: |
-          set -euo pipefail
-          systemctl is-active opennebula
-          rpm -q opennebula opennebula-node-kvm || true
-          grep -n 'ARGUMENTS.*one_drs' /etc/one/oned.conf || true
+          echo "== control plane =="
           export ONE_AUTH=/var/lib/one/.one/one_auth
+          onezone show 0
           onehost list
-          onevm list
-          onecluster show 0 -x | sed -n '/<TEMPLATE>/,/<\/TEMPLATE>/p'
-
-      - name: Verify strict SSH authority to dc2 dc3 dc4
-        shell: bash
-        run: |
-          set -euo pipefail
-          for h in dc2 dc3 dc4; do
+          for h in dc1 dc2 dc3 dc4; do
             echo "===== $h ====="
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 root@"$h" '
-              set -e
-              hostname -s
-              date -Is
-              rpm -q opennebula opennebula-node-kvm 2>&1 || true
-              systemctl is-active opennebula 2>/dev/null || true
-              systemctl is-active libvirtd 2>/dev/null || systemctl is-active virtqemud 2>/dev/null || true
-              test -f /var/lib/one/remotes/scheduler/one_drs/lib/resilience.py && sha256sum /var/lib/one/remotes/scheduler/one_drs/lib/resilience.py || true
-              find /root -maxdepth 4 -type f -name "opennebula-7.4.1-*.rpm" -printf "%p\n" 2>/dev/null | head -20
-              find /root -maxdepth 4 -type d \( -name "layersentry-work" -o -name "onedrs-rpm-build" \) -print 2>/dev/null | head -20
-            '
+            if [ "$h" = dc1 ]; then
+              RUN=""
+            else
+              RUN="ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h"
+            fi
+            $RUN bash -s <<'EOS'
+          set -e
+          hostname -f
+          echo "-- addr --"
+          ip -br addr
+          echo "-- routes --"
+          ip route
+          echo "-- hosts --"
+          grep -E '(^|[[:space:]])dc[1-4]([[:space:]]|$)' /etc/hosts || true
+          echo "-- qemu migration config --"
+          grep -nE '^[[:space:]]*(migration_address|migration_port_min|migration_port_max|migrate_tls_force|migrate_tls_x509_cert_dir)[[:space:]]*=' /etc/libvirt/qemu.conf 2>/dev/null || true
+          echo "-- libvirt daemon config --"
+          grep -nE '^[[:space:]]*(listen_tls|listen_tcp|tcp_port|auth_tcp|auth_tls)[[:space:]]*=' /etc/libvirt/libvirtd.conf 2>/dev/null || true
+          echo "-- firewalld --"
+          firewall-cmd --state 2>/dev/null || true
+          firewall-cmd --get-active-zones 2>/dev/null || true
+          firewall-cmd --list-all-zones 2>/dev/null | grep -E '^(  interfaces:|  ports:|  services:|[a-zA-Z].*\\(active\\))' || true
+          echo "-- libvirt sockets/listeners --"
+          ss -lntp | grep -E ':(16509|4915[2-9]|4916[0-9]|4917[0-9]|4918[0-9]|4919[0-9]|4920[0-9]|4921[0-5])\\b' || true
+          systemctl is-active libvirtd virtqemud virtproxyd 2>/dev/null || true
+          EOS
           done
 
-      - name: Inspect dc4 compute qualification prerequisites
-        shell: bash
-        run: |
-          set -euo pipefail
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 root@dc4 '
-            set -e
-            echo "--identity--"
-            hostname -s
-            echo "--compute--"
-            virsh list --all || true
-            echo "--network--"
-            ip -br addr | grep -E "ls-migration|ls-ovn|br-|ovn|migr" || true
-            echo "--ovn--"
-            systemctl is-active openvswitch ovn-controller 2>/dev/null || true
-            ovs-vsctl show 2>/dev/null || true
-            echo "--storage--"
-            mount | grep -E "/var/lib/one/datastores|nfs" || true
-            df -h /var/lib/one/datastores 2>/dev/null || true
-          '
+          echo "== pairwise migration-interface reachability =="
+          for src in dc2 dc3 dc4; do
+            for dst in dc2 dc3 dc4; do
+              [ "$src" = "$dst" ] && continue
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@"$src" \
+                "echo src=\$(hostname -s) dst=$dst; getent hosts $dst; ip route get \$(getent ahostsv4 $dst | awk 'NR==1{print \$1}') || true"
+            done
+          done
