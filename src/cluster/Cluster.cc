@@ -180,6 +180,60 @@ int Cluster::post_update_template(std::string& error, Template *_old_tmpl)
         return -1;
     }
 
+    // LayerSentry OneDRS resilience fields are consumed by the native
+    // one_drs optimizer. Validate them at the cluster API boundary so a
+    // malformed policy cannot be persisted and fail later in the scheduler.
+    static const std::vector<std::string> resilience_boolean_attr = {
+        "ENABLED",
+        "FAILURE_DOMAIN_SPREAD",
+        "REQUIRE_FAILURE_DOMAIN_LABELS",
+        "COMBINED_FAILURE_MODES"
+    };
+
+    for (const auto& field : resilience_boolean_attr)
+    {
+        if (!validate_field(field, std::regex(R"(^(|yes|no)$)")))
+        {
+            return -1;
+        }
+    }
+
+    static const std::vector<std::string> resilience_nonnegative_int_attr = {
+        "HOST_FAILURE_TOLERANCE",
+        "FAILURE_DOMAIN_TOLERANCE",
+        "MIN_HEALTHY_HOSTS",
+        "MAX_FAILURE_SCENARIOS",
+        "MIGRATION_COOLDOWN_SECONDS"
+    };
+
+    for (const auto& field : resilience_nonnegative_int_attr)
+    {
+        if (!validate_field(field, std::regex(R"(^(|\d+)$)")))
+        {
+            return -1;
+        }
+    }
+
+    if (!validate_field("MAX_GROUP_MIGRATIONS", std::regex(R"(^(-1||\d+)$)")))
+    {
+        return -1;
+    }
+
+    static const std::vector<std::string> resilience_percent_attr = {
+        "CPU_RESERVE_PERCENT",
+        "MEMORY_RESERVE_PERCENT"
+    };
+
+    for (const auto& field : resilience_percent_attr)
+    {
+        if (!validate_field(
+                field,
+                std::regex(R"(^(|(?:[0-9]|[1-9][0-9])(?:\.\d+)?)$)")))
+        {
+            return -1;
+        }
+    }
+
     static std::vector<std::string> numeric_attr = {
         "CPU_USAGE_WEIGHT",
         "CPU_WEIGHT",
