@@ -1,8 +1,9 @@
 name: OneDRS dc1-dc4 Production Qualification
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261006
 
 permissions:
   contents: read
@@ -13,7 +14,6 @@ concurrency:
 
 jobs:
   qualify:
-    if: github.event.pull_request.head.ref == 'qual/onedrs-dc1-dc4-20261006'
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
     steps:
