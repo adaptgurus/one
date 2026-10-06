@@ -22,6 +22,8 @@
 #include "ClusterPool.h"
 #include "Nebula.h"
 
+#include <set>
+
 SchedulerManagerDriver::SchedulerManagerDriver(const std::string& c,
         const std::string& a, int ct): Driver(c, a, ct)
 {
@@ -103,6 +105,21 @@ int SchedulerManagerDriver::scheduler_message(SchedRequest& sr, std::ostringstre
     oss << temp;
 
     sr.vnpool.to_xml(oss, sr.match.match_net);
+
+    // PLACE requests may span one or more clusters. Populate CLUSTER_POOL
+    // from the matched destination hosts so OneDRS can apply the authoritative
+    // cluster policy during initial placement just as it does for OPTIMIZE.
+    std::set<int> matched_cluster_ids;
+
+    for (int host_id : sr.match.match_host)
+    {
+        if (auto host = sr.hpool.get(host_id))
+        {
+            matched_cluster_ids.insert(host->get_cluster_id());
+        }
+    }
+
+    sr.clpool.ids.assign(matched_cluster_ids.begin(), matched_cluster_ids.end());
 
     if ( sr.match.match_vmgroups.empty() )
     {
