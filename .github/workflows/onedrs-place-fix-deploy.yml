@@ -1,0 +1,172 @@
+name: OneDRS PLACE Fix Rolling Deploy
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261007
+    paths:
+      - ".github/workflows/onedrs-place-fix-deploy.yml"
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: onedrs-place-fix-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bind dc1
+        id: bind
+        shell: bash
+        run: |
+          if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname -s)" = dc1 ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stage exact tested candidate
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/var/lock/layersentry-onedrs-place-deploy.lock
+          if ! flock -n 9; then echo "another dc1 slot owns deploy"; exit 0; fi
+          NEW=opennebula-7.4.1-4.ls.onedrs.3fafece.el9.x86_64.rpm
+          OLD=opennebula-7.4.1-3.ls.onedrs.42021b2.el9.x86_64.rpm
+          EXPECT=41b75a7c08ee43a1aea29fefc68ceaa641008a1460f2ea300eab56eb22f8bd3d
+          git fetch --no-tags origin master 3fafecea7a0fe72e05922271fdc177eb2015c835
+          git merge-base --is-ancestor 3fafecea7a0fe72e05922271fdc177eb2015c835 origin/master
+
+          mkdir -p artifacts
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            root@dc2:/root/onedrs-rpm-build-place-3fafece/rpmbuild/RPMS/x86_64/$NEW artifacts/$NEW
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes \
+            root@dc2:/root/onedrs-rpm-build-42021b2/rpmbuild/RPMS/x86_64/$OLD artifacts/$OLD
+          echo "$EXPECT  artifacts/$NEW" | sha256sum -c -
+          rpm -Kv artifacts/$NEW
+          rpm -Uvh --test --noscripts artifacts/$NEW
+
+          for h in dc2 dc3; do
+            scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes artifacts/$NEW root@$h:/var/tmp/$NEW
+            scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes artifacts/$OLD root@$h:/var/tmp/$OLD
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h \
+              "echo '$EXPECT  /var/tmp/$NEW' | sha256sum -c -; rpm -Uvh --test --noscripts /var/tmp/$NEW"
+          done
+          cp artifacts/$NEW /var/tmp/$NEW
+          cp artifacts/$OLD /var/tmp/$OLD
+          echo "$EXPECT  /var/tmp/$NEW" | sha256sum -c -
+
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          raft_gate() {
+            for _ in $(seq 1 45); do
+              zone="$(onezone show 0 2>/dev/null || true)"
+              if ZONE="$zone" python3 - <<'PY'
+          import os,re
+          rows={}
+          for line in os.environ.get("ZONE","").splitlines():
+              m=re.match(r"^\s*([0-2])\s+(dc[123])\s+(leader|follower)\s+(\d+)\s+(\d+)\s+(\d+)\s+",line)
+              if m:
+                  sid,name,state,term,index,commit=m.groups()
+                  rows[name]=(state,int(term),int(index),int(commit))
+          if set(rows)!={"dc1","dc2","dc3"}: raise SystemExit(1)
+          if sum(v[0]=="leader" for v in rows.values())!=1: raise SystemExit(1)
+          if len({v[1] for v in rows.values()})!=1: raise SystemExit(1)
+          commits=[v[3] for v in rows.values()]
+          if max(commits)-min(commits)>5: raise SystemExit(1)
+          for _,_,idx,commit in rows.values():
+              if idx<commit or idx-commit>10: raise SystemExit(1)
+          PY
+              then printf '%s\n' "$zone"; return 0; fi
+              sleep 2
+            done
+            return 1
+          }
+
+          rollback() {
+            rc=$?
+            trap - ERR
+            set +e
+            echo "ROLLBACK nodes=$updated rc=$rc"
+            for h in $updated; do
+              if [ "$h" = dc1 ]; then
+                rpm -Uvh --oldpackage --noscripts /var/tmp/$OLD
+                systemctl restart opennebula
+              else
+                ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h \
+                  "rpm -Uvh --oldpackage --noscripts /var/tmp/$OLD; systemctl restart opennebula"
+              fi
+            done
+            sleep 4
+            raft_gate || true
+            exit "$rc"
+          }
+          updated=""
+          trap rollback ERR
+
+          raft_gate
+          for h in dc2 dc3; do
+            updated="$h $updated"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h \
+              "rpm -Uvh --noscripts /var/tmp/$NEW; systemctl restart opennebula"
+            for _ in $(seq 1 30); do
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h "systemctl is-active --quiet opennebula" && break
+              sleep 2
+            done
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h \
+              "systemctl is-active opennebula; rpm -q opennebula"
+            raft_gate
+          done
+
+          updated="dc1 $updated"
+          rpm -Uvh --noscripts /var/tmp/$NEW
+          systemctl restart opennebula
+          for _ in $(seq 1 30); do systemctl is-active --quiet opennebula && break; sleep 2; done
+          systemctl is-active opennebula
+          rpm -q opennebula
+          raft_gate
+          trap - ERR
+          echo "ROLLING_PLACE_FIX_DEPLOY=PASS"
+
+      - name: Validate exact installed build
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/var/lock/layersentry-onedrs-place-deploy.lock
+          flock 9
+          HEAD=3fafecea7a0fe72e05922271fdc177eb2015c835
+          git fetch --no-tags origin "$HEAD"
+          TEST=/var/tmp/test_resilience-3fafece.py
+          git show "$HEAD:src/schedm_mad/remotes/one_drs/tests/test_resilience.py" > "$TEST"
+          for h in dc2 dc3; do scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$TEST" root@$h:$TEST; done
+          for h in dc1 dc2 dc3; do
+            echo "=== $h ==="
+            if [ "$h" = dc1 ]; then
+              rpm -q opennebula
+              PYTHONPATH=/usr/lib/one/python:/var/lib/one/remotes/scheduler/one_drs python3.12 "$TEST" -v
+            else
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h \
+                "rpm -q opennebula; PYTHONPATH=/usr/lib/one/python:/var/lib/one/remotes/scheduler/one_drs python3.12 '$TEST' -v"
+            fi
+          done
+          for file in /usr/bin/oned /var/lib/one/remotes/scheduler/one_drs/lib/optimizer_parser.py; do
+            { sha256sum "$file"; ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2 "sha256sum '$file'"; ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc3 "sha256sum '$file'"; } >/tmp/hashes
+            cat /tmp/hashes
+            test "$(awk '{print $1}' /tmp/hashes | sort -u | wc -l)" -eq 1
+          done
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          onecluster show 0 -x | grep -F '<ENABLED><![CDATA[YES]]></ENABLED>'
+          onehost list
+          echo "INSTALLED_PLACE_FIX=PASS"
