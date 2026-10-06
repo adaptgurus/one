@@ -1,0 +1,95 @@
+name: OneDRS Restore Production Policy
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261007
+    paths:
+      - ".github/workflows/onedrs-restore-production-policy.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-restore-production-policy
+  cancel-in-progress: false
+
+jobs:
+  restore:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bind dc1
+        id: bind
+        shell: bash
+        run: |
+          if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname -s)" = dc1 ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Restore authoritative production vector
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/var/lock/layersentry-onedrs-policy.lock
+          if ! flock -n 9; then echo "another dc1 slot owns policy"; exit 0; fi
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+
+          echo "=== before ==="
+          onecluster show 0 -x | sed -n '/<TEMPLATE>/,/<\/TEMPLATE>/p'
+
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="NO"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-control-protected"' >/var/tmp/h0.onedrs
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="YES"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-a"' >/var/tmp/h1.onedrs
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="YES"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-b"' >/var/tmp/h2.onedrs
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="YES"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-c"' >/var/tmp/h3.onedrs
+          for id in 0 1 2 3; do onehost update "$id" "/var/tmp/h$id.onedrs" --append; done
+
+          cat >/var/tmp/cluster-onedrs-production.tmpl <<'EOF'
+          RESERVED_CPU=""
+          RESERVED_MEM=""
+          ONE_DRS=[
+            AUTOMATION="manual",
+            POLICY="balance",
+            PREDICTIVE="0",
+            MIGRATION_THRESHOLD="1",
+            HOST_MIGRATION_THRESHOLD="1",
+            DS_MIGRATION_THRESHOLD="0",
+            CPU_USAGE_WEIGHT="0",
+            CPU_WEIGHT="0.5",
+            MEMORY_WEIGHT="0.5",
+            MIGRATION_COOLDOWN_SECONDS="600",
+            ENABLED="YES",
+            HOST_FAILURE_TOLERANCE="1",
+            FAILURE_DOMAIN_TOLERANCE="1",
+            CPU_RESERVE_PERCENT="10",
+            MEMORY_RESERVE_PERCENT="10",
+            MIN_HEALTHY_HOSTS="3",
+            FAILURE_DOMAIN_SPREAD="YES",
+            REQUIRE_FAILURE_DOMAIN_LABELS="YES",
+            COMBINED_FAILURE_MODES="NO",
+            MAX_GROUP_MIGRATIONS="1",
+            MAX_FAILURE_SCENARIOS="1024"
+          ]
+          EOF
+          onecluster update 0 /var/tmp/cluster-onedrs-production.tmpl
+          onecluster show 0 -x > /var/tmp/cluster-policy-readback.xml
+          test "$(grep -c '<ONE_DRS>' /var/tmp/cluster-policy-readback.xml)" -eq 1
+          for needle in \
+            '<ENABLED><![CDATA[YES]]></ENABLED>' \
+            '<HOST_FAILURE_TOLERANCE><![CDATA[1]]></HOST_FAILURE_TOLERANCE>' \
+            '<FAILURE_DOMAIN_TOLERANCE><![CDATA[1]]></FAILURE_DOMAIN_TOLERANCE>' \
+            '<FAILURE_DOMAIN_SPREAD><![CDATA[YES]]></FAILURE_DOMAIN_SPREAD>' \
+            '<REQUIRE_FAILURE_DOMAIN_LABELS><![CDATA[YES]]></REQUIRE_FAILURE_DOMAIN_LABELS>' \
+            '<MIGRATION_COOLDOWN_SECONDS><![CDATA[600]]></MIGRATION_COOLDOWN_SECONDS>' \
+            '<MAX_GROUP_MIGRATIONS><![CDATA[1]]></MAX_GROUP_MIGRATIONS>'; do
+              grep -Fq "$needle" /var/tmp/cluster-policy-readback.xml
+          done
+          for id in 0 1 2 3; do onehost show "$id" | grep -E 'LAYERSENTRY_DRS_READY|LAYERSENTRY_FAILURE_DOMAIN'; done
+          echo "PRODUCTION_POLICY_READBACK=PASS"
