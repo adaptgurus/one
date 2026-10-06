@@ -1,6 +1,7 @@
 import pathlib
 import sys
 import unittest
+from types import SimpleNamespace
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -43,6 +44,37 @@ def vm(vm_id, cpu, memory):
 
 
 class ResilienceAdmissionTests(unittest.TestCase):
+    @staticmethod
+    def _cluster(policy):
+        children = []
+        if policy is not None:
+            fields = [
+                SimpleNamespace(qname=name, text=value)
+                for name, value in policy.items()
+            ]
+            children.append(SimpleNamespace(qname="ONE_DRS", children=fields))
+        return SimpleNamespace(template=SimpleNamespace(children=children))
+
+    def test_place_requires_cluster_policy_context(self):
+        with self.assertRaisesRegex(ValueError, "missing CLUSTER_POOL"):
+            OptimizerParser._select_common_cluster_onedrs([])
+
+    def test_place_accepts_identical_cluster_policies(self):
+        policy = {"ENABLED": "YES", "HOST_FAILURE_TOLERANCE": "1"}
+        selected = OptimizerParser._select_common_cluster_onedrs(
+            [self._cluster(policy), self._cluster(policy)]
+        )
+        self.assertIsNotNone(selected)
+
+    def test_place_rejects_mixed_cluster_policies(self):
+        with self.assertRaisesRegex(ValueError, "different ONE_DRS policies"):
+            OptimizerParser._select_common_cluster_onedrs(
+                [
+                    self._cluster({"ENABLED": "YES"}),
+                    self._cluster({"ENABLED": "NO"}),
+                ]
+            )
+
     def test_transient_monitoring_host_remains_drs_healthy(self):
         self.assertTrue(OptimizerParser._host_drs_healthy(1, True))
         self.assertTrue(OptimizerParser._host_drs_healthy(2, True))
