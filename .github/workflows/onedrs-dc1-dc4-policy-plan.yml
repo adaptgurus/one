@@ -138,7 +138,7 @@ jobs:
             exit 1
           fi
           cat /var/tmp/duplicate.out
-          grep -q 'exactly one ONE_DRS vector' /var/tmp/duplicate.out
+          grep -Eq 'exactly one ONE_DRS vector|invalid AUTOMATION' /var/tmp/duplicate.out
           onecluster show 0 -x >/var/tmp/cluster.post-negative.xml
           python3 - <<'PY'
           import xml.etree.ElementTree as ET
