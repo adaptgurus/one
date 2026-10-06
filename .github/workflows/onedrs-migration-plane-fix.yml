@@ -1,0 +1,115 @@
+name: OneDRS dc2 dc4 Migration Plane Fix
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261007
+    paths:
+      - ".github/workflows/onedrs-migration-plane-fix.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-migration-plane-fix
+  cancel-in-progress: false
+
+jobs:
+  fix:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bind dc1
+        id: bind
+        shell: bash
+        run: |
+          if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname -s)" = dc1 ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure dedicated libvirt migration plane
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/var/lock/layersentry-onedrs-migration-plane.lock
+          if ! flock -n 9; then echo "another dc1 slot owns lock"; exit 0; fi
+          MARK=/var/tmp/layersentry-onedrs-migration-plane-$GITHUB_RUN_ID.done
+          if [ -e "$MARK" ]; then echo "same run already completed"; exit 0; fi
+
+          for pair in dc2:10.200.20.2 dc3:10.200.20.3 dc4:10.200.20.4; do
+            h=\${pair%%:*}; ip=\${pair##*:}
+            echo "===== configure $h $ip ====="
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@"$h" "MIG_IP=$ip bash -s" <<'EOS'
+          set -euo pipefail
+          test -d /sys/class/net/ls-migration
+          ip -4 addr show dev ls-migration | grep -Fq "$MIG_IP/24"
+          install -d -m 0700 /var/backups/layersentry-onedrs-migration
+          cp -a /etc/libvirt/qemu.conf /var/backups/layersentry-onedrs-migration/qemu.conf.before
+          virsh list --state-running --uuid | sort >/var/tmp/ls-running.before
+
+          python3 - <<'PY'
+          import os, pathlib, re
+          p=pathlib.Path("/etc/libvirt/qemu.conf")
+          s=p.read_text()
+          vals={
+              "migration_address": f'"{os.environ["MIG_IP"]}"',
+              "migration_port_min": "49152",
+              "migration_port_max": "49215",
+          }
+          for key,val in vals.items():
+              pat=re.compile(rf"(?m)^\s*#?\s*{re.escape(key)}\s*=.*$")
+              line=f"{key} = {val}"
+              if pat.search(s):
+                  s=pat.sub(line,s,count=1)
+              else:
+                  s += "\n"+line+"\n"
+          p.write_text(s)
+          PY
+
+          firewall-cmd --get-zones | tr ' ' '\n' | grep -qx layersentry-migration || firewall-cmd --permanent --new-zone=layersentry-migration
+          firewall-cmd --permanent --zone=layersentry-migration --add-interface=ls-migration
+          firewall-cmd --permanent --zone=layersentry-migration --add-port=49152-49215/tcp
+          firewall-cmd --reload
+
+          if systemctl is-active --quiet libvirtd; then
+              systemctl restart libvirtd
+              systemctl is-active --quiet libvirtd
+          elif systemctl is-active --quiet virtqemud; then
+              systemctl restart virtqemud
+              systemctl is-active --quiet virtqemud
+          else
+              echo "no active libvirt QEMU daemon" >&2
+              exit 1
+          fi
+
+          virsh list --state-running --uuid | sort >/var/tmp/ls-running.after
+          diff -u /var/tmp/ls-running.before /var/tmp/ls-running.after
+          grep -E '^[[:space:]]*(migration_address|migration_port_min|migration_port_max)[[:space:]]*=' /etc/libvirt/qemu.conf
+          firewall-cmd --zone=layersentry-migration --query-interface=ls-migration
+          firewall-cmd --zone=layersentry-migration --query-port=49152-49215/tcp
+          EOS
+          done
+
+          echo "===== dedicated network reachability ====="
+          for src in dc2 dc3 dc4; do
+            case "$src" in
+              dc2) sip=10.200.20.2 ;;
+              dc3) sip=10.200.20.3 ;;
+              dc4) sip=10.200.20.4 ;;
+            esac
+            for dip in 10.200.20.2 10.200.20.3 10.200.20.4; do
+              [ "$sip" = "$dip" ] && continue
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@"$src" "ping -c 2 -W 2 -I ls-migration $dip"
+            done
+          done
+          touch "$MARK"
+          echo "MIGRATION_PLANE_FIX=PASS"
