@@ -1,0 +1,49 @@
+name: OneDRS Leader PLACE Diagnostic
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261006
+    paths:
+      - ".github/workflows/onedrs-leader-place-diagnostic.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bind dc1
+        id: bind
+        shell: bash
+        run: |
+          if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname)" = dc1 ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Inspect leader scheduler
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          onezone show 0
+          echo "== dc3 processes =="
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc3 "ps -ef | grep -E 'one_sched|one_drs|oned' | grep -v grep"
+          echo "== dc3 scheduler logs around canary resched =="
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc3 \
+            "grep -Ei '23:4[5-9]|23:5[0-9]|one_drs|placement|resched|VM 20| 20 |ERROR|cannot allocate|no host|resilience admission|Unable to find optimal solution|Traceback' /var/log/one/oned.log | tail -600 || true"
+          for f in sched.log scheduler.log; do
+            echo "== dc3 $f =="
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc3 "test -f /var/log/one/$f && tail -600 /var/log/one/$f || true"
+          done
+          echo "== dc3 active config =="
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc3 "grep -n 'ARGUMENTS.*one_drs' /etc/one/oned.conf; rpm -q opennebula"
