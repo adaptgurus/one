@@ -1,0 +1,64 @@
+name: OneDRS PLACE Candidate Tests
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261007
+    paths:
+      - ".github/workflows/onedrs-place-candidate-tests.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-place-candidate-tests
+  cancel-in-progress: false
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bind dc1
+        id: bind
+        shell: bash
+        run: |
+          if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname -s)" = dc1 ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Test built candidate modules
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/var/lock/layersentry-onedrs-place-test.lock
+          if ! flock -n 9; then echo "another dc1 slot owns test"; exit 0; fi
+          HEAD=3fafecea7a0fe72e05922271fdc177eb2015c835
+          git fetch --no-tags origin "$HEAD"
+          TEST=/tmp/test_resilience-3fafece.py
+          git show "$HEAD:src/schedm_mad/remotes/one_drs/tests/test_resilience.py" > "$TEST"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$TEST" root@dc2:/var/tmp/
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          RPM=/root/onedrs-rpm-build-place-3fafece/rpmbuild/RPMS/x86_64/opennebula-7.4.1-4.ls.onedrs.3fafece.el9.x86_64.rpm
+          test -s "$RPM"
+          test "$(sha256sum "$RPM" | awk "{print \$1}")" = "41b75a7c08ee43a1aea29fefc68ceaa641008a1460f2ea300eab56eb22f8bd3d"
+          TMP=$(mktemp -d)
+          cd "$TMP"
+          rpm2cpio "$RPM" | cpio -idmu --quiet
+          mkdir -p "$TMP/var/lib/one/remotes/scheduler/one_drs/tests"
+          cp /var/tmp/test_resilience-3fafece.py "$TMP/var/lib/one/remotes/scheduler/one_drs/tests/test_resilience.py"
+          PYTHONPATH=/usr/lib/one/python:"$TMP/var/lib/one/remotes/scheduler/one_drs" \
+            python3.12 "$TMP/var/lib/one/remotes/scheduler/one_drs/tests/test_resilience.py" -v
+          python3.12 -m compileall -q "$TMP/var/lib/one/remotes/scheduler/one_drs"
+          grep -q '_select_common_cluster_onedrs' "$TMP/var/lib/one/remotes/scheduler/one_drs/lib/optimizer_parser.py"
+          echo "PLACE_CANDIDATE_TESTS=PASS"
+          REMOTE
