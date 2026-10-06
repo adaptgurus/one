@@ -75,9 +75,9 @@ jobs:
           p.write_text(s)
           PY
 
-          firewall-cmd --get-zones | tr ' ' '\n' | grep -qx layersentry-migration || firewall-cmd --permanent --new-zone=layersentry-migration
-          firewall-cmd --permanent --zone=layersentry-migration --add-interface=ls-migration
-          firewall-cmd --permanent --zone=layersentry-migration --add-port=49152-49215/tcp
+          firewall-cmd --get-zones | tr ' ' '\n' | grep -qx ls-migrate || firewall-cmd --permanent --new-zone=ls-migrate
+          firewall-cmd --permanent --zone=ls-migrate --add-interface=ls-migration
+          firewall-cmd --permanent --zone=ls-migrate --add-port=49152-49215/tcp
           firewall-cmd --reload
 
           if systemctl is-active --quiet libvirtd; then
@@ -94,8 +94,8 @@ jobs:
           virsh list --state-running --uuid | sort >/var/tmp/ls-running.after
           diff -u /var/tmp/ls-running.before /var/tmp/ls-running.after
           grep -E '^[[:space:]]*(migration_address|migration_port_min|migration_port_max)[[:space:]]*=' /etc/libvirt/qemu.conf
-          firewall-cmd --zone=layersentry-migration --query-interface=ls-migration
-          firewall-cmd --zone=layersentry-migration --query-port=49152-49215/tcp
+          firewall-cmd --zone=ls-migrate --query-interface=ls-migration
+          firewall-cmd --zone=ls-migrate --query-port=49152-49215/tcp
           EOS
           done
 
