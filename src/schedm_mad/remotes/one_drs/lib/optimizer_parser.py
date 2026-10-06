@@ -363,17 +363,12 @@ class OptimizerParser:
         else:
             storage_migrations = allowed_storage_migrations
 
-        used_local_dstores = self._used_local_dstores
-        used_shared_dstores = self._used_shared_dstores
-        curr_placement: list[Allocation] = []
-        for vm_id, host_id in self._curr_alloc.items():
-            if (dstore_id := used_local_dstores.get(vm_id)) is not None:
-                alloc = Allocation(vm_id, host_id, dstore_id, "local")
-            elif (dstore_id := used_shared_dstores.get(vm_id)) is not None:
-                alloc = Allocation(vm_id, host_id, dstore_id, "shared")
-            else:
-                alloc = Allocation(vm_id, host_id)
-            curr_placement.append(alloc)
+        curr_placement = self._build_current_placement(
+            self._curr_alloc,
+            self._used_local_dstores,
+            self._used_shared_dstores,
+            vm_reqs_dict,
+        )
 
         host_capacities = self._parse_host_capacities()
 
@@ -1032,6 +1027,33 @@ class OptimizerParser:
             for child in one_drs.children
             if child.qname.upper() in weight_map
         }
+
+    @staticmethod
+    def _build_current_placement(
+        curr_alloc,
+        used_local_dstores,
+        used_shared_dstores,
+        vm_reqs_dict,
+    ) -> list[Allocation]:
+        curr_placement: list[Allocation] = []
+        for vm_id, host_id in curr_alloc.items():
+            vm_req = vm_reqs_dict.get(vm_id)
+            # A recreated VM can be PENDING while retaining historical host
+            # records. That history is not a current allocation. Treating it
+            # as one makes the PLACE mapper serialize a migrate action for a
+            # PENDING VM, which OpenNebula correctly rejects.
+            if vm_req is not None and vm_req.state is VMState.PENDING:
+                continue
+
+            if (dstore_id := used_local_dstores.get(vm_id)) is not None:
+                alloc = Allocation(vm_id, host_id, dstore_id, "local")
+            elif (dstore_id := used_shared_dstores.get(vm_id)) is not None:
+                alloc = Allocation(vm_id, host_id, dstore_id, "shared")
+            else:
+                alloc = Allocation(vm_id, host_id)
+            curr_placement.append(alloc)
+
+        return curr_placement
 
     @staticmethod
     def _effective_predictive(cluster_config, default):
