@@ -287,6 +287,8 @@ class OptimizerParser:
         }
 
     def build_optimizer(self) -> ILPOptimizer:
+        place_cluster_id = None
+
         if self.mode.upper() == "PLACE":
             criteria = self.config["MODE"]["POLICY"].lower()
             if criteria.upper() == "BALANCE":
@@ -377,6 +379,12 @@ class OptimizerParser:
 
         host_capacities = self._parse_host_capacities()
 
+        if self.mode.upper() == "PLACE":
+            place_cluster_id = self._resolve_place_cluster_id(
+                host_capacities,
+                list(vm_reqs_dict.values()),
+            )
+
         if self.mode.upper() == "OPTIMIZE" and migration_cooldown_seconds > 0:
             healthy_ids = {host.id for host in host_capacities if host.healthy}
             vm_pool = {
@@ -419,7 +427,15 @@ class OptimizerParser:
         # Resilience is a cluster admission contract, so it must govern both
         # initial PLACE and later OPTIMIZE operations. Restricting cluster
         # overrides to OPTIMIZE would let a new VM bypass N+K admission.
-        cluster_resilience = self._parse_cluster()
+        cluster_resilience = (
+            self._parse_cluster(place_cluster_id)
+            if self.mode.upper() == "PLACE" and place_cluster_id is not None
+            else (
+                {}
+                if self.mode.upper() == "PLACE"
+                else self._parse_cluster()
+            )
+        )
         for key in resilience_config:
             if (
                 key in cluster_resilience
@@ -476,8 +492,16 @@ class OptimizerParser:
                 1, int(resilience_config["MAX_FAILURE_SCENARIOS"])
             ),
         )
+        resilience_hosts = host_capacities
+        if self.mode.upper() == "PLACE" and place_cluster_id is not None:
+            resilience_hosts = [
+                host
+                for host in host_capacities
+                if int(host.cluster_id) == int(place_cluster_id)
+            ]
+
         report = validate_resilience(
-            host_capacities,
+            resilience_hosts,
             list(vm_reqs_dict.values()),
             resilience_policy,
             vm_groups=vmg,
@@ -854,14 +878,105 @@ class OptimizerParser:
                 alloc[int(vm.id)] = int(last_rec.hid)
         return alloc
 
-    def _parse_cluster(self) -> dict:
+    @staticmethod
+    def _resilience_enabled(config: dict) -> bool:
+        value = config.get("ENABLED", False)
+        return value is True or str(value).upper() == "YES"
+
+    def _resolve_place_cluster_id(
+        self,
+        host_capacities: list[HostCapacity],
+        vm_requirements: list[VMRequirements],
+    ) -> int | None:
+        host_cluster = {
+            int(host.id): int(host.cluster_id)
+            for host in host_capacities
+        }
+        candidate_clusters: set[int] = set()
+
+        for vm in vm_requirements:
+            host_ids = (
+                set(host_cluster)
+                if vm.host_ids is None
+                else {int(host_id) for host_id in vm.host_ids}
+            )
+            unknown = host_ids - set(host_cluster)
+            if unknown:
+                raise ValueError(
+                    "OneDRS PLACE references Hosts missing from HOST_POOL: "
+                    f"{sorted(unknown)}"
+                )
+            clusters = {host_cluster[host_id] for host_id in host_ids}
+            if not clusters:
+                raise ValueError(
+                    f"OneDRS PLACE VM {vm.id} has no eligible cluster"
+                )
+            candidate_clusters |= clusters
+
+        if not candidate_clusters:
+            raise ValueError("OneDRS PLACE has no candidate cluster")
+
+        if len(candidate_clusters) == 1:
+            return next(iter(candidate_clusters))
+
+        # Native PLACE can batch VMs whose matches span several clusters.
+        # A single resilience contract cannot be safely applied across those
+        # failure domains. Preserve native multi-cluster behavior only when
+        # resilience is disabled everywhere; otherwise require the request to
+        # be cluster-scoped and fail closed.
+        resilience_enabled = self._resilience_enabled(
+            self.config["RESILIENCE"]
+        )
+        for cluster_id in sorted(candidate_clusters):
+            cluster_config = self._parse_cluster(cluster_id)
+            if self._resilience_enabled(cluster_config):
+                resilience_enabled = True
+
+        if resilience_enabled:
+            raise ValueError(
+                "OneDRS PLACE spans multiple clusters while resilience is "
+                "enabled; constrain placement to one cluster"
+            )
+
+        self.log_general(
+            "WARNING",
+            "OneDRS PLACE spans multiple clusters with resilience disabled; "
+            "using native placement without cluster resilience overrides",
+        )
+        return None
+
+    def _parse_cluster(self, cluster_id: int | None = None) -> dict:
         result = {}
+        clusters = list(self.scheduler_driver_action.cluster_pool.cluster)
+        if not clusters:
+            raise ValueError(
+                "OneDRS scheduler request is missing CLUSTER_POOL metadata"
+            )
+
+        if cluster_id is None:
+            if len(clusters) != 1:
+                raise ValueError(
+                    "OneDRS optimization requires exactly one cluster, got "
+                    f"{len(clusters)}"
+                )
+            cluster = clusters[0]
+        else:
+            matches = [
+                cluster
+                for cluster in clusters
+                if int(cluster.id) == int(cluster_id)
+            ]
+            if len(matches) != 1:
+                raise ValueError(
+                    f"OneDRS scheduler request does not contain cluster "
+                    f"{cluster_id}"
+                )
+            cluster = matches[0]
+
         one_drs = next(
             (
                 child
-                for child in self.scheduler_driver_action.cluster_pool.cluster[
-                    0
-                ].template.children
+                for child in cluster.template.children
                 if child.qname.upper() == "ONE_DRS"
             ),
             None,
