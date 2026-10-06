@@ -854,17 +854,52 @@ class OptimizerParser:
                 alloc[int(vm.id)] = int(last_rec.hid)
         return alloc
 
+    @staticmethod
+    def _select_common_cluster_onedrs(clusters):
+        if not clusters:
+            raise ValueError(
+                "OneDRS scheduler request is missing CLUSTER_POOL policy context"
+            )
+
+        selected = []
+        signatures = []
+        for cluster in clusters:
+            one_drs = next(
+                (
+                    child
+                    for child in cluster.template.children
+                    if child.qname.upper() == "ONE_DRS"
+                ),
+                None,
+            )
+            selected.append(one_drs)
+            if one_drs is None:
+                signatures.append(None)
+            else:
+                signatures.append(
+                    tuple(
+                        sorted(
+                            (
+                                child.qname.upper(),
+                                str(child.text or "").strip(),
+                            )
+                            for child in one_drs.children
+                        )
+                    )
+                )
+
+        if len(set(signatures)) != 1:
+            raise ValueError(
+                "OneDRS PLACE spans candidate clusters with different "
+                "ONE_DRS policies; split placement or align cluster policy"
+            )
+
+        return selected[0]
+
     def _parse_cluster(self) -> dict:
         result = {}
-        one_drs = next(
-            (
-                child
-                for child in self.scheduler_driver_action.cluster_pool.cluster[
-                    0
-                ].template.children
-                if child.qname.upper() == "ONE_DRS"
-            ),
-            None,
+        one_drs = self._select_common_cluster_onedrs(
+            self.scheduler_driver_action.cluster_pool.cluster
         )
         if one_drs is None:
             return {
