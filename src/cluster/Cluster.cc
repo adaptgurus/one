@@ -132,6 +132,12 @@ int Cluster::post_update_template(std::string& error, Template *_old_tmpl)
         return 0;
     }
 
+    if (one_drs_num != 1)
+    {
+        error = "Error cluster template must contain exactly one ONE_DRS vector";
+        return -1;
+    }
+
     auto* one_drs = one_drs_attrs.front();
 
     const auto validate_field = [&](const std::string& field_name, const std::regex& pattern)
@@ -228,7 +234,7 @@ int Cluster::post_update_template(std::string& error, Template *_old_tmpl)
     {
         if (!validate_field(
                 field,
-                std::regex(R"(^(|(?:[0-9]|[1-9][0-9])(?:\.\d+)?)$)")))
+                std::regex(R"(^(|([0-9]|[1-9][0-9])(\.\d+)?)$)")))
         {
             return -1;
         }
