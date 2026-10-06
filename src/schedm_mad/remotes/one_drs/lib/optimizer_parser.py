@@ -476,9 +476,25 @@ class OptimizerParser:
                 1, int(resilience_config["MAX_FAILURE_SCENARIOS"])
             ),
         )
+        vm_pool_by_id = {
+            int(vm.id): vm for vm in self.scheduler_driver_action.vm_pool.vm
+        }
+        resilience_vm_requirements = []
+        for vm_req in vm_reqs_dict.values():
+            vm_obj = vm_pool_by_id.get(vm_req.id)
+            if vm_obj is not None and self._vm_resilience_exempt(vm_obj):
+                self.log_vm(
+                    "INFO",
+                    vm_req.id,
+                    "Excluded from LayerSentry resilience admission by "
+                    "LAYERSENTRY_DRS_RESILIENCE_EXEMPT=YES",
+                )
+                continue
+            resilience_vm_requirements.append(vm_req)
+
         report = validate_resilience(
             host_capacities,
-            list(vm_reqs_dict.values()),
+            resilience_vm_requirements,
             resilience_policy,
             vm_groups=vmg,
         )
@@ -1028,6 +1044,21 @@ class OptimizerParser:
         # state 2 (MONITORED). Treat the transient monitoring state as
         # eligible so an ordinary probe cycle does not consume HA reserve.
         return int(state) in {1, 2} and bool(drs_ready)
+
+    @staticmethod
+    def _vm_resilience_exempt(vm):
+        # Resilience admission is fail-safe by default: every VM is protected
+        # unless an operator/product workflow explicitly marks that workload
+        # outside the published N+K/failure-domain SLA. ONEDRS_BLOCKED does
+        # not imply exemption; a blocked VM remains non-movable and therefore
+        # correctly makes HA admission fail unless this separate marker exists.
+        if vm.user_template is None:
+            return False
+        for item in vm.user_template.any_element:
+            if item.qname.upper() != "LAYERSENTRY_DRS_RESILIENCE_EXEMPT":
+                continue
+            return str(item.text or "").strip().upper() == "YES"
+        return False
 
     @staticmethod
     def _sanity_check(value):
