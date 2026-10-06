@@ -15,7 +15,7 @@ concurrency:
 jobs:
   qualify:
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 60
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
 
@@ -71,6 +71,80 @@ jobs:
             echo "=== BUILD TREE ==="
             find /root/onedrs-rpm-build -maxdepth 3 -type f -printf "%p\n" | sort | head -350
           '
+
+
+      - name: Build exact 42021b22 OneDRS RPM on dc2
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin e2f766b7694cb675c4ba99d04399e712811a6adf 42021b22d78f529f4b3c42a966957ab4704badc3
+          PATCH=/tmp/layersentry-onedrs-42021b2.patch
+          git diff --binary e2f766b7694cb675c4ba99d04399e712811a6adf..42021b22d78f529f4b3c42a966957ab4704badc3 -- \
+            share/etc/oned.conf \
+            src/cluster/Cluster.cc \
+            src/schedm_mad/remotes/one_drs/tests/test_production_source_contract.py \
+            share/smoke_tests/tests/01a-onedrs-production.sh > "$PATCH"
+          test -s "$PATCH"
+          grep -q -- '-p one_drs -o one_drs' "$PATCH"
+          grep -q 'exactly one ONE_DRS vector' "$PATCH"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$PATCH" root@dc2:/var/tmp/layersentry-onedrs-42021b2.patch
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          SRC=/root/onedrs-rpm-build/rpmbuild
+          TOP=/root/onedrs-rpm-build-42021b2/rpmbuild
+          OUT=/root/onedrs-rpm-build-42021b2
+          rm -rf "$OUT"
+          mkdir -p "$TOP"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          cp -al "$SRC"/SOURCES/. "$TOP"/SOURCES/
+          cp "$SRC"/SPECS/opennebula.spec "$TOP"/SPECS/opennebula.spec
+          cp /var/tmp/layersentry-onedrs-42021b2.patch "$TOP"/SOURCES/layersentry-onedrs-42021b2.patch
+
+          python3 - "$TOP/SPECS/opennebula.spec" <<'PY'
+          import pathlib, re, sys
+          p = pathlib.Path(sys.argv[1])
+          s = p.read_text()
+          old = "Release: 2.ls.onedrs.e2f766b%{?dist}"
+          new = "Release: 3.ls.onedrs.42021b2%{?dist}"
+          if old not in s:
+              raise SystemExit("expected e2f release marker missing")
+          s = s.replace(old, new, 1)
+          marker = "Patch1002: layersentry-onedrs-e2f766b.patch"
+          if marker not in s:
+              raise SystemExit("Patch1002 declaration missing")
+          s = s.replace(marker, marker + "\nPatch1003: layersentry-onedrs-42021b2.patch", 1)
+          lines = s.splitlines()
+          idx = None
+          for i, line in enumerate(lines):
+              if re.search(r"%patch(?:\s+-P\s+1002\b|1002\b)", line):
+                  idx = i
+                  break
+          if idx is None:
+              raise SystemExit("Patch1002 application missing")
+          if any("1003" in line and "%patch" in line for line in lines):
+              raise SystemExit("Patch1003 application already present unexpectedly")
+          lines.insert(idx + 1, re.sub(r"1002", "1003", lines[idx], count=1))
+          p.write_text("\n".join(lines) + "\n")
+          PY
+
+          echo "=== build gate ==="
+          grep -n -E 'Release:|Patch100[0-3]|%patch.*100[0-3]' "$TOP/SPECS/opennebula.spec"
+          df -h /root
+          rpmbuild -bb --define "_topdir $TOP" "$TOP/SPECS/opennebula.spec"
+
+          RPM="$TOP/RPMS/x86_64/opennebula-7.4.1-3.ls.onedrs.42021b2.el9.x86_64.rpm"
+          test -s "$RPM"
+          rpm -Kv "$RPM"
+          rpm -qpi "$RPM"
+          sha256sum "$RPM" | tee "$OUT/opennebula-42021b2.sha256"
+          echo "secret_signing_keys=$(gpg --batch --list-secret-keys --with-colons 2>/dev/null | grep -c '^sec:' || true)"
+          if grep -qE '^%?_gpg_name' /root/.rpmmacros 2>/dev/null; then
+            echo "rpm_signing_macro=configured"
+          else
+            echo "rpm_signing_macro=not-configured"
+          fi
+          echo "BUILD_42021B2=PASS"
+          REMOTE
 
       - name: Inspect current scheduler and live cluster state
         shell: bash
