@@ -325,8 +325,8 @@ class OptimizerParser:
                 migration_priority = "storage"
             else:
                 migration_priority = "host"
-            self.config["PREDICTIVE"] = cluster_config.get(
-                "PREDICTIVE", self.config["PREDICTIVE"]
+            self.config["PREDICTIVE"] = self._effective_predictive(
+                cluster_config, self.config["PREDICTIVE"]
             )
             criteria = (
                 self._normalize_weights(cluster_config["WEIGHTS"])
@@ -979,6 +979,11 @@ class OptimizerParser:
             for child in one_drs.children
             if child.qname.upper() in weight_map
         }
+
+    @staticmethod
+    def _effective_predictive(cluster_config, default):
+        predictive = cluster_config.get("PREDICTIVE")
+        return default if predictive is None else predictive
 
     @staticmethod
     def _sanity_check(value):
