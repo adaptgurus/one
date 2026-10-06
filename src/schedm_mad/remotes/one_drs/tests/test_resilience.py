@@ -55,6 +55,41 @@ class ResilienceAdmissionTests(unittest.TestCase):
             children.append(SimpleNamespace(qname="ONE_DRS", children=fields))
         return SimpleNamespace(template=SimpleNamespace(children=children))
 
+    def test_resilience_exemption_is_explicit_opt_in(self):
+        plain = SimpleNamespace(user_template=None)
+        blocked_only = SimpleNamespace(
+            user_template=SimpleNamespace(
+                any_element=[
+                    SimpleNamespace(qname="ONEDRS_BLOCKED", text="YES")
+                ]
+            )
+        )
+        opted_out = SimpleNamespace(
+            user_template=SimpleNamespace(
+                any_element=[
+                    SimpleNamespace(
+                        qname="LAYERSENTRY_DRS_RESILIENCE_EXEMPT",
+                        text=" yes ",
+                    )
+                ]
+            )
+        )
+        explicit_no = SimpleNamespace(
+            user_template=SimpleNamespace(
+                any_element=[
+                    SimpleNamespace(
+                        qname="LAYERSENTRY_DRS_RESILIENCE_EXEMPT",
+                        text="NO",
+                    )
+                ]
+            )
+        )
+
+        self.assertFalse(OptimizerParser._vm_resilience_exempt(plain))
+        self.assertFalse(OptimizerParser._vm_resilience_exempt(blocked_only))
+        self.assertTrue(OptimizerParser._vm_resilience_exempt(opted_out))
+        self.assertFalse(OptimizerParser._vm_resilience_exempt(explicit_no))
+
     def test_place_requires_cluster_policy_context(self):
         with self.assertRaisesRegex(ValueError, "missing CLUSTER_POOL"):
             OptimizerParser._select_common_cluster_onedrs([])
