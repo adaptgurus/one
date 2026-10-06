@@ -53,6 +53,25 @@ jobs:
           echo "=== dc4 role ==="
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc4 "rpm -q opennebula opennebula-node-kvm 2>&1 || true"
 
+
+      - name: Inspect dc2 OneDRS RPM recipe
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2 '
+            set -e
+            echo "=== SPEC ==="
+            sed -n "1,280p" /root/onedrs-rpm-build/rpmbuild/SPECS/opennebula.spec
+            echo "=== SOURCES ==="
+            find /root/onedrs-rpm-build/rpmbuild/SOURCES -maxdepth 2 -type f -printf "%p %s bytes\n" | sort | head -300
+            echo "=== RPMS ==="
+            find /root/onedrs-rpm-build/rpmbuild/RPMS -type f -name "*.rpm" -printf "%p\n" | sort
+            echo "=== E2F RPM INFO ==="
+            rpm -qpi /root/onedrs-rpm-build/rpmbuild/RPMS/x86_64/opennebula-7.4.1-2.ls.onedrs.e2f766b.el9.x86_64.rpm 2>/dev/null || true
+            echo "=== BUILD TREE ==="
+            find /root/onedrs-rpm-build -maxdepth 3 -type f -printf "%p\n" | sort | head -350
+          '
+
       - name: Inspect current scheduler and live cluster state
         shell: bash
         run: |
