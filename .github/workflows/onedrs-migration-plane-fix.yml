@@ -46,7 +46,7 @@ jobs:
           if [ -e "$MARK" ]; then echo "same run already completed"; exit 0; fi
 
           for pair in dc2:10.200.20.2 dc3:10.200.20.3 dc4:10.200.20.4; do
-            h=\${pair%%:*}; ip=\${pair##*:}
+            h=${pair%%:*}; ip=${pair##*:}
             echo "===== configure $h $ip ====="
             ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@"$h" "MIG_IP=$ip bash -s" <<'EOS'
           set -euo pipefail
