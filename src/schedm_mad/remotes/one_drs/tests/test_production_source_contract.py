@@ -31,6 +31,11 @@ class OneDRSProductionSourceContractTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertIn(f'"{field}"', cluster)
 
+    def test_cluster_rejects_duplicate_onedrs_vectors(self):
+        cluster = (REPO_ROOT / "src/cluster/Cluster.cc").read_text()
+        self.assertIn("one_drs_num != 1", cluster)
+        self.assertIn("exactly one ONE_DRS vector", cluster)
+
 
 if __name__ == "__main__":
     unittest.main()
