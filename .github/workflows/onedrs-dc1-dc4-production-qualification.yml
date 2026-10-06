@@ -1,0 +1,89 @@
+name: OneDRS dc1 dc4 Production Qualification
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261007
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-dc1-dc4-production-qualification
+  cancel-in-progress: false
+
+jobs:
+  inspect:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bind exact dc1 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner=$RUNNER_NAME"
+          echo "hostname=$(hostname)"
+          echo "sha=$GITHUB_SHA"
+          test "$RUNNER_NAME" = "dc1"
+          test "$(hostname -s)" = "dc1"
+          test "$(id -u)" = "0"
+
+      - name: Prove exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "42021b22d78f529f4b3c42a966957ab4704badc3"
+          git log -1 --oneline
+
+      - name: Inspect dc1 control plane without restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          systemctl is-active opennebula
+          rpm -q opennebula opennebula-node-kvm || true
+          grep -n 'ARGUMENTS.*one_drs' /etc/one/oned.conf || true
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          onehost list
+          onevm list
+          onecluster show 0 -x | sed -n '/<TEMPLATE>/,/<\/TEMPLATE>/p'
+
+      - name: Verify strict SSH authority to dc2 dc3 dc4
+        shell: bash
+        run: |
+          set -euo pipefail
+          for h in dc2 dc3 dc4; do
+            echo "===== $h ====="
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 root@"$h" '
+              set -e
+              hostname -s
+              date -Is
+              rpm -q opennebula opennebula-node-kvm 2>&1 || true
+              systemctl is-active opennebula 2>/dev/null || true
+              systemctl is-active libvirtd 2>/dev/null || systemctl is-active virtqemud 2>/dev/null || true
+              test -f /var/lib/one/remotes/scheduler/one_drs/lib/resilience.py && sha256sum /var/lib/one/remotes/scheduler/one_drs/lib/resilience.py || true
+              find /root -maxdepth 4 -type f -name "opennebula-7.4.1-*.rpm" -printf "%p\n" 2>/dev/null | head -20
+              find /root -maxdepth 4 -type d \( -name "layersentry-work" -o -name "onedrs-rpm-build" \) -print 2>/dev/null | head -20
+            '
+          done
+
+      - name: Inspect dc4 compute qualification prerequisites
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=8 root@dc4 '
+            set -e
+            echo "--identity--"
+            hostname -s
+            echo "--compute--"
+            virsh list --all || true
+            echo "--network--"
+            ip -br addr | grep -E "ls-migration|ls-ovn|br-|ovn|migr" || true
+            echo "--ovn--"
+            systemctl is-active openvswitch ovn-controller 2>/dev/null || true
+            ovs-vsctl show 2>/dev/null || true
+            echo "--storage--"
+            mount | grep -E "/var/lib/one/datastores|nfs" || true
+            df -h /var/lib/one/datastores 2>/dev/null || true
+          '
