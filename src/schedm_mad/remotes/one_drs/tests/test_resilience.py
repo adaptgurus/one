@@ -574,5 +574,77 @@ class ResilienceAdmissionTests(unittest.TestCase):
             )
 
 
+    def test_cluster_assignment_expands_idle_local_datastore_hosts(self):
+        expanded = OptimizerParser._expand_local_dstore_hosts(
+            {100: {1, 2}},
+            {
+                100: {"CLUSTERS": [0]},
+                200: {"CLUSTERS": [1]},
+            },
+            {0: 0, 1: 0, 2: 0, 3: 0, 4: 1},
+        )
+        self.assertEqual(expanded[100], {0, 1, 2, 3})
+        self.assertEqual(expanded[200], {4})
+
+    def test_migratable_local_datastore_falls_back_to_current_id(self):
+        parser = object.__new__(OptimizerParser)
+        parser._system_local_dstore_hosts = {100: {1, 2, 3}}
+        parser._system_local_dstore_attrs = {
+            100: {"DS_MIGRATE": True, "TM_MAD": "SSH", "CLUSTERS": [0]}
+        }
+        parser._system_shared_dstore_attrs = {}
+        parser._used_local_dstores = {19: 100}
+        parser._used_shared_dstores = {}
+        vm_req = SimpleNamespace(
+            id=19,
+            hosts=SimpleNamespace(id=[1, 2, 3]),
+            datastores=SimpleNamespace(id=[]),
+        )
+        got = parser._find_datastores(vm_req)
+        self.assertEqual(
+            got["local_dstore_ids"],
+            {1: [100], 2: [100], 3: [100]},
+        )
+        self.assertEqual(got["shared_dstore_ids"], [])
+
+    def test_migratable_shared_datastore_falls_back_to_current_id(self):
+        parser = object.__new__(OptimizerParser)
+        parser._system_local_dstore_hosts = {}
+        parser._system_local_dstore_attrs = {}
+        parser._system_shared_dstore_attrs = {
+            200: {"DS_MIGRATE": True, "TM_MAD": "CEPH", "CLUSTERS": [0]}
+        }
+        parser._used_local_dstores = {}
+        parser._used_shared_dstores = {19: 200}
+        vm_req = SimpleNamespace(
+            id=19,
+            hosts=SimpleNamespace(id=[1, 2, 3]),
+            datastores=SimpleNamespace(id=[]),
+        )
+        got = parser._find_datastores(vm_req)
+        self.assertEqual(got["local_dstore_ids"], {})
+        self.assertEqual(got["shared_dstore_ids"], [200])
+
+    def test_idle_local_datastore_capacity_uses_generic_host_disk(self):
+        parser = object.__new__(OptimizerParser)
+        parser._system_local_dstore_attrs = {
+            100: {"CLUSTERS": [0], "TM_MAD": "SSH"}
+        }
+        host = SimpleNamespace(
+            cluster_id=0,
+            host_share=SimpleNamespace(
+                datastores=SimpleNamespace(
+                    ds=[],
+                    used_disk=100,
+                    free_disk=900,
+                )
+            ),
+        )
+        got = parser._parse_local_dstore_capacities(host)
+        self.assertEqual(set(got), {100})
+        self.assertEqual(got[100].total, 1000)
+        self.assertEqual(got[100].usage, 100)
+
+
 if __name__ == "__main__":
     unittest.main()
