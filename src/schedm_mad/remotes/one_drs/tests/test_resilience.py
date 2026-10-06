@@ -43,6 +43,12 @@ def vm(vm_id, cpu, memory):
 
 
 class ResilienceAdmissionTests(unittest.TestCase):
+    def test_transient_monitoring_host_remains_drs_healthy(self):
+        self.assertTrue(OptimizerParser._host_drs_healthy(1, True))
+        self.assertTrue(OptimizerParser._host_drs_healthy(2, True))
+        self.assertFalse(OptimizerParser._host_drs_healthy(1, False))
+        self.assertFalse(OptimizerParser._host_drs_healthy(3, True))
+
     def test_missing_cluster_predictive_preserves_global_default(self):
         self.assertEqual(
             OptimizerParser._effective_predictive(
