@@ -1,0 +1,104 @@
+name: OneDRS PLACE Fix RPM Qualification
+
+on:
+  push:
+    branches:
+      - qual/onedrs-dc1-dc4-20261007
+    paths:
+      - ".github/workflows/onedrs-place-fix-rpm-qual.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-place-fix-rpm-qual
+  cancel-in-progress: false
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bind dc1
+        id: bind
+        shell: bash
+        run: |
+          if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname -s)" = dc1 ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build exact PR50 candidate on dc2
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/var/lock/layersentry-onedrs-place-build.lock
+          if ! flock -n 9; then echo "another dc1 slot owns build"; exit 0; fi
+
+          BASE=42021b22d78f529f4b3c42a966957ab4704badc3
+          HEAD=3fafecea7a0fe72e05922271fdc177eb2015c835
+          SHORT=3fafece
+          git fetch --no-tags origin "$BASE" "$HEAD"
+          PATCH=/tmp/layersentry-onedrs-place-$SHORT.patch
+          git diff --binary "$BASE..$HEAD" -- \
+            src/schedm/SchedulerManagerDriver.cc \
+            src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py \
+            src/schedm_mad/remotes/one_drs/tests/test_resilience.py > "$PATCH"
+          test -s "$PATCH"
+          grep -q 'matched_cluster_ids' "$PATCH"
+          grep -q '_select_common_cluster_onedrs' "$PATCH"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$PATCH" root@dc2:/var/tmp/
+
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2 "SHORT=$SHORT bash -s" <<'REMOTE'
+          set -euo pipefail
+          SRC=/root/onedrs-rpm-build-42021b2/rpmbuild
+          TOP=/root/onedrs-rpm-build-place-3fafece/rpmbuild
+          OUT=/root/onedrs-rpm-build-place-3fafece
+          rm -rf "$OUT"
+          mkdir -p "$TOP"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
+          cp -al "$SRC"/SOURCES/. "$TOP"/SOURCES/
+          cp "$SRC"/SPECS/opennebula.spec "$TOP"/SPECS/opennebula.spec
+          cp /var/tmp/layersentry-onedrs-place-3fafece.patch "$TOP"/SOURCES/layersentry-onedrs-place-3fafece.patch
+
+          python3 - "$TOP/SPECS/opennebula.spec" <<'PY'
+          import pathlib, re, sys
+          p=pathlib.Path(sys.argv[1]); s=p.read_text()
+          old="Release: 3.ls.onedrs.42021b2%{?dist}"
+          new="Release: 4.ls.onedrs.3fafece%{?dist}"
+          if old not in s: raise SystemExit("expected 42021b2 release marker missing")
+          s=s.replace(old,new,1)
+          marker="Patch1003: layersentry-onedrs-42021b2.patch"
+          if marker not in s: raise SystemExit("Patch1003 declaration missing")
+          s=s.replace(marker, marker+"\nPatch1004: layersentry-onedrs-place-3fafece.patch",1)
+          lines=s.splitlines(); idx=None
+          for i,line in enumerate(lines):
+              if re.search(r"%patch(?:\s+-P\s+1003\b|1003\b)",line):
+                  idx=i; break
+          if idx is None: raise SystemExit("Patch1003 application missing")
+          lines.insert(idx+1,re.sub(r"1003","1004",lines[idx],count=1))
+          p.write_text("\n".join(lines)+"\n")
+          PY
+
+          grep -n -E 'Release:|Patch100[0-4]|%patch.*100[0-4]' "$TOP/SPECS/opennebula.spec"
+          rpmbuild -bb --define "_topdir $TOP" "$TOP/SPECS/opennebula.spec"
+          RPM="$TOP/RPMS/x86_64/opennebula-7.4.1-4.ls.onedrs.3fafece.el9.x86_64.rpm"
+          test -s "$RPM"
+          rpm -Kv "$RPM"
+          rpm -Uvh --test --noscripts "$RPM"
+          sha256sum "$RPM" | tee "$OUT/opennebula-place-3fafece.sha256"
+
+          TMP=$(mktemp -d)
+          cd "$TMP"
+          rpm2cpio "$RPM" | cpio -idmu --quiet
+          PYTHONPATH=/usr/lib/one/python:"$TMP/var/lib/one/remotes/scheduler/one_drs" \
+            python3.12 "$TMP/var/lib/one/remotes/scheduler/one_drs/tests/test_resilience.py" -v
+          grep -q 'matched_cluster_ids' "$TMP/usr/bin/oned" 2>/dev/null || true
+          echo "PLACE_FIX_RPM_BUILD=PASS"
+          REMOTE
