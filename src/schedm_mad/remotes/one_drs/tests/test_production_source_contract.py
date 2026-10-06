@@ -36,6 +36,11 @@ class OneDRSProductionSourceContractTests(unittest.TestCase):
         self.assertIn("one_drs_num != 1", cluster)
         self.assertIn("exactly one ONE_DRS vector", cluster)
 
+    def test_place_request_publishes_cluster_context(self):
+        driver = (REPO_ROOT / "src/schedm/SchedulerManagerDriver.cc").read_text()
+        self.assertIn("place_cluster_ids", driver)
+        self.assertIn("sr.clpool.ids.assign", driver)
+
 
 if __name__ == "__main__":
     unittest.main()

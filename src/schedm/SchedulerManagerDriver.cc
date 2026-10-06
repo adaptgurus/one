@@ -190,6 +190,24 @@ int SchedulerManagerDriver::setup_place_pools(SchedRequest &sr) const
         return -1;
     }
 
+    // PLACE messages must carry the Cluster objects for every enabled Host.
+    // OneDRS consumes the Cluster template to apply LayerSentry resilience
+    // policy during initial placement/rescheduling.  setup_optimize_pools()
+    // already publishes its single Cluster explicitly; PLACE historically
+    // emitted an empty CLUSTER_POOL even though the scheduler XML contract
+    // requires the element.
+    std::set<int> place_cluster_ids;
+
+    for (int host_id : sr.hpool.ids)
+    {
+        if (auto host = sr.hpool.get(host_id))
+        {
+            place_cluster_ids.insert(host->get_cluster_id());
+        }
+    }
+
+    sr.clpool.ids.assign(place_cluster_ids.begin(), place_cluster_ids.end());
+
     sr.merge_cluster_to_host();
 
     // -------------------------------------------------------------------------
