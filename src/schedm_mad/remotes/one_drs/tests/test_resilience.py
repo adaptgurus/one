@@ -110,6 +110,27 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 ]
             )
 
+    def test_pending_vm_history_is_not_current_placement(self):
+        pending = VMRequirements(
+            id=19,
+            state=VMState.PENDING,
+            cpu_ratio=0.2,
+            memory=256,
+        )
+        running = VMRequirements(
+            id=20,
+            state=VMState.RUNNING,
+            cpu_ratio=0.2,
+            memory=256,
+        )
+        placements = OptimizerParser._build_current_placement(
+            {19: 3, 20: 1},
+            {19: 100, 20: 101},
+            {},
+            {19: pending, 20: running},
+        )
+        self.assertEqual(placements, [Allocation(20, 1, 101, "local")])
+
     def test_transient_monitoring_host_remains_drs_healthy(self):
         self.assertTrue(OptimizerParser._host_drs_healthy(1, True))
         self.assertTrue(OptimizerParser._host_drs_healthy(2, True))
