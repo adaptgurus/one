@@ -148,10 +148,10 @@ class OptimizerParser:
                 elif item.qname.upper() == "DS_MIGRATE":
                     attrs["DS_MIGRATE"] = item.text.upper() == "YES"
             if type_ == "SYSTEM_DS":
+                attrs["CLUSTERS"] = list(data.clusters.id)
                 if (shared := attrs.get("SHARED")) == "YES":
                     attrs["TOTAL_MB"] = data.total_mb
                     attrs["USED_MB"] = data.used_mb
-                    attrs["CLUSTERS"] = data.clusters.id
                     shared_dstore_attrs[data.id] = attrs
                 elif shared == "NO":
                     local_dstore_attrs[data.id] = attrs
@@ -167,12 +167,18 @@ class OptimizerParser:
         # The hosts assiciated to the system local datastores.
         # Dict {dstore id: host ids} for system local datastores.
         local_dstore_hosts: defaultdict[int, set[int]] = defaultdict(set)
+        host_cluster_ids: dict[int, int] = {}
         for host_data in self.scheduler_driver_action.host_pool.host:
-            host_id = host_data.id
+            host_id = int(host_data.id)
+            host_cluster_ids[host_id] = int(host_data.cluster_id)
             for dstore_data in host_data.host_share.datastores.ds:
                 if dstore_data.id in local_dstore_attrs:
                     local_dstore_hosts[dstore_data.id].add(host_id)
-        self._system_local_dstore_hosts = local_dstore_hosts
+        self._system_local_dstore_hosts = self._expand_local_dstore_hosts(
+            local_dstore_hosts,
+            local_dstore_attrs,
+            host_cluster_ids,
+        )
 
         # Currently used hosts and datastores.
         curr_alloc: dict[int, int] = {}
@@ -806,6 +812,12 @@ class OptimizerParser:
 
     def _parse_local_dstore_capacities(self, host) -> dict[int, Capacity]:
         # Returns the capacities of the host system local datastores.
+        #
+        # HostShare lists local SYSTEM_DS entries that are currently observed
+        # on the Host, but an idle Host can omit an otherwise valid cluster-
+        # assigned local datastore. Cluster membership is the authoritative
+        # availability boundary for a local SYSTEM_DS; use the Host's generic
+        # local-disk capacity when a valid datastore is idle/unreported.
         local_dstore_ids = set(self._system_local_dstore_attrs)
         local_dstore_attrs = self._system_local_dstore_attrs
         caps: dict[int, Capacity] = {}
@@ -821,6 +833,22 @@ class OptimizerParser:
                 total_size = data.total_mb
             cap = Capacity(total=total_size, usage=data.used_mb)
             caps[data.id] = cap
+
+        host_cluster_id = int(host.cluster_id)
+        generic_used = float(host.host_share.datastores.used_disk or 0)
+        generic_free = float(host.host_share.datastores.free_disk or 0)
+        for dstore_id, attrs in local_dstore_attrs.items():
+            if dstore_id in caps:
+                continue
+            cluster_ids = {int(cluster_id) for cluster_id in attrs.get("CLUSTERS", [])}
+            if host_cluster_id not in cluster_ids:
+                continue
+            if (limit := attrs.get("LIMIT_MB")) is not None:
+                total_size = float(limit)
+            else:
+                total_size = generic_used + generic_free
+            caps[dstore_id] = Capacity(total=total_size, usage=generic_used)
+
         return caps
 
     def _parse_dstore_capacities(
@@ -1029,6 +1057,24 @@ class OptimizerParser:
         }
 
     @staticmethod
+    def _expand_local_dstore_hosts(
+        local_dstore_hosts,
+        local_dstore_attrs,
+        host_cluster_ids,
+    ):
+        expanded: defaultdict[int, set[int]] = defaultdict(set)
+        for dstore_id, host_ids in local_dstore_hosts.items():
+            expanded[int(dstore_id)].update(int(host_id) for host_id in host_ids)
+
+        for dstore_id, attrs in local_dstore_attrs.items():
+            cluster_ids = {int(cluster_id) for cluster_id in attrs.get("CLUSTERS", [])}
+            for host_id, cluster_id in host_cluster_ids.items():
+                if int(cluster_id) in cluster_ids:
+                    expanded[int(dstore_id)].add(int(host_id))
+
+        return expanded
+
+    @staticmethod
     def _build_current_placement(
         curr_alloc,
         used_local_dstores,
@@ -1100,10 +1146,15 @@ class OptimizerParser:
         host_ids = set(vm_req.hosts.id)
 
         if (curr_dstore_id := used_local_dstores.get(vm_id)) is not None:
-            # VM already allocated to a local datastore.
+            # VM already allocated to a local datastore. Optimization requests
+            # can omit datastore candidates for an already-running VM. When
+            # that happens, retain the current migratable datastore as a valid
+            # same-ID target instead of collapsing recovery reachability to
+            # zero hosts.
             curr_dstore_attrs = local_dstore_attrs.get(curr_dstore_id) or {}
-            if curr_dstore_attrs.get("DS_MIGRATE"):
-                dstore_ids = vm_req.datastores.id
+            candidate_dstore_ids = list(vm_req.datastores.id)
+            if curr_dstore_attrs.get("DS_MIGRATE") and candidate_dstore_ids:
+                dstore_ids = candidate_dstore_ids
             else:
                 dstore_ids = [curr_dstore_id]
 
@@ -1118,11 +1169,13 @@ class OptimizerParser:
                         local_dstore_ids[host_id].append(dstore_id)
 
         elif (curr_dstore_id := used_shared_dstores.get(vm_id)) is not None:
-            # VM already allocated to a shared datastore.
+            # VM already allocated to a shared datastore. Preserve the current
+            # datastore when the optimizer request omits candidate IDs.
             curr_dstore_attrs = shared_dstore_attrs.get(curr_dstore_id) or {}
             tm_mad = curr_dstore_attrs.get("TM_MAD")
-            if curr_dstore_attrs.get("DS_MIGRATE"):
-                dstore_ids = vm_req.datastores.id
+            candidate_dstore_ids = list(vm_req.datastores.id)
+            if curr_dstore_attrs.get("DS_MIGRATE") and candidate_dstore_ids:
+                dstore_ids = candidate_dstore_ids
             else:
                 dstore_ids = [curr_dstore_id]
 
