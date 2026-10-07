@@ -63,7 +63,7 @@ jobs:
           echo "-- hosts --"
           grep -E '(^|[[:space:]])dc[1-4]([[:space:]]|$)' /etc/hosts || true
           echo "-- qemu migration config --"
-          grep -nE '^[[:space:]]*(migration_address|migration_port_min|migration_port_max|migrate_tls_force|migrate_tls_x509_cert_dir)[[:space:]]*=' /etc/libvirt/qemu.conf 2>/dev/null || true
+          grep -nE '^[[:space:]]*(migration_address|migration_host|migration_port_min|migration_port_max|migrate_tls_force|migrate_tls_x509_cert_dir)[[:space:]]*=' /etc/libvirt/qemu.conf 2>/dev/null || true
           echo "-- libvirt daemon config --"
           grep -nE '^[[:space:]]*(listen_tls|listen_tcp|tcp_port|auth_tcp|auth_tls)[[:space:]]*=' /etc/libvirt/libvirtd.conf 2>/dev/null || true
           echo "-- firewalld --"

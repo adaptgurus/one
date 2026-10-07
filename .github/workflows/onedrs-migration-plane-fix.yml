@@ -63,6 +63,11 @@ jobs:
           s=p.read_text()
           vals={
               "migration_address": f'"{os.environ["MIG_IP"]}"',
+              # migration_address controls the destination listener bind address.
+              # migration_host controls the URI advertised back to the source.
+              # Both must use the dedicated migration plane or libvirt falls
+              # back to the management hostname (for example dc4:49152).
+              "migration_host": f'"{os.environ["MIG_IP"]}"',
               "migration_port_min": "49152",
               "migration_port_max": "49215",
           }
@@ -94,7 +99,7 @@ jobs:
 
           virsh list --state-running --uuid | sort >/var/tmp/ls-running.after
           diff -u /var/tmp/ls-running.before /var/tmp/ls-running.after
-          grep -E '^[[:space:]]*(migration_address|migration_port_min|migration_port_max)[[:space:]]*=' /etc/libvirt/qemu.conf
+          grep -E '^[[:space:]]*(migration_address|migration_host|migration_port_min|migration_port_max)[[:space:]]*=' /etc/libvirt/qemu.conf
           firewall-cmd --zone=ls-migrate --query-interface=ls-migration
           firewall-cmd --zone=ls-migrate --query-port=49152-49215/tcp
           EOS

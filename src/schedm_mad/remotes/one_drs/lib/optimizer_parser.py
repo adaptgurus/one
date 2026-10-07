@@ -148,10 +148,10 @@ class OptimizerParser:
                 elif item.qname.upper() == "DS_MIGRATE":
                     attrs["DS_MIGRATE"] = item.text.upper() == "YES"
             if type_ == "SYSTEM_DS":
+                attrs["CLUSTERS"] = list(data.clusters.id)
                 if (shared := attrs.get("SHARED")) == "YES":
                     attrs["TOTAL_MB"] = data.total_mb
                     attrs["USED_MB"] = data.used_mb
-                    attrs["CLUSTERS"] = data.clusters.id
                     shared_dstore_attrs[data.id] = attrs
                 elif shared == "NO":
                     local_dstore_attrs[data.id] = attrs
@@ -167,12 +167,18 @@ class OptimizerParser:
         # The hosts assiciated to the system local datastores.
         # Dict {dstore id: host ids} for system local datastores.
         local_dstore_hosts: defaultdict[int, set[int]] = defaultdict(set)
+        host_cluster_ids: dict[int, int] = {}
         for host_data in self.scheduler_driver_action.host_pool.host:
-            host_id = host_data.id
+            host_id = int(host_data.id)
+            host_cluster_ids[host_id] = int(host_data.cluster_id)
             for dstore_data in host_data.host_share.datastores.ds:
                 if dstore_data.id in local_dstore_attrs:
                     local_dstore_hosts[dstore_data.id].add(host_id)
-        self._system_local_dstore_hosts = local_dstore_hosts
+        self._system_local_dstore_hosts = self._expand_local_dstore_hosts(
+            local_dstore_hosts,
+            local_dstore_attrs,
+            host_cluster_ids,
+        )
 
         # Currently used hosts and datastores.
         curr_alloc: dict[int, int] = {}
@@ -363,19 +369,22 @@ class OptimizerParser:
         else:
             storage_migrations = allowed_storage_migrations
 
-        used_local_dstores = self._used_local_dstores
-        used_shared_dstores = self._used_shared_dstores
-        curr_placement: list[Allocation] = []
-        for vm_id, host_id in self._curr_alloc.items():
-            if (dstore_id := used_local_dstores.get(vm_id)) is not None:
-                alloc = Allocation(vm_id, host_id, dstore_id, "local")
-            elif (dstore_id := used_shared_dstores.get(vm_id)) is not None:
-                alloc = Allocation(vm_id, host_id, dstore_id, "shared")
-            else:
-                alloc = Allocation(vm_id, host_id)
-            curr_placement.append(alloc)
+        curr_placement = self._build_current_placement(
+            self._curr_alloc,
+            self._used_local_dstores,
+            self._used_shared_dstores,
+            vm_reqs_dict,
+        )
 
         host_capacities = self._parse_host_capacities()
+
+        # Resilience simulates loss of the current host/domain and therefore
+        # must retain the VM's normal recovery candidates. A healthy-host
+        # migration cooldown is only an optimization disruption guard; it must
+        # never remove recovery destinations from N+K admission. Keep the
+        # pre-cooldown requirements for resilience, while the optimizer below
+        # receives the temporary current-host pin for ordinary balancing.
+        resilience_vm_reqs_dict = vm_reqs_dict.copy()
 
         if self.mode.upper() == "OPTIMIZE" and migration_cooldown_seconds > 0:
             healthy_ids = {host.id for host in host_capacities if host.healthy}
@@ -476,9 +485,25 @@ class OptimizerParser:
                 1, int(resilience_config["MAX_FAILURE_SCENARIOS"])
             ),
         )
+        vm_pool_by_id = {
+            int(vm.id): vm for vm in self.scheduler_driver_action.vm_pool.vm
+        }
+        resilience_vm_requirements = []
+        for vm_req in resilience_vm_reqs_dict.values():
+            vm_obj = vm_pool_by_id.get(vm_req.id)
+            if vm_obj is not None and self._vm_resilience_exempt(vm_obj):
+                self.log_vm(
+                    "INFO",
+                    vm_req.id,
+                    "Excluded from LayerSentry resilience admission by "
+                    "LAYERSENTRY_DRS_RESILIENCE_EXEMPT=YES",
+                )
+                continue
+            resilience_vm_requirements.append(vm_req)
+
         report = validate_resilience(
             host_capacities,
-            list(vm_reqs_dict.values()),
+            resilience_vm_requirements,
             resilience_policy,
             vm_groups=vmg,
         )
@@ -795,6 +820,12 @@ class OptimizerParser:
 
     def _parse_local_dstore_capacities(self, host) -> dict[int, Capacity]:
         # Returns the capacities of the host system local datastores.
+        #
+        # HostShare lists local SYSTEM_DS entries that are currently observed
+        # on the Host, but an idle Host can omit an otherwise valid cluster-
+        # assigned local datastore. Cluster membership is the authoritative
+        # availability boundary for a local SYSTEM_DS; use the Host's generic
+        # local-disk capacity when a valid datastore is idle/unreported.
         local_dstore_ids = set(self._system_local_dstore_attrs)
         local_dstore_attrs = self._system_local_dstore_attrs
         caps: dict[int, Capacity] = {}
@@ -810,6 +841,22 @@ class OptimizerParser:
                 total_size = data.total_mb
             cap = Capacity(total=total_size, usage=data.used_mb)
             caps[data.id] = cap
+
+        host_cluster_id = int(host.cluster_id)
+        generic_used = float(host.host_share.datastores.used_disk or 0)
+        generic_free = float(host.host_share.datastores.free_disk or 0)
+        for dstore_id, attrs in local_dstore_attrs.items():
+            if dstore_id in caps:
+                continue
+            cluster_ids = {int(cluster_id) for cluster_id in attrs.get("CLUSTERS", [])}
+            if host_cluster_id not in cluster_ids:
+                continue
+            if (limit := attrs.get("LIMIT_MB")) is not None:
+                total_size = float(limit)
+            else:
+                total_size = generic_used + generic_free
+            caps[dstore_id] = Capacity(total=total_size, usage=generic_used)
+
         return caps
 
     def _parse_dstore_capacities(
@@ -854,17 +901,52 @@ class OptimizerParser:
                 alloc[int(vm.id)] = int(last_rec.hid)
         return alloc
 
+    @staticmethod
+    def _select_common_cluster_onedrs(clusters):
+        if not clusters:
+            raise ValueError(
+                "OneDRS scheduler request is missing CLUSTER_POOL policy context"
+            )
+
+        selected = []
+        signatures = []
+        for cluster in clusters:
+            one_drs = next(
+                (
+                    child
+                    for child in cluster.template.children
+                    if child.qname.upper() == "ONE_DRS"
+                ),
+                None,
+            )
+            selected.append(one_drs)
+            if one_drs is None:
+                signatures.append(None)
+            else:
+                signatures.append(
+                    tuple(
+                        sorted(
+                            (
+                                child.qname.upper(),
+                                str(child.text or "").strip(),
+                            )
+                            for child in one_drs.children
+                        )
+                    )
+                )
+
+        if len(set(signatures)) != 1:
+            raise ValueError(
+                "OneDRS PLACE spans candidate clusters with different "
+                "ONE_DRS policies; split placement or align cluster policy"
+            )
+
+        return selected[0]
+
     def _parse_cluster(self) -> dict:
         result = {}
-        one_drs = next(
-            (
-                child
-                for child in self.scheduler_driver_action.cluster_pool.cluster[
-                    0
-                ].template.children
-                if child.qname.upper() == "ONE_DRS"
-            ),
-            None,
+        one_drs = self._select_common_cluster_onedrs(
+            self.scheduler_driver_action.cluster_pool.cluster
         )
         if one_drs is None:
             return {
@@ -983,6 +1065,51 @@ class OptimizerParser:
         }
 
     @staticmethod
+    def _expand_local_dstore_hosts(
+        local_dstore_hosts,
+        local_dstore_attrs,
+        host_cluster_ids,
+    ):
+        expanded: defaultdict[int, set[int]] = defaultdict(set)
+        for dstore_id, host_ids in local_dstore_hosts.items():
+            expanded[int(dstore_id)].update(int(host_id) for host_id in host_ids)
+
+        for dstore_id, attrs in local_dstore_attrs.items():
+            cluster_ids = {int(cluster_id) for cluster_id in attrs.get("CLUSTERS", [])}
+            for host_id, cluster_id in host_cluster_ids.items():
+                if int(cluster_id) in cluster_ids:
+                    expanded[int(dstore_id)].add(int(host_id))
+
+        return expanded
+
+    @staticmethod
+    def _build_current_placement(
+        curr_alloc,
+        used_local_dstores,
+        used_shared_dstores,
+        vm_reqs_dict,
+    ) -> list[Allocation]:
+        curr_placement: list[Allocation] = []
+        for vm_id, host_id in curr_alloc.items():
+            vm_req = vm_reqs_dict.get(vm_id)
+            # A recreated VM can be PENDING while retaining historical host
+            # records. That history is not a current allocation. Treating it
+            # as one makes the PLACE mapper serialize a migrate action for a
+            # PENDING VM, which OpenNebula correctly rejects.
+            if vm_req is not None and vm_req.state is VMState.PENDING:
+                continue
+
+            if (dstore_id := used_local_dstores.get(vm_id)) is not None:
+                alloc = Allocation(vm_id, host_id, dstore_id, "local")
+            elif (dstore_id := used_shared_dstores.get(vm_id)) is not None:
+                alloc = Allocation(vm_id, host_id, dstore_id, "shared")
+            else:
+                alloc = Allocation(vm_id, host_id)
+            curr_placement.append(alloc)
+
+        return curr_placement
+
+    @staticmethod
     def _effective_predictive(cluster_config, default):
         predictive = cluster_config.get("PREDICTIVE")
         return default if predictive is None else predictive
@@ -993,6 +1120,21 @@ class OptimizerParser:
         # state 2 (MONITORED). Treat the transient monitoring state as
         # eligible so an ordinary probe cycle does not consume HA reserve.
         return int(state) in {1, 2} and bool(drs_ready)
+
+    @staticmethod
+    def _vm_resilience_exempt(vm):
+        # Resilience admission is fail-safe by default: every VM is protected
+        # unless an operator/product workflow explicitly marks that workload
+        # outside the published N+K/failure-domain SLA. ONEDRS_BLOCKED does
+        # not imply exemption; a blocked VM remains non-movable and therefore
+        # correctly makes HA admission fail unless this separate marker exists.
+        if vm.user_template is None:
+            return False
+        for item in vm.user_template.any_element:
+            if item.qname.upper() != "LAYERSENTRY_DRS_RESILIENCE_EXEMPT":
+                continue
+            return str(item.text or "").strip().upper() == "YES"
+        return False
 
     @staticmethod
     def _sanity_check(value):
@@ -1012,10 +1154,15 @@ class OptimizerParser:
         host_ids = set(vm_req.hosts.id)
 
         if (curr_dstore_id := used_local_dstores.get(vm_id)) is not None:
-            # VM already allocated to a local datastore.
+            # VM already allocated to a local datastore. Optimization requests
+            # can omit datastore candidates for an already-running VM. When
+            # that happens, retain the current migratable datastore as a valid
+            # same-ID target instead of collapsing recovery reachability to
+            # zero hosts.
             curr_dstore_attrs = local_dstore_attrs.get(curr_dstore_id) or {}
-            if curr_dstore_attrs.get("DS_MIGRATE"):
-                dstore_ids = vm_req.datastores.id
+            candidate_dstore_ids = list(vm_req.datastores.id)
+            if curr_dstore_attrs.get("DS_MIGRATE") and candidate_dstore_ids:
+                dstore_ids = candidate_dstore_ids
             else:
                 dstore_ids = [curr_dstore_id]
 
@@ -1030,11 +1177,13 @@ class OptimizerParser:
                         local_dstore_ids[host_id].append(dstore_id)
 
         elif (curr_dstore_id := used_shared_dstores.get(vm_id)) is not None:
-            # VM already allocated to a shared datastore.
+            # VM already allocated to a shared datastore. Preserve the current
+            # datastore when the optimizer request omits candidate IDs.
             curr_dstore_attrs = shared_dstore_attrs.get(curr_dstore_id) or {}
             tm_mad = curr_dstore_attrs.get("TM_MAD")
-            if curr_dstore_attrs.get("DS_MIGRATE"):
-                dstore_ids = vm_req.datastores.id
+            candidate_dstore_ids = list(vm_req.datastores.id)
+            if curr_dstore_attrs.get("DS_MIGRATE") and candidate_dstore_ids:
+                dstore_ids = candidate_dstore_ids
             else:
                 dstore_ids = [curr_dstore_id]
 
