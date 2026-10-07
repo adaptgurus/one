@@ -55,6 +55,41 @@ class ResilienceAdmissionTests(unittest.TestCase):
             children.append(SimpleNamespace(qname="ONE_DRS", children=fields))
         return SimpleNamespace(template=SimpleNamespace(children=children))
 
+    def test_resilience_exemption_is_explicit_opt_in(self):
+        plain = SimpleNamespace(user_template=None)
+        blocked_only = SimpleNamespace(
+            user_template=SimpleNamespace(
+                any_element=[
+                    SimpleNamespace(qname="ONEDRS_BLOCKED", text="YES")
+                ]
+            )
+        )
+        opted_out = SimpleNamespace(
+            user_template=SimpleNamespace(
+                any_element=[
+                    SimpleNamespace(
+                        qname="LAYERSENTRY_DRS_RESILIENCE_EXEMPT",
+                        text=" yes ",
+                    )
+                ]
+            )
+        )
+        explicit_no = SimpleNamespace(
+            user_template=SimpleNamespace(
+                any_element=[
+                    SimpleNamespace(
+                        qname="LAYERSENTRY_DRS_RESILIENCE_EXEMPT",
+                        text="NO",
+                    )
+                ]
+            )
+        )
+
+        self.assertFalse(OptimizerParser._vm_resilience_exempt(plain))
+        self.assertFalse(OptimizerParser._vm_resilience_exempt(blocked_only))
+        self.assertTrue(OptimizerParser._vm_resilience_exempt(opted_out))
+        self.assertFalse(OptimizerParser._vm_resilience_exempt(explicit_no))
+
     def test_place_requires_cluster_policy_context(self):
         with self.assertRaisesRegex(ValueError, "missing CLUSTER_POOL"):
             OptimizerParser._select_common_cluster_onedrs([])
@@ -74,6 +109,27 @@ class ResilienceAdmissionTests(unittest.TestCase):
                     self._cluster({"ENABLED": "NO"}),
                 ]
             )
+
+    def test_pending_vm_history_is_not_current_placement(self):
+        pending = VMRequirements(
+            id=19,
+            state=VMState.PENDING,
+            cpu_ratio=0.2,
+            memory=256,
+        )
+        running = VMRequirements(
+            id=20,
+            state=VMState.RUNNING,
+            cpu_ratio=0.2,
+            memory=256,
+        )
+        placements = OptimizerParser._build_current_placement(
+            {19: 3, 20: 1},
+            {19: 100, 20: 101},
+            {},
+            {19: pending, 20: running},
+        )
+        self.assertEqual(placements, [Allocation(20, 1, 101, "local")])
 
     def test_transient_monitoring_host_remains_drs_healthy(self):
         self.assertTrue(OptimizerParser._host_drs_healthy(1, True))
@@ -516,6 +572,78 @@ class ResilienceAdmissionTests(unittest.TestCase):
                     memory_reserve_percent=20,
                 ),
             )
+
+
+    def test_cluster_assignment_expands_idle_local_datastore_hosts(self):
+        expanded = OptimizerParser._expand_local_dstore_hosts(
+            {100: {1, 2}},
+            {
+                100: {"CLUSTERS": [0]},
+                200: {"CLUSTERS": [1]},
+            },
+            {0: 0, 1: 0, 2: 0, 3: 0, 4: 1},
+        )
+        self.assertEqual(expanded[100], {0, 1, 2, 3})
+        self.assertEqual(expanded[200], {4})
+
+    def test_migratable_local_datastore_falls_back_to_current_id(self):
+        parser = object.__new__(OptimizerParser)
+        parser._system_local_dstore_hosts = {100: {1, 2, 3}}
+        parser._system_local_dstore_attrs = {
+            100: {"DS_MIGRATE": True, "TM_MAD": "SSH", "CLUSTERS": [0]}
+        }
+        parser._system_shared_dstore_attrs = {}
+        parser._used_local_dstores = {19: 100}
+        parser._used_shared_dstores = {}
+        vm_req = SimpleNamespace(
+            id=19,
+            hosts=SimpleNamespace(id=[1, 2, 3]),
+            datastores=SimpleNamespace(id=[]),
+        )
+        got = parser._find_datastores(vm_req)
+        self.assertEqual(
+            got["local_dstore_ids"],
+            {1: [100], 2: [100], 3: [100]},
+        )
+        self.assertEqual(got["shared_dstore_ids"], [])
+
+    def test_migratable_shared_datastore_falls_back_to_current_id(self):
+        parser = object.__new__(OptimizerParser)
+        parser._system_local_dstore_hosts = {}
+        parser._system_local_dstore_attrs = {}
+        parser._system_shared_dstore_attrs = {
+            200: {"DS_MIGRATE": True, "TM_MAD": "CEPH", "CLUSTERS": [0]}
+        }
+        parser._used_local_dstores = {}
+        parser._used_shared_dstores = {19: 200}
+        vm_req = SimpleNamespace(
+            id=19,
+            hosts=SimpleNamespace(id=[1, 2, 3]),
+            datastores=SimpleNamespace(id=[]),
+        )
+        got = parser._find_datastores(vm_req)
+        self.assertEqual(got["local_dstore_ids"], {})
+        self.assertEqual(got["shared_dstore_ids"], [200])
+
+    def test_idle_local_datastore_capacity_uses_generic_host_disk(self):
+        parser = object.__new__(OptimizerParser)
+        parser._system_local_dstore_attrs = {
+            100: {"CLUSTERS": [0], "TM_MAD": "SSH"}
+        }
+        host = SimpleNamespace(
+            cluster_id=0,
+            host_share=SimpleNamespace(
+                datastores=SimpleNamespace(
+                    ds=[],
+                    used_disk=100,
+                    free_disk=900,
+                )
+            ),
+        )
+        got = parser._parse_local_dstore_capacities(host)
+        self.assertEqual(set(got), {100})
+        self.assertEqual(got[100].total, 1000)
+        self.assertEqual(got[100].usage, 100)
 
 
 if __name__ == "__main__":
