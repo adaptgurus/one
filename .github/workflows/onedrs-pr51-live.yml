@@ -1,0 +1,343 @@
+name: OneDRS PR51 Current Live Qualification
+
+on:
+  push:
+    branches:
+      - qual/onedrs-pr51-live-20261007
+    paths:
+      - ".github/workflows/onedrs-pr51-live.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: onedrs-pr51-current-live
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [1, 2, 3, 4, 5, 6, 7, 8]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bind exact dc1 execution authority
+        id: bind
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner=$RUNNER_NAME hostname=$(hostname -s)"
+          if [ "$RUNNER_NAME" = "dc1" ] && [ "$(hostname -s)" = "dc1" ]; then
+            echo "dc1=true" >> "$GITHUB_OUTPUT"
+            echo "DC1_AUTHORITY=PASS"
+          else
+            echo "dc1=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP_WRONG_RUNNER=PASS"
+          fi
+
+      - name: Qualify PR51 source and current dc1-dc4 runtime
+        if: steps.bind.outputs.dc1 == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          exec 9>/var/lock/layersentry-onedrs-pr51-live.lock
+          if ! flock -n 9; then
+            echo "another dc1 slot owns qualification lock; clean skip"
+            exit 0
+          fi
+
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          EXPECT_SOURCE=f48a3915a9a582209d087f52ea9ac2756fa30fcd
+          EXPECT_PKG=opennebula-7.4.1-4.ls.onedrs.3fafece.el9.x86_64
+          test "$(git rev-parse HEAD^)" = "$EXPECT_SOURCE"
+
+          echo "== PR51 targeted source tests =="
+          PYTHONPATH=/usr/lib/one/python:"$PWD/src/schedm_mad/remotes/one_drs" \
+            python3.12 src/schedm_mad/remotes/one_drs/tests/test_resilience.py -v \
+            2>&1 | tee /var/tmp/onedrs-pr51-source-tests.log
+          grep -q "Ran 29 tests" /var/tmp/onedrs-pr51-source-tests.log
+          grep -q "^OK$" /var/tmp/onedrs-pr51-source-tests.log
+          PYTHONPATH=/usr/lib/one/python:"$PWD/src/schedm_mad/remotes/one_drs" \
+            python3.12 -m compileall -q src/schedm_mad/remotes/one_drs
+          echo "PR51_TARGETED_SOURCE_TESTS=29/29_PASS"
+
+          echo "== frontend package and live source identity =="
+          testfile=/var/tmp/test_resilience-pr51.py
+          cp src/schedm_mad/remotes/one_drs/tests/test_resilience.py "$testfile"
+          for h in dc1 dc2 dc3; do
+            if [ "$h" = dc1 ]; then
+              pkg=$(rpm -q opennebula)
+              sched=$(grep 'ARGUMENTS.*one_drs' /etc/one/oned.conf)
+            else
+              pkg=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h rpm -q opennebula)
+              sched=$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h "grep 'ARGUMENTS.*one_drs' /etc/one/oned.conf")
+              scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$testfile" root@$h:"$testfile"
+            fi
+            echo "$h $pkg $sched"
+            test "$pkg" = "$EXPECT_PKG"
+            grep -q -- '-p one_drs -o one_drs' <<<"$sched"
+
+            tmp=$(mktemp)
+            if [ "$h" = dc1 ]; then
+              tail -n +2 /var/lib/one/remotes/scheduler/one_drs/lib/optimizer_parser.py >"$tmp"
+            else
+              ssh root@$h "tail -n +2 /var/lib/one/remotes/scheduler/one_drs/lib/optimizer_parser.py" >"$tmp"
+            fi
+            diff -u <(tail -n +2 src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py) "$tmp"
+            rm -f "$tmp"
+
+            for rel in lib/resilience.py lib/mapper/ilp_optimizer.py lib/mapper/model.py; do
+              srcsha=$(sha256sum "src/schedm_mad/remotes/one_drs/$rel" | awk '{print $1}')
+              if [ "$h" = dc1 ]; then
+                livesha=$(sha256sum "/var/lib/one/remotes/scheduler/one_drs/$rel" | awk '{print $1}')
+              else
+                livesha=$(ssh root@$h "sha256sum /var/lib/one/remotes/scheduler/one_drs/$rel | awk '{print \$1}'")
+              fi
+              test "$srcsha" = "$livesha"
+            done
+
+            if [ "$h" = dc1 ]; then
+              PYTHONPATH=/usr/lib/one/python:/var/lib/one/remotes/scheduler/one_drs \
+                python3.12 "$testfile" -v 2>&1 | tee "/var/tmp/pr51-live-$h.log"
+            else
+              ssh root@$h "PYTHONPATH=/usr/lib/one/python:/var/lib/one/remotes/scheduler/one_drs python3.12 '$testfile' -v" \
+                2>&1 | tee "/var/tmp/pr51-live-$h.log"
+            fi
+            grep -q "Ran 29 tests" "/var/tmp/pr51-live-$h.log"
+            grep -q "^OK$" "/var/tmp/pr51-live-$h.log"
+          done
+          strings /usr/bin/oned | grep -Fq "Error cluster template must contain exactly one ONE_DRS vector"
+          echo "LIVE_SOURCE_MATCH=PASS"
+          echo "INSTALLED_TARGETED_TESTS=87/87_PASS"
+
+          echo "== raft health =="
+          onezone show 0
+          python3 - <<'PY'
+          import subprocess,re
+          s=subprocess.check_output(["onezone","show","0"],text=True)
+          rows={}
+          for line in s.splitlines():
+              m=re.match(r"^\s*([0-2])\s+(dc[123])\s+(leader|follower)\s+(\d+)\s+(\d+)\s+(\d+)\s+",line)
+              if m:
+                  _,name,state,term,index,commit=m.groups()
+                  rows[name]=(state,int(term),int(index),int(commit))
+          if set(rows)!={"dc1","dc2","dc3"}: raise SystemExit(f"bad raft members {rows}")
+          if sum(v[0]=="leader" for v in rows.values())!=1: raise SystemExit(f"leader count {rows}")
+          if len({v[1] for v in rows.values()})!=1: raise SystemExit(f"term mismatch {rows}")
+          if max(v[3] for v in rows.values())-min(v[3] for v in rows.values())>5:
+              raise SystemExit(f"commit lag {rows}")
+          print("RAFT_GATE=PASS",rows)
+          PY
+
+          echo "== production policy readback =="
+          onecluster show 0 -x >/var/tmp/onedrs-pr51-cluster.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          r=ET.parse("/var/tmp/onedrs-pr51-cluster.xml").getroot()
+          vs=r.findall("./TEMPLATE/ONE_DRS")
+          if len(vs)!=1: raise SystemExit(f"ONE_DRS cardinality={len(vs)}")
+          d={c.tag.upper():(c.text or "").strip().lower() for c in vs[0]}
+          exp={
+            "AUTOMATION":"manual","POLICY":"balance","PREDICTIVE":"0",
+            "MIGRATION_THRESHOLD":"1","HOST_MIGRATION_THRESHOLD":"1","DS_MIGRATION_THRESHOLD":"0",
+            "MIGRATION_COOLDOWN_SECONDS":"600","ENABLED":"yes",
+            "HOST_FAILURE_TOLERANCE":"1","FAILURE_DOMAIN_TOLERANCE":"1",
+            "CPU_RESERVE_PERCENT":"10","MEMORY_RESERVE_PERCENT":"10",
+            "MIN_HEALTHY_HOSTS":"3","FAILURE_DOMAIN_SPREAD":"yes",
+            "REQUIRE_FAILURE_DOMAIN_LABELS":"yes","COMBINED_FAILURE_MODES":"no",
+            "MAX_GROUP_MIGRATIONS":"1","MAX_FAILURE_SCENARIOS":"1024",
+          }
+          for k,v in exp.items():
+              if d.get(k)!=v: raise SystemExit(f"{k}={d.get(k)!r} expected={v!r}")
+          print("POLICY_READBACK=PASS")
+          PY
+
+          echo "== host metadata =="
+          onehost show 0 | grep -q 'LAYERSENTRY_DRS_READY="NO"'
+          onehost show 0 | grep -q 'LAYERSENTRY_FAILURE_DOMAIN="dc-control-protected"'
+          onehost show 1 | grep -q 'LAYERSENTRY_DRS_READY="YES"'
+          onehost show 1 | grep -q 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-a"'
+          onehost show 2 | grep -q 'LAYERSENTRY_DRS_READY="YES"'
+          onehost show 2 | grep -q 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-b"'
+          onehost show 3 | grep -q 'LAYERSENTRY_DRS_READY="YES"'
+          onehost show 3 | grep -q 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-c"'
+          echo "HOST_METADATA=PASS"
+
+          echo "== scope safety =="
+          onevm list -x >/var/tmp/onedrs-pr51-vms-before.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET,json
+          r=ET.parse("/var/tmp/onedrs-pr51-vms-before.xml").getroot()
+          out={}
+          for vm in r.findall("./VM"):
+              vid=int(vm.findtext("ID"))
+              name=vm.findtext("NAME") or ""
+              lab=(vm.findtext("./USER_TEMPLATE/LAYERSENTRY_LAB_ONLY") or "").upper()
+              exempt=(vm.findtext("./USER_TEMPLATE/LAYERSENTRY_DRS_RESILIENCE_EXEMPT") or "").upper()
+              if name.startswith("ls-onedrs-") and exempt=="YES":
+                  raise SystemExit(f"OneDRS canary {vid}/{name} must not be resilience exempt")
+              if exempt=="YES" and lab!="YES":
+                  raise SystemExit(f"non-lab VM {vid}/{name} is resilience exempt")
+              hs=vm.findall("./HISTORY_RECORDS/HISTORY")
+              last=max(hs,key=lambda x:int(x.findtext("SEQ") or -1)) if hs else None
+              out[str(vid)]={"name":name,"host":int(last.findtext("HID")) if last is not None else -1}
+          open("/var/tmp/onedrs-pr51-before.json","w").write(json.dumps(out,sort_keys=True))
+          print("RESILIENCE_SCOPE=PASS")
+          PY
+
+          echo "== dc4 compute and dedicated migration plane =="
+          ssh root@dc4 'set -e; systemctl is-active openvswitch; systemctl is-active ovn-controller; (systemctl is-active virtqemud || systemctl is-active libvirtd); ovs-vsctl br-exists br-int; ip -4 addr show dev ls-migration | grep -F "10.200.20.4/24"; firewall-cmd --zone=ls-migrate --query-port=49152-49215/tcp; firewall-cmd --zone=ls-migrate --query-interface=ls-migration'
+          for src in dc2 dc3 dc4; do
+            case "$src" in dc2) sip=10.200.20.2;; dc3) sip=10.200.20.3;; dc4) sip=10.200.20.4;; esac
+            for dip in 10.200.20.2 10.200.20.3 10.200.20.4; do
+              [ "$sip" = "$dip" ] && continue
+              ssh root@$src "ping -c 2 -W 2 -I ls-migration $dip"
+            done
+          done
+          echo "DC4_COMPUTE_HEALTH=PASS"
+          echo "MIGRATION_PLANE=PASS"
+
+          echo "== safe optimize =="
+          onecluster plandelete 0 >/dev/null 2>&1 || true
+          onecluster optimize 0
+          sleep 5
+          onecluster show 0 -x >/var/tmp/onedrs-pr51-plan.xml
+          onevm list -x >/var/tmp/onedrs-pr51-pool.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET,json
+          cr=ET.parse("/var/tmp/onedrs-pr51-plan.xml").getroot()
+          vr=ET.parse("/var/tmp/onedrs-pr51-pool.xml").getroot()
+          names={int(v.findtext("ID")):(v.findtext("NAME") or "") for v in vr.findall("./VM")}
+          p=cr.find("./PLAN")
+          acts=[] if p is None else p.findall("./ACTION")
+          out=[]
+          for a in acts:
+              vid=int(a.findtext("VM_ID")); hid=int(a.findtext("HOST_ID"))
+              op=(a.findtext("OPERATION") or "").strip().lower()
+              if not names.get(vid,"").startswith("ls-onedrs-"):
+                  raise SystemExit(f"unsafe plan action on VM {vid}/{names.get(vid)}")
+              if hid not in {1,2,3}: raise SystemExit(f"unsafe target host {hid}")
+              if op not in {"migrate","deploy"}: raise SystemExit(f"unexpected operation {op}")
+              out.append((vid,names[vid],hid,op))
+          print("SAFE_PLAN_ACTIONS",json.dumps(out))
+          PY
+          echo "SAFE_OPTIMIZE=PASS"
+
+          echo "== select running canary and PLACE it to dc4 through OneDRS =="
+          pick=""
+          before_host=""
+          before_seq=""
+          before_ip=""
+          for id in 19 20 21 22 23; do
+            xml=$(onevm show "$id" -x 2>/dev/null || true)
+            [ -n "$xml" ] || continue
+            facts=$(XML="$xml" python3 - <<'PY'
+          import os,xml.etree.ElementTree as E
+          r=E.fromstring(os.environ["XML"])
+          hs=r.findall("./HISTORY_RECORDS/HISTORY")
+          h=max(hs,key=lambda x:int(x.findtext("SEQ") or -1)) if hs else None
+          print(r.findtext("STATE") or "-",r.findtext("LCM_STATE") or "-",h.findtext("HID") if h is not None else "-",h.findtext("SEQ") if h is not None else "-",r.findtext("./TEMPLATE/NIC/IP") or "-")
+          PY
+          )
+            read -r state lcm hid seq ip <<<"$facts"
+            if [ "$state" = 3 ] && [ "$lcm" = 3 ] && { [ "$hid" = 1 ] || [ "$hid" = 2 ]; }; then
+              pick=$id; before_host=$hid; before_seq=$seq; before_ip=$ip; break
+            fi
+          done
+          test -n "$pick"
+          echo "CANARY=$pick BEFORE_HOST=$before_host BEFORE_SEQ=$before_seq IP=$before_ip"
+          printf '%s\n' 'ONEDRS_BLOCKED="NO"' 'SCHED_REQUIREMENTS="ID = 3"' >/var/tmp/canary-to-dc4.tmpl
+          onevm update "$pick" /var/tmp/canary-to-dc4.tmpl --append
+          log_start=$(wc -l < /var/log/one/oned.log)
+          onevm resched "$pick"
+
+          moved=0
+          for _ in $(seq 1 90); do
+            xml=$(onevm show "$pick" -x)
+            facts=$(XML="$xml" python3 - <<'PY'
+          import os,xml.etree.ElementTree as E
+          r=E.fromstring(os.environ["XML"])
+          hs=r.findall("./HISTORY_RECORDS/HISTORY")
+          h=max(hs,key=lambda x:int(x.findtext("SEQ") or -1)) if hs else None
+          print(r.findtext("STATE") or "-",r.findtext("LCM_STATE") or "-",h.findtext("HID") if h is not None else "-",h.findtext("SEQ") if h is not None else "-")
+          PY
+          )
+            read -r state lcm hid seq <<<"$facts"
+            if [ "$state" = 3 ] && [ "$lcm" = 3 ] && [ "$hid" = 3 ] && [ "$seq" -gt "$before_seq" ]; then moved=1; break; fi
+            sleep 2
+          done
+          test "$moved" -eq 1
+          ssh root@dc4 "virsh domstate one-$pick | grep -qi running"
+          echo "ONEDRS_PLACE_TO_DC4=PASS vm=$pick"
+
+          newlog=/var/tmp/onedrs-pr51-new.log
+          tail -n +$((log_start + 1)) /var/log/one/oned.log >"$newlog"
+          if grep -E 'IndexError: list index out of range|Scheduler place operation error|TypeError:.*NoneType' "$newlog" | grep -q .; then
+            cat "$newlog"
+            exit 1
+          fi
+          echo "PLACE_RUNTIME_ERROR_FREE=PASS"
+
+          echo "== cooldown no-ping-pong =="
+          printf '%s\n' 'SCHED_REQUIREMENTS=""' 'ONEDRS_BLOCKED="NO"' >/var/tmp/canary-unpin.tmpl
+          onevm update "$pick" /var/tmp/canary-unpin.tmpl --append
+          onecluster plandelete 0 >/dev/null 2>&1 || true
+          onecluster optimize 0
+          sleep 4
+          onecluster show 0 -x >/var/tmp/onedrs-pr51-postmove.xml
+          if grep -A20 -B5 "<VM_ID>$pick</VM_ID>" /var/tmp/onedrs-pr51-postmove.xml | grep -q '<ACTION>'; then
+            echo "canary selected inside cooldown" >&2
+            exit 1
+          fi
+          echo "MIGRATION_COOLDOWN_NO_PINGPONG=PASS"
+
+          echo "== dc4 DRS_READY fail-closed and rejoin =="
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="NO"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-c"' >/var/tmp/dc4-notready.tmpl
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="YES"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-c"' >/var/tmp/dc4-ready.tmpl
+          restore_dc4(){ onehost update 3 /var/tmp/dc4-ready.tmpl --append >/dev/null 2>&1 || true; }
+          trap restore_dc4 EXIT
+          onehost update 3 /var/tmp/dc4-notready.tmpl --append
+          onecluster plandelete 0 >/dev/null 2>&1 || true
+          onecluster optimize 0 >/var/tmp/dc4-notready-opt.out 2>&1 || true
+          sleep 4
+          onecluster show 0 -x >/var/tmp/dc4-notready-plan.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET
+          r=ET.parse("/var/tmp/dc4-notready-plan.xml").getroot()
+          p=r.find("./PLAN")
+          if p is not None and p.findall("./ACTION"):
+              raise SystemExit("dc4 DRS_READY=NO produced actionable plan")
+          print("DC4_NOT_READY_FAIL_CLOSED=PASS")
+          PY
+          restore_dc4
+          trap - EXIT
+          onehost show 3 | grep -q 'LAYERSENTRY_DRS_READY="YES"'
+          echo "DC4_REJOIN=PASS"
+
+          echo "== protected VM immutability =="
+          onevm list -x >/var/tmp/onedrs-pr51-vms-after.xml
+          python3 - <<'PY'
+          import xml.etree.ElementTree as ET,json
+          before=json.load(open("/var/tmp/onedrs-pr51-before.json"))
+          r=ET.parse("/var/tmp/onedrs-pr51-vms-after.xml").getroot()
+          now={}
+          for vm in r.findall("./VM"):
+              vid=int(vm.findtext("ID")); hs=vm.findall("./HISTORY_RECORDS/HISTORY")
+              h=max(hs,key=lambda x:int(x.findtext("SEQ") or -1)) if hs else None
+              now[str(vid)]=int(h.findtext("HID")) if h is not None else -1
+          for vid in map(str,[0,1,5,6,7,8,9,10,11]):
+              if vid in before and vid in now and before[vid]["host"]!=now[vid]:
+                  raise SystemExit(f"protected VM {vid} moved")
+          print("PROTECTED_VM_IMMUTABILITY=PASS")
+          PY
+
+          printf '%s\n' 'ONEDRS_BLOCKED="YES"' 'LAYERSENTRY_ONEDRS_BLOCK_REASON="QUALIFICATION_RETAINED_CANARY"' >/var/tmp/canary-block.tmpl
+          onevm update "$pick" /var/tmp/canary-block.tmpl --append
+          onezone show 0
+          onehost list
+          for h in dc1 dc2 dc3; do ssh root@$h systemctl is-active opennebula; done
+          echo "ONEDRS_PR51_CURRENT_LIVE=PASS"
