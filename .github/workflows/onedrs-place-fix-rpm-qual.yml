@@ -1,4 +1,4 @@
-name: OneDRS PLACE Fix RPM Qualification
+name: OneDRS Final PR51 RPM Qualification
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: onedrs-place-fix-rpm-qual
+  group: onedrs-final-pr51-rpm
   cancel-in-progress: false
 
 jobs:
@@ -19,86 +19,120 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        slot: [1, 2, 3, 4]
+        slot: [1, 2, 3, 4, 5, 6, 7, 8]
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
-      - name: Bind dc1
+
+      - name: Bind exact dc1 authority
         id: bind
         shell: bash
         run: |
+          set -euo pipefail
+          echo "runner=$RUNNER_NAME hostname=$(hostname -s)"
           if [ "$RUNNER_NAME" = dc1 ] && [ "$(hostname -s)" = dc1 ]; then
             echo "dc1=true" >> "$GITHUB_OUTPUT"
+            echo "DC1_AUTHORITY=PASS"
           else
             echo "dc1=false" >> "$GITHUB_OUTPUT"
+            echo "SKIP_WRONG_RUNNER=PASS"
           fi
 
-      - name: Build exact PR50 candidate on dc2
+      - name: Build exact merged OneDRS release-7 on dc2
         if: steps.bind.outputs.dc1 == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          exec 9>/var/lock/layersentry-onedrs-place-build.lock
+          exec 9>/var/lock/layersentry-onedrs-final-rpm.lock
           if ! flock -n 9; then echo "another dc1 slot owns build"; exit 0; fi
 
-          BASE=42021b22d78f529f4b3c42a966957ab4704badc3
-          HEAD=3fafecea7a0fe72e05922271fdc177eb2015c835
-          SHORT=3fafece
+          BASE=7eb38f555c29148be41b2d99e09dc82a5716ddc3
+          HEAD=71dab36cfa5b5ec0ec6e273a4070bcf7939bfb3f
+          SHORT=71dab36
+          PATCH=/var/tmp/layersentry-onedrs-final-$SHORT.patch
           git fetch --no-tags origin "$BASE" "$HEAD"
-          PATCH=/tmp/layersentry-onedrs-place-$SHORT.patch
+          git merge-base --is-ancestor "$BASE" "$HEAD"
           git diff --binary "$BASE..$HEAD" -- \
-            src/schedm/SchedulerManagerDriver.cc \
             src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py \
-            src/schedm_mad/remotes/one_drs/tests/test_resilience.py > "$PATCH"
+            src/schedm_mad/remotes/one_drs/tests/test_resilience.py >"$PATCH"
           test -s "$PATCH"
-          grep -q 'matched_cluster_ids' "$PATCH"
-          grep -q '_select_common_cluster_onedrs' "$PATCH"
-          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$PATCH" root@dc2:/var/tmp/
+          grep -q 'LAYERSENTRY_DRS_RESILIENCE_EXEMPT' "$PATCH"
+          grep -q '_build_current_placement' "$PATCH"
+          grep -q 'generic host disk' "$PATCH" || grep -q 'host_share.disk_usage' "$PATCH"
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$PATCH" root@dc2:"$PATCH"
 
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2 "SHORT=$SHORT bash -s" <<'REMOTE'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2 "BASE=$BASE HEAD=$HEAD SHORT=$SHORT bash -s" <<'REMOTE'
           set -euo pipefail
-          SRC=/root/onedrs-rpm-build-42021b2/rpmbuild
-          TOP=/root/onedrs-rpm-build-place-3fafece/rpmbuild
-          OUT=/root/onedrs-rpm-build-place-3fafece
+          SRC=/root/onedrs-rpm-build-place-3fafece/rpmbuild
+          OUT=/root/onedrs-rpm-build-final-71dab36
+          TOP=$OUT/rpmbuild
           rm -rf "$OUT"
           mkdir -p "$TOP"/{BUILD,BUILDROOT,RPMS,SOURCES,SPECS,SRPMS}
           cp -al "$SRC"/SOURCES/. "$TOP"/SOURCES/
           cp "$SRC"/SPECS/opennebula.spec "$TOP"/SPECS/opennebula.spec
-          cp /var/tmp/layersentry-onedrs-place-3fafece.patch "$TOP"/SOURCES/layersentry-onedrs-place-3fafece.patch
+          cp "/var/tmp/layersentry-onedrs-final-$SHORT.patch" "$TOP/SOURCES/layersentry-onedrs-final-$SHORT.patch"
 
-          python3 - "$TOP/SPECS/opennebula.spec" <<'PY'
-          import pathlib, re, sys
-          p=pathlib.Path(sys.argv[1]); s=p.read_text()
-          old="Release: 3.ls.onedrs.42021b2%{?dist}"
-          new="Release: 4.ls.onedrs.3fafece%{?dist}"
-          if old not in s: raise SystemExit("expected 42021b2 release marker missing")
+          python3 - "$TOP/SPECS/opennebula.spec" "$SHORT" <<'PY'
+          import pathlib,re,sys
+          p=pathlib.Path(sys.argv[1]); short=sys.argv[2]; s=p.read_text()
+          old="Release: 4.ls.onedrs.3fafece%{?dist}"
+          new=f"Release: 7.ls.onedrs.{short}%{{?dist}}"
+          if old not in s: raise SystemExit("release-4 marker missing")
           s=s.replace(old,new,1)
-          marker="Patch1003: layersentry-onedrs-42021b2.patch"
-          if marker not in s: raise SystemExit("Patch1003 declaration missing")
-          s=s.replace(marker, marker+"\nPatch1004: layersentry-onedrs-place-3fafece.patch",1)
+          marker="Patch1004: layersentry-onedrs-place-3fafece.patch"
+          decl=f"Patch1005: layersentry-onedrs-final-{short}.patch"
+          if marker not in s: raise SystemExit("Patch1004 declaration missing")
+          s=s.replace(marker,marker+"\n"+decl,1)
           lines=s.splitlines(); idx=None
           for i,line in enumerate(lines):
-              if re.search(r"%patch(?:\s+-P\s+1003\b|1003\b)",line):
+              if re.search(r"%patch(?:\s+-P\s+1004\b|1004\b)",line):
                   idx=i; break
-          if idx is None: raise SystemExit("Patch1003 application missing")
-          lines.insert(idx+1,re.sub(r"1003","1004",lines[idx],count=1))
+          if idx is None: raise SystemExit("Patch1004 application missing")
+          lines.insert(idx+1,re.sub(r"1004","1005",lines[idx],count=1))
           p.write_text("\n".join(lines)+"\n")
           PY
 
-          grep -n -E 'Release:|Patch100[0-4]|%patch.*100[0-4]' "$TOP/SPECS/opennebula.spec"
+          echo "== final spec patch chain =="
+          grep -n -E 'Release:|Patch100[0-5]|%patch.*100[0-5]' "$TOP/SPECS/opennebula.spec"
+
           rpmbuild -bb --define "_topdir $TOP" "$TOP/SPECS/opennebula.spec"
-          RPM="$TOP/RPMS/x86_64/opennebula-7.4.1-4.ls.onedrs.3fafece.el9.x86_64.rpm"
+          RPM="$TOP/RPMS/x86_64/opennebula-7.4.1-7.ls.onedrs.71dab36.el9.x86_64.rpm"
           test -s "$RPM"
+
+          echo "== optional organizational RPM signing =="
+          gpg_name="$(rpm --eval '%{?_gpg_name}' | xargs || true)"
+          if [ -n "$gpg_name" ] && gpg --batch --list-secret-keys "$gpg_name" >/dev/null 2>&1; then
+            echo "RPM_SIGNING_KEY_CONFIGURED=YES"
+            timeout 30 rpmsign --addsign "$RPM"
+            echo "RPM_SIGNED=YES"
+          else
+            echo "RPM_SIGNING_KEY_CONFIGURED=NO"
+            echo "RPM_SIGNED=NO"
+          fi
+
           rpm -Kv "$RPM"
           rpm -Uvh --test --noscripts "$RPM"
-          sha256sum "$RPM" | tee "$OUT/opennebula-place-3fafece.sha256"
+          sha256sum "$RPM" | tee "$OUT/opennebula-final-71dab36.sha256"
 
           TMP=$(mktemp -d)
+          trap 'rm -rf "$TMP"' EXIT
           cd "$TMP"
           rpm2cpio "$RPM" | cpio -idmu --quiet
+          test -f "$TMP/var/lib/one/remotes/scheduler/one_drs/tests/test_resilience.py"
           PYTHONPATH=/usr/lib/one/python:"$TMP/var/lib/one/remotes/scheduler/one_drs" \
-            python3.12 "$TMP/var/lib/one/remotes/scheduler/one_drs/tests/test_resilience.py" -v
-          grep -q 'matched_cluster_ids' "$TMP/usr/bin/oned" 2>/dev/null || true
-          echo "PLACE_FIX_RPM_BUILD=PASS"
+            python3.12 "$TMP/var/lib/one/remotes/scheduler/one_drs/tests/test_resilience.py" -v \
+            2>&1 | tee "$OUT/payload-tests.log"
+          grep -q "Ran 29 tests" "$OUT/payload-tests.log"
+          grep -q "^OK$" "$OUT/payload-tests.log"
+
+          # The RPM build may rewrite the Python shebang; all executable source
+          # below line one must remain byte-identical to the merged source.
+          curl -fsSL "https://raw.githubusercontent.com/adaptgurus/one/$HEAD/src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py" \
+            -o "$OUT/optimizer_parser.source.py"
+          diff -u <(tail -n +2 "$OUT/optimizer_parser.source.py") \
+                  <(tail -n +2 "$TMP/var/lib/one/remotes/scheduler/one_drs/lib/optimizer_parser.py")
+          echo "RPM_PAYLOAD_SOURCE_MATCH=PASS"
+          echo "RPM_PAYLOAD_TESTS=29/29_PASS"
+          echo "FINAL_RPM_BUILD=PASS"
           REMOTE
