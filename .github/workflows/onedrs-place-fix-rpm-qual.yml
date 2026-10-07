@@ -52,14 +52,13 @@ jobs:
           SHORT=71dab36
           PATCH=/var/tmp/layersentry-onedrs-final-$SHORT.patch
           git fetch --no-tags origin "$BASE" "$HEAD"
-          git merge-base --is-ancestor "$BASE" "$HEAD"
           git diff --binary "$BASE..$HEAD" -- \
             src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py \
             src/schedm_mad/remotes/one_drs/tests/test_resilience.py >"$PATCH"
           test -s "$PATCH"
           grep -q 'LAYERSENTRY_DRS_RESILIENCE_EXEMPT' "$PATCH"
           grep -q '_build_current_placement' "$PATCH"
-          grep -q 'generic host disk' "$PATCH" || grep -q 'host_share.disk_usage' "$PATCH"
+          grep -q 'test_idle_local_datastore_capacity_uses_generic_host_disk' "$PATCH"
           scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$PATCH" root@dc2:"$PATCH"
 
           ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2 "BASE=$BASE HEAD=$HEAD SHORT=$SHORT bash -s" <<'REMOTE'
