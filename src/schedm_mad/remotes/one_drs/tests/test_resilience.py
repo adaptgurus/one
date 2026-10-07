@@ -574,6 +574,85 @@ class ResilienceAdmissionTests(unittest.TestCase):
             )
 
 
+    @staticmethod
+    def _vmgroup_parser_fixture(required_ids, placements):
+        parser = object.__new__(OptimizerParser)
+        parser._curr_alloc = dict(placements)
+
+        def vm_member(vm_id):
+            return SimpleNamespace(
+                id=vm_id,
+                template=SimpleNamespace(
+                    vmgroup=SimpleNamespace(
+                        children=[
+                            SimpleNamespace(qname="VMGROUP_ID", text="0"),
+                            SimpleNamespace(qname="ROLE", text="replica"),
+                        ]
+                    )
+                ),
+            )
+
+        parser.scheduler_driver_action = SimpleNamespace(
+            requirements=SimpleNamespace(
+                vm=[SimpleNamespace(id=vm_id) for vm_id in required_ids]
+            ),
+            vm_pool=SimpleNamespace(
+                vm=[vm_member(vm_id) for vm_id in (27, 28, 36)]
+            ),
+            vm_group_pool=SimpleNamespace(
+                vm_group=[
+                    SimpleNamespace(
+                        id=0,
+                        roles=SimpleNamespace(
+                            role=[
+                                SimpleNamespace(
+                                    name="replica",
+                                    policy="ANTI_AFFINED",
+                                    host_affined=None,
+                                    host_anti_affined=None,
+                                )
+                            ]
+                        ),
+                        template=None,
+                    )
+                ]
+            ),
+        )
+        return parser
+
+    def test_active_anti_affined_members_stay_in_optimizer_group(self):
+        parser = self._vmgroup_parser_fixture(
+            {27, 28, 36},
+            {27: 1, 28: 1, 36: 1},
+        )
+        (
+            groups,
+            affined_hosts,
+            anti_affined_hosts,
+            static_affined_hosts,
+            static_anti_affined_hosts,
+        ) = parser._parse_vm_groups()
+
+        self.assertEqual(len(groups), 1)
+        self.assertFalse(groups[0].affined)
+        self.assertEqual(groups[0].vm_ids, {27, 28, 36})
+        self.assertEqual(affined_hosts, {})
+        self.assertEqual(anti_affined_hosts, {})
+        self.assertEqual(static_affined_hosts, {})
+        self.assertEqual(static_anti_affined_hosts, {})
+
+    def test_only_non_requested_peer_becomes_fixed_anti_affinity_host(self):
+        parser = self._vmgroup_parser_fixture(
+            {27, 28},
+            {27: 2, 28: 3, 36: 1},
+        )
+        groups, _, anti_affined_hosts, _, _ = parser._parse_vm_groups()
+
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0].vm_ids, {27, 28})
+        self.assertEqual(anti_affined_hosts[27], {1})
+        self.assertEqual(anti_affined_hosts[28], {1})
+
     def test_cluster_assignment_expands_idle_local_datastore_hosts(self):
         expanded = OptimizerParser._expand_local_dstore_hosts(
             {100: {1, 2}},
