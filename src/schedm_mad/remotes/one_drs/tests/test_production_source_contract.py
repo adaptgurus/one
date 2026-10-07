@@ -31,10 +31,19 @@ class OneDRSProductionSourceContractTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertIn(f'"{field}"', cluster)
 
+    def test_place_keeps_cluster_host_inventory_separate_from_vm_candidates(self):
+        scheduler = (REPO_ROOT / "src/schedm/SchedulerManagerDriver.cc").read_text()
+        self.assertIn("std::set<int> host_inventory_ids = sr.match.match_host;", scheduler)
+        self.assertIn("for (int host_id : sr.hpool.ids)", scheduler)
+        self.assertIn("matched_cluster_ids.count(host->get_cluster_id()) != 0", scheduler)
+        self.assertIn("sr.hpool.to_xml(oss, host_inventory_ids);", scheduler)
+        self.assertIn("sr.match.to_xml(oss);", scheduler)
+
     def test_cluster_rejects_duplicate_onedrs_vectors(self):
         cluster = (REPO_ROOT / "src/cluster/Cluster.cc").read_text()
         self.assertIn("one_drs_num != 1", cluster)
         self.assertIn("exactly one ONE_DRS vector", cluster)
+
 
     def test_cooldown_does_not_remove_resilience_recovery_candidates(self):
         parser = (
