@@ -340,21 +340,40 @@ class OptimizerParser:
                 else policy.lower()
             )
             self._plan_id = self.scheduler_driver_action.cluster_pool.cluster[0].id
-        vmg, affined_hosts, anti_affined_hosts = self._parse_vm_groups()
+        (
+            vmg,
+            affined_hosts,
+            anti_affined_hosts,
+            resilience_affined_hosts,
+            resilience_anti_affined_hosts,
+        ) = self._parse_vm_groups()
         vm_reqs_dict = self._parse_vm_requirements()
-        for vm_req in self.scheduler_driver_action.requirements.vm:
-            if vm_req.id in affined_hosts:
-                # Available hosts are only the affined hosts
-                new_host_ids = affined_hosts[vm_req.id]
-            elif vm_req.id in anti_affined_hosts:
-                # Remove anti-affined hosts from the available host_ids
-                current_ids = vm_reqs_dict[vm_req.id].host_ids
-                new_host_ids = current_ids - anti_affined_hosts[vm_req.id]
-            else:
-                continue
-            vm_reqs_dict[vm_req.id] = replace(
-                vm_reqs_dict[vm_req.id], host_ids=new_host_ids
-            )
+
+        # Recovery admission must preserve explicit VMGroup host policies, but
+        # it must not inherit optimizer-only exclusions derived from the
+        # current placement of peer VMs. Anti-affinity between VMs is modeled
+        # directly by validate_resilience() across each failure scenario.
+        resilience_vm_reqs_dict = vm_reqs_dict.copy()
+
+        def apply_host_constraints(requirements, host_affined, host_anti_affined):
+            for vm_req in self.scheduler_driver_action.requirements.vm:
+                if vm_req.id in host_affined:
+                    new_host_ids = host_affined[vm_req.id]
+                elif vm_req.id in host_anti_affined:
+                    current_ids = requirements[vm_req.id].host_ids
+                    new_host_ids = current_ids - host_anti_affined[vm_req.id]
+                else:
+                    continue
+                requirements[vm_req.id] = replace(
+                    requirements[vm_req.id], host_ids=new_host_ids
+                )
+
+        apply_host_constraints(vm_reqs_dict, affined_hosts, anti_affined_hosts)
+        apply_host_constraints(
+            resilience_vm_reqs_dict,
+            resilience_affined_hosts,
+            resilience_anti_affined_hosts,
+        )
 
         if allowed_migrations == -1:
             migrations = None
@@ -378,14 +397,10 @@ class OptimizerParser:
 
         host_capacities = self._parse_host_capacities()
 
-        # Resilience simulates loss of the current host/domain and therefore
-        # must retain the VM's normal recovery candidates. A healthy-host
-        # migration cooldown is only an optimization disruption guard; it must
-        # never remove recovery destinations from N+K admission. Keep the
-        # pre-cooldown requirements for resilience, while the optimizer below
-        # receives the temporary current-host pin for ordinary balancing.
-        resilience_vm_reqs_dict = vm_reqs_dict.copy()
-
+        # A healthy-host migration cooldown is only an optimization
+        # disruption guard; it must never remove recovery destinations from
+        # N+K admission. resilience_vm_reqs_dict already contains only the
+        # static host constraints that also apply during recovery.
         if self.mode.upper() == "OPTIMIZE" and migration_cooldown_seconds > 0:
             healthy_ids = {host.id for host in host_capacities if host.healthy}
             vm_pool = {
@@ -631,9 +646,10 @@ class OptimizerParser:
         # vmg = list[VMGroup]
         vmg, idx = [], 0
         # Dicts for Host-VM Affinity
-        # affined_hosts = {vm_id: set(host_ids)}
-        # anti_affined_hosts = {vm_id: set(host_ids)}
-        affined_hosts, anti_affined_hosts = {}, {}
+        # Static VMGroup host policies are kept separate from optimizer-only
+        # peer-placement exclusions so resilience recovery reachability is not
+        # over-constrained by the current VM placement.
+        static_affined_hosts, static_anti_affined_hosts = {}, {}
         # Create VM Groups for VM-VM and Host-VM Affinity
         for group in self.scheduler_driver_action.vm_group_pool.vm_group:
             gid = int(group.id)
@@ -647,9 +663,9 @@ class OptimizerParser:
                     or role_obj.host_anti_affined is not None
                 ):
                     target_hosts = (
-                        affined_hosts
+                        static_affined_hosts
                         if role_obj.host_affined is not None
-                        else anti_affined_hosts
+                        else static_anti_affined_hosts
                     )
                     host_list = (
                         role_obj.host_affined or role_obj.host_anti_affined
@@ -675,6 +691,17 @@ class OptimizerParser:
                     )
                     aux_vmg[(gid, role_obj.name)] = vm_group
                     idx += 1
+        # The optimizer also respects current peer placement. Keep these maps
+        # distinct from the static host policies used for resilience admission.
+        affined_hosts = {
+            vm_id: set(host_ids)
+            for vm_id, host_ids in static_affined_hosts.items()
+        }
+        anti_affined_hosts = {
+            vm_id: set(host_ids)
+            for vm_id, host_ids in static_anti_affined_hosts.items()
+        }
+
         # Create VM Groups for Role-Role affinity
         for group in self.scheduler_driver_action.vm_group_pool.vm_group:
             gid = int(group.id)
@@ -735,6 +762,12 @@ class OptimizerParser:
             for vm_id in vm_group.vm_ids:
                 if vm_id in allowed_vm_ids:
                     for aux_vm_id in vm_group.vm_ids:
+                        # Anti-affinity excludes peer placements, not the VM's
+                        # own current host. Excluding self would make a valid
+                        # running placement unavailable as a no-op optimizer
+                        # choice and can render the ILP infeasible.
+                        if not vm_group.affined and aux_vm_id == vm_id:
+                            continue
                         if aux_vm_id in current_placement:
                             # Affined or anti-affined host by the placed VMs
                             target_hosts.setdefault(vm_id, set()).add(
@@ -760,7 +793,13 @@ class OptimizerParser:
                     result.pop(j)
         # Return a unique list that contain the affined and antiaffined roles
         # and the dicts with the affined and anti_affined hosts
-        return result, affined_hosts, anti_affined_hosts
+        return (
+            result,
+            affined_hosts,
+            anti_affined_hosts,
+            static_affined_hosts,
+            static_anti_affined_hosts,
+        )
 
     def _parse_host_capacities(self) -> list[HostCapacity]:
         result = []

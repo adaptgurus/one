@@ -69,6 +69,29 @@ class OneDRSProductionSourceContractTests(unittest.TestCase):
             workflow,
         )
 
+    def test_resilience_ignores_dynamic_peer_host_exclusions(self):
+        parser = (
+            REPO_ROOT
+            / "src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py"
+        ).read_text()
+        self.assertIn("static_affined_hosts, static_anti_affined_hosts", parser)
+        self.assertIn("resilience_affined_hosts", parser)
+        self.assertIn("resilience_anti_affined_hosts", parser)
+        self.assertIn(
+            "apply_host_constraints(\n            resilience_vm_reqs_dict,",
+            parser,
+        )
+
+    def test_anti_affinity_does_not_exclude_own_current_host(self):
+        parser = (
+            REPO_ROOT
+            / "src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py"
+        ).read_text()
+        self.assertIn(
+            "if not vm_group.affined and aux_vm_id == vm_id:",
+            parser,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
