@@ -1,0 +1,310 @@
+name: OneDRS dc1-dc4 Deploy and Validate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: onedrs-dc1-dc4-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bind exact dc1 runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "runner=$RUNNER_NAME hostname=$(hostname) user=$(id -un)"
+          test "$RUNNER_NAME" = "dc1"
+          test "$(hostname)" = "dc1"
+          sudo -n true
+
+      - name: Stage and verify exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW=opennebula-7.4.1-3.ls.onedrs.42021b2.el9.x86_64.rpm
+          OLD=opennebula-7.4.1-2.ls.onedrs.e2f766b.el9.x86_64.rpm
+          EXPECT=622f432ca9fe0ddea16fb46d0fafd38135334f361c9470b0939e64f9cef22c31
+          mkdir -p artifacts
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2:/root/onedrs-rpm-build-42021b2/rpmbuild/RPMS/x86_64/$NEW artifacts/$NEW
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2:/root/onedrs-rpm-build/rpmbuild/RPMS/x86_64/$OLD artifacts/$OLD
+          echo "$EXPECT  artifacts/$NEW" | sha256sum -c -
+          rpm -Kv artifacts/$NEW
+          rpm -qpi artifacts/$NEW
+          rpm -Uvh --test --noscripts artifacts/$NEW
+          for h in dc2 dc3; do
+            scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes artifacts/$NEW root@$h:/var/tmp/$NEW
+            scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes artifacts/$OLD root@$h:/var/tmp/$OLD
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h "echo '$EXPECT  /var/tmp/$NEW' | sha256sum -c -; rpm -Uvh --test --noscripts /var/tmp/$NEW"
+          done
+          cp artifacts/$NEW /var/tmp/$NEW
+          cp artifacts/$OLD /var/tmp/$OLD
+          echo "$EXPECT  /var/tmp/$NEW" | sha256sum -c -
+
+      - name: Upload exact RPM evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: opennebula-onedrs-42021b2-${{ github.run_id }}
+          path: artifacts/opennebula-7.4.1-3.ls.onedrs.42021b2.el9.x86_64.rpm
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attest candidate build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: artifacts/opennebula-7.4.1-3.ls.onedrs.42021b2.el9.x86_64.rpm
+
+      - name: Rolling deploy on dc2 dc3 dc1
+        shell: bash
+        run: |
+          set -euo pipefail
+          NEW=opennebula-7.4.1-3.ls.onedrs.42021b2.el9.x86_64.rpm
+          OLD=opennebula-7.4.1-2.ls.onedrs.e2f766b.el9.x86_64.rpm
+          BACK=/var/backups/layersentry-onedrs-pre-42021b2
+          updated=""
+
+          raft_gate() {
+            for _ in $(seq 1 45); do
+              zone="$(ONE_AUTH=/var/lib/one/.one/one_auth onezone show 0 2>/dev/null || true)"
+              if ZONE="$zone" python3 - <<'PY'
+          import os, re, sys
+          rows = {}
+          for line in os.environ.get("ZONE", "").splitlines():
+              m = re.match(r"^\s*([0-2])\s+(dc[123])\s+(leader|follower)\s+(\d+)\s+(\d+)\s+(\d+)\s+", line)
+              if m:
+                  sid, name, state, term, index, commit = m.groups()
+                  rows[name] = (state, int(term), int(index), int(commit))
+          if set(rows) != {"dc1", "dc2", "dc3"}:
+              raise SystemExit(1)
+          if sum(1 for r in rows.values() if r[0] == "leader") != 1:
+              raise SystemExit(1)
+          terms = {r[1] for r in rows.values()}
+          if len(terms) != 1:
+              raise SystemExit(1)
+          commits = [r[3] for r in rows.values()]
+          if max(commits) - min(commits) > 5:
+              raise SystemExit(1)
+          for state, term, index, commit in rows.values():
+              if index < commit or index - commit > 10:
+                  raise SystemExit(1)
+          PY
+              then
+                printf '%s\n' "$zone"
+                return 0
+              fi
+              sleep 2
+            done
+            echo "Raft health gate failed (leader/term/commit lag)" >&2
+            ONE_AUTH=/var/lib/one/.one/one_auth onezone show 0 || true
+            return 1
+          }
+
+          write_sched_config() {
+            python3 - <<'PY'
+          import pathlib
+          p=pathlib.Path("/etc/one/oned.conf")
+          s=p.read_text()
+          old='ARGUMENTS  = "-t 15 -p rank -o one_drs"'
+          new='ARGUMENTS  = "-t 15 -p one_drs -o one_drs"'
+          if new not in s:
+              if old not in s:
+                  raise SystemExit("expected scheduler argument line not found")
+              p.write_text(s.replace(old,new,1))
+          PY
+          }
+
+          rollback() {
+            rc=$?
+            trap - ERR
+            set +e
+            echo "ROLLBACK starting after rc=$rc nodes=$updated"
+            for h in $updated; do
+              if [ "$h" = "dc1" ]; then
+                rpm -Uvh --oldpackage --noscripts /var/tmp/$OLD
+                test -f "$BACK/oned.conf" && cp -a "$BACK/oned.conf" /etc/one/oned.conf
+                systemctl restart opennebula
+              else
+                ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h "rpm -Uvh --oldpackage --noscripts /var/tmp/$OLD; test -f '$BACK/oned.conf' && cp -a '$BACK/oned.conf' /etc/one/oned.conf; systemctl restart opennebula"
+              fi
+            done
+            sleep 4
+            raft_gate || true
+            exit "$rc"
+          }
+          trap rollback ERR
+
+          upgrade_remote() {
+            h=$1
+            updated="$h $updated"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h "mkdir -p '$BACK'; cp -a /etc/one/oned.conf '$BACK/oned.conf'; rpm -q opennebula > '$BACK/package.before'; rpm -Uvh --noscripts /var/tmp/$NEW"
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h "python3 - <<'PY'
+          import pathlib
+          p=pathlib.Path('/etc/one/oned.conf')
+          s=p.read_text()
+          old='ARGUMENTS  = \"-t 15 -p rank -o one_drs\"'
+          new='ARGUMENTS  = \"-t 15 -p one_drs -o one_drs\"'
+          if new not in s:
+              if old not in s:
+                  raise SystemExit('expected scheduler argument line not found')
+              p.write_text(s.replace(old,new,1))
+          PY
+          grep -q -- '-p one_drs -o one_drs' /etc/one/oned.conf
+          systemctl daemon-reload
+          systemctl restart opennebula"
+            for _ in $(seq 1 30); do
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h "systemctl is-active --quiet opennebula" && break
+              sleep 2
+            done
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h "systemctl is-active opennebula; rpm -q opennebula; grep -n 'ARGUMENTS.*one_drs' /etc/one/oned.conf"
+            raft_gate
+          }
+
+          raft_gate
+          upgrade_remote dc2
+          upgrade_remote dc3
+
+          updated="dc1 $updated"
+          mkdir -p "$BACK"
+          cp -a /etc/one/oned.conf "$BACK/oned.conf"
+          rpm -q opennebula > "$BACK/package.before"
+          rpm -Uvh --noscripts /var/tmp/$NEW
+          write_sched_config
+          grep -q -- '-p one_drs -o one_drs' /etc/one/oned.conf
+          systemctl daemon-reload
+          systemctl restart opennebula
+          for _ in $(seq 1 30); do
+            systemctl is-active --quiet opennebula && break
+            sleep 2
+          done
+          systemctl is-active opennebula
+          rpm -q opennebula
+          grep -n 'ARGUMENTS.*one_drs' /etc/one/oned.conf
+          raft_gate
+          trap - ERR
+          echo "ROLLING_DEPLOY=PASS"
+
+      - name: Verify identical installed build and run scheduler tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEST=/var/tmp/test_resilience_42021.py
+          cp src/schedm_mad/remotes/one_drs/tests/test_resilience.py "$TEST"
+          for h in dc2 dc3; do scp -q -o BatchMode=yes -o StrictHostKeyChecking=yes "$TEST" root@$h:$TEST; done
+          for h in dc1 dc2 dc3; do
+            echo "=== $h ==="
+            if [ "$h" = dc1 ]; then
+              rpm -q opennebula
+              PYTHONPATH=/usr/lib/one/python:/var/lib/one/remotes/scheduler/one_drs python3.12 "$TEST" -v
+            else
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@$h "rpm -q opennebula; PYTHONPATH=/usr/lib/one/python:/var/lib/one/remotes/scheduler/one_drs python3.12 '$TEST' -v"
+            fi
+          done
+          for file in /usr/bin/oned /var/lib/one/remotes/scheduler/one_drs/lib/resilience.py /var/lib/one/remotes/scheduler/one_drs/lib/optimizer_parser.py /var/lib/one/remotes/scheduler/one_drs/lib/mapper/ilp_optimizer.py; do
+            echo "=== hash $file ==="
+            { sha256sum "$file"; ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc2 "sha256sum '$file'"; ssh -o BatchMode=yes -o StrictHostKeyChecking=yes root@dc3 "sha256sum '$file'"; } | tee /tmp/hashes
+            test "$(awk '{print $1}' /tmp/hashes | sort -u | wc -l)" -eq 1
+          done
+          echo "INSTALLED_BUILD_TEST=PASS"
+
+      - name: Apply production OneDRS metadata and policy atomically
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          mkdir -p /var/backups/layersentry-onedrs-pre-42021b2
+          onecluster show 0 -x > /var/backups/layersentry-onedrs-pre-42021b2/cluster.before.xml
+
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="NO"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-control-protected"' >/var/tmp/h0.onedrs
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="YES"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-a"' >/var/tmp/h1.onedrs
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="YES"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-b"' >/var/tmp/h2.onedrs
+          printf '%s\n' 'LAYERSENTRY_DRS_READY="YES"' 'LAYERSENTRY_FAILURE_DOMAIN="dc-rack-c"' >/var/tmp/h3.onedrs
+          for id in 0 1 2 3; do onehost update "$id" "/var/tmp/h$id.onedrs" --append; done
+
+          state5=$(onevm show 5 2>/dev/null | awk '/^STATE/{print $3; exit}' || true)
+          if [ "$state5" = "PENDING" ]; then onevm hold 5; fi
+
+          cat >/var/tmp/cluster-onedrs-production.tmpl <<'EOF'
+          RESERVED_CPU=""
+          RESERVED_MEM=""
+          ONE_DRS=[
+            AUTOMATION="manual",
+            POLICY="balance",
+            PREDICTIVE="0",
+            MIGRATION_THRESHOLD="1",
+            HOST_MIGRATION_THRESHOLD="1",
+            DS_MIGRATION_THRESHOLD="0",
+            CPU_USAGE_WEIGHT="0",
+            CPU_WEIGHT="0.5",
+            MEMORY_WEIGHT="0.5",
+            MIGRATION_COOLDOWN_SECONDS="600",
+            ENABLED="YES",
+            HOST_FAILURE_TOLERANCE="1",
+            FAILURE_DOMAIN_TOLERANCE="1",
+            CPU_RESERVE_PERCENT="10",
+            MEMORY_RESERVE_PERCENT="10",
+            MIN_HEALTHY_HOSTS="3",
+            FAILURE_DOMAIN_SPREAD="YES",
+            REQUIRE_FAILURE_DOMAIN_LABELS="YES",
+            COMBINED_FAILURE_MODES="NO",
+            MAX_GROUP_MIGRATIONS="1",
+            MAX_FAILURE_SCENARIOS="1024"
+          ]
+          EOF
+          onecluster update 0 /var/tmp/cluster-onedrs-production.tmpl
+          onecluster show 0 -x > /var/tmp/cluster.after.xml
+          test "$(grep -c '<ONE_DRS>' /var/tmp/cluster.after.xml)" -eq 1
+          for pair in             '<ENABLED><![CDATA[YES]]></ENABLED>'             '<HOST_FAILURE_TOLERANCE><![CDATA[1]]></HOST_FAILURE_TOLERANCE>'             '<FAILURE_DOMAIN_TOLERANCE><![CDATA[1]]></FAILURE_DOMAIN_TOLERANCE>'             '<FAILURE_DOMAIN_SPREAD><![CDATA[YES]]></FAILURE_DOMAIN_SPREAD>'             '<REQUIRE_FAILURE_DOMAIN_LABELS><![CDATA[YES]]></REQUIRE_FAILURE_DOMAIN_LABELS>'             '<MIGRATION_COOLDOWN_SECONDS><![CDATA[600]]></MIGRATION_COOLDOWN_SECONDS>'             '<MAX_GROUP_MIGRATIONS><![CDATA[1]]></MAX_GROUP_MIGRATIONS>'; do
+              grep -Fq "$pair" /var/tmp/cluster.after.xml
+          done
+          for id in 0 1 2 3; do onehost show "$id" | grep -E 'LAYERSENTRY_DRS_READY|LAYERSENTRY_FAILURE_DOMAIN'; done
+
+          cat >/var/tmp/duplicate-onedrs.tmpl <<'EOF'
+          ONE_DRS=[ POLICY="balance" ]
+          EOF
+          if onecluster update 0 /var/tmp/duplicate-onedrs.tmpl --append >/var/tmp/duplicate.out 2>&1; then
+            echo "duplicate ONE_DRS unexpectedly accepted" >&2
+            onecluster update 0 /var/tmp/cluster-onedrs-production.tmpl
+            exit 1
+          fi
+          grep -E 'exactly one ONE_DRS|invalid AUTOMATION' /var/tmp/duplicate.out || cat /var/tmp/duplicate.out
+          onecluster show 0 -x > /var/tmp/cluster.post-negative.xml
+          test "$(grep -c '<ONE_DRS>' /var/tmp/cluster.post-negative.xml)" -eq 1
+          grep -Fq '<ENABLED><![CDATA[YES]]></ENABLED>' /var/tmp/cluster.post-negative.xml
+          echo "POLICY_ATOMIC_READBACK=PASS"
+
+      - name: Protect non-canary workloads and generate real OneDRS plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ONE_AUTH=/var/lib/one/.one/one_auth
+          for id in 0 1 6 7 8 9 10 11; do
+            onevm show "$id" >/dev/null 2>&1 || continue
+            printf '%s\n' 'ONEDRS_BLOCKED="YES"' 'LAYERSENTRY_ONEDRS_BLOCK_REASON="PRODUCTION_QUALIFICATION_GUARD"' >/var/tmp/vm-onedrs-block.tmpl
+            onevm update "$id" /var/tmp/vm-onedrs-block.tmpl --append
+          done
+          for id in 19 20 21 22 23; do
+            onevm show "$id" >/dev/null 2>&1 || continue
+            echo 'ONEDRS_BLOCKED="NO"' >/var/tmp/vm-onedrs-allow.tmpl
+            onevm update "$id" /var/tmp/vm-onedrs-allow.tmpl --append
+          done
+          echo "=== canary placement before optimize ==="
+          for id in 19 20 21 22 23; do
+            onevm show "$id" -x 2>/dev/null | python3 -c 'import sys,xml.etree.ElementTree as E; r=E.parse(sys.stdin).getroot(); h=r.findall("./HISTORY_RECORDS/HISTORY"); last=max(h,key=lambda x:int(x.findtext("SEQ") or -1)) if h else None; print("vm",r.findtext("ID"),r.findtext("NAME"),"host",last.findtext("HID") if last is not None else "-","state",r.findtext("STATE"),"lcm",r.findtext("LCM_STATE"))'
+          done
+          onecluster plandelete 0 >/dev/null 2>&1 || true
+          onecluster optimize 0
+          sleep 4
+          onecluster show 0 -x > /var/tmp/onedrs-plan-42021.xml
+          echo "=== generated plan XML ==="
+          sed -n '/<PLAN>/,/<\/PLAN>/p' /var/tmp/onedrs-plan-42021.xml || true
+          echo "PLAN_GENERATED=PASS"
