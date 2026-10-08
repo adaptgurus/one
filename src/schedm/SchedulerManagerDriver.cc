@@ -97,7 +97,38 @@ int SchedulerManagerDriver::scheduler_message(SchedRequest& sr, std::ostringstre
 
     sr.vmpool.to_xml(oss, sr.match.vms);
 
-    sr.hpool.to_xml(oss, sr.match.match_host);
+    // REQUIREMENTS carries the per-VM Host candidate set after
+    // SCHED_REQUIREMENTS / affinity filtering. HOST_POOL must retain the
+    // complete monitored Host inventory of the matched cluster(s), otherwise
+    // OneDRS PLACE resilience admission sees only the destination candidates.
+    // A VM constrained to a single Host would then incorrectly collapse an
+    // N+1 cluster to one healthy Host. Extra HOST_POOL entries do not widen
+    // placement because the optimizer still consumes the candidate IDs from
+    // REQUIREMENTS.
+    std::set<int> matched_cluster_ids;
+
+    for (int host_id : sr.match.match_host)
+    {
+        if (auto host = sr.hpool.get(host_id))
+        {
+            matched_cluster_ids.insert(host->get_cluster_id());
+        }
+    }
+
+    std::set<int> host_inventory_ids = sr.match.match_host;
+
+    for (int host_id : sr.hpool.ids)
+    {
+        if (auto host = sr.hpool.get(host_id))
+        {
+            if (matched_cluster_ids.count(host->get_cluster_id()) != 0)
+            {
+                host_inventory_ids.insert(host_id);
+            }
+        }
+    }
+
+    sr.hpool.to_xml(oss, host_inventory_ids);
 
     //Include Image and System datastores to compute SELF LN/CP methods
     dspool->dump(temp, "", 0, -1, false);
@@ -109,16 +140,6 @@ int SchedulerManagerDriver::scheduler_message(SchedRequest& sr, std::ostringstre
     // PLACE requests may span one or more clusters. Populate CLUSTER_POOL
     // from the matched destination hosts so OneDRS can apply the authoritative
     // cluster policy during initial placement just as it does for OPTIMIZE.
-    std::set<int> matched_cluster_ids;
-
-    for (int host_id : sr.match.match_host)
-    {
-        if (auto host = sr.hpool.get(host_id))
-        {
-            matched_cluster_ids.insert(host->get_cluster_id());
-        }
-    }
-
     sr.clpool.ids.assign(matched_cluster_ids.begin(), matched_cluster_ids.end());
 
     if ( sr.match.match_vmgroups.empty() )
