@@ -65,6 +65,9 @@ fi
 #-------------------------------------------------------------------------------
 # Create non-volatile memory to store firmware variables and convert if needed
 #-------------------------------------------------------------------------------
+# LayerSentry security-state preboot: restore the delivered NVRAM/vTPM custody
+# for a recovery binding before the native NVRAM template copy (refuses boot).
+ls_ss_dep="$(printf '%s' "$DEP_FILE" | tr -s /)"; ls_ss_vm="$(dirname "$ls_ss_dep")/vm.xml"; ls_ss="$(xmllint --xpath 'string(/VM/USER_TEMPLATE/LAYERSENTRY_SECURITY_STATE_VERSION)' "$ls_ss_vm" 2>/dev/null)"; if [ -n "$ls_ss" ]; then /usr/libexec/layersentry-vm-security-state preboot "$ls_ss_dep" "$ls_ss_vm" || { error_message "LayerSentry security-state preboot refused"; exit -1; }; fi
 nvram="$(xmllint --xpath '/domain/os/nvram/text()' $DEP_FILE 2>/dev/null)"
 nvram_fmt="$(xmllint --xpath 'string(/domain/os/nvram/@format)' "$DEP_FILE" 2>/dev/null)"
 if [ -n "${nvram}" ]; then
@@ -106,6 +109,9 @@ if [ -d "$DEP_FILE_LOCATION/tpm" ]; then
     DOM_UUID=$(xmllint --xpath '/domain/uuid/text()' "$DEP_FILE")
     (sudo -l | grep -q vtpm_setup) && sudo /var/tmp/one/vtpm_setup recover "$DOM_UUID" "$DEP_FILE_LOCATION"
 fi
+
+# LayerSentry security-state preboot verification before the domain starts.
+if [ -n "$ls_ss" ]; then sudo -n /usr/libexec/layersentry-vm-security-state verify-preboot "$ls_ss_dep" "$ls_ss_vm" || { error_message "LayerSentry security-state preboot verification refused"; exit -1; }; fi
 
 DATA=`virsh --connect $LIBVIRT_URI create $DEP_FILE`
 
