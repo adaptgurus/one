@@ -556,74 +556,95 @@ class OptimizerParser:
 
     def _parse_vm_requirements(self) -> dict[int, VMRequirements]:
         vm_requirements = {}
-        vm_pool = {
-            vm.id: vm for vm in self.scheduler_driver_action.vm_pool.vm
-        }
+        # Never let duplicate identities overwrite one another or silently
+        # omit a required VM. This is native snapshot validation, not a grant
+        # to change workload power-state, placement or protection policy.
+        vm_pool = {}
+        for vm in self.scheduler_driver_action.vm_pool.vm:
+            if type(vm.id) is not int or vm.id < 0:
+                raise ValueError("invalid native VM identity")
+            if vm.id in vm_pool:
+                raise ValueError(f"duplicate native VM identity {vm.id}")
+            vm_pool[vm.id] = vm
+
+        required_ids = set()
         for vm_req in self.scheduler_driver_action.requirements.vm:
-            if vm := vm_pool.get(vm_req.id):
-                sys_storage, img_storage = self._build_vm_storage(vm, vm_req)
-                cpu_current = float(vm.monitoring.cpu or 0)
-                cpu_forecast = float(vm.monitoring.cpu_forecast or 0)
-                net_current = float(vm.monitoring.nettx_bw or 0) + float(
-                    vm.monitoring.netrx_bw or 0
-                )
-                net_forecast = float(vm.monitoring.nettx_bw_forecast or 0) + float(
-                    vm.monitoring.netrx_bw_forecast or 0
-                )
-                disk_current = float(vm.monitoring.diskrdbytes_bw or 0) + float(
-                    vm.monitoring.diskwrbytes_bw or 0
-                )
-                disk_forecast = float(
-                    vm.monitoring.diskrdbytes_bw_forecast or 0
-                ) + float(vm.monitoring.diskwrbytes_bw_forecast or 0)
-                # Predictive factor only for 'optimize'
-                cpu_usage = (
-                    self._apply_predictive_adjustment(cpu_current, cpu_forecast)
-                    if self.mode.upper() == "OPTIMIZE"
-                    else cpu_current
-                ) / 100.0
-                net_usage = (
-                    self._apply_predictive_adjustment(net_current, net_forecast)
-                    if self.mode.upper() == "OPTIMIZE"
-                    else net_current
-                )
-                disk_usage = (
-                    self._apply_predictive_adjustment(disk_current, disk_forecast)
-                    if self.mode.upper() == "OPTIMIZE"
-                    else disk_current
-                )
+            if type(vm_req.id) is not int or vm_req.id < 0:
+                raise ValueError("invalid native VM requirement")
+            if vm_req.id in required_ids:
+                raise ValueError(f"duplicate native VM requirement {vm_req.id}")
+            required_ids.add(vm_req.id)
+        for vm_req in self.scheduler_driver_action.requirements.vm:
+            vm = vm_pool.get(vm_req.id)
+            if vm is None:
+                raise ValueError(f"required VM {vm_req.id} is absent from native snapshot")
+            try:
+                vm_state = self._map_vm_state(vm.state, vm.lcm_state)
+            except ValueError as error:
+                raise ValueError(f"VM {vm_req.id}: {error}") from error
+            sys_storage, img_storage = self._build_vm_storage(vm, vm_req)
+            cpu_current = float(vm.monitoring.cpu or 0)
+            cpu_forecast = float(vm.monitoring.cpu_forecast or 0)
+            net_current = float(vm.monitoring.nettx_bw or 0) + float(
+                vm.monitoring.netrx_bw or 0
+            )
+            net_forecast = float(vm.monitoring.nettx_bw_forecast or 0) + float(
+                vm.monitoring.netrx_bw_forecast or 0
+            )
+            disk_current = float(vm.monitoring.diskrdbytes_bw or 0) + float(
+                vm.monitoring.diskwrbytes_bw or 0
+            )
+            disk_forecast = float(
+                vm.monitoring.diskrdbytes_bw_forecast or 0
+            ) + float(vm.monitoring.diskwrbytes_bw_forecast or 0)
+            # Predictive factor only for 'optimize'
+            cpu_usage = (
+                self._apply_predictive_adjustment(cpu_current, cpu_forecast)
+                if self.mode.upper() == "OPTIMIZE"
+                else cpu_current
+            ) / 100.0
+            net_usage = (
+                self._apply_predictive_adjustment(net_current, net_forecast)
+                if self.mode.upper() == "OPTIMIZE"
+                else net_current
+            )
+            disk_usage = (
+                self._apply_predictive_adjustment(disk_current, disk_forecast)
+                if self.mode.upper() == "OPTIMIZE"
+                else disk_current
+            )
 
-                host_ids = set(vm_req.hosts.id)
-                if (
-                    self.mode.upper() == "OPTIMIZE"
-                    and vm.user_template is not None
-                ):
-                    for item in vm.user_template.any_element:
-                        if (
-                            item.qname.upper() == "ONEDRS_BLOCKED"
-                            and (item.text or "").upper() == "YES"
-                        ):
-                            curr_host_id = self._curr_alloc.get(vm.id)
-                            host_ids &= {curr_host_id}
-                            break
+            host_ids = set(vm_req.hosts.id)
+            if (
+                self.mode.upper() == "OPTIMIZE"
+                and vm.user_template is not None
+            ):
+                for item in vm.user_template.any_element:
+                    if (
+                        item.qname.upper() == "ONEDRS_BLOCKED"
+                        and (item.text or "").upper() == "YES"
+                    ):
+                        curr_host_id = self._curr_alloc.get(vm.id)
+                        host_ids &= {curr_host_id}
+                        break
 
-                vm_requirements[int(vm_req.id)] = VMRequirements(
-                    id=int(vm_req.id),
-                    state=self._map_vm_state(vm.state, vm.lcm_state),
-                    memory=int(vm.template.memory),
-                    cpu_ratio=float(vm.template.cpu),
-                    cpu_usage=cpu_usage,
-                    storage=sys_storage,
-                    image_storage=img_storage,
-                    disk_usage=disk_usage,
-                    pci_devices=self._build_pci_devices_requirements(
-                        vm.template.pci
-                    ),
-                    host_ids=host_ids,
-                    share_vnets=not self.config["DIFFERENT_VNETS"],
-                    nic_matches={nic.id: nic.vnets.id for nic in vm_req.nic},
-                    net_usage=net_usage,
-                )
+            vm_requirements[int(vm_req.id)] = VMRequirements(
+                id=int(vm_req.id),
+                state=vm_state,
+                memory=int(vm.template.memory),
+                cpu_ratio=float(vm.template.cpu),
+                cpu_usage=cpu_usage,
+                storage=sys_storage,
+                image_storage=img_storage,
+                disk_usage=disk_usage,
+                pci_devices=self._build_pci_devices_requirements(
+                    vm.template.pci
+                ),
+                host_ids=host_ids,
+                share_vnets=not self.config["DIFFERENT_VNETS"],
+                nic_matches={nic.id: nic.vnets.id for nic in vm_req.nic},
+                net_usage=net_usage,
+            )
         return vm_requirements
 
     def _parse_vm_groups(self) -> list[VMGroup]:
@@ -1077,14 +1098,22 @@ class OptimizerParser:
 
     @staticmethod
     def _map_vm_state(state: int, lcm_state: int) -> VMState:
-        if state == 3 and lcm_state == 3:
-            return VMState.RUNNING
-        elif state == 8:
-            return VMState.POWEROFF
-        elif state == 1:
-            return VMState.PENDING
-        else:
-            return VMState.RUNNING  # TODO: default value
+        # Only stable native states supported by this scheduler may enter
+        # planning. HOLD, SUSPENDED, transient LCM states and unknown values
+        # must not acquire RUNNING semantics through a permissive fallback.
+        if type(state) is not int or type(lcm_state) is not int:
+            raise ValueError("unsupported or unstable native VM state: integer fields required")
+        stable = {
+            (1, 0): VMState.PENDING,
+            (3, 3): VMState.RUNNING,
+            (8, 0): VMState.POWEROFF,
+        }
+        mapped = stable.get((state, lcm_state))
+        if mapped is None:
+            raise ValueError(
+                f"unsupported or unstable native VM state: STATE={state}, LCM_STATE={lcm_state}"
+            )
+        return mapped
 
     @staticmethod
     def _get_weights(one_drs):
