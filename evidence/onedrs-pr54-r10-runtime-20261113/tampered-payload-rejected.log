@@ -1,0 +1,7 @@
+/root/onedrs-pr54-security-integrated-r10-20261113/lab-signing/tampered-DO-NOT-USE.rpm:
+    Header V4 RSA/SHA256 Signature, key ID aa428403: OK
+    Header SHA256 digest: OK
+    Header SHA1 digest: OK
+    Payload SHA256 ALT digest: BAD (Expected cfd7cf0bfca4cbc3ea6b50ce9fbae021ce5db5273490a27de5e469d5adbc77f0 != 32bf53decb4ab01d608ec3e8ff4510d436da01266f9e5f89596a65d877c29566)
+    Payload SHA256 digest: BAD (Expected 8e18ac9556a43a364662b52a28fa8a85e0d01de1803949dba8514d7238962493 != 32bf53decb4ab01d608ec3e8ff4510d436da01266f9e5f89596a65d877c29566)
+    MD5 digest: BAD (Expected 828a7f39ea57ccec61efc9b1621fc8b8 != 11632592acb96094492469dda521319b)

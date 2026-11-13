@@ -1,0 +1,22 @@
+{
+  "at": "2026-11-13T04:43:59.087004+00:00",
+  "native_scheduler_source": "3165fdb1603787a2ac4d9655a17999e0c189db47",
+  "security_driver_composition_source": "07c9128a55fea8c74aada3cf3d6e301ba59a840c",
+  "candidate_NEVRA": "opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_64",
+  "candidate_lab_signed_sha256": "30d4cd97930281d699ad3aa45e434f1b87d43ddd23cb249a6c656b7b4088f7ed",
+  "rollback_r8_lab_signed_sha256": "f84b8c8936343cb37d8ea39728113182645a8fdb92a73fb7d275d47d3ea51b18",
+  "isolated_SQLite_daemon_API_upgrade_rollback": "PASS",
+  "isolated_MySQL_daemon_API_upgrade_rollback": "PASS",
+  "real_driver_mock_helper_preboot_cases": 7,
+  "native_python_tests": 41,
+  "native_cpp_explicit_cases": 10,
+  "native_cpp_exhaustive_cases": 4032,
+  "security_driver_overwrite_conflict": "RESOLVED_IN_R10_PACKAGE_SOURCE_NOT_LIVE_DEPLOYED",
+  "lab_RPM_audit_and_private_transactions": "PASS",
+  "reviewed_staging_correction": "EXECUTED_ONCE_CONFIRMED",
+  "live_DR3_canary": "NEW_EXACT_REVIEW_AWAITING_USER_NO_EXECUTION",
+  "all_live_DR1_DR2_DR3_cores": "ORIGINAL_R8_UNCHANGED",
+  "DR4_qualification": "PREVIOUS_SEPARATE_REVIEW_STILL_OPEN",
+  "dedicated_service_account": "existing ls-onedrs-lab-svc retained; no duplicate",
+  "module_production_decision": "NO_GO_FULL_FUNCTIONAL_GATES_REMAIN"
+}

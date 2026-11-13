@@ -1,0 +1,9 @@
+{
+  "source": "exact independently read DR1 current native kvm/deploy",
+  "source_sha256": "3cc0513112d22968859fb822fc4605347c8067fc7a5b169933775ae340584e9b",
+  "preserved_preboot_and_verify_hooks_byte_identical": true,
+  "no_helper_or_privilege_configuration_changed": true,
+  "new_package_behavior_for_tagged_VM_without_helper": "refuse boot",
+  "untagged_VM_uses_original_native_path": true,
+  "read_at": "2026-11-13"
+}

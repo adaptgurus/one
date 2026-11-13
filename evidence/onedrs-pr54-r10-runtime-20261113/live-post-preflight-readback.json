@@ -1,0 +1,45 @@
+{
+  "at": "2026-11-13T04:38:59.636546+00:00",
+  "hosts": {
+    "dr1": {
+      "hostname": "dr1",
+      "pid": "3319",
+      "native_service": "active",
+      "installed_package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "installed_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "deploy_driver_sha256": "3cc0513112d22968859fb822fc4605347c8067fc7a5b169933775ae340584e9b",
+      "candidate_canary_result_exists": false,
+      "pending_canary_script_exists": false,
+      "lab_canary_signing_key_present": false
+    },
+    "dr2": {
+      "hostname": "dr2",
+      "pid": "2520",
+      "native_service": "active",
+      "installed_package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "installed_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "deploy_driver_sha256": "df93b32c041f367c43365a38f863041ecf5ca292b37fbf78136b87e89e759bd6",
+      "candidate_canary_result_exists": false,
+      "pending_canary_script_exists": false,
+      "lab_canary_signing_key_present": false
+    },
+    "dr3": {
+      "hostname": "dr3",
+      "pid": "2820",
+      "native_service": "active",
+      "installed_package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "installed_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "deploy_driver_sha256": "df93b32c041f367c43365a38f863041ecf5ca292b37fbf78136b87e89e759bd6",
+      "candidate_canary_result_exists": false,
+      "pending_canary_script_exists": false,
+      "lab_canary_signing_key_present": false,
+      "private_backup_bytes": 283109302,
+      "private_backup_mode": "0o600"
+    }
+  },
+  "pending_canary_executed": false,
+  "all_original_r8_cores_still_running": true
+}

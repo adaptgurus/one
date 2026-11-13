@@ -1,0 +1,15 @@
+{
+  "at": "2026-11-13T04:43:59.086650+00:00",
+  "private_MySQL_data_and_native_prefixes_removed": [
+    "/root/onedrs-pr54-security-integrated-r10-20261113/mysql-runtime-fixture",
+    "/root/onedrs-pr54-security-integrated-r10-20261113/mysql-runtime-fixture-v2",
+    "/root/onedrs-pr54-security-integrated-r10-20261113/mysql-runtime-fixture-v3",
+    "/root/onedrs-pr54-security-integrated-r10-20261113/mysql-native-prefix",
+    "/root/onedrs-pr54-security-integrated-r10-20261113/mysql-native-prefix-v3"
+  ],
+  "original_private_SQLite_identity_files_removed": true,
+  "original_private_SQLite_database_removed": true,
+  "live_DR3_backup_retained_root_private": true,
+  "live_canary_not_executed": true,
+  "native_service_restart_on_DR_hosts": false
+}

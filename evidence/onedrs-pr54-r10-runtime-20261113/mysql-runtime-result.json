@@ -1,0 +1,40 @@
+{
+  "scope": "ISOLATED_MYSQL_FULL_NATIVE_DAEMON_API_UPGRADE_ROLLBACK_NO_LIVE_HOSTS",
+  "backend": "MariaDB 10.5 private loopback schema",
+  "started_at": "2026-11-13T04:41:56.113795+00:00",
+  "network": "private namespace,loopback only,no routes",
+  "production_data_paths_shadowed": true,
+  "steps": [
+    {
+      "label": "mysql-original-start",
+      "binary_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "version": "7.4.1",
+      "authenticated_api_ready": true,
+      "native_host_pool_empty": true,
+      "shutdown_exit": 0
+    },
+    {
+      "label": "mysql-candidate-upgrade-start",
+      "binary_sha256": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+      "version": "7.4.1",
+      "authenticated_api_ready": true,
+      "native_host_pool_empty": true,
+      "shutdown_exit": 0
+    },
+    {
+      "label": "mysql-original-rollback-start",
+      "binary_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "version": "7.4.1",
+      "authenticated_api_ready": true,
+      "native_host_pool_empty": true,
+      "shutdown_exit": 0
+    }
+  ],
+  "created_isolated_cluster_id": 100,
+  "candidate_read_and_write_native_API": true,
+  "original_reads_candidate_write_and_cleans": true,
+  "result": "PASS",
+  "private_mysql_stopped": true,
+  "original_private_config_restored": true,
+  "ended_at": "2026-11-13T04:42:32.960270+00:00"
+}
