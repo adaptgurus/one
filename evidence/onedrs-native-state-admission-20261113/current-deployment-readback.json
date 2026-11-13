@@ -1,0 +1,35 @@
+{
+  "at": "2026-11-13T07:07:27.389946+00:00",
+  "scope": "READ_ONLY_PENDING_DEPLOYMENT_CHECK",
+  "hosts": {
+    "dr1": {
+      "hostname": "dr1",
+      "pid": "3319",
+      "active": "active",
+      "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "installed_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1"
+    },
+    "dr2": {
+      "hostname": "dr2",
+      "pid": "2520",
+      "active": "active",
+      "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "installed_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1"
+    },
+    "dr3": {
+      "hostname": "dr3",
+      "pid": "2820",
+      "active": "active",
+      "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "installed_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "canary_results": [],
+      "candidate_sha256": "30d4cd97930281d699ad3aa45e434f1b87d43ddd23cb249a6c656b7b4088f7ed"
+    }
+  },
+  "r10_canary_completed": false,
+  "source_only_guard_deployed": false,
+  "pending_DR3_or_DR4_operation_reissued": false
+}

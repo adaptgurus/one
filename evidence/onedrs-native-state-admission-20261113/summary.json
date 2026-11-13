@@ -1,0 +1,21 @@
+{
+  "at": "2026-11-13T07:07:27.395290+00:00",
+  "source_commit": "c33bab453d4a266166b2501e9a3d16178bf8db4b",
+  "parent_R10_branch_head_unchanged": "8e976810e8423667fc9691238f7bc30a6dc7a08a",
+  "new_focused_tests": 13,
+  "full_native_python_tests": 54,
+  "exhaustive_state_LCM_pairs": 2829,
+  "old_source_final_suite": "EXPECTED_FAIL_52_SUBCASE_FAILURES_0_ERRORS",
+  "corrected_source_suite": "PASS",
+  "actual_XML_decoder_cases": 7,
+  "live_read_only_classification": {
+    "poweroff": 12,
+    "running": 14
+  },
+  "native_mutation_calls": 0,
+  "new_guard_packaged_or_deployed": false,
+  "stopped_VM_or_storage_policy_exemption_added": false,
+  "R10_artifacts_changed": false,
+  "live_canary_gate": "STILL_UNEXECUTED_REVIEW_REQUIRED",
+  "module_status": "NOT_PRODUCTION_READY"
+}

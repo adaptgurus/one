@@ -1,0 +1,18 @@
+test_actual_XML_decoder_missing_and_transient_fields_rejected (test_native_state_admission.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) ... ok
+test_actual_XML_decoder_valid_states_retain_native_semantics (test_native_state_admission.NativeStateAdmissionTests.test_actual_XML_decoder_valid_states_retain_native_semantics) ... ok
+test_duplicate_native_identity_refused (test_native_state_admission.NativeStateAdmissionTests.test_duplicate_native_identity_refused) ... ok
+test_duplicate_requirement_refused (test_native_state_admission.NativeStateAdmissionTests.test_duplicate_requirement_refused) ... ok
+test_exact_stable_states_preserved (test_native_state_admission.NativeStateAdmissionTests.test_exact_stable_states_preserved) ... ok
+test_exhaustive_state_pairs_only_exact_supported_tuples (test_native_state_admission.NativeStateAdmissionTests.test_exhaustive_state_pairs_only_exact_supported_tuples) ... ok
+test_invalid_identifiers_refused (test_native_state_admission.NativeStateAdmissionTests.test_invalid_identifiers_refused) ... ok
+test_lifecycle_transitions_rejected (test_native_state_admission.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) ... ok
+test_missing_and_noninteger_state_is_not_coerced (test_native_state_admission.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) ... ok
+test_missing_required_VM_refused (test_native_state_admission.NativeStateAdmissionTests.test_missing_required_VM_refused) ... ok
+test_nonrunning_states_never_become_running (test_native_state_admission.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) ... ok
+test_state_refusal_precedes_storage_interpretation (test_native_state_admission.NativeStateAdmissionTests.test_state_refusal_precedes_storage_interpretation) ... ok
+test_valid_selected_VM_keeps_original_power_state (test_native_state_admission.NativeStateAdmissionTests.test_valid_selected_VM_keeps_original_power_state) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.015s
+
+OK

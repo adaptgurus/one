@@ -1,0 +1,171 @@
+{
+  "at": "2026-11-13T07:05:06.307232+00:00",
+  "scope": "READ_ONLY_LIVE_STATE_CLASSIFICATION_NOT_OPTIMIZER_OR_RECOVERY",
+  "count": 26,
+  "state_counts": {
+    "poweroff": 12,
+    "running": 14
+  },
+  "states": [
+    {
+      "vmid": 0,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 1,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 2,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 3,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 4,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 5,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 7,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 11,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 14,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 15,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 16,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 17,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 19,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 20,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 21,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 22,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 23,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 24,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 25,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 26,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 31,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 32,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 33,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    },
+    {
+      "vmid": 34,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 35,
+      "native_state": 3,
+      "native_lcm_state": 3,
+      "classified_state": "running"
+    },
+    {
+      "vmid": 41,
+      "native_state": 8,
+      "native_lcm_state": 0,
+      "classified_state": "poweroff"
+    }
+  ],
+  "all_observed_VM_identity_state_host_ds_history_unchanged": true,
+  "native_mutation_calls": 0,
+  "source_guard_deployed": false,
+  "does_not_waive_storage_or_placement_policy": true
+}
