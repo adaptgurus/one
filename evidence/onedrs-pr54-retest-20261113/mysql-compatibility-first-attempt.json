@@ -1,0 +1,21 @@
+{
+  "scope": "ISOLATED_EMPTY_MYSQL_BOOTSTRAP_AND_SCHEMA_ROLLBACK_NOT_LIVE_DATABASE_OR_SERVICE",
+  "started_at": "2026-11-13T03:16:48.792743+00:00",
+  "production_database_contacted": false,
+  "oned_managers_started": false,
+  "steps": [
+    {
+      "test": "baseline-empty-mysql-bootstrap",
+      "exit": 0
+    },
+    {
+      "test": "candidate-reads-baseline-schema",
+      "exit": 255
+    }
+  ],
+  "result": "FAIL",
+  "error": "candidate-reads-baseline-schema failed; see private sanitized evidence",
+  "isolated_server_stopped": true,
+  "isolated_TCP_listener_absent": true,
+  "ended_at": "2026-11-13T03:16:50.765158+00:00"
+}

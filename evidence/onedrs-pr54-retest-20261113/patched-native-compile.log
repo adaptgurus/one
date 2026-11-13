@@ -1,0 +1,7 @@
+In file included from include/ProtocolMessages.h:20,
+                 from include/SchedulerManagerDriver.h:20,
+                 from src/schedm/SchedulerManagerDriver.cc:17:
+include/Message.h: In member function ‘int Message<E, compress, encode, encrypt, has_timestamp>::write_to(int) const [with E = SchedulerManagerMessages; bool compress = false; bool encode = true; bool encrypt = false; bool has_timestamp = false]’:
+include/Message.h:346:12: warning: ignoring return value of ‘ssize_t write(int, const void*, size_t)’ declared with attribute ‘warn_unused_result’ [-Wunused-result]
+  346 |     ::write(fd, (const void *) out.c_str(), out.size());
+      |     ~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

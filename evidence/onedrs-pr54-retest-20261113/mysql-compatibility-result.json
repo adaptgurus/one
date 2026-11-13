@@ -1,0 +1,47 @@
+{
+  "scope": "ISOLATED_EMPTY_MYSQL_SCHEMA_EQUIVALENCE_AND_VERSION_CHECKS_NOT_RUNTIME_ROLLBACK",
+  "started_at": "2026-11-13T03:17:56.675780+00:00",
+  "production_database_contacted": false,
+  "oned_managers_started": false,
+  "steps": [
+    {
+      "test": "v2-baseline-empty-mysql-bootstrap",
+      "exit": 0
+    },
+    {
+      "test": "v2-candidate-empty-mysql-bootstrap",
+      "exit": 0
+    },
+    {
+      "test": "v2-original-existing-baseline-nonidempotence-control",
+      "exit": 255
+    },
+    {
+      "test": "v2-candidate-checks-original-version-before-reinit-rejection",
+      "exit": 255
+    },
+    {
+      "test": "v2-original-checks-candidate-version-before-reinit-rejection",
+      "exit": 255
+    }
+  ],
+  "result": "PASS_BOUNDED_SCHEMA_COMPATIBILITY",
+  "table_count": 40,
+  "fresh_bootstrap_original_and_candidate_pass": true,
+  "candidate_and_original_schema_equal": true,
+  "cross_binary_version_checks_accept_7_4_0": true,
+  "existing_database_reinitialization_nonidempotent_on_both": true,
+  "schema_and_version_rows_unchanged_after_reinitialization_attempts": true,
+  "database_version_rows": {
+    "baseline": "0\t7.4.0\t1794539877\tOpenNebula 7.4.1 (27b39092-dirty) daemon bootstrap\n",
+    "baseline_local": "0\t7.4.0\t1794539877\tOpenNebula 7.4.1 (27b39092-dirty) daemon bootstrap\t0\n",
+    "candidate": "0\t7.4.0\t1794539878\tOpenNebula 7.4.1 (27b39092-dirty) daemon bootstrap\n",
+    "candidate_local": "0\t7.4.0\t1794539878\tOpenNebula 7.4.1 (27b39092-dirty) daemon bootstrap\t0\n"
+  },
+  "actual_server_version": "10.5.29-MariaDB",
+  "normal_daemon_startup_or_HA_failover_tested": false,
+  "rollback_runtime_tested": false,
+  "isolated_server_stopped": true,
+  "isolated_TCP_listener_absent": true,
+  "ended_at": "2026-11-13T03:18:00.662477+00:00"
+}

@@ -1,0 +1,13 @@
+{
+  "candidate_sha256": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+  "version_banner": "OpenNebula 7.4.1 (27b39092-dirty)\nCopyright 2002-2026, OpenNebula Project, OpenNebula Systems \n\nLicensed under the Apache License, Version 2.0 (the \"License\"); you may not\nuse this file except in compliance with the License. You may obtain a copy\nof the License at http://www.apache.org/licenses/LICENSE-2.0",
+  "core_version_preserved": "7.4.1",
+  "shared_and_local_DB_version_preserved": "7.4.0",
+  "original_Template_cc_preserved": true,
+  "full_native_link": "PASS",
+  "dynamic_dependencies_resolved": true,
+  "production_installed": false,
+  "core_daemon_started": false,
+  "build_uses_original_package_objects_and_link_flags": true,
+  "version_suffix_note": "Original package banner preserved; patch identity is separately pinned by SHA256 and recipe, not by the banner"
+}
