@@ -1,0 +1,8 @@
+sec:u:3072:1:EA97A94EE21212BF:1794541412:1795146212::u:::scSC:::+:::23::0:
+fpr:::::::::3E34D9A7B74D455B0F9F1560EA97A94EE21212BF:
+grp:::::::::4026289A827F244D22F6B0C381806934EB7B1D0A:
+uid:u::::1794541412::7934F27CF9EAF8D8C295F890D65EA2099B6BBD28::LayerSentry OneDRS PR54 LAB ONLY 20261113 <lab-pr54-noreply@invalid.test>::::::::::0:
+gpg: checking the trustdb
+gpg: marginals needed: 3  completes needed: 1  trust model: pgp
+gpg: depth: 0  valid:   1  signed:   0  trust: 0-, 0q, 0n, 0m, 0f, 1u
+gpg: next trustdb check due at 2026-11-20

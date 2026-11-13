@@ -1,0 +1,5 @@
+gpg: keybox '/root/onedrs-pr54-runtime-package-20261113/lab-signing/pubring.kbx' created
+gpg: /root/onedrs-pr54-runtime-package-20261113/lab-signing/trustdb.gpg: trustdb created
+gpg: key EA97A94EE21212BF marked as ultimately trusted
+gpg: directory '/root/onedrs-pr54-runtime-package-20261113/lab-signing/openpgp-revocs.d' created
+gpg: revocation certificate stored as '/root/onedrs-pr54-runtime-package-20261113/lab-signing/openpgp-revocs.d/3E34D9A7B74D455B0F9F1560EA97A94EE21212BF.rev'

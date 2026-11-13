@@ -1,0 +1,7 @@
+/root/onedrs-pr54-runtime-package-20261113/lab-signing/tampered-DO-NOT-USE.rpm:
+    Header V4 RSA/SHA256 Signature, key ID e21212bf: OK
+    Header SHA256 digest: OK
+    Header SHA1 digest: OK
+    Payload SHA256 ALT digest: BAD (Expected e1eb37c6951ffb37875f843b1224a1df503a4730b5f83775e399111acf1d5968 != 4be948d511d60ddcef1f63f42f95ebfd9de4591f755c645dab4138830000fe2b)
+    Payload SHA256 digest: BAD (Expected 21d7b5e9ad4fd30cfd2612046db2a1658c212be110aca979f3f3ab379edf4b5d != 4be948d511d60ddcef1f63f42f95ebfd9de4591f755c645dab4138830000fe2b)
+    MD5 digest: BAD (Expected eb1deea04c62c7a025070721596f62b3 != 4f803a713d95e974ba170979624a88f7)

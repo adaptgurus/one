@@ -1,0 +1,10 @@
+{
+  "failure": "shutil.copytree(symlinks=False) traversed recursive one-deploy Ansible collection symlinks",
+  "process_pid": 633480,
+  "copy_pid": 633656,
+  "exit": 1,
+  "no_native_daemon_or_database_started": true,
+  "remediation": "preserve symlinks instead of recursively dereferencing; exact correction remains awaiting user review",
+  "partial_test_tree_retained": "/root/onedrs-pr54-runtime-package-20261113/prefix",
+  "no_equivalent_bypass_executed": true
+}
