@@ -1,0 +1,9 @@
+{
+  "test": "native_scheduler_single_host_constraint_rejected",
+  "result": "PASS_NEGATIVE",
+  "reason": "required three healthy hosts not available within single-host candidate set",
+  "no_native_deploy_submitted": true,
+  "native_vm_state": "PENDING then HELD",
+  "identity": "ls-onedrs-lab-svc",
+  "at": "2026-11-13T01:44:25.359966+00:00"
+}

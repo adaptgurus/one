@@ -1,0 +1,20 @@
+Fri Nov 13 07:13:17 2026 [Z0][VM][I]: New state is PENDING
+Fri Nov 13 07:14:25 2026 [Z0][VM][I]: New state is HOLD
+Fri Nov 13 07:14:25 2026 [Z0][VM][I]: New state is PENDING
+Fri Nov 13 07:14:40 2026 [Z0][VMM][I]: Placing VM in host '1' using system datastore 116
+Fri Nov 13 07:14:40 2026 [Z0][VM][I]: New state is ACTIVE
+Fri Nov 13 07:14:40 2026 [Z0][VM][I]: New LCM state is PROLOG
+Fri Nov 13 07:14:41 2026 [Z0][VM][I]: New LCM state is BOOT
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: Generating deployment file: /var/lib/one/vms/40/deployment.0
+Fri Nov 13 07:14:41 2026 [Z0][VM][I]: Virtual Machine has no context
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: Successfully execute network driver operation: pre.
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: ExitCode: 0
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: /bin/mkdir -p.
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: ExitCode: 0
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: /bin/cat - >/var/lib/one//datastores/116/40/vm.xml.
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: ExitCode: 0
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: /bin/cat - >/var/lib/one//datastores/116/40/ds.xml.
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: ExitCode: 0
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: deploy.
+Fri Nov 13 07:14:41 2026 [Z0][VMM][I]: Successfully execute network driver operation: post.
+Fri Nov 13 07:14:41 2026 [Z0][VM][I]: New LCM state is RUNNING

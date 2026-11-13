@@ -1,0 +1,50 @@
+test_actual_unhealthy_source_still_fails_minimum (test_host_context.HostContextTests.test_actual_unhealthy_source_still_fails_minimum) ... ok
+test_full_context_preserves_three_host_policy_and_two_candidates (test_host_context.HostContextTests.test_full_context_preserves_three_host_policy_and_two_candidates) ... ok
+test_hard_pin_still_fails_survivor_eligibility (test_host_context.HostContextTests.test_hard_pin_still_fails_survivor_eligibility) ... ok
+test_local_storage_remains_unrecoverable (test_host_context.HostContextTests.test_local_storage_remains_unrecoverable) ... ok
+test_native_serializer_keeps_match_requirements (test_host_context.HostContextTests.test_native_serializer_keeps_match_requirements) ... ok
+test_original_filtered_pool_reproduces_live_error (test_host_context.HostContextTests.test_original_filtered_pool_reproduces_live_error) ... ok
+test_solver_never_uses_context_only_source (test_host_context.HostContextTests.test_solver_never_uses_context_only_source) ... /usr/lib/one/python/pulp/pulp.py:318: DeprecationWarning: Constructing LpVariable(name, ...) directly is deprecated; in PuLP 4.0 use prob.add_variable(name, lowBound, upBound, cat=...). Variables are then attached to the model when created.
+  _v4_deprecation(msg, stacklevel=2)
+ok
+test_cluster_api_validates_resilience_policy_fields (test_production_source_contract.OneDRSProductionSourceContractTests.test_cluster_api_validates_resilience_policy_fields) ... ok
+test_cluster_rejects_duplicate_onedrs_vectors (test_production_source_contract.OneDRSProductionSourceContractTests.test_cluster_rejects_duplicate_onedrs_vectors) ... ok
+test_onedrs_owns_initial_placement_and_optimization (test_production_source_contract.OneDRSProductionSourceContractTests.test_onedrs_owns_initial_placement_and_optimization) ... ok
+test_active_anti_affined_members_stay_in_optimizer_group (test_resilience.ResilienceAdmissionTests.test_active_anti_affined_members_stay_in_optimizer_group) ... ok
+test_affined_group_is_not_subject_to_replica_disruption_budget (test_resilience.ResilienceAdmissionTests.test_affined_group_is_not_subject_to_replica_disruption_budget) ... /usr/lib/one/python/pulp/pulp.py:1638: DeprecationWarning: Using LpProblem.constraints as a dict mapping is deprecated; in PuLP 4.0 constraints are returned by prob.constraints() as a list. Use get_constraint_by_name(name) or iterate prob.constraints() and compare constraint names.
+  self._warn_mapping()
+ok
+test_anti_affinity_recovery_requires_distinct_survivors (test_resilience.ResilienceAdmissionTests.test_anti_affinity_recovery_requires_distinct_survivors) ... ok
+test_blocks_correlated_failure_domain_loss (test_resilience.ResilienceAdmissionTests.test_blocks_correlated_failure_domain_loss) ... ok
+test_blocks_when_two_host_failures_exhaust_capacity (test_resilience.ResilienceAdmissionTests.test_blocks_when_two_host_failures_exhaust_capacity) ... ok
+test_cluster_assignment_expands_idle_local_datastore_hosts (test_resilience.ResilienceAdmissionTests.test_cluster_assignment_expands_idle_local_datastore_hosts) ... ok
+test_combined_rack_plus_host_failure_is_checked (test_resilience.ResilienceAdmissionTests.test_combined_rack_plus_host_failure_is_checked) ... ok
+test_committed_capacity_not_real_usage_drives_ha_admission (test_resilience.ResilienceAdmissionTests.test_committed_capacity_not_real_usage_drives_ha_admission) ... ok
+test_failure_domain_labels_can_be_required (test_resilience.ResilienceAdmissionTests.test_failure_domain_labels_can_be_required) ... ok
+test_idle_local_datastore_capacity_uses_generic_host_disk (test_resilience.ResilienceAdmissionTests.test_idle_local_datastore_capacity_uses_generic_host_disk) ... ok
+test_ignores_unhealthy_host_as_survivor_capacity (test_resilience.ResilienceAdmissionTests.test_ignores_unhealthy_host_as_survivor_capacity) ... ok
+test_ilp_contains_failure_domain_and_group_disruption_constraints (test_resilience.ResilienceAdmissionTests.test_ilp_contains_failure_domain_and_group_disruption_constraints) ... ok
+test_impossible_compound_failure_policy_fails_closed (test_resilience.ResilienceAdmissionTests.test_impossible_compound_failure_policy_fails_closed) ... ok
+test_local_storage_recovery_reachability_is_enforced (test_resilience.ResilienceAdmissionTests.test_local_storage_recovery_reachability_is_enforced) ... ok
+test_migratable_local_datastore_falls_back_to_current_id (test_resilience.ResilienceAdmissionTests.test_migratable_local_datastore_falls_back_to_current_id) ... ok
+test_migratable_shared_datastore_falls_back_to_current_id (test_resilience.ResilienceAdmissionTests.test_migratable_shared_datastore_falls_back_to_current_id) ... ok
+test_migration_cooldown_only_holds_for_healthy_eligible_host (test_resilience.ResilienceAdmissionTests.test_migration_cooldown_only_holds_for_healthy_eligible_host) ... ok
+test_missing_cluster_predictive_preserves_global_default (test_resilience.ResilienceAdmissionTests.test_missing_cluster_predictive_preserves_global_default) ... ok
+test_only_non_requested_peer_becomes_fixed_anti_affinity_host (test_resilience.ResilienceAdmissionTests.test_only_non_requested_peer_becomes_fixed_anti_affinity_host) ... ok
+test_pending_vm_history_is_not_current_placement (test_resilience.ResilienceAdmissionTests.test_pending_vm_history_is_not_current_placement) ... ok
+test_pending_workload_counts_toward_failover_demand (test_resilience.ResilienceAdmissionTests.test_pending_workload_counts_toward_failover_demand) ... ok
+test_place_accepts_identical_cluster_policies (test_resilience.ResilienceAdmissionTests.test_place_accepts_identical_cluster_policies) ... ok
+test_place_rejects_mixed_cluster_policies (test_resilience.ResilienceAdmissionTests.test_place_rejects_mixed_cluster_policies) ... ok
+test_place_requires_cluster_policy_context (test_resilience.ResilienceAdmissionTests.test_place_requires_cluster_policy_context) ... ok
+test_reserve_headroom_is_enforced (test_resilience.ResilienceAdmissionTests.test_reserve_headroom_is_enforced) ... ok
+test_resilience_disabled_preserves_single_host_lab (test_resilience.ResilienceAdmissionTests.test_resilience_disabled_preserves_single_host_lab) ... ok
+test_resilience_exemption_is_explicit_opt_in (test_resilience.ResilienceAdmissionTests.test_resilience_exemption_is_explicit_opt_in) ... ok
+test_survives_two_host_failures (test_resilience.ResilienceAdmissionTests.test_survives_two_host_failures) ... ok
+test_transient_monitoring_host_remains_drs_healthy (test_resilience.ResilienceAdmissionTests.test_transient_monitoring_host_remains_drs_healthy) ... ok
+test_vm_recovery_reachability_blocks_pinned_single_target (test_resilience.ResilienceAdmissionTests.test_vm_recovery_reachability_blocks_pinned_single_target) ... ok
+test_zero_group_migration_budget_is_valid_freeze (test_resilience.ResilienceAdmissionTests.test_zero_group_migration_budget_is_valid_freeze) ... ok
+
+----------------------------------------------------------------------
+Ran 41 tests in 0.014s
+
+OK

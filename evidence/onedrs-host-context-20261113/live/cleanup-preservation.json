@@ -1,0 +1,18 @@
+{
+  "at": "2026-11-13T01:56:01.994697+00:00",
+  "vmid": 40,
+  "dsid": 116,
+  "template_id": 7,
+  "native_VM_DONE": true,
+  "test_domain_absent_on_DR1_DR2_DR3": true,
+  "owned_bind_mounts_removed": 3,
+  "test_datastore_template_and_object_acls_deleted": true,
+  "owned_NFS_subtree_deleted": true,
+  "all_original_VM_identity_state_host_ds_history_preserved": true,
+  "original_VM_count": 25,
+  "original_HA_profile_preserved": true,
+  "initial_native_placement": "PASS",
+  "native_reschedule": "BLOCKED_BY_FILTERED_HOST_POOL_MINIMUM",
+  "no_manual_deploy_or_migration_fallback": true,
+  "DR4_enrollment_not_touched": true
+}

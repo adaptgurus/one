@@ -1,0 +1,14 @@
+test_actual_unhealthy_source_still_fails_minimum (test_host_context.HostContextTests.test_actual_unhealthy_source_still_fails_minimum) ... ok
+test_full_context_preserves_three_host_policy_and_two_candidates (test_host_context.HostContextTests.test_full_context_preserves_three_host_policy_and_two_candidates) ... ok
+test_hard_pin_still_fails_survivor_eligibility (test_host_context.HostContextTests.test_hard_pin_still_fails_survivor_eligibility) ... ok
+test_local_storage_remains_unrecoverable (test_host_context.HostContextTests.test_local_storage_remains_unrecoverable) ... ok
+test_native_serializer_keeps_match_requirements (test_host_context.HostContextTests.test_native_serializer_keeps_match_requirements) ... ok
+test_original_filtered_pool_reproduces_live_error (test_host_context.HostContextTests.test_original_filtered_pool_reproduces_live_error) ... ok
+test_solver_never_uses_context_only_source (test_host_context.HostContextTests.test_solver_never_uses_context_only_source) ... /usr/lib/one/python/pulp/pulp.py:318: DeprecationWarning: Constructing LpVariable(name, ...) directly is deprecated; in PuLP 4.0 use prob.add_variable(name, lowBound, upBound, cat=...). Variables are then attached to the model when created.
+  _v4_deprecation(msg, stacklevel=2)
+ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.017s
+
+OK

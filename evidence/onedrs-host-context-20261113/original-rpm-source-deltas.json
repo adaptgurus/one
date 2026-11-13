@@ -1,0 +1,14 @@
+{
+  "tracked_native_source_files_compared": 596,
+  "different_files": [
+    "include/NebulaService.h",
+    "src/template/Template.cc"
+  ],
+  "repo_header_code_version": "7.5.80",
+  "repo_header_shared_local_db_version": "7.6.0",
+  "installed_build_header_code_version": "7.4.1",
+  "installed_build_shared_local_db_version": "7.4.0",
+  "consequence": "retain original 7.4 packaging/DB identity; do not replace running HA core using an unqualified raw source build",
+  "native_core_restarted": false,
+  "native_core_deployed": false
+}
