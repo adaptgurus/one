@@ -1,0 +1,106 @@
+{
+  "scope": "ONE_SERVICE_OWNED_NATIVE_SCHEDULER_VM",
+  "started_at": "2026-11-14T04:52:42.396375+00:00",
+  "manual_deploy_calls": 0,
+  "manual_migrate_calls": 0,
+  "DR4_touched": false,
+  "original_VM_count": 26,
+  "initial_placement": {
+    "native": {
+      "state": "3",
+      "lcm": "3",
+      "host": "1",
+      "ds": "121",
+      "seq": "0",
+      "uuid": "005345c9-4234-427c-a48b-4ad95bd31978",
+      "resched": "0"
+    },
+    "guest": {
+      "boot_count": 1,
+      "boot_id": "0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n",
+      "heartbeat": 3,
+      "initialized": true,
+      "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+      "state": "READY",
+      "uptime_ms": 4001
+    },
+    "active_instances": {
+      "0": false,
+      "1": true,
+      "2": false
+    },
+    "seconds_to_guest_witness": 23.356
+  },
+  "native_reschedule": {
+    "before": {
+      "state": "3",
+      "lcm": "3",
+      "host": "1",
+      "ds": "121",
+      "seq": "0",
+      "uuid": "005345c9-4234-427c-a48b-4ad95bd31978",
+      "resched": "0"
+    },
+    "after": {
+      "state": "3",
+      "lcm": "3",
+      "host": "0",
+      "ds": "121",
+      "seq": "1",
+      "uuid": "005345c9-4234-427c-a48b-4ad95bd31978",
+      "resched": "0"
+    },
+    "guest_after": {
+      "boot_count": 1,
+      "boot_id": "0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n",
+      "heartbeat": 13,
+      "initialized": true,
+      "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+      "state": "READY",
+      "uptime_ms": 24009
+    },
+    "active_instances": {
+      "0": true,
+      "1": false,
+      "2": false
+    },
+    "seconds_to_guest_witness": 21.196,
+    "boot_id_preserved": true,
+    "native_live_rescheds": 0,
+    "not_physical_failure_RTO": true
+  },
+  "history": [
+    {
+      "SEQ": "0",
+      "HID": "1",
+      "DS_ID": "121",
+      "PLAN_ID": "-1",
+      "ACTION_ID": "0",
+      "UID": "0",
+      "GID": "0",
+      "REQUEST_ID": "8477",
+      "ACTION": "1"
+    },
+    {
+      "SEQ": "1",
+      "HID": "0",
+      "DS_ID": "121",
+      "PLAN_ID": "-1",
+      "ACTION_ID": "0",
+      "UID": "-1",
+      "GID": "-1",
+      "REQUEST_ID": "-1",
+      "ACTION": "0"
+    }
+  ],
+  "result": "PASS_NATIVE_PLACEMENT_AND_RESCHEDULE",
+  "owned_VM_DONE": true,
+  "serial_observation": "native PTY read only; no persistent serial log on hypervisors",
+  "owned_NFS_diagnostic_root_retained": "/srv/layersentry-native/dr/files/ls-onedrs-r10-bafdee220289",
+  "native_objects_and_bind_mounts_cleaned": true,
+  "original_VM_records_preserved": true,
+  "original_HA_policy_preserved": true,
+  "foreign_new_VM_ids": [],
+  "cleanup_errors": [],
+  "ended_at": "2026-11-14T04:53:30.515945+00:00"
+}

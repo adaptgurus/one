@@ -1,0 +1,324 @@
+{
+  "scope": "COORDINATED_SAME_VERSION_R10_NATIVE_RESCHEDULE_AND_R8_ROLLBACK_LAB",
+  "started_at": "2026-11-14T04:51:25.392760+00:00",
+  "events": [
+    {
+      "host": 0,
+      "action": "prepare",
+      "exit": 0,
+      "at": "2026-11-14T04:51:29.785005+00:00"
+    },
+    {
+      "host": 1,
+      "action": "prepare",
+      "exit": 0,
+      "at": "2026-11-14T04:51:34.002578+00:00"
+    },
+    {
+      "host": 2,
+      "action": "prepare",
+      "exit": 0,
+      "at": "2026-11-14T04:51:38.391462+00:00"
+    },
+    {
+      "host": 1,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:51:45.146086+00:00"
+    },
+    {
+      "host": 2,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:51:51.816130+00:00"
+    },
+    {
+      "host": 0,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:52:06.439980+00:00"
+    },
+    {
+      "host": 0,
+      "action": "install",
+      "exit": 0,
+      "at": "2026-11-14T04:52:11.158989+00:00"
+    },
+    {
+      "host": 1,
+      "action": "install",
+      "exit": 0,
+      "at": "2026-11-14T04:52:15.926625+00:00"
+    },
+    {
+      "host": 2,
+      "action": "install",
+      "exit": 0,
+      "at": "2026-11-14T04:52:20.619292+00:00"
+    },
+    {
+      "host": 0,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:52:26.352847+00:00"
+    },
+    {
+      "host": 1,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:52:32.338329+00:00"
+    },
+    {
+      "host": 2,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:52:38.254847+00:00"
+    },
+    {
+      "host": 0,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:52:41.574284+00:00"
+    },
+    {
+      "host": 1,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:52:41.984661+00:00"
+    },
+    {
+      "host": 2,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:52:42.378332+00:00"
+    },
+    {
+      "host": 0,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:53:30.732631+00:00"
+    },
+    {
+      "host": 1,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:53:31.138307+00:00"
+    },
+    {
+      "host": 2,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:53:31.536343+00:00"
+    },
+    {
+      "host": 1,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:53:38.387822+00:00"
+    },
+    {
+      "host": 2,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:53:45.164664+00:00"
+    },
+    {
+      "host": 0,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:53:59.909945+00:00"
+    },
+    {
+      "host": 0,
+      "action": "rollback",
+      "exit": 0,
+      "at": "2026-11-14T04:54:03.114443+00:00"
+    },
+    {
+      "host": 1,
+      "action": "rollback",
+      "exit": 0,
+      "at": "2026-11-14T04:54:06.524544+00:00"
+    },
+    {
+      "host": 2,
+      "action": "rollback",
+      "exit": 0,
+      "at": "2026-11-14T04:54:09.814374+00:00"
+    },
+    {
+      "host": 0,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:54:15.093218+00:00"
+    },
+    {
+      "host": 1,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:54:20.458962+00:00"
+    },
+    {
+      "host": 2,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:54:25.976757+00:00"
+    }
+  ],
+  "no_schema_migration": true,
+  "DR4_touched": false,
+  "no_physical_host_failure_injected": true,
+  "before_raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3529",
+      "COMMIT": "138458",
+      "LOG_INDEX": "138458"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3529",
+      "COMMIT": "138458",
+      "LOG_INDEX": "138458"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3529",
+      "COMMIT": "138458",
+      "LOG_INDEX": "138458"
+    }
+  },
+  "original_VM_count": 26,
+  "zone_disabled": true,
+  "candidate_raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3530",
+      "COMMIT": "138462",
+      "LOG_INDEX": "138462"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3530",
+      "COMMIT": "138462",
+      "LOG_INDEX": "138462"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3530",
+      "COMMIT": "138462",
+      "LOG_INDEX": "138462"
+    }
+  },
+  "guest_test": {
+    "scope": "ONE_SERVICE_OWNED_NATIVE_SCHEDULER_VM",
+    "started_at": "2026-11-14T04:52:42.396375+00:00",
+    "manual_deploy_calls": 0,
+    "manual_migrate_calls": 0,
+    "DR4_touched": false,
+    "original_VM_count": 26,
+    "initial_placement": {
+      "native": {
+        "state": "3",
+        "lcm": "3",
+        "host": "1",
+        "ds": "121",
+        "seq": "0",
+        "uuid": "005345c9-4234-427c-a48b-4ad95bd31978",
+        "resched": "0"
+      },
+      "guest": {
+        "boot_count": 1,
+        "boot_id": "0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n",
+        "heartbeat": 3,
+        "initialized": true,
+        "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+        "state": "READY",
+        "uptime_ms": 4001
+      },
+      "active_instances": {
+        "0": false,
+        "1": true,
+        "2": false
+      },
+      "seconds_to_guest_witness": 23.356
+    },
+    "native_reschedule": {
+      "before": {
+        "state": "3",
+        "lcm": "3",
+        "host": "1",
+        "ds": "121",
+        "seq": "0",
+        "uuid": "005345c9-4234-427c-a48b-4ad95bd31978",
+        "resched": "0"
+      },
+      "after": {
+        "state": "3",
+        "lcm": "3",
+        "host": "0",
+        "ds": "121",
+        "seq": "1",
+        "uuid": "005345c9-4234-427c-a48b-4ad95bd31978",
+        "resched": "0"
+      },
+      "guest_after": {
+        "boot_count": 1,
+        "boot_id": "0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n",
+        "heartbeat": 13,
+        "initialized": true,
+        "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+        "state": "READY",
+        "uptime_ms": 24009
+      },
+      "active_instances": {
+        "0": true,
+        "1": false,
+        "2": false
+      },
+      "seconds_to_guest_witness": 21.196,
+      "boot_id_preserved": true,
+      "native_live_rescheds": 0,
+      "not_physical_failure_RTO": true
+    },
+    "history": [
+      {
+        "SEQ": "0",
+        "HID": "1",
+        "DS_ID": "121",
+        "PLAN_ID": "-1",
+        "ACTION_ID": "0",
+        "UID": "0",
+        "GID": "0",
+        "REQUEST_ID": "8477",
+        "ACTION": "1"
+      },
+      {
+        "SEQ": "1",
+        "HID": "0",
+        "DS_ID": "121",
+        "PLAN_ID": "-1",
+        "ACTION_ID": "0",
+        "UID": "-1",
+        "GID": "-1",
+        "REQUEST_ID": "-1",
+        "ACTION": "0"
+      }
+    ],
+    "result": "PASS_NATIVE_PLACEMENT_AND_RESCHEDULE",
+    "owned_VM_DONE": true,
+    "serial_observation": "native PTY read only; no persistent serial log on hypervisors",
+    "owned_NFS_diagnostic_root_retained": "/srv/layersentry-native/dr/files/ls-onedrs-r10-bafdee220289",
+    "native_objects_and_bind_mounts_cleaned": true,
+    "original_VM_records_preserved": true,
+    "original_HA_policy_preserved": true,
+    "foreign_new_VM_ids": [],
+    "cleanup_errors": [],
+    "ended_at": "2026-11-14T04:53:30.515945+00:00"
+  },
+  "recovery_errors": [
+    "quorum verification failed: "
+  ],
+  "result": "FAIL_REQUIRES_RECONCILIATION",
+  "ended_at": "2026-11-14T04:55:56.896846+00:00"
+}

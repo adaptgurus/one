@@ -1,0 +1,168 @@
+{
+  "scope": "LAB_DR3_NATIVE_FOLLOWER_R10_UPGRADE_R8_ROLLBACK",
+  "started_at": "2026-11-14T04:16:20.664745+00:00",
+  "actions": [
+    {
+      "name": "private-config-backup",
+      "exit": 0
+    },
+    {
+      "name": "lab-key-fingerprint",
+      "exit": 0
+    },
+    {
+      "name": "import-specific-lab-signature-key",
+      "exit": 0
+    },
+    {
+      "name": "candidate-signature-check",
+      "exit": 0
+    },
+    {
+      "name": "rollback-signature-check",
+      "exit": 0
+    },
+    {
+      "name": "final-candidate-transaction-dry-run",
+      "exit": 0
+    },
+    {
+      "name": "dnf-signed-candidate-install",
+      "exit": 0
+    },
+    {
+      "name": "candidate-start-opennebula-ssh-agent",
+      "exit": 0
+    },
+    {
+      "name": "candidate-start-opennebula",
+      "exit": 0
+    },
+    {
+      "name": "candidate-start-opennebula-hem",
+      "exit": 0
+    },
+    {
+      "name": "dnf-signed-original-rollback",
+      "exit": 0
+    },
+    {
+      "name": "rollback-start-opennebula-ssh-agent",
+      "exit": 0
+    },
+    {
+      "name": "rollback-start-opennebula",
+      "exit": 0
+    },
+    {
+      "name": "rollback-start-opennebula-hem",
+      "exit": 0
+    }
+  ],
+  "no_guest_mutation_requests": true,
+  "no_database_schema_migration": true,
+  "before_raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3525",
+      "COMMIT": "138120",
+      "LOG_INDEX": "138120"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3525",
+      "COMMIT": "138120",
+      "LOG_INDEX": "138120"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3525",
+      "COMMIT": "138120",
+      "LOG_INDEX": "138120"
+    }
+  },
+  "before_VM_count": 26,
+  "original_active_units": [
+    "opennebula-ssh-agent",
+    "opennebula",
+    "opennebula-hem"
+  ],
+  "candidate_runtime": {
+    "seconds_to_raft_synced": 1.515,
+    "pid": 3274803,
+    "running_sha256": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+    "raft": {
+      "0": {
+        "STATE": "3",
+        "TERM": "3525",
+        "COMMIT": "138125",
+        "LOG_INDEX": "138125"
+      },
+      "1": {
+        "STATE": "2",
+        "TERM": "3525",
+        "COMMIT": "138125",
+        "LOG_INDEX": "138125"
+      },
+      "2": {
+        "STATE": "2",
+        "TERM": "3525",
+        "COMMIT": "138125",
+        "LOG_INDEX": "138125"
+      }
+    },
+    "native_version": "7.4.1"
+  },
+  "candidate_host_count": 3,
+  "rollback_runtime": {
+    "seconds_to_raft_synced": 0.561,
+    "pid": 3291521,
+    "running_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "raft": {
+      "0": {
+        "STATE": "3",
+        "TERM": "3525",
+        "COMMIT": "138125",
+        "LOG_INDEX": "138125"
+      },
+      "1": {
+        "STATE": "2",
+        "TERM": "3525",
+        "COMMIT": "138125",
+        "LOG_INDEX": "138125"
+      },
+      "2": {
+        "STATE": "2",
+        "TERM": "3525",
+        "COMMIT": "138125",
+        "LOG_INDEX": "138125"
+      }
+    },
+    "native_version": "7.4.1"
+  },
+  "VM_records_identical_after_upgrade_and_rollback": true,
+  "after_raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3525",
+      "COMMIT": "138125",
+      "LOG_INDEX": "138125"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3525",
+      "COMMIT": "138125",
+      "LOG_INDEX": "138125"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3525",
+      "COMMIT": "138125",
+      "LOG_INDEX": "138125"
+    }
+  },
+  "result": "PASS_NATIVE_FOLLOWER_UPGRADE_AND_ROLLBACK",
+  "final_release": "original r8 restored deliberately after canary",
+  "temporary_lab_trust_removed": true,
+  "ended_at": "2026-11-14T04:16:54.465483+00:00"
+}

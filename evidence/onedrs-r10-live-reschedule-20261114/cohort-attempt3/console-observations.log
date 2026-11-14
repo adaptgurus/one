@@ -1,0 +1,15 @@
+HOST=1 UUID=005345c9-4234-427c-a48b-4ad95bd31978
+[    0.014937] Warning: Deprecated Hardware is detected: x86_64-v1:AuthenticAMD:QEMU Virtual CPU version 2.5+ will not be maintained in a future major release and may be disabled
+LS_ONEDRS_CANARY {"boot_count":1,"boot_id":"0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n","heartbeat":1,"initialized":true,"sha256":"5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a","state":"READY","uptime_ms":0}
+
+HOST=1 UUID=005345c9-4234-427c-a48b-4ad95bd31978
+LS_ONEDRS_CANARY {"boot_count":1,"boot_id":"0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n","heartbeat":2,"initialized":true,"sha256":"5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a","state":"READY","uptime_ms":2001}
+LS_ONEDRS_CANARY {"boot_count":1,"boot_id":"0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n","heartbeat":3,"initialized":true,"sha256":"5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a","state":"READY","uptime_ms":4001}
+
+HOST=0 UUID=005345c9-4234-427c-a48b-4ad95bd31978
+LS_ONEDRS_CANARY {"boot_count":1,"boot_id":"0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n","heartbeat":11,"initialized":true,"sha256":"5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a","state":"READY","uptime_ms":20007}
+
+HOST=0 UUID=005345c9-4234-427c-a48b-4ad95bd31978
+LS_ONEDRS_CANARY {"boot_count":1,"boot_id":"0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n","heartbeat":12,"initialized":true,"sha256":"5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a","state":"READY","uptime_ms":22008}
+LS_ONEDRS_CANARY {"boot_count":1,"boot_id":"0e9a98a4-3b3d-4041-9450-d1b01f8f4ef7\n","heartbeat":13,"initialized":true,"sha256":"5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a","state":"READY","uptime_ms":24009}
+

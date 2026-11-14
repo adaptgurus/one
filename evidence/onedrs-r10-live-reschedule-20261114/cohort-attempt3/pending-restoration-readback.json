@@ -1,0 +1,48 @@
+{
+  "at": "2026-11-14T05:00:16.583310+00:00",
+  "scope": "READ_ONLY_STATE_AFTER_R10_RESCHEDULE_AND_ROLLBACK_DEADLINE",
+  "original_VM_count": 26,
+  "current_VM_count": 26,
+  "all_original_VM_records_identical": true,
+  "zone_state": "1",
+  "host_states": [
+    {
+      "ID": "2",
+      "NAME": "172.17.60.82",
+      "STATE": "4"
+    },
+    {
+      "ID": "1",
+      "NAME": "172.17.60.81",
+      "STATE": "4"
+    },
+    {
+      "ID": "0",
+      "NAME": "172.17.60.80",
+      "STATE": "4"
+    }
+  ],
+  "raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3531",
+      "COMMIT": "138566",
+      "LOG_INDEX": "138566"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3531",
+      "COMMIT": "138566",
+      "LOG_INDEX": "138566"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3531",
+      "COMMIT": "138566",
+      "LOG_INDEX": "138566"
+    }
+  },
+  "post_timeout_restoration_receipt_exists": false,
+  "execution_review": "AWAITING_USER_FOR_FINAL_UNFREEZE_SERVICES_AND_TEMPORARY_KEY_REMOVAL",
+  "whole_module": "NO_GO"
+}

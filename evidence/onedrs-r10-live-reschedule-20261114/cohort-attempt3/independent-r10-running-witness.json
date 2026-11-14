@@ -1,0 +1,50 @@
+{
+  "at": "2026-11-14T04:52:52.738830+00:00",
+  "scope": "INDEPENDENT_READ_ONLY_THREE_HOST_R10_RUNNING_PROCESS_WITNESS",
+  "hosts": {
+    "172.17.60.80": {
+      "hostname": "dr1",
+      "pid": 2271385,
+      "installed_core": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+      "running_core": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+      "package": "opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_64",
+      "SELinux": "Enforcing",
+      "running_domain_uuids": [
+        "1b386a19-5648-4421-b3c4-008e06604f6b",
+        "25e92acb-56c0-4a25-a7ff-23f408a20851",
+        "5c265b8c-4255-413a-9c1c-43b83a5861c0",
+        "61426ff1-2850-4471-9cec-428161d81cfa"
+      ]
+    },
+    "172.17.60.81": {
+      "hostname": "dr2",
+      "pid": 2981865,
+      "installed_core": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+      "running_core": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+      "package": "opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_64",
+      "SELinux": "Enforcing",
+      "running_domain_uuids": [
+        "28c34d61-5b72-4724-83f6-737c57167260",
+        "37fd7d37-0e1b-4ea4-a758-1b6f4566550c",
+        "3c5629a2-7bfe-40f1-b5b5-3ec744137c7e",
+        "5021598d-0a71-4ad0-88a3-55837b21206c",
+        "549c276d-2851-4bf8-82fb-071a02084cdf"
+      ]
+    },
+    "172.17.60.82": {
+      "hostname": "dr3",
+      "pid": 3433620,
+      "installed_core": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+      "running_core": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+      "package": "opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_64",
+      "SELinux": "Enforcing",
+      "running_domain_uuids": [
+        "07186eb6-14f7-495f-a41e-7ba52e42385c",
+        "135c3618-16c2-4047-baa0-7ba144f13614",
+        "25cd57b5-40b0-4b43-a5a1-2d4e48184a05",
+        "4e06634a-135f-455a-b55f-6fb666c36236",
+        "7e0f28e4-651c-45a6-a3a3-41d0213e5303"
+      ]
+    }
+  }
+}

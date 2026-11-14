@@ -1,0 +1,7 @@
+{
+  "vm": 42,
+  "root": "/srv/layersentry-native/dr/files/ls-onedrs-r10-93e1d5f72f7d",
+  "correction": "precreate own serial file as oneadmin 0660; exact run directories 0750",
+  "SELinux_changed": false,
+  "shared_parent_changed": false
+}

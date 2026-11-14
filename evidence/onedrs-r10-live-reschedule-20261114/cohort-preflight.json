@@ -1,0 +1,86 @@
+{
+  "172.17.60.80": {
+    "at": "2026-11-14T04:23:23.801729+00:00",
+    "hostname": "dr1",
+    "uuid": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+    "core": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "running_core": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "pid": "3319",
+    "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+    "active_units": [
+      "opennebula-fireedge.service",
+      "opennebula-flow.service",
+      "opennebula-form.service",
+      "opennebula-gate.service",
+      "opennebula-guacd.service",
+      "opennebula-hem.service",
+      "opennebula-ssh-agent.service",
+      "opennebula.service"
+    ],
+    "native_config": {
+      "/etc/one/oned.conf": "9df03d3fcb2d0b50bf31dd22aaaecc66878eb1142be053b95b7e275e8acca4c8",
+      "/etc/one/monitord.conf": "87452aef37723b3afaf9f9f7976e25ea9f7dcdbb41f410ed900fc932b1cda726",
+      "/var/lib/one/remotes/vmm/kvm/deploy": "3cc0513112d22968859fb822fc4605347c8067fc7a5b169933775ae340584e9b",
+      "/usr/libexec/layersentry-host-network-role": "46d1a4c89a34f519f348869182c4caaf0b75dafe288f502e3e9a2bdb121af4ed"
+    },
+    "filesystem_free_bytes": 20299636736,
+    "candidate": "30d4cd97930281d699ad3aa45e434f1b87d43ddd23cb249a6c656b7b4088f7ed",
+    "rollback": "f84b8c8936343cb37d8ea39728113182645a8fdb92a73fb7d275d47d3ea51b18",
+    "helper_present": true,
+    "dependency_dryrun_exit": 0
+  },
+  "172.17.60.81": {
+    "at": "2026-11-14T04:23:23.971351+00:00",
+    "hostname": "dr2",
+    "uuid": "7a8de079-0a04-4bc6-8c53-e3439d7ce94d",
+    "core": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "running_core": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "pid": "2520",
+    "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+    "active_units": [
+      "opennebula-fireedge.service",
+      "opennebula-guacd.service",
+      "opennebula-hem.service",
+      "opennebula-ssh-agent.service",
+      "opennebula.service"
+    ],
+    "native_config": {
+      "/etc/one/oned.conf": "5f539258ff917a02d3bcfeda9a45fd6125055b50f2c8324809985bebad463104",
+      "/etc/one/monitord.conf": "87452aef37723b3afaf9f9f7976e25ea9f7dcdbb41f410ed900fc932b1cda726",
+      "/var/lib/one/remotes/vmm/kvm/deploy": "df93b32c041f367c43365a38f863041ecf5ca292b37fbf78136b87e89e759bd6",
+      "/usr/libexec/layersentry-host-network-role": "46d1a4c89a34f519f348869182c4caaf0b75dafe288f502e3e9a2bdb121af4ed"
+    },
+    "filesystem_free_bytes": 17773555712,
+    "candidate": "30d4cd97930281d699ad3aa45e434f1b87d43ddd23cb249a6c656b7b4088f7ed",
+    "rollback": "f84b8c8936343cb37d8ea39728113182645a8fdb92a73fb7d275d47d3ea51b18",
+    "helper_present": false,
+    "dependency_dryrun_exit": 0
+  },
+  "172.17.60.82": {
+    "at": "2026-11-14T04:23:23.958038+00:00",
+    "hostname": "dr3",
+    "uuid": "3a521acf-c116-4c5e-a6ce-920527f45d45",
+    "core": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "running_core": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "pid": "3291521",
+    "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+    "active_units": [
+      "opennebula-fireedge.service",
+      "opennebula-guacd.service",
+      "opennebula-hem.service",
+      "opennebula-ssh-agent.service",
+      "opennebula.service"
+    ],
+    "native_config": {
+      "/etc/one/oned.conf": "0236863ce5fe3c92f4622397c00f14e01353e862de891bc7b63895bb90194b02",
+      "/etc/one/monitord.conf": "87452aef37723b3afaf9f9f7976e25ea9f7dcdbb41f410ed900fc932b1cda726",
+      "/var/lib/one/remotes/vmm/kvm/deploy": "df93b32c041f367c43365a38f863041ecf5ca292b37fbf78136b87e89e759bd6",
+      "/usr/libexec/layersentry-host-network-role": "46d1a4c89a34f519f348869182c4caaf0b75dafe288f502e3e9a2bdb121af4ed"
+    },
+    "filesystem_free_bytes": 37348651008,
+    "candidate": "30d4cd97930281d699ad3aa45e434f1b87d43ddd23cb249a6c656b7b4088f7ed",
+    "rollback": "f84b8c8936343cb37d8ea39728113182645a8fdb92a73fb7d275d47d3ea51b18",
+    "helper_present": false,
+    "dependency_dryrun_exit": 0
+  }
+}

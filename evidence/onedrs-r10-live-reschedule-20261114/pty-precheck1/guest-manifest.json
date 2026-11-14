@@ -1,0 +1,23 @@
+{
+  "run": "ls-onedrs-r10-e14cf85e46e1",
+  "root": "/srv/layersentry-native/dr/files/ls-onedrs-r10-e14cf85e46e1",
+  "ds": 119,
+  "template": 10,
+  "vm": 44,
+  "acls": [
+    {
+      "id": 70,
+      "rule": "#10 DATASTORE/#119 USE #0"
+    },
+    {
+      "id": 71,
+      "rule": "#10 TEMPLATE/#10 USE #0"
+    }
+  ],
+  "mounts": [
+    0,
+    1,
+    2
+  ],
+  "serial_type": "native-pty"
+}

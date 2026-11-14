@@ -1,0 +1,18 @@
+{
+  "scope": "ONE_SERVICE_OWNED_NATIVE_SCHEDULER_VM",
+  "started_at": "2026-11-14T04:33:44.835343+00:00",
+  "manual_deploy_calls": 0,
+  "manual_migrate_calls": 0,
+  "DR4_touched": false,
+  "original_VM_count": 26,
+  "result": "FAIL",
+  "error": "native scheduler deadline: {\"state\": \"3\", \"lcm\": \"36\", \"host\": \"1\", \"ds\": \"117\", \"seq\": \"0\", \"uuid\": \"\", \"resched\": \"0\"}; None",
+  "owned_VM_DONE": true,
+  "original_VM_records_preserved": true,
+  "original_HA_policy_preserved": true,
+  "foreign_new_VM_ids": [],
+  "cleanup_errors": [
+    "one.acl.delrule: [one.acl.delrule] Rule 66 does not exist"
+  ],
+  "ended_at": "2026-11-14T04:35:48.244669+00:00"
+}
