@@ -840,16 +840,19 @@ class OptimizerParser:
             drs_ready = str(
                 attrs.get("LAYERSENTRY_DRS_READY", "YES")
             ).upper() not in {"NO", "FALSE", "0"}
+            # Native HostShare and host monitoring memory are KiB; VM
+            # TEMPLATE/MEMORY and OneDRS demand are MiB. Keep all three
+            # host memory fields in MiB to avoid false HA admission/refusal.
             result.append(
                 HostCapacity(
                     id=int(host.id),
                     memory=Capacity(
-                        total=host.host_share.max_mem / 1000,
+                        total=host.host_share.max_mem / 1024,
                         usage=self._apply_predictive_adjustment(
                             float(host.monitoring.capacity.used_memory or 0),
                             float(host.monitoring.capacity.used_memory_forecast or 0),
                         )
-                        / 1000,
+                        / 1024,
                     ),
                     cpu=Capacity(
                         total=host.host_share.max_cpu / 100,
@@ -873,7 +876,7 @@ class OptimizerParser:
                     healthy=self._host_drs_healthy(
                         int(host.state), drs_ready
                     ),
-                    committed_memory=float(host.host_share.mem_usage or 0) / 1000,
+                    committed_memory=float(host.host_share.mem_usage or 0) / 1024,
                     committed_cpu=float(host.host_share.cpu_usage or 0) / 100,
                 )
             )
