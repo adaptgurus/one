@@ -121,6 +121,50 @@ def _demand(
     )
 
 
+def _require_reconciled_commitments(
+    hosts: Collection[HostCapacity],
+    requirements: Collection[VMRequirements],
+) -> None:
+    # A native scheduler request can carry selected requirements while host
+    # accounting includes unselected running workloads. This proof cannot
+    # count already occupied CPU/RAM as new recovery capacity.
+    existing_mem = sum(
+        _validated_demand(vm.memory, f"VM {vm.id} memory")
+        for vm in requirements if vm.state is not VMState.PENDING
+    )
+    existing_cpu = sum(
+        _validated_demand(vm.cpu_ratio, f"VM {vm.id} CPU")
+        for vm in requirements if vm.state is not VMState.PENDING
+    )
+    committed_mem = 0.0
+    committed_cpu = 0.0
+    for host in hosts:
+        committed_mem += _validated_demand(
+            host.committed_memory if host.committed_memory is not None
+            else host.memory.usage,
+            f"host {host.id} committed memory",
+        )
+        committed_cpu += _validated_demand(
+            host.committed_cpu if host.committed_cpu is not None
+            else host.cpu.usage,
+            f"host {host.id} committed CPU",
+        )
+    # Float rounding only; material source unit/telemetry differences need
+    # a verified reconciliation, not a silently weakened resilience SLA.
+    if committed_mem > existing_mem + 1e-7:
+        raise ValueError(
+            "resilience admission failed: unmodeled committed memory "
+            f"({committed_mem:.6g} vs selected {existing_mem:.6g}); "
+            "native VM inventory/accounting must be reconciled"
+        )
+    if committed_cpu > existing_cpu + 1e-7:
+        raise ValueError(
+            "resilience admission failed: unmodeled committed CPU "
+            f"({committed_cpu:.6g} vs selected {existing_cpu:.6g}); "
+            "native VM inventory/accounting must be reconciled"
+        )
+
+
 def _eligible_survivors(
     vm: VMRequirements,
     survivor_ids: set[int],
@@ -369,6 +413,7 @@ def validate_resilience(
             "required for all healthy hosts"
         )
 
+    _require_reconciled_commitments(host_capacities, vm_requirements)
     memory_demand, cpu_demand = _demand(vm_requirements, host_capacities)
 
     host_scenarios = _scenario_count(

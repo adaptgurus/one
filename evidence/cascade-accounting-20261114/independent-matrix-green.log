@@ -1,0 +1,1 @@
+{"checked": 400, "conclusion": "PASS", "elapsed_seconds": 10.7596, "expected_admitted": 90, "expected_rejected": 310, "false_acceptances": 0, "false_rejections": 0, "scope": "SIMULATED_HOST_DOMAIN_AND_VM_PLACEMENT_NOT_REAL_PHYSICAL_FAILURE", "seed": 20261114}
