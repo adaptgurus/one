@@ -78,7 +78,10 @@ public:
     {
         _stopping.store(true);
         uint64_t wake = 1;
-        (void) ::write(_stop_fd, &wake, sizeof(wake));
+        ssize_t result;
+        do { result = ::write(_stop_fd, &wake, sizeof(wake)); }
+        while (result < 0 && errno == EINTR);
+        // EAGAIN means the event is already latched and readable.
         _cond.notify_all();
     }
 

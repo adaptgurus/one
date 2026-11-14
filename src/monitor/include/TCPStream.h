@@ -256,12 +256,19 @@ int TCPStream<MSG>
         pollfd fds[2] = {{sd, POLLIN, 0}, {this->cancellation_fd(), POLLIN, 0}};
         int ready;
         do { ready = poll(fds, 2, -1); } while (ready < 0 && errno == EINTR);
-        if (terminate || ready <= 0 || fds[1].revents != 0 ||
-            (fds[0].revents & (POLLERR | POLLNVAL)))
+        if (terminate || fds[1].revents != 0)
         {
             close(sd);
             line.clear();
             return -1;
+        }
+        if (ready <= 0 || (fds[0].revents & (POLLERR | POLLNVAL)))
+        {
+            // A reset/bad accepted connection is local to that peer. Keep
+            // the listening worker available for the next monitor request.
+            close(sd);
+            line.clear();
+            return 0;
         }
         rc = recv(sd, buffer, BUFFER_SIZE, 0);
         if (rc < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;

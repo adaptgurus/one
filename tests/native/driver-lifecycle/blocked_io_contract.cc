@@ -131,6 +131,36 @@ static bool accepted_tcp_peer_cancelled()
     bool cancelled=stopped.load();shutdown(peer,SHUT_RDWR);close(peer);stopper.join();
     return cancelled;
 }
+static bool tcp_reset_does_not_retire_listener()
+{
+    std::atomic<bool> received{false};
+    TCPStream<TestMessage> stream("127.0.0.1",0,[&](std::unique_ptr<TestMessage> msg)
+    {if(msg->payload=="AFTER_RESET")received=true;});
+    std::string error;if(stream.action_loop(1,error))return false;
+    sockaddr_in address{};socklen_t length=sizeof(address);bool found=false;
+    for(int fd=3;fd<128;++fd)
+    {
+        int yes=0;socklen_t n=sizeof(yes);
+        if(getsockopt(fd,SOL_SOCKET,SO_ACCEPTCONN,&yes,&n)==0 && yes &&
+           getsockname(fd,reinterpret_cast<sockaddr*>(&address),&length)==0)
+        {found=true;break;}
+    }
+    if(!found){stream.stop();return false;}
+    address.sin_addr.s_addr=htonl(INADDR_LOOPBACK);
+    int reset=socket(AF_INET,SOCK_STREAM|SOCK_CLOEXEC,0);
+    if(connect(reset,reinterpret_cast<sockaddr*>(&address),sizeof(address))){close(reset);stream.stop();return false;}
+    (void)send(reset,"INCOMPLETE",10,0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(80));
+    linger abrupt{1,0};setsockopt(reset,SOL_SOCKET,SO_LINGER,&abrupt,sizeof(abrupt));close(reset);
+    std::this_thread::sleep_for(std::chrono::milliseconds(80));
+    int peer=socket(AF_INET,SOCK_STREAM|SOCK_CLOEXEC,0);
+    if(connect(peer,reinterpret_cast<sockaddr*>(&address),sizeof(address))){close(peer);stream.stop();return false;}
+    (void)send(peer,"AFTER_RESET",11,0);shutdown(peer,SHUT_WR);
+    auto end=std::chrono::steady_clock::now()+std::chrono::milliseconds(600);
+    while(!received && std::chrono::steady_clock::now()<end)std::this_thread::yield();
+    close(peer);stream.stop();return received;
+}
+
 int main(int argc,char** argv)
 {
     if(argc==2)return std::string(argv[1])=="--reader" ? consuming_child() : stalled_child(argv[1]);
@@ -141,8 +171,10 @@ int main(int argc,char** argv)
     const bool write_ok=blocked_callback_write_cancelled(path);
     const bool tcp_ok=accepted_tcp_peer_cancelled();
     const bool delivery_ok=complete_serialized_messages(path);
+    const bool reset_ok=tcp_reset_does_not_retire_listener();
     std::cout<<(write_ok?"PASS ":"FAIL ")<<"blocked_callback_write_cancelled_with_descendant_reader\n";
     std::cout<<(tcp_ok?"PASS ":"FAIL ")<<"accepted_tcp_peer_cancelled_while_open\n";
     std::cout<<(delivery_ok?"PASS ":"FAIL ")<<"complete_noninterleaved_large_messages_after_partial_writes\n";
-    return write_ok&&tcp_ok&&delivery_ok?0:1;
+    std::cout<<(reset_ok?"PASS ":"FAIL ")<<"listener_survives_connection_reset\n";
+    return write_ok&&tcp_ok&&delivery_ok&&reset_ok?0:1;
 }
