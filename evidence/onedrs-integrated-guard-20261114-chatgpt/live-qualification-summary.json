@@ -1,0 +1,25 @@
+{
+  "at": "2026-11-14T13:18:07.091250+00:00",
+  "commit_index": 140330,
+  "files_sha256": {
+    "hosts-after.txt": "af48463bdfbeab97b0822269df5b0c93564528396e1c6e18fd444f6ab1d74fef",
+    "hosts-before.txt": "af48463bdfbeab97b0822269df5b0c93564528396e1c6e18fd444f6ab1d74fef",
+    "read_only_probe.py": "cbf16d7c7a05767c9b5a2a604ba3811e5a4601d707fe2c2cd00debf7ab9a8c79",
+    "rollback_guard.py": "7204a173fca8e6a0c4c28a824a0c95572561108aa95716136a0d0013505e31f6",
+    "strict-native-raft.json": "0d823e3e7bcedf8fa40d3d77a04b9eeac23ada1eb4b0daf428f2c6cfa5874ecb",
+    "vms-after.txt": "e4a9be923e50ab312c5c39594ed268c08c6e68f809af8b31147077f0aa73582f",
+    "vms-before.txt": "720d7ad8f5c7ec67d3e89c96dee05ba755c0dac7da5bcce6b25e20d3a38cd193"
+  },
+  "host_inventory_unchanged": true,
+  "leader_id": 0,
+  "native_writes": 0,
+  "qualification": "LAB_ONLY_READ_ONLY_ORIGINAL_R8_NOT_CANDIDATE_E2E",
+  "read_only": true,
+  "sampled_rounds": 2,
+  "scope": "DR1_DR2_DR3_POST_INTEGRATION_READONLY",
+  "strict_raft_guard_pass": true,
+  "term": 3531,
+  "vm_count_after": 26,
+  "vm_count_before": 26,
+  "vm_inventory_unchanged": true
+}
