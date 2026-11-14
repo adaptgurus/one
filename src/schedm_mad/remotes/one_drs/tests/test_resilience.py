@@ -225,7 +225,12 @@ class ResilienceAdmissionTests(unittest.TestCase):
                 committed_cpu=2,
             ),
         ]
-        with self.assertRaisesRegex(ValueError, "memory demand"):
+        # The stronger fail-closed proof must now reject unknown committed
+        # VM identities before their capacity can be counted a second time.
+        # Original source behavior also rejected this case on summed demand.
+        with self.assertRaisesRegex(
+            ValueError, r"unmodeled committed memory \(210 vs selected 0\)"
+        ):
             validate_resilience(
                 hosts,
                 [],

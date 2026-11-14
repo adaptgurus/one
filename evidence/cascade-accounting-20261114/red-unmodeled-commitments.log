@@ -1,0 +1,48 @@
+test_disabled_resilience_does_not_change_existing_scheduling (test_cascade_accounting.UnmodeledNativeCommitments.test_disabled_resilience_does_not_change_existing_scheduling) ... ok
+test_known_commitments_without_unknown_workload_still_pass (test_cascade_accounting.UnmodeledNativeCommitments.test_known_commitments_without_unknown_workload_still_pass) ... ok
+test_nan_host_commitment_must_never_pass (test_cascade_accounting.UnmodeledNativeCommitments.test_nan_host_commitment_must_never_pass) ... FAIL
+test_pending_vm_consumes_extra_capacity_without_false_unknown (test_cascade_accounting.UnmodeledNativeCommitments.test_pending_vm_consumes_extra_capacity_without_false_unknown) ... ok
+test_unknown_guest_when_no_requirements_still_rejects (test_cascade_accounting.UnmodeledNativeCommitments.test_unknown_guest_when_no_requirements_still_rejects) ... FAIL
+test_unmodeled_committed_cpu_cannot_be_spent_again (test_cascade_accounting.UnmodeledNativeCommitments.test_unmodeled_committed_cpu_cannot_be_spent_again) ... FAIL
+test_unmodeled_committed_memory_cannot_be_spent_again (test_cascade_accounting.UnmodeledNativeCommitments.test_unmodeled_committed_memory_cannot_be_spent_again) ... FAIL
+
+======================================================================
+FAIL: test_nan_host_commitment_must_never_pass (test_cascade_accounting.UnmodeledNativeCommitments.test_nan_host_commitment_must_never_pass)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-cascade-accounting-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_cascade_accounting.py", line 52, in test_nan_host_commitment_must_never_pass
+    with self.assertRaisesRegex(ValueError, "invalid host 0 committed memory"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_unknown_guest_when_no_requirements_still_rejects (test_cascade_accounting.UnmodeledNativeCommitments.test_unknown_guest_when_no_requirements_still_rejects)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-cascade-accounting-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_cascade_accounting.py", line 47, in test_unknown_guest_when_no_requirements_still_rejects
+    with self.assertRaisesRegex(ValueError, "unmodeled committed memory"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_unmodeled_committed_cpu_cannot_be_spent_again (test_cascade_accounting.UnmodeledNativeCommitments.test_unmodeled_committed_cpu_cannot_be_spent_again)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-cascade-accounting-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_cascade_accounting.py", line 42, in test_unmodeled_committed_cpu_cannot_be_spent_again
+    with self.assertRaisesRegex(ValueError, "unmodeled committed CPU"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_unmodeled_committed_memory_cannot_be_spent_again (test_cascade_accounting.UnmodeledNativeCommitments.test_unmodeled_committed_memory_cannot_be_spent_again)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-cascade-accounting-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_cascade_accounting.py", line 34, in test_unmodeled_committed_memory_cannot_be_spent_again
+    with self.assertRaisesRegex(ValueError, "unmodeled committed memory"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.002s
+
+FAILED (failures=4)
