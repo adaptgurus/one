@@ -1,0 +1,39 @@
+test_affinity_must_share_one_host_with_sufficient_joint_capacity (test_cascade_admission.CascadingPlacementAdmissionTests.test_affinity_must_share_one_host_with_sufficient_joint_capacity) ... ok
+test_aggregate_survival_must_not_double_allocate_only_large_host (test_cascade_admission.CascadingPlacementAdmissionTests.test_aggregate_survival_must_not_double_allocate_only_large_host) ... ok
+test_bad_cpu_measurement_rejects_protection_policy (test_cascade_admission.CascadingPlacementAdmissionTests.test_bad_cpu_measurement_rejects_protection_policy) ... FAIL
+test_cross_group_anti_affinity_must_have_one_consistent_assignment (test_cascade_admission.CascadingPlacementAdmissionTests.test_cross_group_anti_affinity_must_have_one_consistent_assignment) ... ok
+test_duplicate_host_id_does_not_double_count_survivor_capacity (test_cascade_admission.CascadingPlacementAdmissionTests.test_duplicate_host_id_does_not_double_count_survivor_capacity) ... FAIL
+test_non_enforced_policy_remains_backward_compatible (test_cascade_admission.CascadingPlacementAdmissionTests.test_non_enforced_policy_remains_backward_compatible) ... ok
+test_per_host_reserve_is_not_replaceable_by_aggregate_reserve (test_cascade_admission.CascadingPlacementAdmissionTests.test_per_host_reserve_is_not_replaceable_by_aggregate_reserve) ... ok
+test_rack_then_host_cascade_requires_simultaneous_recovery_fit (test_cascade_admission.CascadingPlacementAdmissionTests.test_rack_then_host_cascade_requires_simultaneous_recovery_fit) ... ok
+test_solver_indeterminate_refuses_without_a_false_ha_pass (test_cascade_admission.CascadingPlacementAdmissionTests.test_solver_indeterminate_refuses_without_a_false_ha_pass) ... ok
+test_solver_unavailable_refuses_without_a_false_ha_pass (test_cascade_admission.CascadingPlacementAdmissionTests.test_solver_unavailable_refuses_without_a_false_ha_pass) ... ok
+test_three_large_vms_do_not_fit_two_large_survivors (test_cascade_admission.CascadingPlacementAdmissionTests.test_three_large_vms_do_not_fit_two_large_survivors) ... ok
+test_valid_one_host_recovery_remains_admitted (test_cascade_admission.CascadingPlacementAdmissionTests.test_valid_one_host_recovery_remains_admitted) ... ok
+
+======================================================================
+FAIL: test_bad_cpu_measurement_rejects_protection_policy (test_cascade_admission.CascadingPlacementAdmissionTests.test_bad_cpu_measurement_rejects_protection_policy)
+----------------------------------------------------------------------
+ValueError: resilience admission failed: VM 711 has no eligible surviving host
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/root/onedrs-cascade-admission-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_cascade_admission.py", line 151, in test_bad_cpu_measurement_rejects_protection_policy
+    with self.assertRaisesRegex(ValueError, "invalid VM 711 CPU"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: "invalid VM 711 CPU" does not match "resilience admission failed: VM 711 has no eligible surviving host"
+
+======================================================================
+FAIL: test_duplicate_host_id_does_not_double_count_survivor_capacity (test_cascade_admission.CascadingPlacementAdmissionTests.test_duplicate_host_id_does_not_double_count_survivor_capacity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-cascade-admission-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_cascade_admission.py", line 187, in test_duplicate_host_id_does_not_double_count_survivor_capacity
+    with self.assertRaisesRegex(ValueError, "duplicate host or VM"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 12 tests in 0.041s
+
+FAILED (failures=2)

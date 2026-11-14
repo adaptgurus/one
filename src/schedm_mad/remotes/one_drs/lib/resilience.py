@@ -12,8 +12,14 @@ from collections.abc import Collection
 from dataclasses import dataclass
 from itertools import combinations
 from math import comb
+from time import monotonic
 
 from .mapper.model import HostCapacity, VMGroup, VMRequirements, VMState
+from .recovery_fit import (
+    JOINT_FIT_BUDGET_SECONDS,
+    _validated_demand,
+    validate_joint_recovery_fit,
+)
 
 
 @dataclass(frozen=True)
@@ -167,13 +173,19 @@ def _validate_placement_reachability(
     survivors: list[HostCapacity],
     vm_requirements: Collection[VMRequirements],
     vm_groups: Collection[VMGroup],
-    failure_domain_spread: bool,
+    policy: ResiliencePolicy,
+    label: str,
+    deadline: float,
 ) -> None:
     survivor_ids = {host.id for host in survivors}
     host_by_id = {host.id: host for host in survivors}
     candidates: dict[int, set[int]] = {}
 
     for vm in vm_requirements:
+        # NaN and malformed measurements must not bypass aggregate resource
+        # comparisons and become an erroneous HA admission.
+        _validated_demand(vm.memory, f"VM {vm.id} memory")
+        _validated_demand(vm.cpu_ratio, f"VM {vm.id} CPU")
         eligible = _eligible_survivors(vm, survivor_ids)
         # Also require the VM to fit individually. Aggregate capacity alone
         # cannot detect a large VM that fits nowhere after a failure.
@@ -205,7 +217,7 @@ def _validate_placement_reachability(
                 "cannot map to distinct surviving hosts"
             )
 
-        if failure_domain_spread and not _has_distinct_assignment(
+        if policy.failure_domain_spread and not _has_distinct_assignment(
             members,
             candidates,
             lambda host_id: host_by_id[host_id].failure_domain
@@ -215,6 +227,19 @@ def _validate_placement_reachability(
                 f"resilience admission failed: anti-affinity group {group.id} "
                 "cannot map to distinct surviving failure domains"
             )
+
+    # Individually eligible destinations and aggregate headroom do not prove
+    # the complete protection set fits simultaneously after a host/rack loss.
+    # A bounded constructive witness or strict integer feasibility proof must
+    # exist before reporting a protected placement as recoverable.
+    validate_joint_recovery_fit(
+        survivors, list(vm_requirements), list(vm_groups), candidates,
+        memory_reserve_percent=policy.memory_reserve_percent,
+        cpu_reserve_percent=policy.cpu_reserve_percent,
+        failure_domain_spread=policy.failure_domain_spread,
+        label=label,
+        deadline=deadline,
+    )
 
 
 def migration_cooldown_holds(
@@ -255,6 +280,7 @@ def _evaluate_scenario(
     memory_demand: float,
     cpu_demand: float,
     label: str,
+    deadline: float,
 ) -> tuple[float, float]:
     if not survivors:
         raise ValueError(
@@ -281,7 +307,9 @@ def _evaluate_scenario(
         survivors,
         vm_requirements,
         vm_groups,
-        policy.failure_domain_spread,
+        policy,
+        label,
+        deadline,
     )
     return memory, cpu
 
@@ -292,7 +320,18 @@ def validate_resilience(
     policy: ResiliencePolicy,
     vm_groups: Collection[VMGroup] = (),
 ) -> ResilienceReport:
+    # Materialize once to avoid a generator being silently exhausted across
+    # the failure scenarios and changing the protection proof mid-request.
+    host_capacities = list(host_capacities)
+    vm_requirements = list(vm_requirements)
+    vm_groups = list(vm_groups)
     healthy = [host for host in host_capacities if host.healthy]
+
+    if policy.enabled:
+        host_ids = [host.id for host in host_capacities]
+        vm_ids = [vm.id for vm in vm_requirements]
+        if len(set(host_ids)) != len(host_ids) or len(set(vm_ids)) != len(vm_ids):
+            raise ValueError("resilience admission failed: duplicate host or VM identity")
 
     if not policy.enabled:
         return ResilienceReport(
@@ -388,6 +427,7 @@ def validate_resilience(
             f"{policy.max_failure_scenarios}"
         )
 
+    proof_deadline = monotonic() + JOINT_FIT_BUDGET_SECONDS
     min_host_memory = float("inf")
     min_host_cpu = float("inf")
     checked = 0
@@ -414,6 +454,7 @@ def validate_resilience(
             memory_demand,
             cpu_demand,
             f"host loss {sorted(failed_set)}",
+            proof_deadline,
         )
         min_host_memory = min(min_host_memory, memory)
         min_host_cpu = min(min_host_cpu, cpu)
@@ -444,6 +485,7 @@ def validate_resilience(
                 memory_demand,
                 cpu_demand,
                 f"failure-domain loss {sorted(failed)}",
+                proof_deadline,
             )
             min_domain_memory = min(min_domain_memory, memory)
             min_domain_cpu = min(min_domain_cpu, cpu)
@@ -485,6 +527,7 @@ def validate_resilience(
                     "combined loss domains="
                     f"{sorted(failed_domain_set)} hosts="
                     f"{sorted(failed_host_set)}",
+                    proof_deadline,
                 )
                 checked += 1
 

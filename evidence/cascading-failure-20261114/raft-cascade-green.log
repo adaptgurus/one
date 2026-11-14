@@ -1,0 +1,10 @@
+test_contested_leaders_after_one_good_sample_fail_immediately (test_cascade_raft.CascadeRestorationTests) ... ok
+test_leader_plus_follower_loss_refuses_complete_barrier (test_cascade_raft.CascadeRestorationTests) ... ok
+test_stale_follower_commit_cannot_be_overridden_by_majority (test_cascade_raft.CascadeRestorationTests) ... ok
+test_transient_dual_failure_then_recovery_keeps_missed_acceptance (test_cascade_raft.CascadeRestorationTests) ... ok
+test_two_followers_unavailable_never_authorize_restoration (test_cascade_raft.CascadeRestorationTests) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.003s
+
+OK
