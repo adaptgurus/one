@@ -1,0 +1,10 @@
+{
+  "scope": "FINITE_MODEL_TOPOLOGY_COMMIT_SUFFIX_COMBINATIONS_NOT_PHYSICAL_FAILURE",
+  "combinations": 27000,
+  "accepted": 9,
+  "rejected": 26991,
+  "false_acceptances": 0,
+  "false_rejections": 0,
+  "result": "PASS",
+  "elapsed_seconds": 3.97
+}

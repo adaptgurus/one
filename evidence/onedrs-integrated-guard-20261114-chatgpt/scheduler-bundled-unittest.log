@@ -1,0 +1,88 @@
+======================================================================
+ERROR: test_host_context (unittest.loader._FailedTest)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_host_context
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/unittest/loader.py", line 436, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "/usr/lib64/python3.9/unittest/loader.py", line 377, in _get_module_from_name
+    __import__(name)
+  File "/root/onedrs-integrated-guard-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_host_context.py", line 5, in <module>
+    from lib.resilience import ResiliencePolicy,validate_resilience
+  File "/root/onedrs-integrated-guard-20261114-chatgpt/src/schedm_mad/remotes/one_drs/lib/__init__.py", line 4, in <module>
+    from .optimizer_parser import OptimizerParser
+  File "/root/onedrs-integrated-guard-20261114-chatgpt/src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py", line 28, in <module>
+    from xsdata.formats.dataclass.parsers import XmlParser
+  File "/usr/lib/one/python/xsdata/formats/dataclass/parsers/__init__.py", line 1, in <module>
+    from xsdata.formats.dataclass.parsers.dict import DictDecoder
+  File "/usr/lib/one/python/xsdata/formats/dataclass/parsers/dict.py", line 7, in <module>
+    from xsdata.formats.converter import converter
+  File "/usr/lib/one/python/xsdata/formats/converter.py", line 18, in <module>
+    from xsdata.models.datatype import (
+  File "/usr/lib/one/python/xsdata/models/datatype.py", line 8, in <module>
+    from xsdata.utils.dates import (
+  File "/usr/lib/one/python/xsdata/utils/dates.py", line 7, in <module>
+    def parse_date_args(value: Any, fmt: str) -> Iterator[int | None]:
+TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+
+
+======================================================================
+ERROR: test_native_state_admission (unittest.loader._FailedTest)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_native_state_admission
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/unittest/loader.py", line 436, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "/usr/lib64/python3.9/unittest/loader.py", line 377, in _get_module_from_name
+    __import__(name)
+  File "/root/onedrs-integrated-guard-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 10, in <module>
+    from lib.optimizer_parser import OptimizerParser
+  File "/root/onedrs-integrated-guard-20261114-chatgpt/src/schedm_mad/remotes/one_drs/lib/__init__.py", line 4, in <module>
+    from .optimizer_parser import OptimizerParser
+  File "/root/onedrs-integrated-guard-20261114-chatgpt/src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py", line 28, in <module>
+    from xsdata.formats.dataclass.parsers import XmlParser
+  File "/usr/lib/one/python/xsdata/formats/dataclass/parsers/__init__.py", line 1, in <module>
+    from xsdata.formats.dataclass.parsers.dict import DictDecoder
+  File "/usr/lib/one/python/xsdata/formats/dataclass/parsers/dict.py", line 7, in <module>
+    from xsdata.formats.converter import converter
+  File "/usr/lib/one/python/xsdata/formats/converter.py", line 18, in <module>
+    from xsdata.models.datatype import (
+  File "/usr/lib/one/python/xsdata/models/datatype.py", line 8, in <module>
+    from xsdata.utils.dates import (
+  File "/usr/lib/one/python/xsdata/utils/dates.py", line 7, in <module>
+    def parse_date_args(value: Any, fmt: str) -> Iterator[int | None]:
+TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+
+
+======================================================================
+ERROR: test_resilience (unittest.loader._FailedTest)
+----------------------------------------------------------------------
+ImportError: Failed to import test module: test_resilience
+Traceback (most recent call last):
+  File "/usr/lib64/python3.9/unittest/loader.py", line 436, in _find_test_path
+    module = self._get_module_from_name(name)
+  File "/usr/lib64/python3.9/unittest/loader.py", line 377, in _get_module_from_name
+    __import__(name)
+  File "/root/onedrs-integrated-guard-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_resilience.py", line 9, in <module>
+    from lib.mapper.ilp_optimizer import ILPOptimizer
+  File "/root/onedrs-integrated-guard-20261114-chatgpt/src/schedm_mad/remotes/one_drs/lib/__init__.py", line 4, in <module>
+    from .optimizer_parser import OptimizerParser
+  File "/root/onedrs-integrated-guard-20261114-chatgpt/src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py", line 28, in <module>
+    from xsdata.formats.dataclass.parsers import XmlParser
+  File "/usr/lib/one/python/xsdata/formats/dataclass/parsers/__init__.py", line 1, in <module>
+    from xsdata.formats.dataclass.parsers.dict import DictDecoder
+  File "/usr/lib/one/python/xsdata/formats/dataclass/parsers/dict.py", line 7, in <module>
+    from xsdata.formats.converter import converter
+  File "/usr/lib/one/python/xsdata/formats/converter.py", line 18, in <module>
+    from xsdata.models.datatype import (
+  File "/usr/lib/one/python/xsdata/models/datatype.py", line 8, in <module>
+    from xsdata.utils.dates import (
+  File "/usr/lib/one/python/xsdata/utils/dates.py", line 7, in <module>
+    def parse_date_args(value: Any, fmt: str) -> Iterator[int | None]:
+TypeError: unsupported operand type(s) for |: 'type' and 'NoneType'
+
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.001s
+
+FAILED (errors=3)
