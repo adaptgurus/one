@@ -1,0 +1,90 @@
+{
+  "started_at": "2026-11-14T06:09:56.790322+00:00",
+  "original_cohort_failure_preserved": true,
+  "reason": "Complete original rollback restoration after follower caught up beyond the 90-second deadline",
+  "events": [
+    "original_zone_reenabled",
+    "original_hosts_reenabled",
+    {
+      "host": 0,
+      "action": "restore-services",
+      "exit": 0
+    },
+    {
+      "host": 0,
+      "action": "finish",
+      "exit": 0
+    },
+    {
+      "host": 1,
+      "action": "restore-services",
+      "exit": 0
+    },
+    {
+      "host": 1,
+      "action": "finish",
+      "exit": 0
+    },
+    {
+      "host": 2,
+      "action": "restore-services",
+      "exit": 0
+    },
+    {
+      "host": 2,
+      "action": "finish",
+      "exit": 0
+    }
+  ],
+  "recovered_raft_before_unfreeze": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3531",
+      "COMMIT": "138774",
+      "LOG_INDEX": "138774"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3531",
+      "COMMIT": "138774",
+      "LOG_INDEX": "138774"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3531",
+      "COMMIT": "138774",
+      "LOG_INDEX": "138774"
+    }
+  },
+  "result": "PASS_POST_TIMEOUT_RESTORATION",
+  "all_26_original_VM_records_identical": true,
+  "zone_enabled": true,
+  "native_hosts_monitored": true,
+  "all_original_r8_packages_drivers_and_services_restored": true,
+  "original_running_domain_UUIDs_verified_each_host": true,
+  "temporary_lab_keys_removed_each_host": true,
+  "follower_restart_or_database_restore_performed": false,
+  "guest_native_rescheduling_result": "PASS",
+  "automated_rollback_deadline_result": "FAIL_PRESERVED_NOT_WAIVED",
+  "ended_at": "2026-11-14T06:09:59.450824+00:00",
+  "final_raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3531",
+      "COMMIT": "138778",
+      "LOG_INDEX": "138778"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3531",
+      "COMMIT": "138778",
+      "LOG_INDEX": "138778"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3531",
+      "COMMIT": "138778",
+      "LOG_INDEX": "138778"
+    }
+  }
+}

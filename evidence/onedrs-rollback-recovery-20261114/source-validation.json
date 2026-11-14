@@ -1,0 +1,40 @@
+{
+  "scope": "SOURCE_TESTS_AND_READ_ONLY_NATIVE_PROBE_ONLY_NO_NEW_ROLLOUT",
+  "normal_python_tests": 58,
+  "optimized_guard_tests": 58,
+  "python312_tests": 58,
+  "finite_model_cases": 27000,
+  "actual_loopback_XMLRPC_test_methods": 6,
+  "actual_generated_coordinator_finally_test_methods": 9,
+  "native_probe": "PASS_READ_ONLY_TWO_COMPLETE_SAMPLES",
+  "user_approved_original_restoration": "PASS_POST_TIMEOUT_RESTORATION",
+  "new_live_cohort_upgrade_or_rollback_executed": false,
+  "candidate_R10_runtime_or_12h_soak_started": false,
+  "guard_orchestrator_live_effectful_acceptance": "NOT_RUN",
+  "original_90_second_rollback_failure": "PRESERVED",
+  "existing_PR55_state_guard": "NOT_INCLUDED_NOT_PACKAGED",
+  "original_parent_commit": "39a418b895ebbe196af6c75f9ed0169c2bc1c9b8",
+  "new_source_directory": "tools/onedrs_qualification",
+  "at": "2026-11-14T06:31:04.864382+00:00",
+  "read_only_original_r8_observation": {
+    "scope": "READ_ONLY_ORIGINAL_R8_POST_RESTORATION_OBSERVATION_NOT_R10_STRESS_OR_PRODUCTION_SOAK",
+    "started_at": "2026-11-14T06:14:12.596785+00:00",
+    "requested_seconds": 900,
+    "sample_interval_seconds": 5,
+    "samples": 181,
+    "management_checks": 31,
+    "max_commit_gap": 0,
+    "mutation_calls": 0,
+    "errors": [],
+    "result": "PASS_15_MINUTE_ORIGINAL_R8_READ_ONLY_STABILITY",
+    "elapsed_seconds": 901.184,
+    "ended_at": "2026-11-14T06:29:13.781127+00:00",
+    "initial_term": 3531,
+    "initial_pids": {
+      "0": 2283363,
+      "1": 2989595,
+      "2": 3441059
+    }
+  },
+  "read_only_monitor_timer_enabled": true
+}
