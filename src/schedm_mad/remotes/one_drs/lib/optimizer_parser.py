@@ -579,7 +579,7 @@ class OptimizerParser:
             if vm is None:
                 raise ValueError(f"required VM {vm_req.id} is absent from native snapshot")
             try:
-                vm_state = self._map_vm_state(vm.state, vm.lcm_state)
+                vm_state = self._map_vm_requirement_state(vm, vm_req)
             except ValueError as error:
                 raise ValueError(f"VM {vm_req.id}: {error}") from error
             sys_storage, img_storage = self._build_vm_storage(vm, vm_req)
@@ -1098,6 +1098,56 @@ class OptimizerParser:
             )
             for pci in pci_list
         ]
+
+    def _map_vm_requirement_state(self, vm, requirement) -> VMState:
+        # UNKNOWN is never a RUNNING observation. Native failed-host recovery
+        # deliberately submits ACTIVE/UNKNOWN with RESCHED=1 to PLACE after
+        # its separate fencing/ownership workflow. Model only that explicit
+        # request as RESCHED; this parser grants no fencing or mutation rights.
+        if not (
+            type(vm.state) is int and vm.state == 3
+            and type(vm.lcm_state) is int and vm.lcm_state == 16
+            and type(getattr(vm, "resched", None)) is int and vm.resched == 1
+            and str(self.mode).upper() == "PLACE"
+        ):
+            return self._map_vm_state(vm.state, vm.lcm_state)
+
+        def refuse(reason):
+            raise ValueError("unsupported native UNKNOWN recovery request: " + reason)
+
+        history = getattr(getattr(vm, "history_records", None), "history", None)
+        if not history:
+            refuse("missing current placement history")
+        seen = set()
+        for item in history:
+            if (type(item.seq) is not int or item.seq < 0
+                    or type(item.oid) is not int or item.oid != vm.id
+                    or item.seq in seen):
+                refuse("ambiguous history generation or VM identity")
+            seen.add(item.seq)
+        current = max(history, key=lambda item: item.seq)
+        if (type(current.hid) is not int or current.hid < 0
+                or type(current.ds_id) is not int or current.ds_id < 0
+                or type(current.etime) is not int or current.etime != 0
+                or self._curr_alloc.get(vm.id) != current.hid):
+            refuse("invalid or inconsistent current placement")
+        datastore = self._system_shared_dstore_attrs.get(current.ds_id)
+        if (self._used_shared_dstores.get(vm.id) != current.ds_id
+                or vm.id in self._used_local_dstores
+                or not datastore or datastore.get("TYPE") != "SYSTEM_DS"
+                or datastore.get("SHARED") != "YES"
+                or not isinstance(current.tm_mad, str)
+                or current.tm_mad.upper() != datastore.get("TM_MAD")):
+            refuse("original shared system datastore is not proven")
+        candidates = getattr(getattr(requirement, "datastores", None), "id", None)
+        if (not candidates or len(candidates) != 1
+                or type(candidates[0]) is not int or candidates[0] != current.ds_id):
+            refuse("recovery must retain the original system datastore")
+        hosts = getattr(getattr(requirement, "hosts", None), "id", None)
+        if (not hosts or any(type(h) is not int or h < 0 for h in hosts)
+                or len(set(hosts)) != len(hosts) or current.hid in hosts):
+            refuse("invalid destination set or source host is still eligible")
+        return VMState.RESCHED
 
     @staticmethod
     def _map_vm_state(state: int, lcm_state: int) -> VMState:
