@@ -1,0 +1,565 @@
+test_actual_XML_decoder_missing_and_transient_fields_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) ... 
+  test_actual_XML_decoder_missing_and_transient_fields_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) (body='<ID>11</ID>') ... FAIL
+  test_actual_XML_decoder_missing_and_transient_fields_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) (body='<ID>11</ID><STATE>3</STATE>') ... FAIL
+  test_actual_XML_decoder_missing_and_transient_fields_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) (body='<ID>11</ID><LCM_STATE>3</LCM_STATE>') ... FAIL
+  test_actual_XML_decoder_missing_and_transient_fields_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) (body='<ID>11</ID><STATE>3</STATE><LCM_STATE>36</LCM_STATE>') ... FAIL
+test_actual_XML_decoder_valid_states_retain_native_semantics (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_valid_states_retain_native_semantics) ... ok
+test_duplicate_native_identity_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_duplicate_native_identity_refused) ... FAIL
+test_duplicate_requirement_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_duplicate_requirement_refused) ... FAIL
+test_exact_stable_states_preserved (original_state_guard_reproduction.NativeStateAdmissionTests.test_exact_stable_states_preserved) ... ok
+test_exhaustive_state_pairs_only_exact_supported_tuples (original_state_guard_reproduction.NativeStateAdmissionTests.test_exhaustive_state_pairs_only_exact_supported_tuples) ... FAIL
+test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) ... 
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=None, pool=True) ... FAIL
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=None, pool=False) ... FAIL
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=-1, pool=True) ... FAIL
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=-1, pool=False) ... FAIL
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=True, pool=True) ... FAIL
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=True, pool=False) ... FAIL
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=11.0, pool=True) ... FAIL
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=11.0, pool=False) ... FAIL
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid='11', pool=True) ... FAIL
+  test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid='11', pool=False) ... FAIL
+test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) ... 
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 0)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 1)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 2)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 4)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 8)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 36)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 70)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(1, 3)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(1, -1)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(8, 3)) ... FAIL
+  test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(8, 18)) ... FAIL
+test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) ... 
+  test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(None, None)) ... FAIL
+  test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=('3', 3)) ... FAIL
+  test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(3, '3')) ... FAIL
+  test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(3.0, 3)) ... FAIL
+  test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(3, 3.0)) ... FAIL
+  test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(True, 0)) ... FAIL
+  test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(1, False)) ... FAIL
+  test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(8, False)) ... FAIL
+test_missing_required_VM_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_required_VM_refused) ... FAIL
+test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) ... 
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=0) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=2) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=4) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=5) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=6) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=7) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=9) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=10) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=11) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=12) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=-1) ... FAIL
+  test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=999) ... FAIL
+test_state_refusal_precedes_storage_interpretation (original_state_guard_reproduction.NativeStateAdmissionTests.test_state_refusal_precedes_storage_interpretation) ... 
+  test_state_refusal_precedes_storage_interpretation (original_state_guard_reproduction.NativeStateAdmissionTests.test_state_refusal_precedes_storage_interpretation) (pair=(2, 0)) ... FAIL
+  test_state_refusal_precedes_storage_interpretation (original_state_guard_reproduction.NativeStateAdmissionTests.test_state_refusal_precedes_storage_interpretation) (pair=(3, 36)) ... FAIL
+  test_state_refusal_precedes_storage_interpretation (original_state_guard_reproduction.NativeStateAdmissionTests.test_state_refusal_precedes_storage_interpretation) (pair=(8, 18)) ... FAIL
+test_valid_selected_VM_keeps_original_power_state (original_state_guard_reproduction.NativeStateAdmissionTests.test_valid_selected_VM_keeps_original_power_state) ... ok
+
+======================================================================
+FAIL: test_actual_XML_decoder_missing_and_transient_fields_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) (body='<ID>11</ID>')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 120, in test_actual_XML_decoder_missing_and_transient_fields_rejected
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_actual_XML_decoder_missing_and_transient_fields_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) (body='<ID>11</ID><STATE>3</STATE>')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 120, in test_actual_XML_decoder_missing_and_transient_fields_rejected
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_actual_XML_decoder_missing_and_transient_fields_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) (body='<ID>11</ID><LCM_STATE>3</LCM_STATE>')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 120, in test_actual_XML_decoder_missing_and_transient_fields_rejected
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_actual_XML_decoder_missing_and_transient_fields_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_actual_XML_decoder_missing_and_transient_fields_rejected) (body='<ID>11</ID><STATE>3</STATE><LCM_STATE>36</LCM_STATE>')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 120, in test_actual_XML_decoder_missing_and_transient_fields_rejected
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_duplicate_native_identity_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_duplicate_native_identity_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 66, in test_duplicate_native_identity_refused
+    with self.assertRaisesRegex(ValueError, 'duplicate native VM identity'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_duplicate_requirement_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_duplicate_requirement_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 72, in test_duplicate_requirement_refused
+    with self.assertRaisesRegex(ValueError, 'duplicate native VM requirement'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_exhaustive_state_pairs_only_exact_supported_tuples (original_state_guard_reproduction.NativeStateAdmissionTests.test_exhaustive_state_pairs_only_exact_supported_tuples)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 109, in test_exhaustive_state_pairs_only_exact_supported_tuples
+    with self.assertRaises(ValueError):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=None, pool=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=None, pool=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=-1, pool=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=-1, pool=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=True, pool=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=True, pool=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=11.0, pool=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid=11.0, pool=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid='11', pool=True)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_invalid_identifiers_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_invalid_identifiers_refused) (invalid='11', pool=False)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 80, in test_invalid_identifiers_refused
+    with self.assertRaisesRegex(ValueError, 'invalid native VM (identity|requirement)'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 0))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 1))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 2))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 4))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 8))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 36))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(3, 70))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(1, 3))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(1, -1))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(8, 3))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_lifecycle_transitions_rejected (original_state_guard_reproduction.NativeStateAdmissionTests.test_lifecycle_transitions_rejected) (pair=(8, 18))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 29, in test_lifecycle_transitions_rejected
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(None, None))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 35, in test_missing_and_noninteger_state_is_not_coerced
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=('3', 3))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 35, in test_missing_and_noninteger_state_is_not_coerced
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(3, '3'))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 35, in test_missing_and_noninteger_state_is_not_coerced
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(3.0, 3))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 35, in test_missing_and_noninteger_state_is_not_coerced
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(3, 3.0))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 35, in test_missing_and_noninteger_state_is_not_coerced
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(True, 0))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 35, in test_missing_and_noninteger_state_is_not_coerced
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(1, False))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 35, in test_missing_and_noninteger_state_is_not_coerced
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_and_noninteger_state_is_not_coerced (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_and_noninteger_state_is_not_coerced) (pair=(8, False))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 35, in test_missing_and_noninteger_state_is_not_coerced
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_required_VM_refused (original_state_guard_reproduction.NativeStateAdmissionTests.test_missing_required_VM_refused)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 58, in test_missing_required_VM_refused
+    with self.assertRaisesRegex(ValueError, 'required VM 11 is absent'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=0)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=2)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=4)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=5)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=6)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=7)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=9)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=10)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=11)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=12)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=-1)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_nonrunning_states_never_become_running (original_state_guard_reproduction.NativeStateAdmissionTests.test_nonrunning_states_never_become_running) (state=999)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 23, in test_nonrunning_states_never_become_running
+    with self.assertRaisesRegex(ValueError, 'unsupported or unstable native VM state'):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_state_refusal_precedes_storage_interpretation (original_state_guard_reproduction.NativeStateAdmissionTests.test_state_refusal_precedes_storage_interpretation) (pair=(2, 0))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 53, in test_state_refusal_precedes_storage_interpretation
+    p._parse_vm_requirements()
+  File "/root/onedrs-native-host-context-20261113/src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py", line 564, in _parse_vm_requirements
+    sys_storage, img_storage = self._build_vm_storage(vm, vm_req)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+AssertionError: storage touched
+
+======================================================================
+FAIL: test_state_refusal_precedes_storage_interpretation (original_state_guard_reproduction.NativeStateAdmissionTests.test_state_refusal_precedes_storage_interpretation) (pair=(3, 36))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 53, in test_state_refusal_precedes_storage_interpretation
+    p._parse_vm_requirements()
+  File "/root/onedrs-native-host-context-20261113/src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py", line 564, in _parse_vm_requirements
+    sys_storage, img_storage = self._build_vm_storage(vm, vm_req)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+AssertionError: storage touched
+
+======================================================================
+FAIL: test_state_refusal_precedes_storage_interpretation (original_state_guard_reproduction.NativeStateAdmissionTests.test_state_refusal_precedes_storage_interpretation) (pair=(8, 18))
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-native-state-admission-20261113/src/schedm_mad/remotes/one_drs/tests/test_native_state_admission.py", line 53, in test_state_refusal_precedes_storage_interpretation
+    p._parse_vm_requirements()
+  File "/root/onedrs-native-host-context-20261113/src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py", line 564, in _parse_vm_requirements
+    sys_storage, img_storage = self._build_vm_storage(vm, vm_req)
+                               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/unittest/mock.py", line 1139, in __call__
+    return self._mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/unittest/mock.py", line 1143, in _mock_call
+    return self._execute_mock_call(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.12/unittest/mock.py", line 1198, in _execute_mock_call
+    raise effect
+AssertionError: storage touched
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.016s
+
+FAILED (failures=52)
+BASELINE_FAILURE_EXPECTED True tests 13 failures 52 errors 0
