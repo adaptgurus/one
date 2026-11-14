@@ -30,6 +30,9 @@
 #include <functional>
 #include <mutex>
 #include <condition_variable>
+#include <atomic>
+#include <stdexcept>
+#include <sys/eventfd.h>
 
 #include "Message.h"
 #include "StringBuffer.h"
@@ -51,19 +54,43 @@ public:
      *  @param fd file descriptor for the stream
      *  @param error_cbk function to execute on error (parse error or UNDEFINED)
      */
-    StreamManager(int __fd, callback_t error_cbk):_fd(__fd)
+    StreamManager(int __fd, callback_t error_cbk):_fd(__fd),
+        _stop_fd(eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK))
     {
+        if (_stop_fd < 0) throw std::runtime_error("Cannot create stream cancellation event");
         register_action(MSG::msg_enum::UNDEFINED, error_cbk);
     };
 
     StreamManager(callback_t error_cbk):StreamManager(-1, error_cbk) {};
 
-    StreamManager():StreamManager(-1, [](std::unique_ptr<MSG> m) {}) {};
+    StreamManager():StreamManager(-1, [](std::unique_ptr<MSG>) {}) {};
 
     virtual ~StreamManager()
     {
-        close(_fd);
+        request_stop();
+        drain();
+        if (_fd >= 0) close(_fd);
+        close(_stop_fd);
     };
+
+    // Terminal, idempotent stop. The caller owns/join()s its reader thread.
+    void request_stop()
+    {
+        _stopping.store(true);
+        uint64_t wake = 1;
+        (void) ::write(_stop_fd, &wake, sizeof(wake));
+        _cond.notify_all();
+    }
+
+    // Borrowed descriptor: latched readable after terminal stop. Callers must
+    // not read/close it; it wakes every in-flight pipe or accepted-socket poll.
+    int cancellation_fd() const { return _stop_fd; }
+
+    void drain()
+    {
+        std::unique_lock<std::mutex> lock(_mutex);
+        _cond.wait(lock, [this] { return _active == 0; });
+    }
 
     /**
      * Associate a function to be executed when a message of the given type is
@@ -87,7 +114,10 @@ public:
      */
     void fd(int __fd)
     {
+        // Called only before the reader starts or by that reader at EOF.
+        if (_fd >= 0 && _fd != __fd) close(_fd);
         _fd = __fd;
+        buffer.reset();
     }
 
     /**
@@ -103,11 +133,24 @@ protected:
      */
     virtual int read_line(std::string& line)
     {
-        return buffer.read_line(_fd, line);
+        return buffer.read_line(_fd, line, _stop_fd);
     }
 
 private:
     int _fd;
+    const int _stop_fd;
+    std::atomic<bool> _stopping{false};
+    int _active = 0;
+
+    void finished_action()
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        ++_concurrency;
+        --_active;
+        // This must be the worker's final member access before releasing the
+        // mutex. drain() may permit destruction immediately after it sees 0.
+        _cond.notify_all();
+    }
 
     std::mutex _mutex;
 
@@ -153,39 +196,35 @@ void StreamManager<MSG>
     }
 
     const auto action = it->second;
-    MSG * mptr = msg.release();
 
     if (thr)
     {
         std::unique_lock<std::mutex> lock(_mutex);
-
-        while( _concurrency <= 0 )
-        {
-            _cond.wait(lock);
-        }
-
+        _cond.wait(lock, [this] { return _stopping.load() || _concurrency > 0; });
+        if (_stopping.load()) return;
         --_concurrency;
-
+        ++_active;
+        MSG * mptr = msg.release();
         lock.unlock();
-
-        std::thread action_thread([this, action, mptr]
+        try
         {
-            action(std::unique_ptr<MSG>{mptr});
-
-            std::unique_lock<std::mutex> lock(_mutex);
-
-            _concurrency++;
-
-            lock.unlock();
-
-            _cond.notify_one();
-        });
-
-        action_thread.detach();
+            std::thread([this, action, mptr]
+            {
+                try { action(std::unique_ptr<MSG>{mptr}); }
+                catch (...) { finished_action(); throw; }
+                finished_action();
+            }).detach();
+        }
+        catch (...)
+        {
+            delete mptr;
+            finished_action();
+            throw;
+        }
     }
-    else
+    else if (!_stopping.load())
     {
-        action(std::unique_ptr<MSG> {mptr});
+        action(std::move(msg));
     }
 }
 
@@ -197,9 +236,12 @@ int StreamManager<MSG>
 ::action_loop(int concurrency)
 {
     bool threaded = concurrency > 0;
-    _concurrency  = concurrency;
+    {
+        std::lock_guard<std::mutex> lock(_mutex);
+        _concurrency = concurrency - _active;
+    }
 
-    while (true)
+    while (!_stopping.load())
     {
         std::string line;
 

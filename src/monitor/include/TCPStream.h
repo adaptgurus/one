@@ -69,6 +69,7 @@ public:
     void stop()
     {
         terminate = true;
+        this->request_stop();
 
         shutdown(_socket, SHUT_RDWR);
 
@@ -77,7 +78,9 @@ public:
             th.join();
         }
 
-        close(_socket);
+        this->drain();
+        this->fd(-1); // StreamManager owns the socket descriptor.
+        _socket = -1;
     }
 
 protected:
@@ -240,7 +243,8 @@ int TCPStream<MSG>
 
     line.clear();
 
-    int sd = accept(_socket, (struct sockaddr *) &addr, &addr_size);
+    int sd = accept4(_socket, (struct sockaddr *) &addr, &addr_size,
+                     SOCK_CLOEXEC | SOCK_NONBLOCK);
 
     if ( sd == -1 )
     {
@@ -249,14 +253,23 @@ int TCPStream<MSG>
 
     while (1)
     {
+        pollfd fds[2] = {{sd, POLLIN, 0}, {this->cancellation_fd(), POLLIN, 0}};
+        int ready;
+        do { ready = poll(fds, 2, -1); } while (ready < 0 && errno == EINTR);
+        if (terminate || ready <= 0 || fds[1].revents != 0 ||
+            (fds[0].revents & (POLLERR | POLLNVAL)))
+        {
+            close(sd);
+            line.clear();
+            return -1;
+        }
         rc = recv(sd, buffer, BUFFER_SIZE, 0);
-
+        if (rc < 0 && (errno == EINTR || errno == EAGAIN || errno == EWOULDBLOCK)) continue;
         if (rc <= 0)
         {
             close(sd);
             break;
         }
-
         line.append(buffer, rc);
     }
 
