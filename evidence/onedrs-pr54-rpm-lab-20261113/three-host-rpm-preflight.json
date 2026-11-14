@@ -1,0 +1,77 @@
+{
+  "dr1": {
+    "at": "2026-11-13T03:44:28.064015+00:00",
+    "scope": "READ_ONLY_RPM_DEPENDENCY_AND_CONFLICT_DRY_RUN_NO_NODEPS_NO_INSTALL",
+    "dependency_conflict_preflight_exit": 0,
+    "dry_run_output": "Verifying...                          ########################################\nPreparing...                          ########################################\nwarning: /var/lib/layersentry/onedrs-pr54-rpm-preflight-20261113/candidate-LAB-ONLY.rpm: Header V4 RSA/SHA256 Signature, key ID e21212bf: NOKEY\n",
+    "nonconfiguration_original_package_verification_exit": 1,
+    "nonconfiguration_verification_output": "S.5....T.    /var/lib/one/remotes/vmm/kvm/deploy\n",
+    "before": {
+      "pid": "3319",
+      "core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "service": "active"
+    },
+    "after": {
+      "pid": "3319",
+      "core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "service": "active"
+    },
+    "live_core_package_and_service_unchanged": true,
+    "production_signing_trust_added": false,
+    "candidate_installed": false
+  },
+  "dr2": {
+    "at": "2026-11-13T03:44:28.250360+00:00",
+    "scope": "READ_ONLY_RPM_DEPENDENCY_AND_CONFLICT_DRY_RUN_NO_NODEPS_NO_INSTALL",
+    "dependency_conflict_preflight_exit": 0,
+    "dry_run_output": "Verifying...                          ########################################\nPreparing...                          ########################################\nwarning: /var/lib/layersentry/onedrs-pr54-rpm-preflight-20261113/candidate-LAB-ONLY.rpm: Header V4 RSA/SHA256 Signature, key ID e21212bf: NOKEY\n",
+    "nonconfiguration_original_package_verification_exit": 0,
+    "nonconfiguration_verification_output": "",
+    "before": {
+      "pid": "2520",
+      "core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "service": "active"
+    },
+    "after": {
+      "pid": "2520",
+      "core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "service": "active"
+    },
+    "live_core_package_and_service_unchanged": true,
+    "production_signing_trust_added": false,
+    "candidate_installed": false
+  },
+  "dr3": {
+    "at": "2026-11-13T03:44:28.539567+00:00",
+    "scope": "READ_ONLY_RPM_DEPENDENCY_AND_CONFLICT_DRY_RUN_NO_NODEPS_NO_INSTALL",
+    "dependency_conflict_preflight_exit": 0,
+    "dry_run_output": "Verifying...                          ########################################\nPreparing...                          ########################################\nwarning: /var/lib/layersentry/onedrs-pr54-rpm-preflight-20261113/candidate-LAB-ONLY.rpm: Header V4 RSA/SHA256 Signature, key ID e21212bf: NOKEY\n",
+    "nonconfiguration_original_package_verification_exit": 0,
+    "nonconfiguration_verification_output": "",
+    "before": {
+      "pid": "2820",
+      "core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "service": "active"
+    },
+    "after": {
+      "pid": "2820",
+      "core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "package": "opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64",
+      "service": "active"
+    },
+    "live_core_package_and_service_unchanged": true,
+    "production_signing_trust_added": false,
+    "candidate_installed": false
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "at": "2026-11-13T01:46:54.531644+00:00",
+  "failure": "native PLACE reschedule sees two eligible hosts while full cluster has three monitored hosts",
+  "error": "only 2 healthy hosts, minimum is 3",
+  "vmid": 40,
+  "no_migration_executed": true,
+  "original_source_retained": true,
+  "only_test_VM_resched_flag_cleared": true,
+  "native_host_inventory": [
+    {
+      "ID": "2",
+      "NAME": "172.17.60.82",
+      "STATE": "2",
+      "CLUSTER_ID": "0"
+    },
+    {
+      "ID": "1",
+      "NAME": "172.17.60.81",
+      "STATE": "2",
+      "CLUSTER_ID": "0"
+    },
+    {
+      "ID": "0",
+      "NAME": "172.17.60.80",
+      "STATE": "2",
+      "CLUSTER_ID": "0"
+    }
+  ]
+}

@@ -1,0 +1,98 @@
+{
+  "alerts": [
+    "LAST_NATIVE_OPTIMIZATION_FAILED",
+    "NONSHARED_SYSTEM_VM_RECOVERY_NOT_QUALIFIED",
+    "DR_HOST_RPM_SIGNATURE_MISSING_OR_UNKNOWN",
+    "ONEDRS_RELEASE_UNSIGNED",
+    "DR4_NOT_QUALIFIED_IN_CLUSTER"
+  ],
+  "checked_at_utc": "2026-11-13T01:45:00.117746+00:00",
+  "checks": {
+    "all_four_agent_sessions": true,
+    "all_four_durable_healthy": true,
+    "controller_service_active": true,
+    "deployed_onedrs_signed": false,
+    "dr1_dr3_rpm_signatures_present": false,
+    "dr4_registered": false,
+    "dr_registered_host_count": 3,
+    "dr_scheduler_query_ok": true,
+    "dr_three_hosts_monitored": true,
+    "drs_manual_mode": true,
+    "durable_sql_query_ok": true,
+    "nonshared_system_running_vm_count": 2,
+    "nonshared_system_vm_count": 13,
+    "nonshared_vm_inventory_query_ok": true,
+    "one_host_failover_enabled": true,
+    "rack_failover_enabled": true,
+    "resilience_enabled": true
+  },
+  "dr_host_rpm_signatures": {
+    "dr1": {
+      "header_signature_present": false,
+      "rpm_query_ok": true
+    },
+    "dr2": {
+      "header_signature_present": false,
+      "rpm_query_ok": true
+    },
+    "dr3": {
+      "header_signature_present": false,
+      "rpm_query_ok": true
+    }
+  },
+  "host_agents": {
+    "dr1": {
+      "controller_tcp_connected": true,
+      "durable_healthy_fresh": true,
+      "health_age_sec": 2,
+      "health_state": "HEALTHY",
+      "heartbeat_age_sec": 2
+    },
+    "dr2": {
+      "controller_tcp_connected": true,
+      "durable_healthy_fresh": true,
+      "health_age_sec": 4,
+      "health_state": "HEALTHY",
+      "heartbeat_age_sec": 4
+    },
+    "dr3": {
+      "controller_tcp_connected": true,
+      "durable_healthy_fresh": true,
+      "health_age_sec": 11,
+      "health_state": "HEALTHY",
+      "heartbeat_age_sec": 11
+    },
+    "dr4": {
+      "controller_tcp_connected": true,
+      "durable_healthy_fresh": true,
+      "health_age_sec": 6,
+      "health_state": "HEALTHY",
+      "heartbeat_age_sec": 6
+    }
+  },
+  "last_optimizer_error_excerpt": "resilience admission failed: VM 11 has no eligible surviving host",
+  "mode": "read_only",
+  "nonshared_ds_ids": [
+    100,
+    102,
+    107,
+    108
+  ],
+  "nonshared_vm_ids": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    7,
+    11,
+    31,
+    32,
+    33,
+    34,
+    35
+  ],
+  "release_gate": "NO_GO",
+  "release_gate_reason": "Native plan/failover, host4, signed rollout and soak still require acceptance"
+}

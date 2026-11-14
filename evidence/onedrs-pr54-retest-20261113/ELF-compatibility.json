@@ -1,0 +1,17 @@
+{
+  "baseline": {
+    "class": "ELF64",
+    "machine": "Advanced Micro Devices X86-64",
+    "type": "DYN (Shared object file)",
+    "gnu_relro": true,
+    "bind_now": true
+  },
+  "candidate": {
+    "class": "ELF64",
+    "machine": "Advanced Micro Devices X86-64",
+    "type": "DYN (Shared object file)",
+    "gnu_relro": true,
+    "bind_now": true
+  },
+  "same_target_and_hardening": true
+}

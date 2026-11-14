@@ -1,0 +1,8 @@
+{
+  "path": "/var/lib/one/remotes/vmm/kvm/deploy",
+  "original_sha256": "df93b32c041f367c43365a38f863041ecf5ca292b37fbf78136b87e89e759bd6",
+  "DR1_current_sha256": "3cc0513112d22968859fb822fc4605347c8067fc7a5b169933775ae340584e9b",
+  "source_read_only": true,
+  "candidate_payload_contains": "original r8 deploy driver",
+  "live_driver_changed_by_this_run": false
+}

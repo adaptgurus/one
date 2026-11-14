@@ -1,0 +1,48 @@
+{
+  "at": "2026-11-13T03:48:07.719628+00:00",
+  "native_VM_count": 26,
+  "original_VM_records_equal_to_prior_retest": false,
+  "dedicated_service_account": [
+    {
+      "id": "10",
+      "name": "ls-onedrs-lab-svc",
+      "gid": "107",
+      "enabled": "1"
+    }
+  ],
+  "native_hosts": [
+    {
+      "id": "2",
+      "name": "172.17.60.82",
+      "state": "2"
+    },
+    {
+      "id": "1",
+      "name": "172.17.60.81",
+      "state": "2"
+    },
+    {
+      "id": "0",
+      "name": "172.17.60.80",
+      "state": "2"
+    }
+  ],
+  "DR4_manifest_present": false,
+  "live_runtime_changed_by_package_qualification": false,
+  "refreshed_at": "2026-11-13T03:48:22.316732+00:00",
+  "original_25_records_individually_preserved": true,
+  "new_records_since_prior_retest": [
+    {
+      "ID": "41",
+      "NAME": "lsrv2-5bc659ff-isolated-recovery-20261113a",
+      "UID": "7",
+      "STATE": "3",
+      "LCM_STATE": "3",
+      "host": "0",
+      "ds": "102",
+      "seq": "0"
+    }
+  ],
+  "changed_or_missing_original_records": [],
+  "no_new_VM_created_by_this_package_test": true
+}

@@ -1,0 +1,14 @@
+{
+  "implementation_commit": "3165fdb1603787a2ac4d9655a17999e0c189db47",
+  "native_initial_placement": "PASS",
+  "native_reschedule": "NOT_COMPLETED_NATIVE_CONTEXT_BUG",
+  "cpp_direct_cases_pass": 10,
+  "cpp_exhaustive_subset_cases_pass": 4032,
+  "native_python_tests_pass": 41,
+  "modified_native_translation_unit_compiled": true,
+  "full_core_link_or_RPM_build": false,
+  "new_native_core_deployed": false,
+  "original_VM_count_preserved": 25,
+  "disposable_cleanup": "PASS",
+  "DR4_reviewed_enrollment_executed": false
+}

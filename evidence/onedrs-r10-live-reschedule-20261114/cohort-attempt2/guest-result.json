@@ -1,0 +1,19 @@
+{
+  "scope": "ONE_SERVICE_OWNED_NATIVE_SCHEDULER_VM",
+  "started_at": "2026-11-14T04:40:54.232534+00:00",
+  "manual_deploy_calls": 0,
+  "manual_migrate_calls": 0,
+  "DR4_touched": false,
+  "original_VM_count": 26,
+  "result": "FAIL",
+  "error": "native scheduler deadline: {\"state\": \"3\", \"lcm\": \"36\", \"host\": \"1\", \"ds\": \"118\", \"seq\": \"0\", \"uuid\": \"\", \"resched\": \"0\"}; None",
+  "owned_VM_DONE": true,
+  "owned_serial_logs_retained": "/var/log/libvirt/qemu/ls-onedrs-r10-0423d3b0ad6e-serial.log",
+  "owned_NFS_diagnostic_root_retained": "/srv/layersentry-native/dr/files/ls-onedrs-r10-0423d3b0ad6e",
+  "native_objects_and_bind_mounts_cleaned": true,
+  "original_VM_records_preserved": true,
+  "original_HA_policy_preserved": true,
+  "foreign_new_VM_ids": [],
+  "cleanup_errors": [],
+  "ended_at": "2026-11-14T04:42:58.139528+00:00"
+}

@@ -1,0 +1,6 @@
+In file included from include/Nebula.h:20,
+                 from src/schedm/SchedulerManagerDriver.cc:24:
+include/NebulaService.h: In static member function ‘static std::string NebulaService::version()’:
+include/NebulaService.h:142:23: error: ‘GITVERSION’ was not declared in this scope
+  142 |         os << " (" << GITVERSION << ")";
+      |                       ^~~~~~~~~~

@@ -1,0 +1,40 @@
+Sat Nov 14 10:22:43 2026 [Z0][VM][I]: New state is PENDING
+Sat Nov 14 10:22:58 2026 [Z0][VMM][I]: Placing VM in host '1' using system datastore 121
+Sat Nov 14 10:22:58 2026 [Z0][VM][I]: New state is ACTIVE
+Sat Nov 14 10:22:58 2026 [Z0][VM][I]: New LCM state is PROLOG
+Sat Nov 14 10:22:59 2026 [Z0][VM][I]: New LCM state is BOOT
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: Generating deployment file: /var/lib/one/vms/46/deployment.0
+Sat Nov 14 10:22:59 2026 [Z0][VM][I]: Virtual Machine has no context
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: Successfully execute network driver operation: pre.
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: ExitCode: 0
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: /bin/mkdir -p.
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: ExitCode: 0
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: /bin/cat - >/var/lib/one//datastores/121/46/vm.xml.
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: ExitCode: 0
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: /bin/cat - >/var/lib/one//datastores/121/46/ds.xml.
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: ExitCode: 0
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: deploy.
+Sat Nov 14 10:22:59 2026 [Z0][VMM][I]: Successfully execute network driver operation: post.
+Sat Nov 14 10:22:59 2026 [Z0][VM][I]: New LCM state is RUNNING
+Sat Nov 14 10:23:18 2026 [Z0][VMM][I]: Placing VM in host '0' using system datastore 121
+Sat Nov 14 10:23:18 2026 [Z0][VM][I]: New LCM state is SAVE_MIGRATE
+Sat Nov 14 10:23:19 2026 [Z0][VMM][I]: ExitCode: 0
+Sat Nov 14 10:23:19 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: save.
+Sat Nov 14 10:23:19 2026 [Z0][VMM][I]: Successfully execute network driver operation: clean.
+Sat Nov 14 10:23:19 2026 [Z0][VM][I]: New LCM state is PROLOG_MIGRATE
+Sat Nov 14 10:23:19 2026 [Z0][VM][I]: New LCM state is BOOT_MIGRATE
+Sat Nov 14 10:23:19 2026 [Z0][VM][I]: Virtual Machine has no context
+Sat Nov 14 10:23:19 2026 [Z0][VMM][I]: Successfully execute network driver operation: pre.
+Sat Nov 14 10:23:20 2026 [Z0][VMM][I]: error: failed to get domain 'one-46'
+Sat Nov 14 10:23:20 2026 [Z0][VMM][I]: ExitCode: 0
+Sat Nov 14 10:23:20 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: restore.
+Sat Nov 14 10:23:20 2026 [Z0][VMM][I]: Successfully execute network driver operation: post.
+Sat Nov 14 10:23:20 2026 [Z0][VM][I]: New LCM state is RUNNING
+Sat Nov 14 10:23:23 2026 [Z0][VMM][I]: Ignoring VM state update
+Sat Nov 14 10:23:28 2026 [Z0][VM][I]: New LCM state is SHUTDOWN
+Sat Nov 14 10:23:29 2026 [Z0][VMM][I]: ExitCode: 0
+Sat Nov 14 10:23:29 2026 [Z0][VMM][I]: Successfully execute virtualization driver operation: cancel.
+Sat Nov 14 10:23:29 2026 [Z0][VMM][I]: Successfully execute network driver operation: clean.
+Sat Nov 14 10:23:29 2026 [Z0][VM][I]: New LCM state is EPILOG
+Sat Nov 14 10:23:29 2026 [Z0][VM][I]: New state is DONE
+Sat Nov 14 10:23:29 2026 [Z0][VM][I]: New LCM state is LCM_INIT

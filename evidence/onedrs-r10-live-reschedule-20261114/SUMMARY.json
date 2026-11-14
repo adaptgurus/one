@@ -1,0 +1,20 @@
+{
+  "checkpoint": "2026-11-14T05:00:16Z",
+  "approved_DR3_follower_canary": "PASS",
+  "three_host_R10_runtime_and_exact_process_identity": "PASS",
+  "native_service_owned_VM46_placement_and_reschedule": "PASS",
+  "guest_data_hash_boot_identity_single_instance": "PASS",
+  "manual_deploy_calls": 0,
+  "manual_migrate_calls": 0,
+  "SELinux": "Enforcing_unchanged",
+  "original_VM_records_preserved": 26,
+  "third_cohort_automatic_rollback_deadline": "FAIL_PRESERVED",
+  "installed_and_running_final_core": "ORIGINAL_R8_ALL_THREE",
+  "later_Raft_synchronization": "OBSERVED_ALL_THREE_EQUAL",
+  "zone_and_host_objects": "DISABLED_PENDING_EXACT_RESTORATION_REVIEW",
+  "ancillary_services_and_temporary_lab_key_cleanup": "PENDING_EXACT_RESTORATION_REVIEW",
+  "post_timeout_recovery_executed": false,
+  "PR55_packaged": false,
+  "DR4_registered": false,
+  "production_decision": "NO_GO"
+}

@@ -1,0 +1,52 @@
+warning: line 118: It's not recommended to have unversioned Obsoletes: Obsoletes: opennebula-addon-markets
+warning: line 119: It's not recommended to have unversioned Obsoletes: Obsoletes: opennebula-ozones
+warning: line 120: It's not recommended to have unversioned Obsoletes: Obsoletes: opennebula-provision
+warning: line 121: It's not recommended to have unversioned Obsoletes: Obsoletes: opennebula-provision-data
+setting SOURCE_DATE_EPOCH=1794528000
+Executing(%prep): /bin/sh -e /var/tmp/rpm-tmp.Rlqcpb
++ umask 022
++ cd /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILD
++ RPM_EC=0
+++ jobs -p
++ exit 0
+Executing(%build): /bin/sh -e /var/tmp/rpm-tmp.g2Ix6a
++ umask 022
++ cd /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILD
++ RPM_EC=0
+++ jobs -p
++ exit 0
+Executing(%install): /bin/sh -e /var/tmp/rpm-tmp.JRD5YN
++ umask 022
++ cd /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILD
++ '[' /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64 '!=' / ']'
++ rm -rf /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64
+++ dirname /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64
++ mkdir -p /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT
++ mkdir /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64
++ mkdir -p /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64
++ cp -a /root/onedrs-pr54-runtime-package-20261113/package-payload/. /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64/
++ /usr/lib/rpm/check-buildroot
+Processing files: opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64
+warning: Explicit %attr() mode not applicable to symlink: /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64/usr/lib/.build-id/1e/008f08db25f30f9bbf627f18e4ef16136d0117
+warning: Explicit %attr() mode not applicable to symlink: /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64/usr/lib/.build-id/9b/7f29ed27a7904565ed0f65249da454bbf6fc8d
+warning: Explicit %attr() mode not applicable to symlink: /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64/usr/lib/.build-id/36/9e445401646f8b94927bd7cf17939b0380d829
+warning: Explicit %attr() mode not applicable to symlink: /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64/usr/lib/.build-id/5b/9e213c0584a3c45059ef63ce7bc2ebe7e7af3e
+warning: Explicit %attr() mode not applicable to symlink: /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64/usr/lib/.build-id/cd/324257eaf54c4f9e2b761310937ece665497a1
+Provides: config(opennebula) = 7.4.1-9.ls.onedrs.pr54.3165fdb.el9 opennebula = 7.4.1-9.ls.onedrs.pr54.3165fdb.el9 opennebula(x86-64) = 7.4.1-9.ls.onedrs.pr54.3165fdb.el9 opennebula-server = 7.4.1
+Requires(interp): /bin/sh /bin/sh /bin/sh /bin/sh /bin/sh /bin/sh
+Requires(rpmlib): rpmlib(CompressedFileNames) <= 3.0.4-1 rpmlib(FileDigests) <= 4.6.0-1 rpmlib(PayloadFilesHavePrefix) <= 4.0-1
+Requires(pre): /bin/sh
+Requires(post): /bin/sh
+Requires(preun): /bin/sh
+Requires(postun): /bin/sh
+Requires(posttrans): /bin/sh
+Obsoletes: onescape < 5.13.80 opennebula-addon-markets opennebula-ozones opennebula-provision opennebula-provision-data opennebula-server < 5.13.80
+Checking for unpackaged file(s): /usr/lib/rpm/check-files /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64
+Wrote: /root/onedrs-pr54-runtime-package-20261113/rpmbuild/RPMS/x86_64/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64.rpm
+Executing(%clean): /bin/sh -e /var/tmp/rpm-tmp.JaYcjH
++ umask 022
++ cd /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILD
++ /usr/bin/rm -rf /root/onedrs-pr54-runtime-package-20261113/rpmbuild/BUILDROOT/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64
++ RPM_EC=0
+++ jobs -p
++ exit 0

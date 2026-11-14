@@ -1,0 +1,23 @@
+{
+  "run": "ls-onedrs-r10-0423d3b0ad6e",
+  "root": "/srv/layersentry-native/dr/files/ls-onedrs-r10-0423d3b0ad6e",
+  "ds": 118,
+  "template": 9,
+  "vm": 43,
+  "acls": [
+    {
+      "id": 68,
+      "rule": "#10 DATASTORE/#118 USE #0"
+    },
+    {
+      "id": 69,
+      "rule": "#10 TEMPLATE/#9 USE #0"
+    }
+  ],
+  "mounts": [
+    0,
+    1,
+    2
+  ],
+  "serial_path": "/var/log/libvirt/qemu/ls-onedrs-r10-0423d3b0ad6e-serial.log"
+}

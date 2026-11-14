@@ -1,0 +1,93 @@
+{
+  "at": "2026-11-13T04:34:27.913486+00:00",
+  "scope": "LAB_SIGNATURE_PRIVATE_RPMROOT_FILE_AND_SCRIPTLET_TEST",
+  "live_root_or_release_trust_modified": false,
+  "systemd_service_calls": "recorded-only stub inside private chroot",
+  "dependency_resolution": "NOT_TESTED_transactions_use_nodeps_in_private_root",
+  "full_service_start_or_HA": "NOT_TESTED",
+  "steps": [
+    {
+      "test": "lab-key-create",
+      "exit": 0
+    },
+    {
+      "test": "lab-key-metadata",
+      "exit": 0
+    },
+    {
+      "test": "lab-rpm-sign",
+      "exit": 0
+    },
+    {
+      "test": "lab-original-rollback-rpm-sign",
+      "exit": 0
+    },
+    {
+      "test": "private-rpmdb-init",
+      "exit": 0
+    },
+    {
+      "test": "untrusted-rpmdb-init",
+      "exit": 0
+    },
+    {
+      "test": "unknown-lab-key-rejected",
+      "exit": 1
+    },
+    {
+      "test": "private-only-lab-key-import",
+      "exit": 0
+    },
+    {
+      "test": "trusted-lab-signature-and-digests",
+      "exit": 0
+    },
+    {
+      "test": "tampered-payload-rejected",
+      "exit": 1
+    },
+    {
+      "test": "original-rpm-install-scriptlets",
+      "exit": 0
+    },
+    {
+      "test": "candidate-upgrade-dry-run",
+      "exit": 0
+    },
+    {
+      "test": "candidate-rpm-upgrade-scriptlets",
+      "exit": 0
+    },
+    {
+      "test": "original-rpm-downgrade-scriptlets",
+      "exit": 0
+    }
+  ],
+  "lab_signer_fingerprint": "1CBC92283A98C598788048398BF04EAFAA428403",
+  "signed_original_rollback_rpm_sha256": "f84b8c8936343cb37d8ea39728113182645a8fdb92a73fb7d275d47d3ea51b18",
+  "signed_original_rollback_rpm": "/root/onedrs-pr54-security-integrated-r10-20261113/lab-signing/original-r8-rollback-LAB-ONLY.rpm",
+  "explicit_custodied_deploy_restore_required_on_r8_rollback": true,
+  "result": "PASS_BOUNDED_PACKAGE_SIGNATURE_AND_UPGRADE_DOWNGRADE",
+  "signed_rpm_sha256": "30d4cd97930281d699ad3aa45e434f1b87d43ddd23cb249a6c656b7b4088f7ed",
+  "signed_rpm": "/root/onedrs-pr54-security-integrated-r10-20261113/lab-signing/opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_64.rpm",
+  "signature_scope": "EPHEMERAL_LAB_KEY_NOT_PRODUCTION_TRUST",
+  "unknown_signer_rejected": true,
+  "tampered_payload_rejected": true,
+  "original_install_candidate_upgrade_original_downgrade_pass": true,
+  "exact_binary_readbacks_pass": true,
+  "modified_config_credentials_custom_fence_VM_state_and_logs_preserved": true,
+  "recorded_systemctl_calls": [
+    "daemon-reload",
+    "stop opennebula",
+    "stop opennebula-hem",
+    "stop opennebula-ssh-agent",
+    "daemon-reload",
+    "stop opennebula",
+    "stop opennebula-hem",
+    "stop opennebula-ssh-agent",
+    "daemon-reload"
+  ],
+  "original_lifecycle_scriptlets_executed_in_private_root": true,
+  "real_systemctl_calls": 0,
+  "ephemeral_lab_secret_key_removed": true
+}

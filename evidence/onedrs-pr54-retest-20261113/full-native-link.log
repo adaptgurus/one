@@ -1,0 +1,10 @@
+../../onedrs-rpm-build-final-e39bf32-r8/rpmbuild/BUILD/opennebula-7.4.1/template_syntax.hh:86: warning: type ‘union YYSTYPE’ violates the C++ One Definition Rule [-Wodr]
+../../onedrs-rpm-build-final-e39bf32-r8/rpmbuild/BUILD/opennebula-7.4.1/vm_var_syntax.hh:90: note: a different type is defined in another translation unit
+../../onedrs-rpm-build-final-e39bf32-r8/rpmbuild/BUILD/opennebula-7.4.1/template_syntax.y:76: note: the first difference of corresponding definitions is field ‘val_attr’
+../../onedrs-rpm-build-final-e39bf32-r8/rpmbuild/BUILD/opennebula-7.4.1/vm_var_syntax.y:434: note: a field with different name is defined in another translation unit
+../../onedrs-rpm-build-final-e39bf32-r8/rpmbuild/BUILD/opennebula-7.4.1/template_syntax.cc:391: warning: type ‘union yyalloc’ violates the C++ One Definition Rule [-Wodr]
+../../onedrs-rpm-build-final-e39bf32-r8/rpmbuild/BUILD/opennebula-7.4.1/vm_var_syntax.cc:750: note: a different type is defined in another translation unit
+../../onedrs-rpm-build-final-e39bf32-r8/rpmbuild/BUILD/opennebula-7.4.1/template_syntax.cc:394: note: the first difference of corresponding definitions is field ‘yyvs_alloc’
+../../onedrs-rpm-build-final-e39bf32-r8/rpmbuild/BUILD/opennebula-7.4.1/vm_var_syntax.cc:753: note: a field of same name but different type is defined in another translation unit
+../../onedrs-rpm-build-final-e39bf32-r8/rpmbuild/BUILD/opennebula-7.4.1/template_syntax.cc:391: note: type ‘union YYSTYPE’ itself violates the C++ One Definition Rule
+lto-wrapper: warning: using serial compilation of 108 LTRANS jobs

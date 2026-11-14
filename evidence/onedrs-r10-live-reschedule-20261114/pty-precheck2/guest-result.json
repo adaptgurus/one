@@ -1,0 +1,44 @@
+{
+  "scope": "ONE_SERVICE_OWNED_NATIVE_SCHEDULER_VM",
+  "started_at": "2026-11-14T04:49:55.118988+00:00",
+  "manual_deploy_calls": 0,
+  "manual_migrate_calls": 0,
+  "DR4_touched": false,
+  "original_VM_count": 26,
+  "initial_placement": {
+    "native": {
+      "state": "3",
+      "lcm": "3",
+      "host": "1",
+      "ds": "120",
+      "seq": "0",
+      "uuid": "0e8057ea-51b9-4611-937f-01ad518b1503",
+      "resched": "0"
+    },
+    "guest": {
+      "boot_count": 1,
+      "boot_id": "b463d09b-8d73-415c-bc83-28f75150df4e\n",
+      "heartbeat": 3,
+      "initialized": true,
+      "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+      "state": "READY",
+      "uptime_ms": 4001
+    },
+    "active_instances": {
+      "0": false,
+      "1": true,
+      "2": false
+    },
+    "seconds_to_guest_witness": 13.234
+  },
+  "result": "PASS_NATIVE_INITIAL_PLACEMENT_FIXTURE_ONLY",
+  "owned_VM_DONE": true,
+  "serial_observation": "native PTY read only; no persistent serial log on hypervisors",
+  "owned_NFS_diagnostic_root_retained": "/srv/layersentry-native/dr/files/ls-onedrs-r10-4da89bda91c5",
+  "native_objects_and_bind_mounts_cleaned": true,
+  "original_VM_records_preserved": true,
+  "original_HA_policy_preserved": true,
+  "foreign_new_VM_ids": [],
+  "cleanup_errors": [],
+  "ended_at": "2026-11-14T04:50:11.973782+00:00"
+}

@@ -1,0 +1,11 @@
+{
+  "recorded_at": "2026-11-14T04:20:30.497187+00:00",
+  "remote_call": "3ff5f6c4-9a2c-4108-b281-b8615f6d9b09",
+  "process_pid": 180033,
+  "process_exit": 0,
+  "operation_executed_once_by_review": true,
+  "original_call_reissued": false,
+  "execution_date_utc": "2026-11-14T04:16:20.664745+00:00",
+  "canary_result_sha256": "61755a2954a1fa8e2a8e2c210907b8ce0bd24dbd28358286fcd486a6046666d0",
+  "result": "PASS_NATIVE_FOLLOWER_UPGRADE_AND_ROLLBACK"
+}

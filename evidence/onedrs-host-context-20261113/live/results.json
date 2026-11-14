@@ -1,0 +1,66 @@
+[
+  {
+    "result": "PASS",
+    "native": {
+      "id": 40,
+      "state": 3,
+      "lcm": 3,
+      "host": "1",
+      "ds": "116",
+      "seq": "0",
+      "deploy_id": "523a084b-276b-4c9f-a153-34e21c33192c"
+    },
+    "active_instances": {
+      "0": false,
+      "1": true,
+      "2": false
+    },
+    "guest": {
+      "boot_count": 1,
+      "boot_id": "14996a01-4385-4dbd-a3e1-fa4ba519ad53\n",
+      "heartbeat": 23,
+      "initialized": true,
+      "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+      "state": "READY",
+      "uptime_ms": 44017
+    },
+    "history": [
+      {
+        "SEQ": "0",
+        "HID": "1",
+        "DS_ID": "116",
+        "PLAN_ID": "-1",
+        "ACTION_ID": "0",
+        "UID": "-1",
+        "GID": "-1",
+        "REQUEST_ID": "-1",
+        "ACTION": "0"
+      }
+    ],
+    "manual_deploy_calls": 0,
+    "cluster_profile_unchanged": true,
+    "test": "native_onedrs_initial_placement",
+    "identity": "ls-onedrs-lab-svc",
+    "uid": 10,
+    "at": "2026-11-13T01:45:28.758660+00:00"
+  },
+  {
+    "result": "NOT_COMPLETED_WITHIN_OBSERVATION",
+    "native_after": {
+      "id": 40,
+      "state": 3,
+      "lcm": 3,
+      "host": "1",
+      "ds": "116",
+      "seq": "0",
+      "deploy_id": "523a084b-276b-4c9f-a153-34e21c33192c"
+    },
+    "resched_flag": "1",
+    "sched_message": null,
+    "submitted_once": true,
+    "test": "native_onedrs_reschedule",
+    "identity": "ls-onedrs-lab-svc",
+    "uid": 10,
+    "at": "2026-11-13T01:46:50.518484+00:00"
+  }
+]

@@ -1,0 +1,64 @@
+{
+  "run": "ls-onedrs-sched-6f909d40d06c",
+  "root": "/srv/layersentry-native/dr/files/ls-onedrs-sched-6f909d40d06c",
+  "uid": 10,
+  "gid": 107,
+  "hosts": {
+    "0": "172.17.60.80",
+    "1": "172.17.60.81",
+    "2": "172.17.60.82"
+  },
+  "temporary_acls": [
+    {
+      "id": 64,
+      "rule": "#10 DATASTORE/#116 USE #0"
+    },
+    {
+      "id": 65,
+      "rule": "#10 TEMPLATE/#7 USE #0"
+    }
+  ],
+  "mounts": [
+    {
+      "host": "172.17.60.80",
+      "path": "/var/lib/one/datastores/116"
+    },
+    {
+      "host": "172.17.60.81",
+      "path": "/var/lib/one/datastores/116"
+    },
+    {
+      "host": "172.17.60.82",
+      "path": "/var/lib/one/datastores/116"
+    }
+  ],
+  "created_at": "2026-11-13T01:43:15.765549+00:00",
+  "scope": "ONE_DISPOSABLE_VM_NATIVE_SCHEDULER_TEST_NOT_DR4_ENROLLMENT",
+  "dsid": 116,
+  "template_id": 7,
+  "scheduler_log_offset": 14816475,
+  "vmid": 40,
+  "release_requested_at": "2026-11-13T01:43:17.365506+00:00",
+  "unrestricted_release_started_at": "2026-11-13T01:44:25.375609+00:00",
+  "placement_log_offset": 14841195,
+  "reschedule_before": {
+    "id": 40,
+    "state": 3,
+    "lcm": 3,
+    "host": "1",
+    "ds": "116",
+    "seq": "0",
+    "deploy_id": "523a084b-276b-4c9f-a153-34e21c33192c"
+  },
+  "guest_before_reschedule": {
+    "boot_count": 1,
+    "boot_id": "14996a01-4385-4dbd-a3e1-fa4ba519ad53\n",
+    "heartbeat": 23,
+    "initialized": true,
+    "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+    "state": "READY",
+    "uptime_ms": 44017
+  },
+  "reschedule_log_offset": 14853689,
+  "cleanup_complete": true
+}

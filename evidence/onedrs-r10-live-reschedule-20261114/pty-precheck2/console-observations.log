@@ -1,0 +1,7 @@
+HOST=1 UUID=0e8057ea-51b9-4611-937f-01ad518b1503
+LS_ONEDRS_CANARY {"boot_count":1,"boot_id":"b463d09b-8d73-415c-bc83-28f75150df4e\n","heartbeat":1,"initialized":true,"sha256":"5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a","state":"READY","uptime_ms":0}
+LS_ONEDRS_CANARY {"boot_count":1,"boot_id":"b463d09b-8d73-415c-bc83-28f75150df4e\n","heartbeat":2,"initialized":true,"sha256":"5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a","state":"READY","uptime_ms":2000}
+
+HOST=1 UUID=0e8057ea-51b9-4611-937f-01ad518b1503
+LS_ONEDRS_CANARY {"boot_count":1,"boot_id":"b463d09b-8d73-415c-bc83-28f75150df4e\n","heartbeat":3,"initialized":true,"sha256":"5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a","state":"READY","uptime_ms":4001}
+

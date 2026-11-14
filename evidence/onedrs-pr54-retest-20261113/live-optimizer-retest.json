@@ -1,0 +1,13 @@
+{
+  "at": "2026-11-13T03:20:39.013051+00:00",
+  "scope": "EXISTING_DEPLOYED_R8_NATIVE_MANUAL_OPTIMIZER_RETEST_NOT_CANDIDATE_CORE",
+  "request_exit": 0,
+  "actual_optimizer_error": "resilience admission failed: VM 11 has no eligible surviving host",
+  "native_success_log_seen": false,
+  "manual_mode_verified": true,
+  "plan_execute_called": false,
+  "vm_count_before": 25,
+  "all_original_VM_identity_state_host_ds_history_unchanged": true,
+  "ONE_DRS_policy_unchanged": true,
+  "DR4_enrollment_manifest_exists": false
+}

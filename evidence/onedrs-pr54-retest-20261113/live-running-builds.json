@@ -1,0 +1,41 @@
+{
+  "at": "2026-11-13T03:19:43.887778+00:00",
+  "mode": "LIVE_READ_ONLY_DEPLOYMENT_ATTESTATION",
+  "hosts": {
+    "dr1": {
+      "hostname": "dr1",
+      "opennebula_state": "active",
+      "pid": 3319,
+      "installed_package": "opennebula 7.4.1-8.ls.onedrs.e39bf32.el9",
+      "rpm_signature": "(none)",
+      "installed_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "agent_active": "active",
+      "migration_helper_sha256": "46d1a4c89a34f519f348869182c4caaf0b75dafe288f502e3e9a2bdb121af4ed"
+    },
+    "dr2": {
+      "hostname": "dr2",
+      "opennebula_state": "active",
+      "pid": 2520,
+      "installed_package": "opennebula 7.4.1-8.ls.onedrs.e39bf32.el9",
+      "rpm_signature": "(none)",
+      "installed_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "agent_active": "active",
+      "migration_helper_sha256": "46d1a4c89a34f519f348869182c4caaf0b75dafe288f502e3e9a2bdb121af4ed"
+    },
+    "dr3": {
+      "hostname": "dr3",
+      "opennebula_state": "active",
+      "pid": 2820,
+      "installed_package": "opennebula 7.4.1-8.ls.onedrs.e39bf32.el9",
+      "rpm_signature": "(none)",
+      "installed_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "running_core_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "agent_active": "active",
+      "migration_helper_sha256": "46d1a4c89a34f519f348869182c4caaf0b75dafe288f502e3e9a2bdb121af4ed"
+    }
+  },
+  "PR54_candidate_currently_running": false,
+  "no_host_restart_or_install_performed": true
+}

@@ -1,0 +1,75 @@
+{
+  "result": "PASS_PACKAGE_METADATA_AND_PAYLOAD",
+  "original_rpm": "/root/onedrs-rpm-build-final-e39bf32-r8/rpmbuild/RPMS/x86_64/opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64.rpm",
+  "candidate_rpm": "/root/onedrs-pr54-runtime-package-20261113/rpmbuild/RPMS/x86_64/opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64.rpm",
+  "candidate_rpm_sha256": "a16283d51942de6d3772dc4166d57432a4ede705d58f5fc6e6e7634203347c1e",
+  "candidate_NEVRA": "opennebula-7.4.1-9.ls.onedrs.pr54.3165fdb.el9.x86_64",
+  "original_file_count": 1482,
+  "candidate_file_count": 1482,
+  "changed_shared_paths": {
+    "/usr/bin/oned": {
+      "filedigests": {
+        "old": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+        "new": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb"
+      }
+    }
+  },
+  "added_build_id_artifacts": [
+    "/usr/lib/.build-id/9b",
+    "/usr/lib/.build-id/9b/7f29ed27a7904565ed0f65249da454bbf6fc8d"
+  ],
+  "removed_build_id_artifacts": [
+    "/usr/lib/.build-id/21",
+    "/usr/lib/.build-id/21/7acd0b82662a24838b33b8256dcd0af406fcb6"
+  ],
+  "all_original_lifecycle_scripts_and_triggers_identical": {
+    "prein": true,
+    "postin": true,
+    "preun": true,
+    "postun": true,
+    "posttrans": true,
+    "pretrans": true,
+    "preinprog": true,
+    "postinprog": true,
+    "preunprog": true,
+    "postunprog": true,
+    "posttransprog": true,
+    "triggerscripts": true,
+    "triggername": true,
+    "triggerflags": true,
+    "triggerversion": true,
+    "triggerindex": true,
+    "triggerscriptprog": true,
+    "filetriggerscripts": true,
+    "transfiletriggerscripts": true
+  },
+  "dependency_semantics": {
+    "require": {
+      "equal": true,
+      "removed": [],
+      "added": []
+    },
+    "provide": {
+      "equal": true,
+      "removed": [],
+      "added": []
+    },
+    "obsolete": {
+      "equal": true,
+      "removed": [],
+      "added": []
+    },
+    "conflict": {
+      "equal": true,
+      "removed": [],
+      "added": []
+    }
+  },
+  "explicit_config_dependency_provenance_note": "Original automatically-generated RPMSENSE_CONFIG marker is not set on explicit version-matched candidate config() requirement/provide. Name/operator/version and file config flags are retained.",
+  "configuration_flags_ownership_permissions_preserved": true,
+  "embedded_tested_core_sha256": "782a3969593114d966f82f7946b36c076af8f67392f7b49313a68d87f3e8a7fb",
+  "upgrade_release_order_correct": true,
+  "rpm_digest_verification_pass": true,
+  "signature": "UNSIGNED_AT_THIS_STAGE",
+  "live_install": false
+}

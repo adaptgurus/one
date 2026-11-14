@@ -15,6 +15,7 @@
 /* -------------------------------------------------------------------------- */
 
 #include "SchedulerManagerDriver.h"
+#include "SchedulerHostContext.h"
 #include "SchedulerManagerMatch.h"
 
 #include "AclManager.h"
@@ -58,7 +59,10 @@ void SchedulerManagerDriver::place() const
 
     std::ostringstream oss;
 
-    scheduler_message(sr, oss);
+    if (scheduler_message(sr, oss) != 0)
+    {
+        return;
+    }
 
     place(oss);
 }
@@ -81,7 +85,10 @@ void SchedulerManagerDriver::optimize(int cluster_id) const
 
     std::ostringstream oss;
 
-    scheduler_message(sr, oss);
+    if (scheduler_message(sr, oss) != 0)
+    {
+        return;
+    }
 
     optimize(cluster_id, oss);
 }
@@ -92,33 +99,37 @@ void SchedulerManagerDriver::optimize(int cluster_id) const
 int SchedulerManagerDriver::scheduler_message(SchedRequest& sr, std::ostringstream& oss) const
 {
     std::string temp;
-
-    oss << "<SCHEDULER_DRIVER_ACTION>";
-
-    sr.vmpool.to_xml(oss, sr.match.vms);
-
-    sr.hpool.to_xml(oss, sr.match.match_host);
-
-    //Include Image and System datastores to compute SELF LN/CP methods
-    dspool->dump(temp, "", 0, -1, false);
-
-    oss << temp;
-
-    sr.vnpool.to_xml(oss, sr.match.match_net);
-
-    // PLACE requests may span one or more clusters. Populate CLUSTER_POOL
-    // from the matched destination hosts so OneDRS can apply the authoritative
-    // cluster policy during initial placement just as it does for OPTIMIZE.
+    std::string context_error;
+    std::set<int> context_host_ids;
     std::set<int> matched_cluster_ids;
 
-    for (int host_id : sr.match.match_host)
+    // Rescheduling/requirements filter destinations, not cluster membership.
+    // Reuse the same authoritative cached pool; never add destinations to the
+    // per-VM REQUIREMENTS produced by native authorization/match-making.
+    const auto cluster_for = [&sr](int id)
     {
-        if (auto host = sr.hpool.get(host_id))
-        {
-            matched_cluster_ids.insert(host->get_cluster_id());
-        }
+        auto host = sr.hpool.get(id);
+        return host == nullptr ? -1 : host->get_cluster_id();
+    };
+
+    if (!scheduler_host_context(sr.hpool.ids, sr.match.match_host,
+                                cluster_for, context_host_ids,
+                                matched_cluster_ids, context_error))
+    {
+        NebulaLog::error("SCM", context_error);
+        return -1;
     }
 
+    oss << "<SCHEDULER_DRIVER_ACTION>";
+    sr.vmpool.to_xml(oss, sr.match.vms);
+    sr.hpool.to_xml(oss, context_host_ids);
+
+    // Include Image and System datastores to compute SELF LN/CP methods.
+    dspool->dump(temp, "", 0, -1, false);
+    oss << temp;
+    sr.vnpool.to_xml(oss, sr.match.match_net);
+
+    // Cluster policy identities remain bounded by actual matching candidates.
     sr.clpool.ids.assign(matched_cluster_ids.begin(), matched_cluster_ids.end());
 
     if ( sr.match.match_vmgroups.empty() )

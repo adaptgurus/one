@@ -1,0 +1,19 @@
+{
+  "scope": "ONE_SERVICE_OWNED_NATIVE_SCHEDULER_VM",
+  "started_at": "2026-11-14T04:47:01.046814+00:00",
+  "manual_deploy_calls": 0,
+  "manual_migrate_calls": 0,
+  "DR4_touched": false,
+  "original_VM_count": 26,
+  "result": "FAIL",
+  "error": "test fixture command failed on 172.17.60.81: on3.9/subprocess.py\", line 528, in run\n    raise CalledProcessError(retcode, process.args,\nsubprocess.CalledProcessError: Command '['virsh', '-c', 'qemu:///system', 'domuuid', '5f4c2894-38ea-4a86-a13c-6dcc3ebe0e93']' returned non-zero exit status 1.\n",
+  "owned_VM_DONE": true,
+  "serial_observation": "native PTY read only; no persistent serial log on hypervisors",
+  "owned_NFS_diagnostic_root_retained": "/srv/layersentry-native/dr/files/ls-onedrs-r10-e14cf85e46e1",
+  "native_objects_and_bind_mounts_cleaned": true,
+  "original_VM_records_preserved": true,
+  "original_HA_policy_preserved": true,
+  "foreign_new_VM_ids": [],
+  "cleanup_errors": [],
+  "ended_at": "2026-11-14T04:47:09.948861+00:00"
+}

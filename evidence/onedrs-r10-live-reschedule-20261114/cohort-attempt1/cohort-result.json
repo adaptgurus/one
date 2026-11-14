@@ -1,0 +1,351 @@
+{
+  "scope": "COORDINATED_SAME_VERSION_R10_NATIVE_RESCHEDULE_AND_R8_ROLLBACK_LAB",
+  "started_at": "2026-11-14T04:32:02.572688+00:00",
+  "events": [
+    {
+      "host": 0,
+      "action": "prepare",
+      "exit": 0,
+      "at": "2026-11-14T04:32:07.100219+00:00"
+    },
+    {
+      "host": 1,
+      "action": "prepare",
+      "exit": 0,
+      "at": "2026-11-14T04:32:11.582446+00:00"
+    },
+    {
+      "host": 2,
+      "action": "prepare",
+      "exit": 0,
+      "at": "2026-11-14T04:32:15.957556+00:00"
+    },
+    {
+      "host": 1,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:32:22.698452+00:00"
+    },
+    {
+      "host": 2,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:32:29.358360+00:00"
+    },
+    {
+      "host": 0,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:32:44.064255+00:00"
+    },
+    {
+      "host": 0,
+      "action": "install",
+      "exit": 0,
+      "at": "2026-11-14T04:32:48.782000+00:00"
+    },
+    {
+      "host": 1,
+      "action": "install",
+      "exit": 0,
+      "at": "2026-11-14T04:32:53.780630+00:00"
+    },
+    {
+      "host": 2,
+      "action": "install",
+      "exit": 0,
+      "at": "2026-11-14T04:32:58.512991+00:00"
+    },
+    {
+      "host": 0,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:33:04.203495+00:00"
+    },
+    {
+      "host": 1,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:33:10.217900+00:00"
+    },
+    {
+      "host": 2,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:33:16.149357+00:00"
+    },
+    {
+      "host": 0,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:33:43.705457+00:00"
+    },
+    {
+      "host": 1,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:33:44.266297+00:00"
+    },
+    {
+      "host": 2,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:33:44.816970+00:00"
+    },
+    {
+      "host": 0,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:35:48.456605+00:00"
+    },
+    {
+      "host": 1,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:35:48.857821+00:00"
+    },
+    {
+      "host": 2,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:35:49.254994+00:00"
+    },
+    {
+      "host": 1,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:35:56.107983+00:00"
+    },
+    {
+      "host": 2,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:36:10.892746+00:00"
+    },
+    {
+      "host": 0,
+      "action": "stop",
+      "exit": 0,
+      "at": "2026-11-14T04:36:25.655907+00:00"
+    },
+    {
+      "host": 0,
+      "action": "rollback",
+      "exit": 0,
+      "at": "2026-11-14T04:36:28.892585+00:00"
+    },
+    {
+      "host": 1,
+      "action": "rollback",
+      "exit": 0,
+      "at": "2026-11-14T04:36:32.447380+00:00"
+    },
+    {
+      "host": 2,
+      "action": "rollback",
+      "exit": 0,
+      "at": "2026-11-14T04:36:35.759614+00:00"
+    },
+    {
+      "host": 0,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:36:41.097595+00:00"
+    },
+    {
+      "host": 1,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:36:46.490904+00:00"
+    },
+    {
+      "host": 2,
+      "action": "start-core",
+      "exit": 0,
+      "at": "2026-11-14T04:36:52.059331+00:00"
+    },
+    {
+      "host": 0,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:36:57.246634+00:00"
+    },
+    {
+      "host": 1,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:36:57.509349+00:00"
+    },
+    {
+      "host": 2,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:36:57.757563+00:00"
+    },
+    {
+      "host": 0,
+      "action": "restore-services",
+      "exit": 0,
+      "at": "2026-11-14T04:36:58.046119+00:00"
+    },
+    {
+      "host": 1,
+      "action": "restore-services",
+      "exit": 0,
+      "at": "2026-11-14T04:36:58.421698+00:00"
+    },
+    {
+      "host": 2,
+      "action": "restore-services",
+      "exit": 0,
+      "at": "2026-11-14T04:36:58.776954+00:00"
+    },
+    {
+      "host": 0,
+      "action": "finish",
+      "exit": 0,
+      "at": "2026-11-14T04:36:59.101856+00:00"
+    },
+    {
+      "host": 1,
+      "action": "finish",
+      "exit": 0,
+      "at": "2026-11-14T04:36:59.578852+00:00"
+    },
+    {
+      "host": 2,
+      "action": "finish",
+      "exit": 0,
+      "at": "2026-11-14T04:37:00.050370+00:00"
+    },
+    {
+      "host": 0,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:37:00.131572+00:00"
+    },
+    {
+      "host": 1,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:37:00.392249+00:00"
+    },
+    {
+      "host": 2,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:37:00.636089+00:00"
+    },
+    {
+      "host": 0,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:37:00.701668+00:00"
+    },
+    {
+      "host": 1,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:37:00.949929+00:00"
+    },
+    {
+      "host": 2,
+      "action": "readback",
+      "exit": 0,
+      "at": "2026-11-14T04:37:01.196632+00:00"
+    }
+  ],
+  "no_schema_migration": true,
+  "DR4_touched": false,
+  "no_physical_host_failure_injected": true,
+  "before_raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3525",
+      "COMMIT": "138180",
+      "LOG_INDEX": "138180"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3525",
+      "COMMIT": "138180",
+      "LOG_INDEX": "138180"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3525",
+      "COMMIT": "138180",
+      "LOG_INDEX": "138180"
+    }
+  },
+  "original_VM_count": 26,
+  "zone_disabled": false,
+  "candidate_raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3526",
+      "COMMIT": "138186",
+      "LOG_INDEX": "138186"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3526",
+      "COMMIT": "138186",
+      "LOG_INDEX": "138186"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3526",
+      "COMMIT": "138186",
+      "LOG_INDEX": "138186"
+    }
+  },
+  "error": "Native guest qualification failed; inspect guest-result.json",
+  "result": "FAIL_REQUIRES_RECONCILIATION",
+  "rollback_raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3527",
+      "COMMIT": "138252",
+      "LOG_INDEX": "138252"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3527",
+      "COMMIT": "138252",
+      "LOG_INDEX": "138252"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3527",
+      "COMMIT": "138252",
+      "LOG_INDEX": "138252"
+    }
+  },
+  "after_raft": {
+    "0": {
+      "STATE": "3",
+      "TERM": "3527",
+      "COMMIT": "138256",
+      "LOG_INDEX": "138256"
+    },
+    "1": {
+      "STATE": "2",
+      "TERM": "3527",
+      "COMMIT": "138256",
+      "LOG_INDEX": "138256"
+    },
+    "2": {
+      "STATE": "2",
+      "TERM": "3527",
+      "COMMIT": "138256",
+      "LOG_INDEX": "138256"
+    }
+  },
+  "original_VM_records_preserved": true,
+  "final_all_cores_original_r8": true,
+  "temporary_lab_keys_removed": true,
+  "original_services_restored": true,
+  "recovery_errors": [],
+  "ended_at": "2026-11-14T04:37:01.197477+00:00"
+}

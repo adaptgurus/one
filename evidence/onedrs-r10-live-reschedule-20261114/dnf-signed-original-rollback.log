@@ -1,0 +1,34 @@
+Dependencies resolved.
+================================================================================
+ Package       Arch      Version                          Repository       Size
+================================================================================
+Downgrading:
+ opennebula    x86_64    7.4.1-8.ls.onedrs.e39bf32.el9    @commandline     15 M
+
+Transaction Summary
+================================================================================
+Downgrade  1 Package
+
+Total size: 15 M
+Downloading Packages:
+Running transaction check
+Transaction check succeeded.
+Running transaction test
+Transaction test succeeded.
+Running transaction
+  Preparing        :                                                        1/1 
+  Running scriptlet: opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64        1/2 
+  Downgrading      : opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64        1/2 
+  Running scriptlet: opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64        1/2 
+  Running scriptlet: opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_6   2/2 
+  Cleanup          : opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_6   2/2 
+  Running scriptlet: opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_6   2/2 
+  Running scriptlet: opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64        2/2 
+  Running scriptlet: opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_6   2/2 
+  Verifying        : opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64        1/2 
+  Verifying        : opennebula-7.4.1-10.ls.onedrs.pr54.07c9128.el9.x86_6   2/2 
+
+Downgraded:
+  opennebula-7.4.1-8.ls.onedrs.e39bf32.el9.x86_64                               
+
+Complete!

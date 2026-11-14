@@ -1,0 +1,4 @@
+SCHED_MAD = [
+      EXECUTABLE = "one_sched",
+      ARGUMENTS  = "-t 15 -p one_drs -o one_drs"
+]

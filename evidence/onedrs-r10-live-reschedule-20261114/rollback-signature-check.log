@@ -1,0 +1,6 @@
+/var/lib/layersentry/onedrs-pr54-r10-canary-20261113/rollback.rpm:
+    Header V4 RSA/SHA256 Signature, key ID aa428403: OK
+    Header SHA256 digest: OK
+    Header SHA1 digest: OK
+    Payload SHA256 digest: OK
+    MD5 digest: OK

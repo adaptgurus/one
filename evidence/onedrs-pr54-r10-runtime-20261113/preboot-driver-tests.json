@@ -1,0 +1,74 @@
+{
+  "at": "2026-11-13T04:32:01.632044+00:00",
+  "driver_sha256": "3cc0513112d22968859fb822fc4605347c8067fc7a5b169933775ae340584e9b",
+  "scope": "REAL_NATIVE_DRIVER_SCRIPT_WITH_MOCK_HELPER_SUDO_AND_VIRSH_NO_REAL_VM",
+  "cases": [
+    {
+      "case": "untagged",
+      "exit": 0,
+      "trace": [
+        "virsh-create"
+      ],
+      "expected_boot": true,
+      "pass": true
+    },
+    {
+      "case": "empty-tag",
+      "exit": 0,
+      "trace": [
+        "virsh-create"
+      ],
+      "expected_boot": true,
+      "pass": true
+    },
+    {
+      "case": "valid-tag",
+      "exit": 0,
+      "trace": [
+        "preboot",
+        "verify-preboot",
+        "virsh-create"
+      ],
+      "expected_boot": true,
+      "pass": true
+    },
+    {
+      "case": "preboot-denied",
+      "exit": 255,
+      "trace": [
+        "preboot"
+      ],
+      "expected_boot": false,
+      "pass": true
+    },
+    {
+      "case": "verification-denied",
+      "exit": 255,
+      "trace": [
+        "preboot",
+        "verify-preboot"
+      ],
+      "expected_boot": false,
+      "pass": true
+    },
+    {
+      "case": "missing-helper",
+      "exit": 255,
+      "trace": [],
+      "expected_boot": false,
+      "pass": true
+    },
+    {
+      "case": "sudo-denied",
+      "exit": 255,
+      "trace": [
+        "preboot"
+      ],
+      "expected_boot": false,
+      "pass": true
+    }
+  ],
+  "result": "PASS",
+  "source_driver_identical_to_DR1": true,
+  "helper_logic_or_real_guest_not_tested": true
+}
