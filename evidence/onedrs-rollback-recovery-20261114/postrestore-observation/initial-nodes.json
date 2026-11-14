@@ -1,0 +1,35 @@
+{
+  "0": {
+    "pid": 2283363,
+    "installed": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "running": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "driver_ok": true,
+    "guards_ok": true,
+    "services_ok": true,
+    "domains_ok": true,
+    "key_absent": true,
+    "selinux": "Enforcing"
+  },
+  "1": {
+    "pid": 2989595,
+    "installed": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "running": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "driver_ok": true,
+    "guards_ok": true,
+    "services_ok": true,
+    "domains_ok": true,
+    "key_absent": true,
+    "selinux": "Enforcing"
+  },
+  "2": {
+    "pid": 3441059,
+    "installed": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "running": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+    "driver_ok": true,
+    "guards_ok": true,
+    "services_ok": true,
+    "domains_ok": true,
+    "key_absent": true,
+    "selinux": "Enforcing"
+  }
+}

@@ -1,0 +1,12 @@
+======================================================================
+FAIL: test_old_timeout_loses_member_diagnostic (test_rollback_guard.LegacyReproductionTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-rollback-recovery-20261114/tools/onedrs_qualification/test_rollback_guard.py", line 207, in test_old_timeout_loses_member_diagnostic
+    with self.assertRaises(RuntimeError) as c:q(2)
+AssertionError: RuntimeError not raised
+
+----------------------------------------------------------------------
+Ran 58 tests in 1.718s
+
+FAILED (failures=1)

@@ -1,0 +1,111 @@
+{
+  "at": "2026-11-14T06:20:16.477495+00:00",
+  "scope": "READ_ONLY_STRICT_NATIVE_SYNC_PROBE",
+  "mutation_calls": 0,
+  "receipt": {
+    "leader_id": 0,
+    "term": 3531,
+    "common_index": 138818,
+    "samples": 2,
+    "elapsed_seconds": 1.027967,
+    "statuses": {
+      "0": {
+        "server_id": 0,
+        "state": 3,
+        "term": 3531,
+        "commit": 138818,
+        "log_index": 138818
+      },
+      "1": {
+        "server_id": 1,
+        "state": 2,
+        "term": 3531,
+        "commit": 138818,
+        "log_index": 138818
+      },
+      "2": {
+        "server_id": 2,
+        "state": 2,
+        "term": 3531,
+        "commit": 138818,
+        "log_index": 138818
+      }
+    }
+  },
+  "samples": [
+    {
+      "kind": "raft_sample",
+      "round": 1,
+      "reason": "synchronized",
+      "leader": 0,
+      "term": 3531,
+      "leader_closing_commit": 138818,
+      "per_host_commit_delta": {
+        "0": 0,
+        "1": 0,
+        "2": 0
+      },
+      "statuses": {
+        "0": {
+          "server_id": 0,
+          "state": 3,
+          "term": 3531,
+          "commit": 138818,
+          "log_index": 138818
+        },
+        "1": {
+          "server_id": 1,
+          "state": 2,
+          "term": 3531,
+          "commit": 138818,
+          "log_index": 138818
+        },
+        "2": {
+          "server_id": 2,
+          "state": 2,
+          "term": 3531,
+          "commit": 138818,
+          "log_index": 138818
+        }
+      },
+      "consecutive_complete_samples": 1
+    },
+    {
+      "kind": "raft_sample",
+      "round": 2,
+      "reason": "synchronized",
+      "leader": 0,
+      "term": 3531,
+      "leader_closing_commit": 138818,
+      "per_host_commit_delta": {
+        "0": 0,
+        "1": 0,
+        "2": 0
+      },
+      "statuses": {
+        "0": {
+          "server_id": 0,
+          "state": 3,
+          "term": 3531,
+          "commit": 138818,
+          "log_index": 138818
+        },
+        "1": {
+          "server_id": 1,
+          "state": 2,
+          "term": 3531,
+          "commit": 138818,
+          "log_index": 138818
+        },
+        "2": {
+          "server_id": 2,
+          "state": 2,
+          "term": 3531,
+          "commit": 138818,
+          "log_index": 138818
+        }
+      },
+      "consecutive_complete_samples": 2
+    }
+  ]
+}

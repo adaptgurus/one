@@ -1,0 +1,6 @@
+{
+  "scope": "EXECUTOR_REFUSES_PYTHON_OPTIMIZATION_BEFORE_NATIVE_CALLS",
+  "exit": 1,
+  "expected_refusal": true,
+  "result": "PASS"
+}

@@ -1,0 +1,46 @@
+test_actual_lag_waits (test_rollback_guard.BarrierTests) ... ok
+test_audit_failure_is_not_transport_retry (test_rollback_guard.BarrierTests) ... ok
+test_authority_change_refused (test_rollback_guard.BarrierTests) ... ok
+test_bad_ids_and_budgets (test_rollback_guard.BarrierTests) ... ok
+test_closing_leader_advances (test_rollback_guard.BarrierTests) ... ok
+test_closing_leader_demotion (test_rollback_guard.BarrierTests) ... ok
+test_commit_regression (test_rollback_guard.BarrierTests) ... ok
+test_continuation_floors_preserved (test_rollback_guard.BarrierTests) ... ok
+test_identity_mismatch_refused (test_rollback_guard.BarrierTests) ... ok
+test_initial_election_bounded (test_rollback_guard.BarrierTests) ... ok
+test_multiple_leaders_refused (test_rollback_guard.BarrierTests) ... ok
+test_permanent_lag_reports_member (test_rollback_guard.BarrierTests) ... ok
+test_pinned_election_instability_refused (test_rollback_guard.BarrierTests) ... ok
+test_programming_error_not_retried (test_rollback_guard.BarrierTests) ... ok
+test_read_budget_and_overrun (test_rollback_guard.BarrierTests) ... ok
+test_single_sample_never_passes (test_rollback_guard.BarrierTests) ... ok
+test_transient_transport_then_recovery (test_rollback_guard.BarrierTests) ... ok
+test_two_complete_samples (test_rollback_guard.BarrierTests) ... ok
+test_uncommitted_tail_not_accepted (test_rollback_guard.BarrierTests) ... ok
+test_actual_old_finally_skips_remaining_restoration (test_rollback_guard.LegacyReproductionTests) ... ok
+test_old_quorum_accepts_impossible_log_geometry (test_rollback_guard.LegacyReproductionTests) ... ok
+test_old_quorum_accepts_wrong_endpoint_identity (test_rollback_guard.LegacyReproductionTests) ... ok
+test_old_timeout_loses_member_diagnostic (test_rollback_guard.LegacyReproductionTests) ... ok
+test_input_bound_and_xml_declarations (test_rollback_guard.ParserTests) ... ok
+test_missing_or_duplicate (test_rollback_guard.ParserTests) ... ok
+test_nested_or_namespaced (test_rollback_guard.ParserTests) ... ok
+test_noncanonical_numbers (test_rollback_guard.ParserTests) ... ok
+test_valid (test_rollback_guard.ParserTests) ... ok
+test_wrong_identity_and_geometry (test_rollback_guard.ParserTests) ... ok
+test_actual_late_timeline_has_two_fresh_samples (test_rollback_guard.RestorationTests) ... ok
+test_audit_failure_before_unfreeze (test_rollback_guard.RestorationTests) ... ok
+test_both_deadlines_fail_no_effects (test_rollback_guard.RestorationTests) ... ok
+test_finish_failure_keeps_gate_failed (test_rollback_guard.RestorationTests) ... ok
+test_forged_receipt_not_accepted (test_rollback_guard.RestorationTests) ... ok
+test_late_catchup_restores_but_deadline_stays_failed (test_rollback_guard.RestorationTests) ... ok
+test_normal_completion (test_rollback_guard.RestorationTests) ... ok
+test_original_binary_guard_failure (test_rollback_guard.RestorationTests) ... ok
+test_original_guard_drift_before_effects (test_rollback_guard.RestorationTests) ... ok
+test_service_failure_does_not_skip_other_hosts_or_remove_keys (test_rollback_guard.RestorationTests) ... ok
+test_unfreeze_error_stops_services (test_rollback_guard.RestorationTests) ... ok
+test_unsafe_topology_has_no_grace (test_rollback_guard.RestorationTests) ... ok
+
+----------------------------------------------------------------------
+Ran 41 tests in 0.028s
+
+OK

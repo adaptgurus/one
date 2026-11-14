@@ -1,0 +1,7 @@
+/root/onedrs-rollback-recovery-20261114/tools/onedrs_qualification/rollback_guard.py:182: ResourceWarning: unclosed <socket.socket fd=6, family=2, type=1, proto=6, laddr=('127.0.0.1', 60842), raddr=('127.0.0.1', 36677)>
+  emit({'kind': 'raft_transport', 'round': rounds, **last})
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+----------------------------------------------------------------------
+Ran 58 tests in 1.709s
+
+OK
