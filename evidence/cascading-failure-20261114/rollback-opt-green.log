@@ -1,0 +1,7 @@
+/root/onedrs-cascade-admission-20261114-chatgpt/tools/onedrs_qualification/rollback_guard.py:182: ResourceWarning: unclosed <socket.socket fd=6, family=AddressFamily.AF_INET, type=SocketKind.SOCK_STREAM, proto=6, laddr=('127.0.0.1', 35462), raddr=('127.0.0.1', 53443)>
+  emit({'kind': 'raft_transport', 'round': rounds, **last})
+ResourceWarning: Enable tracemalloc to get the object allocation traceback
+----------------------------------------------------------------------
+Ran 58 tests in 1.710s
+
+OK

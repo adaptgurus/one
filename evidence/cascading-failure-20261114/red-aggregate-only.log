@@ -1,0 +1,37 @@
+test_aggregate_survival_must_not_double_allocate_only_large_host (test_cascade_admission.CascadingPlacementAdmissionTests.test_aggregate_survival_must_not_double_allocate_only_large_host) ... FAIL
+test_non_enforced_policy_remains_backward_compatible (test_cascade_admission.CascadingPlacementAdmissionTests.test_non_enforced_policy_remains_backward_compatible) ... ok
+test_rack_then_host_cascade_requires_simultaneous_recovery_fit (test_cascade_admission.CascadingPlacementAdmissionTests.test_rack_then_host_cascade_requires_simultaneous_recovery_fit) ... FAIL
+test_three_large_vms_do_not_fit_two_large_survivors (test_cascade_admission.CascadingPlacementAdmissionTests.test_three_large_vms_do_not_fit_two_large_survivors) ... FAIL
+test_valid_one_host_recovery_remains_admitted (test_cascade_admission.CascadingPlacementAdmissionTests.test_valid_one_host_recovery_remains_admitted) ... ok
+
+======================================================================
+FAIL: test_aggregate_survival_must_not_double_allocate_only_large_host (test_cascade_admission.CascadingPlacementAdmissionTests.test_aggregate_survival_must_not_double_allocate_only_large_host)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-cascade-admission-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_cascade_admission.py", line 43, in test_aggregate_survival_must_not_double_allocate_only_large_host
+    with self.assertRaisesRegex(ValueError, "resilience admission failed"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_rack_then_host_cascade_requires_simultaneous_recovery_fit (test_cascade_admission.CascadingPlacementAdmissionTests.test_rack_then_host_cascade_requires_simultaneous_recovery_fit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-cascade-admission-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_cascade_admission.py", line 74, in test_rack_then_host_cascade_requires_simultaneous_recovery_fit
+    with self.assertRaisesRegex(ValueError, "resilience admission failed"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_three_large_vms_do_not_fit_two_large_survivors (test_cascade_admission.CascadingPlacementAdmissionTests.test_three_large_vms_do_not_fit_two_large_survivors)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-cascade-admission-20261114-chatgpt/src/schedm_mad/remotes/one_drs/tests/test_cascade_admission.py", line 58, in test_three_large_vms_do_not_fit_two_large_survivors
+    with self.assertRaisesRegex(ValueError, "resilience admission failed"):
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.002s
+
+FAILED (failures=3)
