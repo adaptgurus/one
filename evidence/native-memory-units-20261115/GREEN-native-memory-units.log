@@ -1,0 +1,7 @@
+test_kib_capacity_does_not_overstate_memory_survivor_headroom (test_native_memory_units.NativeHostMemoryUnitRegression.test_kib_capacity_does_not_overstate_memory_survivor_headroom) ... ok
+test_live_dr1_dr2_dr3_allocations_match_native_vm_template_mib (test_native_memory_units.NativeHostMemoryUnitRegression.test_live_dr1_dr2_dr3_allocations_match_native_vm_template_mib) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.001s
+
+OK

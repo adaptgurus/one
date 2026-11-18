@@ -1,0 +1,30 @@
+test_kib_capacity_does_not_overstate_memory_survivor_headroom (test_native_memory_units.NativeHostMemoryUnitRegression.test_kib_capacity_does_not_overstate_memory_survivor_headroom) ... FAIL
+test_live_dr1_dr2_dr3_allocations_match_native_vm_template_mib (test_native_memory_units.NativeHostMemoryUnitRegression.test_live_dr1_dr2_dr3_allocations_match_native_vm_template_mib) ... FAIL
+
+======================================================================
+FAIL: test_kib_capacity_does_not_overstate_memory_survivor_headroom (test_native_memory_units.NativeHostMemoryUnitRegression.test_kib_capacity_does_not_overstate_memory_survivor_headroom)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-kib-mib-reconciliation-20261115/src/schedm_mad/remotes/one_drs/tests/test_native_memory_units.py", line 74, in test_kib_capacity_does_not_overstate_memory_survivor_headroom
+    self.assertEqual(h.memory.total,1024)
+AssertionError: 1048.576 != 1024
+
+======================================================================
+FAIL: test_live_dr1_dr2_dr3_allocations_match_native_vm_template_mib (test_native_memory_units.NativeHostMemoryUnitRegression.test_live_dr1_dr2_dr3_allocations_match_native_vm_template_mib)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/onedrs-kib-mib-reconciliation-20261115/src/schedm_mad/remotes/one_drs/tests/test_native_memory_units.py", line 51, in test_live_dr1_dr2_dr3_allocations_match_native_vm_template_mib
+    self.assertEqual(
+AssertionError: Lists differ: [30408.704, 23068.672, 21102.592] != [29696, 22528, 20608]
+
+First differing element 0:
+30408.704
+29696
+
+- [30408.704, 23068.672, 21102.592]
++ [29696, 22528, 20608]
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.002s
+
+FAILED (failures=2)
