@@ -10,6 +10,12 @@ on:
       - "src/schedm/SchedulerManagerDriver.cc"
       - "share/etc/oned.conf"
       - "tools/onedrs_qualification/**"
+      - "tests/native/driver-lifecycle/**"
+      - "include/Driver.h"
+      - "include/StreamManager.h"
+      - "include/StringBuffer.h"
+      - "src/monitor/include/TCPStream.h"
+      - "src/monitor/include/UDPStream.h"
       - ".github/workflows/onedrs-safety.yml"
   pull_request:
     paths:
@@ -18,6 +24,12 @@ on:
       - "src/schedm/SchedulerManagerDriver.cc"
       - "share/etc/oned.conf"
       - "tools/onedrs_qualification/**"
+      - "tests/native/driver-lifecycle/**"
+      - "include/Driver.h"
+      - "include/StreamManager.h"
+      - "include/StringBuffer.h"
+      - "src/monitor/include/TCPStream.h"
+      - "src/monitor/include/UDPStream.h"
       - ".github/workflows/onedrs-safety.yml"
   workflow_dispatch:
 
@@ -51,6 +63,17 @@ jobs:
           python -O -m unittest discover -s src/schedm_mad/remotes/one_drs/tests -p test_*.py
       - name: Native scheduler compile
         run: python -m compileall -q src/schedm_mad/remotes/one_drs/lib src/schedm_mad/remotes/one_drs/tests
+      - name: Native C++ driver, stream and socket lifetime
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/onedrs-native"
+          for suite in stop_restart_race teardown_contract blocked_io_contract; do
+            g++ -std=c++17 -O2 -Wall -Wextra -pthread -I include -I src/monitor/include \
+              "tests/native/driver-lifecycle/$suite.cc" -o "$RUNNER_TEMP/onedrs-native/$suite"
+            for trial in 1 2 3; do
+              timeout 60s "$RUNNER_TEMP/onedrs-native/$suite"
+            done
+          done
       - name: Python 3.9 rollback contract
         uses: actions/setup-python@v5
         with:
