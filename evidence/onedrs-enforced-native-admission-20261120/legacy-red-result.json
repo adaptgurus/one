@@ -1,0 +1,84 @@
+{
+  "scope": "PRIVATE_NATIVE_LEGACY_ENFORCE_REPRODUCTION_NOT_SAFETY_PASS",
+  "started_at": "2026-11-20T04:14:36.878623+00:00",
+  "binary_sha256": "8a31919626c19a80739877690fa3ccd68133cd5f6f37ac888235f48c4fb89bf1",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v2_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy-enforce-red-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "legacy_deploy_accepted_original_enforce_true",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_deploy_baseline_exposes_lost_enforce_intent",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_deploy_no_durable_enforce_field",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy-enforce-red-migrate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "legacy_migrate_accepted_original_enforce_true",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_migrate_baseline_exposes_lost_enforce_intent",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_migrate_no_durable_enforce_field",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "legacy-red",
+  "status": "REPRODUCED",
+  "finished_at": "2026-11-20T04:15:14.298396+00:00"
+}

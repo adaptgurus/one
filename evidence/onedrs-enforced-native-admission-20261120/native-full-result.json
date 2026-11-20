@@ -1,0 +1,1620 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T04:45:58.631112+00:00",
+  "binary_sha256": "e93458d6aeec3eb59e5671e45dfb535338f664efc8b517a7d86b5f834f1ffd8c",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v2_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "parallel_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "checked_plan_compare_and_swap_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "two_migrations_share_one_capacity_slot",
+      "result": "PASS"
+    },
+    {
+      "name": "competition_finishes_one_done_one_error",
+      "result": "PASS"
+    },
+    {
+      "name": "successful_migration_source_ledger_released",
+      "result": "PASS"
+    },
+    {
+      "name": "successful_native_generation_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "stale-capacity_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "stale_capacity_plan_accepted_before_drift",
+      "result": "PASS"
+    },
+    {
+      "name": "stale_capacity_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "stale_capacity_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "stale_capacity_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "stale_capacity_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "stale_capacity_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "stale_capacity_checked_after_api_precheck",
+      "result": "PASS"
+    },
+    {
+      "name": "shape-same-host_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_plan_same-host_rejected_before_applying",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_plan_same-host_no_partial_history",
+      "result": "PASS"
+    },
+    {
+      "name": "shape-different-datastore_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_plan_different-datastore_rejected_before_applying",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_plan_different-datastore_no_partial_history",
+      "result": "PASS"
+    },
+    {
+      "name": "shape-pci_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_plan_pci_rejected_before_applying",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_plan_pci_no_partial_history",
+      "result": "PASS"
+    },
+    {
+      "name": "shape-numa_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_plan_numa_rejected_before_applying",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_plan_numa_no_partial_history",
+      "result": "PASS"
+    },
+    {
+      "name": "shape-pinned_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_plan_pinned_rejected_before_applying",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_plan_pinned_no_partial_history",
+      "result": "PASS"
+    },
+    {
+      "name": "shape-not-running_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_plan_not-running_rejected_before_applying",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_plan_not-running_no_partial_history",
+      "result": "PASS"
+    },
+    {
+      "name": "shape-duplicate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_plan_duplicate_rejected_before_applying",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_plan_duplicate_no_partial_history",
+      "result": "PASS"
+    },
+    {
+      "name": "template-injection_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "user_template_cannot_inject_native_guard",
+      "result": "PASS"
+    },
+    {
+      "name": "before-host-commit_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "before-host-commit_checked_request_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "before-host-commit_pending_native_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "before-host-commit_no_driver_before_crash",
+      "result": "PASS"
+    },
+    {
+      "name": "before-host-commit-restart_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "before-host-commit_restart_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "before-host-commit_restart_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "before-host-commit_restart_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "before-host-commit_restart_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "before-host-commit_restart_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "after-host-commit_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "after-host-commit_checked_request_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "after-host-commit_pending_native_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "after-host-commit_no_driver_before_crash",
+      "result": "PASS"
+    },
+    {
+      "name": "after-host-commit-restart_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "after-host-commit_restart_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "after-host-commit_restart_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "after-host-commit_restart_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "after-host-commit_restart_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "after-host-commit_restart_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "before-final-admission-marker_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "before-final-admission-marker_checked_request_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "before-final-admission-marker_pending_native_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "before-final-admission-marker_no_driver_before_crash",
+      "result": "PASS"
+    },
+    {
+      "name": "before-final-admission-marker-restart_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "before-final-admission-marker_restart_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "before-final-admission-marker_restart_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "before-final-admission-marker_restart_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "before-final-admission-marker_restart_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "before-final-admission-marker_restart_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "pending-api-exclusions_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "pending_resize_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_generic_recover_0_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_generic_recover_1_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_generic_recover_2_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_generic_recover_3_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_generic_recover_4_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_generic_recover_5_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_api_cleanup_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_api_cleanup_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_api_cleanup_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_api_cleanup_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_api_cleanup_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel-target-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cancel_target-history_retains_pending_until_write_succeeds",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_target-history_no_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_target-history_retry_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_target-history_retry_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_target-history_retry_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_target-history_retry_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_target-history_retry_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_target-history_same_history_sequence_on_retry",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel-source-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cancel_source-history_retains_pending_until_write_succeeds",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-history_no_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-history_retry_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-history_retry_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-history_retry_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-history_retry_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-history_retry_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-history_same_history_sequence_on_retry",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel-restored-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cancel_restored-history_retains_pending_until_write_succeeds",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_restored-history_no_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_restored-history_retry_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_restored-history_retry_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_restored-history_retry_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_restored-history_retry_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_restored-history_retry_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_restored-history_same_history_sequence_on_retry",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel-source-vm-body_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cancel_source-vm-body_retains_pending_until_write_succeeds",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-vm-body_no_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-vm-body_retry_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-vm-body_retry_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-vm-body_retry_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-vm-body_retry_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-vm-body_retry_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "cancel_source-vm-body_same_history_sequence_on_retry",
+      "result": "PASS"
+    },
+    {
+      "name": "after-final-marker_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "after_final_marker_no_automatic_guest_replay",
+      "result": "PASS"
+    },
+    {
+      "name": "after_final_marker_honest_timeout",
+      "result": "PASS"
+    },
+    {
+      "name": "after_final_marker_native_recover_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "after_final_marker_native_recover_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "after_final_marker_native_recover_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "after_final_marker_native_recover_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "after_final_marker_native_recover_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "terminal-source-ledger_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "terminal_test_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "failed_source_release_does_not_report_done",
+      "result": "PASS"
+    },
+    {
+      "name": "source_release_retry_reports_done_once",
+      "result": "PASS"
+    },
+    {
+      "name": "late-success_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "late_SUCCESS_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "late_SUCCESS_new_generation",
+      "result": "PASS"
+    },
+    {
+      "name": "late_SUCCESS_cannot_complete_replacement_plan",
+      "result": "PASS"
+    },
+    {
+      "name": "late-failure_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "late_FAILURE_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "late_FAILURE_new_generation",
+      "result": "PASS"
+    },
+    {
+      "name": "late_FAILURE_cannot_complete_replacement_plan",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-success_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_checked_request_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_native_sequence_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_native_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-before-tm-source-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_source-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_source-history_refuses_tm_before_durable_write",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_source-history_native_retry_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-before-tm-target-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_target-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_target-history_refuses_tm_before_durable_write",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_target-history_native_retry_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-before-tm-source-ledger_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_source-ledger_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_source-ledger_refuses_tm_before_durable_write",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_source-ledger_native_retry_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-before-tm-vm-body_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_vm-body_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_vm-body_refuses_tm_before_durable_write",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_vm-body_native_retry_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-target-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_target-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-history_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-history_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-history_history_retry_idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-target-ledger_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_target-ledger_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-ledger_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-ledger_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-ledger_history_retry_idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-source-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_source-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_source-history_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_source-history_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_source-history_history_retry_idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-restored-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_restored-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_restored-history_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_restored-history_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_restored-history_history_retry_idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-vm-body_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_vm-body_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_vm-body_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_vm-body_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_vm-body_history_retry_idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "initial-api-history-insert_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "initial_api_history-insert_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_history-insert_source_history_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_history-insert_no_driver_or_target_reservation",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_failed_insert_has_no_orphan",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_history-insert_replacement_generation_distinct",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_history-insert_replacement_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_history-insert_only_new_generation_dispatched",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_history-insert_next_sequence_reused_once",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_history-insert_replacement_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "initial-api-vm-body_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "initial_api_vm-body_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_vm-body_source_history_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_vm-body_no_driver_or_target_reservation",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_orphan_has_exact_failed_generation",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_vm-body_replacement_generation_distinct",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_vm-body_replacement_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_vm-body_only_new_generation_dispatched",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_vm-body_next_sequence_reused_once",
+      "result": "PASS"
+    },
+    {
+      "name": "initial_api_vm-body_replacement_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced-stale-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_deploy_request_accepted_before_drift",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_refuses_driver_after_stale_precheck",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_intent_is_native_history",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced-deploy-restart_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_deploy_intent_survives_restart",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_recover_success_requires_reservation",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_retry_rechecks_capacity",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_retry_after_capacity_available",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced-stale-migrate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_migrate_request_accepted_before_drift",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_migrate_refuses_driver_after_stale_precheck",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_migrate_intent_is_native_history",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_migrate_source_accounting_preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_migrate_retry_after_capacity_available",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced-stale-cold_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_cold_request_accepted_before_drift",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_cold_refuses_driver_after_stale_precheck",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_cold_intent_is_native_history",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_cold_source_accounting_preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_cold_retry_after_capacity_available",
+      "result": "PASS"
+    },
+    {
+      "name": "force-override-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "explicit_force_deploy_request_preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "explicit_force_deploy_override_is_visible",
+      "result": "PASS"
+    },
+    {
+      "name": "force-override-migrate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "explicit_force_migrate_request_preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "explicit_force_migrate_override_is_visible",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed-deploy-0_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_deploy_0_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_deploy_0_one_slot_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed-deploy-1_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_deploy_1_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_deploy_1_one_slot_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed-deploy-2_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_deploy_2_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_deploy_2_one_slot_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed-resize_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_resize_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_resize_one_slot_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "resize-ledger-failure_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_resize_failed_ledger_refuses_request",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_apply_after_failed_resize_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_apply_after_failed_resize_capacity_consistent",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-admission-refusal_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_fixture_retains_native_source_capacity",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_refusal_no_transfer_and_source_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-no-reservation-recover_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_no_reservation_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_no_reservation_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_no_reservation_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-absent-target-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_absent_target-history_remains_unresolved",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_absent_target-history_retry_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_absent_target-history_retry_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_absent_target-history_retry_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-absent-restored-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_absent_restored-history_remains_unresolved",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_absent_restored-history_retry_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_absent_restored-history_retry_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_absent_restored-history_retry_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-absent-vm-body_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_absent_vm-body_remains_unresolved",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_absent_vm-body_retry_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_absent_vm-body_retry_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_absent_vm-body_retry_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-transfer-failure_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_fixture_retains_native_source_capacity",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_transfer_reserves_target_releases_source",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-reserved-target-release_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_reserved_target-release_keeps_failed_target_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_target-release_no_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_target-release_retry_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_target-release_retry_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_target-release_retry_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-reserved-source-reservation_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_reserved_source-reservation_keeps_failed_target_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_source-reservation_no_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_source-reservation_retry_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_source-reservation_retry_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_source-reservation_retry_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-reserved-target-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_reserved_target-history_keeps_failed_target_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_target-history_no_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_target-history_retry_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_target-history_retry_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_target-history_retry_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-reserved-restored-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_reserved_restored-history_keeps_failed_target_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_restored-history_no_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_restored-history_retry_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_restored-history_retry_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_restored-history_retry_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-reserved-vm-body_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_reserved_vm-body_keeps_failed_target_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_vm-body_no_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_vm-body_retry_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_vm-body_retry_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_reserved_vm-body_retry_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-source-capacity-drift_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_rollback_honors_current_source_capacity",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_source_capacity_retry_source_poweroff_and_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_source_capacity_retry_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_source_capacity_retry_single_restored_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "offline-target-retry_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_target_retry_blocks_tm_until_source_release",
+      "result": "PASS"
+    },
+    {
+      "name": "offline_target_retry_completes_with_single_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "checked-before-restore-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "checked_before_restore_history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_before_restore_history_does_not_dispatch_guest",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_before_restore_history_retry_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "checked-before-restore-vm-body_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "checked_before_restore_vm-body_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_before_restore_vm-body_does_not_dispatch_guest",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_before_restore_vm-body_retry_completes",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "all",
+  "status": "PASS",
+  "finished_at": "2026-11-20T04:55:52.207952+00:00"
+}

@@ -313,6 +313,7 @@ string& History::to_xml(string& xml, bool database) const
         "<CHECKED_PLAN_GENERATION>" << checked_plan_generation << "</CHECKED_PLAN_GENERATION>" <<
         "<CHECKED_PLAN_TERM>" << checked_plan_term << "</CHECKED_PLAN_TERM>" <<
         "<CHECKED_CAPACITY_PENDING>" << checked_capacity_pending << "</CHECKED_CAPACITY_PENDING>" <<
+        "<ENFORCE_CAPACITY>" << enforce_capacity << "</ENFORCE_CAPACITY>" <<
         "<PSTIME>"     << prolog_stime  << "</PSTIME>"<<
         "<PETIME>"     << prolog_etime  << "</PETIME>"<<
         "<RSTIME>"     << running_stime << "</RSTIME>"<<
@@ -426,6 +427,10 @@ int History::rebuild_attributes()
         return -1;
     }
     checked_capacity_pending = pending == 1;
+    std::string enforce;
+    xpath(enforce, "/HISTORY/ENFORCE_CAPACITY", "");
+    if (!enforce.empty() && enforce != "0" && enforce != "1") return -1;
+    enforce_capacity = enforce == "1";
     if (!checked_plan_generation.empty() &&
         (checked_plan_generation.size() != 64 || plan_id < 0 || action_id < 0 ||
          checked_plan_generation.find_first_not_of("0123456789abcdef") != std::string::npos))

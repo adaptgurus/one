@@ -292,6 +292,7 @@ protected:
                     const std::string& vmm_mad,
                     const std::string& tm_mad,
                     int                ds_id,
+                    bool               enforce,
                     RequestAttributes& att);
 
     static void release_auto_networks(VirtualMachine* vm, VirtualMachineTemplate& tmpl);

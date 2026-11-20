@@ -958,6 +958,12 @@ public:
         if (history) history->checked_capacity_pending = value;
     }
 
+    bool capacity_enforced() const { return history && history->enforce_capacity; }
+    void capacity_enforced(bool value) { if (history) history->enforce_capacity = value; }
+
+    // States whose next successful/retried driver step requires target capacity.
+    bool capacity_admission_state() const;
+
 
 
     /**

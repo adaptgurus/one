@@ -2129,6 +2129,7 @@ void VirtualMachine::cp_history()
     htmp->checked_plan_generation = history->checked_plan_generation;
     htmp->checked_plan_term = history->checked_plan_term;
     htmp->checked_capacity_pending = history->checked_capacity_pending;
+    htmp->enforce_capacity = history->enforce_capacity;
 
     previous_history = move(history);
     history          = move(htmp);
@@ -2163,6 +2164,7 @@ void VirtualMachine::cp_previous_history()
     htmp->checked_plan_generation = previous_history->checked_plan_generation;
     htmp->checked_plan_term = previous_history->checked_plan_term;
     htmp->checked_capacity_pending = previous_history->checked_capacity_pending;
+    htmp->enforce_capacity = previous_history->enforce_capacity;
 
     previous_history = move(history);
     history          = move(htmp);
@@ -2170,6 +2172,29 @@ void VirtualMachine::cp_previous_history()
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+bool VirtualMachine::capacity_admission_state() const
+{
+    switch (get_lcm_state())
+    {
+        case PROLOG: case PROLOG_FAILURE:
+        case PROLOG_RESUME: case PROLOG_RESUME_FAILURE:
+        case PROLOG_UNDEPLOY: case PROLOG_UNDEPLOY_FAILURE:
+        case PROLOG_MIGRATE: case PROLOG_MIGRATE_FAILURE:
+        case PROLOG_MIGRATE_POWEROFF: case PROLOG_MIGRATE_POWEROFF_FAILURE:
+        case PROLOG_MIGRATE_SUSPEND: case PROLOG_MIGRATE_SUSPEND_FAILURE:
+        case PROLOG_MIGRATE_UNKNOWN: case PROLOG_MIGRATE_UNKNOWN_FAILURE:
+        case BOOT: case BOOT_FAILURE:
+        case BOOT_STOPPED: case BOOT_STOPPED_FAILURE:
+        case BOOT_UNDEPLOY: case BOOT_UNDEPLOY_FAILURE:
+        case BOOT_MIGRATE: case BOOT_MIGRATE_FAILURE:
+        case BOOT_POWEROFF: case BOOT_SUSPENDED: case BOOT_UNKNOWN:
+        case SAVE_MIGRATE: case MIGRATE:
+            return true;
+        default:
+            return false;
+    }
+}
 
 bool VirtualMachine::checked_migration_supported(int target_hid, int target_cid,
                                                  int target_ds, std::string& error) const

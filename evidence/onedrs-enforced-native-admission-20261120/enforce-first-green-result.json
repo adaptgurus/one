@@ -1,0 +1,269 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T04:35:00.574212+00:00",
+  "binary_sha256": "1352bd0959f60fdaa91405700068d3343b5458bc334781777fed24b1db3e14f0",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v2_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced-stale-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_deploy_request_accepted_before_drift",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_refuses_driver_after_stale_precheck",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_intent_is_native_history",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced-deploy-restart_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_deploy_intent_survives_restart",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_recover_success_requires_reservation",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_retry_rechecks_capacity",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_deploy_retry_after_capacity_available",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced-stale-migrate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_migrate_request_accepted_before_drift",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_migrate_refuses_driver_after_stale_precheck",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_migrate_intent_is_native_history",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_migrate_source_accounting_preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_migrate_retry_after_capacity_available",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced-stale-cold_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_cold_request_accepted_before_drift",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_cold_refuses_driver_after_stale_precheck",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_cold_intent_is_native_history",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_cold_source_accounting_preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "enforced_cold_retry_after_capacity_available",
+      "result": "PASS"
+    },
+    {
+      "name": "force-override-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "explicit_force_deploy_request_preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "explicit_force_deploy_override_is_visible",
+      "result": "PASS"
+    },
+    {
+      "name": "force-override-migrate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "explicit_force_migrate_request_preserved",
+      "result": "PASS"
+    },
+    {
+      "name": "explicit_force_migrate_override_is_visible",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed-deploy-0_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_deploy_0_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_deploy_0_one_slot_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed-deploy-1_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_deploy_1_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_deploy_1_one_slot_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed-deploy-2_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_deploy_2_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_deploy_2_one_slot_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed-resize_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "mixed_resize_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "mixed_resize_one_slot_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "resize-ledger-failure_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "enforced_resize_failed_ledger_refuses_request",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_apply_after_failed_resize_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_apply_after_failed_resize_capacity_consistent",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "enforce",
+  "status": "PASS",
+  "finished_at": "2026-11-20T04:36:59.413825+00:00"
+}
