@@ -1,0 +1,7 @@
+{
+  "started_utc": "2026-11-20T02:37:07.491151+00:00",
+  "result": "FAIL",
+  "error": "RuntimeError('[\\'runuser\\', \\'-u\\', \\'oneadmin\\', \\'--\\', \\'python3\\', \\'-c\\', \\'import os,sys; d=os.scandir(sys.argv[1]); next(d,None); d.close(); print(\"opened_native_mount\")\\', \\'/srv/layersentry-native/dr/files\\'] failed: Traceback (most recent call last):\\n  File \"<string>\", line 1, in <module>\\nPermissionError: [Errno 13] Permission denied: \\'/srv/layersentry-native/dr/files\\'\\n')",
+  "rollback_errors": [],
+  "ended_utc": "2026-11-20T02:37:18.124366+00:00"
+}

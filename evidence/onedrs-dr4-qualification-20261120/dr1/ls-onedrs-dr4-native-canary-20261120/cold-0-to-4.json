@@ -1,0 +1,49 @@
+{
+  "started_utc": "2026-11-20T02:57:00.865943+00:00",
+  "result": "PASS_COLD_MIGRATION_AND_GUEST_PAYLOAD",
+  "scope": "Disposable 256 MiB synthetic cold migration, not autonomous failure recovery or production workload SLA",
+  "declared_rto_seconds": 180,
+  "declared_synthetic_payload_rpo_bytes": 0,
+  "before": {
+    "state": 3,
+    "lcm": 3,
+    "host": 0,
+    "ds": 104,
+    "seq": 1,
+    "uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b"
+  },
+  "guest_before": {
+    "boot_count": 2,
+    "boot_id": "046230ea-35ce-4fa9-88c5-fcaaae66c012\n",
+    "heartbeat": 34,
+    "initialized": false,
+    "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+    "state": "READY",
+    "uptime_ms": 66035
+  },
+  "from_host": 0,
+  "to_host": 4,
+  "native_vm_id": 53,
+  "other_vm_count": 31,
+  "native_request_accepted": true,
+  "after": {
+    "state": 3,
+    "lcm": 3,
+    "host": 4,
+    "ds": 104,
+    "seq": 2,
+    "uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b"
+  },
+  "guest_after": {
+    "boot_count": 3,
+    "boot_id": "c864c694-45be-4d85-bbc4-f70e2b829a82\n",
+    "heartbeat": 2,
+    "initialized": false,
+    "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+    "state": "READY",
+    "uptime_ms": 2001
+  },
+  "elapsed_seconds": 7.123,
+  "other_vm_custody_preserved": true,
+  "ended_utc": "2026-11-20T02:57:07.989002+00:00"
+}

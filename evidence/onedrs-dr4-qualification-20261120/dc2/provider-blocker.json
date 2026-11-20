@@ -1,0 +1,22 @@
+{
+  "at_utc": "2026-11-20T02:49:50.115161+00:00",
+  "repository": "adaptgurus/one",
+  "workflow": "onedrs-candidate-safety.yml",
+  "workflow_id": 424545592,
+  "registered_on_default_by_pr": 62,
+  "registration_merge_commit": "7b7513e18377e6a9f80d93ceeae518ffbe4ef1ee",
+  "attempted_candidate": "5995c42b8a0fb17ad959e5eb6af2d9e6da0f4037",
+  "repository_actions_permissions": {
+    "enabled": true,
+    "allowed_actions": "all"
+  },
+  "workflow_state": "active",
+  "dispatch_http_status": 422,
+  "dispatch_message": "Actions has been disabled for this repository.",
+  "hosted_result": "BLOCKED_NO_RUN_CREATED",
+  "provider_documentation": "https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository",
+  "provider_guidance": "A separate GitHub-controlled repository/account disabled state may require GitHub Support review; changing repository permissions will not restore access.",
+  "inference": "Observed enabled repository setting plus active workflow plus disabled-state dispatch error is consistent with a separate provider-controlled disabled state. Exact account-level cause is not accessible through these repository endpoints.",
+  "workarounds_used": false,
+  "support_message_sent": false
+}

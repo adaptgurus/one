@@ -1,0 +1,9 @@
+{
+  "at_utc": "2026-11-20T03:03:45.044381+00:00",
+  "read_only": true,
+  "controlplane_pid": 828138,
+  "sql_require_tls": "true",
+  "observe_only": "true",
+  "autonomy_mode": "ADVISORY",
+  "result": "database_utc\tdatabase_host\n2026-11-20 03:03:45.037675\tdc1\nVariable_name\tValue\nSsl_cipher\tTLS_AES_256_GCM_SHA384\nresource_kind\trecords\tlatest_utc\nHost\t10\t2026-11-20 03:03:42.977602\ntenant\tresource_kind\tresource_id\tstatus\tobserved_at\tage_seconds\nplatform\tHost\tdr1\tHEALTHY\t2026-11-20 03:03:42.977602\t2\nplatform\tHost\tdr2\tHEALTHY\t2026-11-20 03:03:40.388133\t4\nplatform\tHost\tdr3\tHEALTHY\t2026-11-20 03:03:33.216221\t11\nplatform\tHost\tdr4\tHEALTHY\t2026-11-20 03:03:38.697796\t6\n"
+}

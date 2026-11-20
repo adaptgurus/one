@@ -1,0 +1,36 @@
+{
+  "hostname": "dr4",
+  "uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+  "peers": [
+    {
+      "hostname": "dr1",
+      "uuid": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+      "host_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAID1P6L/RueRuiugkkw+3VndY9UaO13HCC2SPPvauS1O9 root@dr1",
+      "oneadmin_public_keys": {
+        "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCXEjRjtoKz0FD0VkGJawH9W0aIyM7B+A/UR27wrFAGcOkc/aCdeGD/6+invVQ5zGDkKls27T2o5RVUNWUQ//cOgzed0u+JJZ+ENluwDESKA27w0lwKyeXp+diri4HnlEUKYexjrBWip9/muPo8sO8Ze9MV8DhysamFLhYm1U4XE1M7BGk9+0Ewc7KHhtEtHjjaxzE4bsTlJfOlFPqUgH/HT5nKvkiTevrXF1pLxCGQJmNTZ4XFx39LIBy4sIsCUcDqSYWrTPvuvHnf/WCTaa7g9JQpDlXTf1jTREV+jIHd3FQZn+OBA6JIAtdeKeK6UjMYVZXNRW4BuQzPF+CJqFen2OWA2aNOOTI5ft0w0RcIM8HQlqzbq1hdwWNm5pTiDMFC9DScmfc689tVrHrIEQPgJpvxYlJWNVZmJO+lxZcO3kuGHD9Zjn7NyzZ8PiD+owK0VJ2VaZf+/JIyzRhUqES2ySBxvQZPlKVcTyBCazEuSlYvqXwIUypqWlK6gSvqzQk= oneadmin@dr1"
+      },
+      "ip": "172.17.60.80",
+      "deviceId": "71eac502-0e19-43a8-bd78-1282918983ab"
+    },
+    {
+      "hostname": "dr2",
+      "uuid": "7a8de079-0a04-4bc6-8c53-e3439d7ce94d",
+      "host_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMxukpM+A5zbXHcOoQV3fuuM8/K9j6+cZvcWIUepnqeH root@dr2",
+      "oneadmin_public_keys": {
+        "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCXEjRjtoKz0FD0VkGJawH9W0aIyM7B+A/UR27wrFAGcOkc/aCdeGD/6+invVQ5zGDkKls27T2o5RVUNWUQ//cOgzed0u+JJZ+ENluwDESKA27w0lwKyeXp+diri4HnlEUKYexjrBWip9/muPo8sO8Ze9MV8DhysamFLhYm1U4XE1M7BGk9+0Ewc7KHhtEtHjjaxzE4bsTlJfOlFPqUgH/HT5nKvkiTevrXF1pLxCGQJmNTZ4XFx39LIBy4sIsCUcDqSYWrTPvuvHnf/WCTaa7g9JQpDlXTf1jTREV+jIHd3FQZn+OBA6JIAtdeKeK6UjMYVZXNRW4BuQzPF+CJqFen2OWA2aNOOTI5ft0w0RcIM8HQlqzbq1hdwWNm5pTiDMFC9DScmfc689tVrHrIEQPgJpvxYlJWNVZmJO+lxZcO3kuGHD9Zjn7NyzZ8PiD+owK0VJ2VaZf+/JIyzRhUqES2ySBxvQZPlKVcTyBCazEuSlYvqXwIUypqWlK6gSvqzQk= oneadmin@dr1"
+      },
+      "ip": "172.17.60.81",
+      "deviceId": "8316541c-2209-43a1-97fd-b2cf2ff4f70f"
+    },
+    {
+      "hostname": "dr3",
+      "uuid": "3a521acf-c116-4c5e-a6ce-920527f45d45",
+      "host_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJDIKBiIb9VEbshkvWEzGItmF3smjoVzGs/EBy9/a84d root@dr3",
+      "oneadmin_public_keys": {
+        "id_rsa.pub": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCXEjRjtoKz0FD0VkGJawH9W0aIyM7B+A/UR27wrFAGcOkc/aCdeGD/6+invVQ5zGDkKls27T2o5RVUNWUQ//cOgzed0u+JJZ+ENluwDESKA27w0lwKyeXp+diri4HnlEUKYexjrBWip9/muPo8sO8Ze9MV8DhysamFLhYm1U4XE1M7BGk9+0Ewc7KHhtEtHjjaxzE4bsTlJfOlFPqUgH/HT5nKvkiTevrXF1pLxCGQJmNTZ4XFx39LIBy4sIsCUcDqSYWrTPvuvHnf/WCTaa7g9JQpDlXTf1jTREV+jIHd3FQZn+OBA6JIAtdeKeK6UjMYVZXNRW4BuQzPF+CJqFen2OWA2aNOOTI5ft0w0RcIM8HQlqzbq1hdwWNm5pTiDMFC9DScmfc689tVrHrIEQPgJpvxYlJWNVZmJO+lxZcO3kuGHD9Zjn7NyzZ8PiD+owK0VJ2VaZf+/JIyzRhUqES2ySBxvQZPlKVcTyBCazEuSlYvqXwIUypqWlK6gSvqzQk= oneadmin@dr1"
+      },
+      "ip": "172.17.60.82",
+      "deviceId": "9901357e-340c-4add-8bc4-c950d85761d2"
+    }
+  ]
+}

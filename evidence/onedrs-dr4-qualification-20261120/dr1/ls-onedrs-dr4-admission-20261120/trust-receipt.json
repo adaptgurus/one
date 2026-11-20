@@ -1,0 +1,7 @@
+{
+  "host": "dr1",
+  "known_hosts_added": 1,
+  "authorized_keys_added": 1,
+  "known_hosts_sha256": "22e96e1002cf7b5385be724c2df8490f20c05ff367aa3625ac67fe379302b538",
+  "authorized_keys_sha256": "a5a381ee80a1a0f17e6b7808270e067b4aeddf2dfb08644b99ae9a77474f0ca1"
+}

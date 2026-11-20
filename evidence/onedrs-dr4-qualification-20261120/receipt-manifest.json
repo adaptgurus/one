@@ -1,0 +1,293 @@
+{
+  "collected_utc": "2026-11-20T03:22:25.365381+00:00",
+  "collection": "Exact explicitly selected root-owned scripts and receipts over verified SSH; private credentials, keys, raw environment and backup files excluded.",
+  "entries": [
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/enroll-native-host.py",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/enroll-native-host.py",
+      "sha256": "a3316cf98c67a35392e5739764f8dd7042e846bdb08463fc4eb39181cdf0d01d",
+      "bytes": 3586
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/resume-native-enrollment.py",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/resume-native-enrollment.py",
+      "sha256": "d45b4f866f658bd90997cd0ee2e1223bc13977e39a8219b2309cc0f644bf0034",
+      "bytes": 3774
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/native-enrollment.json",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/native-enrollment.json",
+      "sha256": "3d656a34a09cffe1fd897cdfe1234cac5a84d171cd037340071ccf8abe506425",
+      "bytes": 403
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/native-enrollment-r2.json",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/native-enrollment-r2.json",
+      "sha256": "10ab53a2efbdb81eee4e57da21ea7734511efecbcc3f561788fe0024143ec816",
+      "bytes": 508
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/native-custody-before-enrollment.json",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/native-custody-before-enrollment.json",
+      "sha256": "f0e80106517f7c0b1f929e853a105823c56088cfc896c3b10689d593fd72d7b6",
+      "bytes": 6715
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/enroll-native-trust.py",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/enroll-native-trust.py",
+      "sha256": "4dd1e0ef319ad5a10a0d7e3adbc1921d19798e97732bc595f51f59cac37ddab5",
+      "bytes": 2904
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/trust-receipt.json",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/trust-receipt.json",
+      "sha256": "642bd56ae19232ea686ae64af7d4cd6dcd9d5612f1d672a3a51fad7eabc56776",
+      "bytes": 264
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/trusted-peers.json",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/trusted-peers.json",
+      "sha256": "980e80598a0a8aee5aca9f9ee15f684b3ede00ccca2ca711a210830f7b514681",
+      "bytes": 557
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/create-native-canary.py",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/create-native-canary.py",
+      "sha256": "6b17783514c464f500b74f918813bb58e3d7950bd2279c9fff966815dd276233",
+      "bytes": 4439
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/create-native-canary-r2.py",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/create-native-canary-r2.py",
+      "sha256": "432963dc8b53857f91936bc288a2af986ff9424eefc25cf673e63ba6ca321e75",
+      "bytes": 4441
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/create-native-canary-r3.py",
+      "path": "dr1/ls-onedrs-dr4-admission-20261120/create-native-canary-r3.py",
+      "sha256": "d4e9b28de0940ad44f854f73aeaedc81172d98e721ffa15aa5d6fbc557fbaefe",
+      "bytes": 4589
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-native-canary-20261120/boot-observation.json",
+      "path": "dr1/ls-onedrs-dr4-native-canary-20261120/boot-observation.json",
+      "sha256": "c78b8856dd5dfa71279563996ff1ba77c09c5d429a1b4748c5e3f77fe45bc80e",
+      "bytes": 396
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-native-canary-20261120/cold-0-to-4.json",
+      "path": "dr1/ls-onedrs-dr4-native-canary-20261120/cold-0-to-4.json",
+      "sha256": "45fce2fe3e6a4a55082f7f03428873a2c2b5133a79c697c077aaaad4f55bd288",
+      "bytes": 1373
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-native-canary-20261120/cold-4-to-0.json",
+      "path": "dr1/ls-onedrs-dr4-native-canary-20261120/cold-4-to-0.json",
+      "sha256": "4dfa0ffc687f73abd4ff827e2edbc147289a2c3007ee98dc357f73db93bc6606",
+      "bytes": 1371
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-native-canary-20261120/cold-migration-test.py",
+      "path": "dr1/ls-onedrs-dr4-native-canary-20261120/cold-migration-test.py",
+      "sha256": "9b54942d215d2355ed41a90872e275d7838d80ffd78356f859f95aeda32d3a2e",
+      "bytes": 5031
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-native-canary-20261120/manifest.json",
+      "path": "dr1/ls-onedrs-dr4-native-canary-20261120/manifest.json",
+      "sha256": "8403634bcf2074918c1d4305df58fba60489598fbc085d5e2fec654b9afba8c2",
+      "bytes": 779
+    },
+    {
+      "source_host": "dr1",
+      "source_path": "/root/ls-onedrs-dr4-native-canary-20261120/rejected-old-initramfs.json",
+      "path": "dr1/ls-onedrs-dr4-native-canary-20261120/rejected-old-initramfs.json",
+      "sha256": "0d03497f6f693aafffd7e1a19d9d2eab3bbf21e80c05672453693cf0c78e8c89",
+      "bytes": 332
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-bridge-20261120/bridge_activation.py",
+      "path": "dr4/ls-onedrs-dr4-bridge-20261120/bridge_activation.py",
+      "sha256": "09b0c17a690f9930c3d38a7fcaa8273f31b63c383a0d88b17c5a9af548a508ce",
+      "bytes": 13337
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-bridge-20261120/before.json",
+      "path": "dr4/ls-onedrs-dr4-bridge-20261120/before.json",
+      "sha256": "72eee069f579bcb90304a02119ba52f329a66a39426cfd13513dc04f72e6a62d",
+      "bytes": 11155
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-bridge-20261120/after.json",
+      "path": "dr4/ls-onedrs-dr4-bridge-20261120/after.json",
+      "sha256": "6bf202c494292cc91714556190b22aa11657a91ecf4c9c57abd516dc828c5bca",
+      "bytes": 11238
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-bridge-20261120/activated-readback.json",
+      "path": "dr4/ls-onedrs-dr4-bridge-20261120/activated-readback.json",
+      "sha256": "cf130524aff1edc0b67c566dc055350f553502b5a08c37d5b7df24dcbc891d74",
+      "bytes": 11267
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-bridge-20261120/external-ack.json",
+      "path": "dr4/ls-onedrs-dr4-bridge-20261120/external-ack.json",
+      "sha256": "39957009cdbdec7eb6a805555a3734b567e1aaa982b9a4fed7a6de92da15ae24",
+      "bytes": 366
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-bridge-20261120/nat-egress-after.json",
+      "path": "dr4/ls-onedrs-dr4-bridge-20261120/nat-egress-after.json",
+      "sha256": "3c418219ee14e793dc1a7370329549179648de3773f79a5b3cf6002eddf7c0f4",
+      "bytes": 1039
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-bridge-20261120/nat-egress-before.json",
+      "path": "dr4/ls-onedrs-dr4-bridge-20261120/nat-egress-before.json",
+      "sha256": "72870de5d9e0b6b59242ada1cb240eb6521ceaa80c182601e8cd14dcf9b58641",
+      "bytes": 1765
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-bridge-20261120/state.json",
+      "path": "dr4/ls-onedrs-dr4-bridge-20261120/state.json",
+      "sha256": "517dcfb245ab840ad16f0e8f472af16410c2a4046932f713a6c330cbfff2a11f",
+      "bytes": 867
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/enroll-native-trust.py",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/enroll-native-trust.py",
+      "sha256": "918cbf9ed1ed6a191fff73cce90ed3ebd8792768f2d42c21ec0f8d1c91981695",
+      "bytes": 3132
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/native-boot-result.json",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/native-boot-result.json",
+      "sha256": "d85f25aeefb5e8e3a69c1c69e0a0e9e09d36963d5b574f2c9c154b9c2d347251",
+      "bytes": 468
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/native-outbound-ssh.json",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/native-outbound-ssh.json",
+      "sha256": "22631a47a41ea31961d9de6aae7d0aee2b41529266a950d7f522cf86ca552637",
+      "bytes": 373
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/persist-native-readiness.py",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/persist-native-readiness.py",
+      "sha256": "cb94207eec9c8480e049029aeb4346df295eb1d15db62bb40f9d8542133c782c",
+      "bytes": 6941
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/persist-native-readiness-r2.py",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/persist-native-readiness-r2.py",
+      "sha256": "a067de15c0b3bcf9739656db1e1fa7a4b50a6e990d6bd01c3c26d4f02cd4a67b",
+      "bytes": 7197
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/persist-native-readiness-r3.py",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/persist-native-readiness-r3.py",
+      "sha256": "bce411160109392ec7844ff38dbad5fffae4b1e228fd0d3117d0d587172e68d4",
+      "bytes": 7594
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/persistence-result.json",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/persistence-result.json",
+      "sha256": "034df30e1e2436aa54857bcf9ff467e8507135f54ef1cd24e6d8257826f6e39c",
+      "bytes": 167
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/persistence-r2-result.json",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/persistence-r2-result.json",
+      "sha256": "eb28736a3323aa000457701f0ecb44c775951a9352a4a47b28709b8bb82b040e",
+      "bytes": 581
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/persistence-r3-result.json",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/persistence-r3-result.json",
+      "sha256": "e1ff7b9bcb41aaf1102e4aa69d75498f61ffbdcbff6b8ed121ffe3b98670d653",
+      "bytes": 459
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/persistence-r3-before.json",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/persistence-r3-before.json",
+      "sha256": "27902ae3e2e951511ce92d4167b5043afcd86b3108d1a50d217c15d30d296ae8",
+      "bytes": 4041
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/qualify-storage.py",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/qualify-storage.py",
+      "sha256": "f0e981a9ffa0f71b6e72d7a9bd75e24908a144754efc96c274aeacf9f2340112",
+      "bytes": 5974
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/storage-result.json",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/storage-result.json",
+      "sha256": "db752fd2c63c32a72eecdc8e218b9811cae12da8bece524f1868e2fcc24e250d",
+      "bytes": 4037
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/trust-receipt.json",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/trust-receipt.json",
+      "sha256": "6f7c89e30b4550d75b50069ec3e4d0cd8adf5ce9332dfd423e0ec64c2f1c3339",
+      "bytes": 264
+    },
+    {
+      "source_host": "dr4",
+      "source_path": "/root/ls-onedrs-dr4-admission-20261120/trusted-peers.json",
+      "path": "dr4/ls-onedrs-dr4-admission-20261120/trusted-peers.json",
+      "sha256": "25d8600c6aa219251c126c00b7006cb71e154cf83f860147ebb20640fb7aed1c",
+      "bytes": 2869
+    },
+    {
+      "source_host": "dc2",
+      "source_path": "/root/ls-onedrs-hosted-ci-20261120/provider-blocker.json",
+      "path": "dc2/provider-blocker.json",
+      "sha256": "0558905f7c98097865cf63e69b3bb5c15eb619aa546b3db5bb61423127e59ac3",
+      "bytes": 1316
+    },
+    {
+      "source_host": "dc2",
+      "source_path": "/root/ls-onedrs-agent-durability-20261120/durable-health-read.json",
+      "path": "dc2/durable-health-read.json",
+      "sha256": "7a2154aae77eb8f555c0aed85129fd735cba5f3eb84fefee99a2e62230c6ce20",
+      "bytes": 713
+    }
+  ]
+}

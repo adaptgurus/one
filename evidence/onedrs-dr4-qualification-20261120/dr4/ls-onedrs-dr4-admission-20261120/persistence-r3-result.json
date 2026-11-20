@@ -1,0 +1,14 @@
+{
+  "started_utc": "2026-11-20T02:38:52.074041+00:00",
+  "result": "PASS_PERSISTENT_CLIENT_MOUNTS_AND_MATCHED_LIBVIRT_MODE",
+  "guests_unchanged": true,
+  "guest_count": 8,
+  "libvirtd_pid_unchanged": true,
+  "enabled_automounts": [
+    "var-lib-one-datastores-104.automount",
+    "var-lib-one-datastores-105.automount",
+    "srv-layersentry\\x2dnative-dr-files.automount"
+  ],
+  "reboot_performed": false,
+  "ended_utc": "2026-11-20T02:38:54.481896+00:00"
+}

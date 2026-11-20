@@ -1,0 +1,11 @@
+{
+  "archive_sha256": "460f9fe5b302cdc17ceedcb413f503dc42a3285a91ce42047cc2aa9e19af7995",
+  "reason": "embedded init differs from corrected rootfs expected digest",
+  "embedded_init": [
+    {
+      "name": "init",
+      "size": 2216098,
+      "sha256": "950d2088648bc736fda4fb9b97a354e98d88ddbe79b061027b52da6a93f73a6d"
+    }
+  ]
+}

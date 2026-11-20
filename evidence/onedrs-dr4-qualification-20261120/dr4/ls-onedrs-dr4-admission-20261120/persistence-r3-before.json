@@ -1,0 +1,95 @@
+{
+  "guests": {
+    "ls-ovn26-canary-a-20261109": {
+      "xml_sha256": "0a5c42e46657210f4ac08b7b81c05490def20ea34bee2c2d53d391e903339237",
+      "pid": "457419",
+      "uuid": "3038a4fa-2b3f-4c16-b937-205eec35ed92"
+    },
+    "ls-ovn26-canary-b-20261109": {
+      "xml_sha256": "4c5c232a67eaf6147511de47a63c5d4288b71a011ae466fd7ac2370361866181",
+      "pid": "459097",
+      "uuid": "3a03a0a6-0420-4f2e-979e-eacf05f528bc"
+    },
+    "ls-ovn26-canary-c-20261109": {
+      "xml_sha256": "c5dce42fef7b9718ff75393197ca1aa38ff3861e4ea3a5a9e85a29af6e866a9c",
+      "pid": "461154",
+      "uuid": "f0717247-baa7-4234-b458-2dbed68f13ba"
+    },
+    "ls-ovn26-canary-d-20261109": {
+      "xml_sha256": "1a61acdc30c778ed450d1dc0fddf4aede25bb303c5a4d5361dad3279b054a10c",
+      "pid": "465156",
+      "uuid": "48019990-719b-4296-9a19-f3d4b78d3855"
+    },
+    "ls-ovn26-rpmbuilder-20261110": {
+      "xml_sha256": "99402b3535e8c76b7b37f58a1769bb82c6300edb4355661e342aef907c5dc8c4",
+      "pid": "489234",
+      "uuid": "3701e57a-373a-40fe-9256-2e80c3c61b72"
+    },
+    "ls-ovn26-gen106-signed-rpm-qa-20261112": {
+      "xml_sha256": "dba7f68a5c04aba24bad658beb9a8dc7e0adb287afac0d0a2ba05f6520be2200",
+      "pid": "616049",
+      "uuid": "6cd30cd6-be6c-41ce-827a-4a07531a23d1"
+    },
+    "ls-ovn26-gen109-native-20261113": {
+      "xml_sha256": "8d46b718287142969385d70bf04115009859fab47520954ef999b1506bd61e47",
+      "pid": "641943",
+      "uuid": "b8fcfcf4-163d-4367-b592-15035f530936"
+    },
+    "ls-ovn26-ipv6-feature-20261113": {
+      "xml_sha256": "dc808994ba49273097c751852a5579c8ae1b62648516bcfd4c0eb3f84c2cce3d",
+      "pid": "658834",
+      "uuid": "67817482-0c5f-4a15-ab48-f3e678660f69"
+    }
+  },
+  "units": {
+    "virtqemud.service": "enabled",
+    "virtqemud.socket": "enabled",
+    "virtqemud-ro.socket": "enabled",
+    "virtqemud-admin.socket": "enabled",
+    "virtproxyd.service": "disabled",
+    "virtproxyd.socket": "enabled",
+    "virtproxyd-ro.socket": "enabled",
+    "virtproxyd-admin.socket": "enabled",
+    "virtinterfaced.service": "disabled",
+    "virtinterfaced.socket": "enabled",
+    "virtinterfaced-ro.socket": "enabled",
+    "virtinterfaced-admin.socket": "enabled",
+    "virtnetworkd.service": "disabled",
+    "virtnetworkd.socket": "enabled",
+    "virtnetworkd-ro.socket": "enabled",
+    "virtnetworkd-admin.socket": "enabled",
+    "virtnodedevd.service": "disabled",
+    "virtnodedevd.socket": "enabled",
+    "virtnodedevd-ro.socket": "enabled",
+    "virtnodedevd-admin.socket": "enabled",
+    "virtnwfilterd.service": "disabled",
+    "virtnwfilterd.socket": "enabled",
+    "virtnwfilterd-ro.socket": "enabled",
+    "virtnwfilterd-admin.socket": "enabled",
+    "virtsecretd.service": "disabled",
+    "virtsecretd.socket": "enabled",
+    "virtsecretd-ro.socket": "enabled",
+    "virtsecretd-admin.socket": "enabled",
+    "virtstoraged.service": "disabled",
+    "virtstoraged.socket": "enabled",
+    "virtstoraged-ro.socket": "enabled",
+    "virtstoraged-admin.socket": "enabled",
+    "libvirtd.service": "disabled",
+    "libvirtd.socket": "disabled",
+    "libvirtd-ro.socket": "disabled",
+    "libvirtd-admin.socket": "disabled",
+    "virtlogd.socket": "disabled",
+    "virtlockd.socket": "disabled"
+  },
+  "mounts": {
+    "/var/lib/one/datastores/104": {
+      "source": "172.17.40.215:/Pool_1/SHARED_DATA/Ls_two_DATA/dcdr-lab-20260930/files/ls-k1p0-20261025-3d188077/storage-20261026/system",
+      "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=172.17.60.88,local_lock=none,addr=172.17.40.215"
+    },
+    "/var/lib/one/datastores/105": {
+      "source": "172.17.40.215:/Pool_1/SHARED_DATA/Ls_two_DATA/dcdr-lab-20260930/files/ls-k1p0-20261025-3d188077/storage-20261026/image",
+      "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=172.17.60.88,local_lock=none,addr=172.17.40.215"
+    }
+  },
+  "libvirtd_pid": "97935"
+}

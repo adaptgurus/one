@@ -1,0 +1,312 @@
+{
+  "51": {
+    "name": "ls-k1up-1119-cp3",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "291f36bd-0afd-4f74-9fbd-45c47ec11bbd",
+    "uuid": null,
+    "host": "0",
+    "ds": "104",
+    "seq": "1"
+  },
+  "50": {
+    "name": "ls-k1up-1119-worker2",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "a803b461-d8a0-4d0e-a94a-1c57c28a6e4f",
+    "uuid": null,
+    "host": "2",
+    "ds": "104",
+    "seq": "1"
+  },
+  "49": {
+    "name": "ls-k1up-1119-cp2",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "96db4365-d916-4419-9a13-7006c295f037",
+    "uuid": null,
+    "host": "2",
+    "ds": "104",
+    "seq": "1"
+  },
+  "48": {
+    "name": "ls-k1up-1119-worker1",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "437e1cfe-28c3-4bd3-adee-af20cb46f447",
+    "uuid": null,
+    "host": "1",
+    "ds": "104",
+    "seq": "1"
+  },
+  "47": {
+    "name": "ls-k1up-1119-cp1",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "6dc761a2-fb01-48e3-9ceb-a62b30b713ba",
+    "uuid": null,
+    "host": "1",
+    "ds": "104",
+    "seq": "1"
+  },
+  "41": {
+    "name": "lsrv2-5bc659ff-isolated-recovery-20261113a",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "23d35bf7-1612-47da-bf9d-c98c4369baa7",
+    "uuid": null,
+    "host": "0",
+    "ds": "102",
+    "seq": "2"
+  },
+  "35": {
+    "name": "lsrv2-xsite-secondvm-20261110-dr-recovery-R2",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "7e0f28e4-651c-45a6-a3a3-41d0213e5303",
+    "uuid": null,
+    "host": "2",
+    "ds": "108",
+    "seq": "4"
+  },
+  "34": {
+    "name": "lsrv2-xsite-20261110-1300-dr-recovery-C",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "61426ff1-2850-4471-9cec-428161d81cfa",
+    "uuid": null,
+    "host": "0",
+    "ds": "107",
+    "seq": "2"
+  },
+  "33": {
+    "name": "labsec-20261102-dr-TEST_CLONE",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "3ab662e4-527d-5531-a9a2-cb2b466e5f8f",
+    "uuid": null,
+    "host": "0",
+    "ds": "102",
+    "seq": "0"
+  },
+  "32": {
+    "name": "labsec-20261102-dr-FENCED_FAILOVER",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "94da2ddb-2798-542b-98f6-a1b7a4eeb7bd",
+    "uuid": null,
+    "host": "0",
+    "ds": "102",
+    "seq": "0"
+  },
+  "31": {
+    "name": "lsdr-ad83351e3a8991fc58ab2c9c",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "03c25e76-5686-46c6-af31-26a033ca71be",
+    "uuid": null,
+    "host": "0",
+    "ds": "102",
+    "seq": "120"
+  },
+  "26": {
+    "name": "ls-k1p0-20261025-3d188077-dr-worker1r",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "3c5629a2-7bfe-40f1-b5b5-3ec744137c7e",
+    "uuid": null,
+    "host": "1",
+    "ds": "104",
+    "seq": "3"
+  },
+  "25": {
+    "name": "ls-k1p0-20261025-3d188077-dr-lb2",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "135c3618-16c2-4047-baa0-7ba144f13614",
+    "uuid": null,
+    "host": "2",
+    "ds": "104",
+    "seq": "2"
+  },
+  "24": {
+    "name": "ls-k1p0-20261025-3d188077-dr-lb1",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "25e92acb-56c0-4a25-a7ff-23f408a20851",
+    "uuid": null,
+    "host": "0",
+    "ds": "104",
+    "seq": "4"
+  },
+  "23": {
+    "name": "ls-k1p0-20261025-3d188077-dr-worker6",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "4e06634a-135f-455a-b55f-6fb666c36236",
+    "uuid": null,
+    "host": "2",
+    "ds": "104",
+    "seq": "1"
+  },
+  "22": {
+    "name": "ls-k1p0-20261025-3d188077-dr-worker5",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "549c276d-2851-4bf8-82fb-071a02084cdf",
+    "uuid": null,
+    "host": "1",
+    "ds": "104",
+    "seq": "3"
+  },
+  "21": {
+    "name": "ls-k1p0-20261025-3d188077-dr-worker4",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "5c265b8c-4255-413a-9c1c-43b83a5861c0",
+    "uuid": null,
+    "host": "0",
+    "ds": "104",
+    "seq": "4"
+  },
+  "20": {
+    "name": "ls-k1p0-20261025-3d188077-dr-worker3",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "07186eb6-14f7-495f-a41e-7ba52e42385c",
+    "uuid": null,
+    "host": "2",
+    "ds": "104",
+    "seq": "2"
+  },
+  "19": {
+    "name": "ls-k1p0-20261025-3d188077-dr-worker2",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "28c34d61-5b72-4724-83f6-737c57167260",
+    "uuid": null,
+    "host": "1",
+    "ds": "104",
+    "seq": "3"
+  },
+  "17": {
+    "name": "ls-k1p0-20261025-3d188077-dr-cp3",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "25cd57b5-40b0-4b43-a5a1-2d4e48184a05",
+    "uuid": null,
+    "host": "2",
+    "ds": "104",
+    "seq": "1"
+  },
+  "16": {
+    "name": "ls-k1p0-20261025-3d188077-dr-cp2",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "1b386a19-5648-4421-b3c4-008e06604f6b",
+    "uuid": null,
+    "host": "0",
+    "ds": "104",
+    "seq": "2"
+  },
+  "15": {
+    "name": "ls-k1p0-20261025-3d188077-dr-cp1",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "37fd7d37-0e1b-4ea4-a758-1b6f4566550c",
+    "uuid": null,
+    "host": "1",
+    "ds": "104",
+    "seq": "5"
+  },
+  "14": {
+    "name": "ls-k1-dr-shared-nfs-smoke-20261026",
+    "state": "3",
+    "lcm": "3",
+    "deploy": "5021598d-0a71-4ad0-88a3-55837b21206c",
+    "uuid": null,
+    "host": "1",
+    "ds": "104",
+    "seq": "1"
+  },
+  "11": {
+    "name": "lsrv2-aa6d1588-pf1",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "61c82636-0778-44b0-8e73-279a5c6c7d35",
+    "uuid": null,
+    "host": "0",
+    "ds": "102",
+    "seq": "27"
+  },
+  "7": {
+    "name": "ls-onedrs-dr-place-canary-20261008",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "1d694e75-11ec-45bd-9af0-25af1249466f",
+    "uuid": null,
+    "host": "2",
+    "ds": "100",
+    "seq": "0"
+  },
+  "5": {
+    "name": "dr-dcdr-lab-qemu-mutable-stream-g3",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "161e4949-1e0f-4b05-8921-04164dcf0e2a",
+    "uuid": null,
+    "host": "0",
+    "ds": "100",
+    "seq": "1"
+  },
+  "4": {
+    "name": "dr-dcdr-lab-qemu-mutable-stream-g2",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "6e805819-3ffe-48a8-94af-67964946249b",
+    "uuid": null,
+    "host": "0",
+    "ds": "100",
+    "seq": "1"
+  },
+  "3": {
+    "name": "dr-dcdr-lab-qemu-mutable-stream-g1",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "612e239c-55a9-414c-85d0-0e6435da381b",
+    "uuid": null,
+    "host": "0",
+    "ds": "100",
+    "seq": "0"
+  },
+  "2": {
+    "name": "dr-dcdr-lab-qemu-mutable-fixed-g1",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "360d432f-67b5-4382-abe1-2cf2220f1660",
+    "uuid": null,
+    "host": "0",
+    "ds": "100",
+    "seq": "0"
+  },
+  "1": {
+    "name": "dr-dcdr-lab-sol-mysql",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "1d441a46-1158-49a9-b21e-3d3635951d78",
+    "uuid": null,
+    "host": "1",
+    "ds": "100",
+    "seq": "12"
+  },
+  "0": {
+    "name": "dr-dcdr-lab-sol-frontend",
+    "state": "8",
+    "lcm": "0",
+    "deploy": "24a66e2e-7dfb-43dd-b579-1e737a020912",
+    "uuid": null,
+    "host": "2",
+    "ds": "100",
+    "seq": "70"
+  }
+}
