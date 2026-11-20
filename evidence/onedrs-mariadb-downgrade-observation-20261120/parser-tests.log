@@ -1,0 +1,11 @@
+test_ambiguous_or_remote_config_is_rejected (test_native_mysql_snapshot.NativeMysqlSnapshotTests) ... ok
+test_duplicate_engine_and_unexpected_records_are_rejected (test_native_mysql_snapshot.NativeMysqlSnapshotTests) ... ok
+test_hex_preserves_exact_utf8_and_newlines (test_native_mysql_snapshot.NativeMysqlSnapshotTests) ... ok
+test_incomplete_nontransactional_and_writable_inputs_are_rejected (test_native_mysql_snapshot.NativeMysqlSnapshotTests) ... ok
+test_native_string_escapes_are_preserved (test_native_mysql_snapshot.NativeMysqlSnapshotTests) ... ok
+test_quoted_credentials_preserve_literal_punctuation (test_native_mysql_snapshot.NativeMysqlSnapshotTests) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.001s
+
+OK
