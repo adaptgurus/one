@@ -1,0 +1,77 @@
+name: OneDRS reviewed candidate safety
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Full immutable commit SHA from the reviewed OneDRS candidate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  safety:
+    name: Native scheduler and rollback source safety
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Validate immutable candidate identity
+        env:
+          CANDIDATE_SHA: ${{ inputs.commit_sha }}
+        run: |
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "A full commit SHA is required" >&2; exit 1; }
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.commit_sha }}
+          persist-credentials: false
+      - name: Verify checked out candidate
+        env:
+          CANDIDATE_SHA: ${{ inputs.commit_sha }}
+        run: test "$(git rev-parse HEAD)" = "$CANDIDATE_SHA"
+      - name: Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned scheduler dependencies
+        run: |
+          python -m pip install --disable-pip-version-check -r .github/requirements/onedrs-safety.txt
+          python -m pip check
+      - name: Native scheduler (normal)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src/schedm_mad/remotes/one_drs
+        run: |
+          python -m unittest discover -s src/schedm_mad/remotes/one_drs/tests -p 'test_*.py'
+      - name: Native scheduler (optimized)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src/schedm_mad/remotes/one_drs
+        run: |
+          python -O -m unittest discover -s src/schedm_mad/remotes/one_drs/tests -p 'test_*.py'
+      - name: Native scheduler compile
+        run: python -m compileall -q src/schedm_mad/remotes/one_drs/lib src/schedm_mad/remotes/one_drs/tests
+      - name: Native C++ driver, stream and socket lifetime
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/onedrs-native"
+          for suite in stop_restart_race teardown_contract blocked_io_contract; do
+            g++ -std=c++17 -O2 -Wall -Wextra -pthread -I include -I src/monitor/include \
+              "tests/native/driver-lifecycle/$suite.cc" -o "$RUNNER_TEMP/onedrs-native/$suite"
+            for trial in 1 2 3; do
+              timeout 60s "$RUNNER_TEMP/onedrs-native/$suite"
+            done
+          done
+      - name: Python 3.9 rollback contract
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+      - name: Rollback and simulated Raft cascade (normal)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tools/onedrs_qualification
+        run: |
+          python -m unittest discover -s tools/onedrs_qualification -p 'test_*.py'
+      - name: Rollback and simulated Raft cascade (optimized)
+        env:
+          PYTHONPATH: ${{ github.workspace }}/tools/onedrs_qualification
+        run: |
+          python -O -m unittest discover -s tools/onedrs_qualification -p 'test_*.py'
