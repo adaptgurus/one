@@ -1,0 +1,13 @@
+{
+  "status": "FAIL",
+  "at": "2026-11-20T06:10:16.106387+00:00",
+  "scope": "READ_ONLY_OBSERVER_TRUST_PATH",
+  "completed_before_failure": [
+    "75 shared data reads",
+    "existing52domain identities unchanged",
+    "network definitions unchanged",
+    "outerNFS exports and service identity unchanged",
+    "routes unchanged"
+  ],
+  "error": "Old realm read-only SSH refused: no ED25519 key in incorrectly specified /root/ls-onedrs-ha-e2e-20261114/known_hosts. No trust bypass or native mutation."
+}

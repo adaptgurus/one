@@ -209,6 +209,42 @@
       "path": "scripts/prepare_compute_storage.py",
       "sha256": "cae4197076263087b4a1e1e51b8e2276f1ef9f11c1da7a7efa79584bf11d73f3",
       "source": "/root/ls-onedrs-rc-20261120/prepare_compute_storage.py"
+    },
+    {
+      "bytes": 5353,
+      "path": "scripts/verify_realm_storage_r3.py",
+      "sha256": "c523ae866d387f97be24a0ad614f943a0a30538cea9da8e4fdb4cf4afdf2a006",
+      "source": "/root/ls-onedrs-rc-20261120/verify_realm_storage_r3.py"
+    },
+    {
+      "bytes": 5181,
+      "path": "receipts/storage-qualification-r3.json",
+      "sha256": "b72bec9025c257994c580754e84d0e2537392fda6fb627cc0efb36904680422c",
+      "source": "/root/ls-onedrs-rc-20261120/storage-qualification-r3.json"
+    },
+    {
+      "bytes": 5261,
+      "path": "scripts/verify_realm_storage.py",
+      "sha256": "99330e595110f0a3379bb5480f6b0c5f39c52a0afaec38067f185b07bcda351c",
+      "source": "/root/ls-onedrs-rc-20261120/verify_realm_storage.py"
+    },
+    {
+      "bytes": 504,
+      "path": "receipts/storage-qualification-r2-attempt1.json",
+      "sha256": "89d9c17981bc7b4271d6655c737f728a09b1652755581c223333b65568a7c59a",
+      "source": "/root/ls-onedrs-rc-20261120/storage-qualification-r2-attempt1.json"
+    },
+    {
+      "bytes": 7924,
+      "path": "scripts/repair_storage_mount_boundaries.py",
+      "sha256": "ae8f938998c99d14984ad7cb23c761c660f84a5315f35e8b6732ed6a4fbd76f4",
+      "source": "/root/ls-onedrs-rc-20261120/repair_storage_mount_boundaries.py"
+    },
+    {
+      "bytes": 3311,
+      "path": "receipts/storage-boundary-r2-result.json",
+      "sha256": "d602fca9a88a847368c494989cb368b9e539829ffb0ee6cffea369507f224911",
+      "source": "/root/ls-onedrs-rc-20261120/storage-boundary-r2-result.json"
     }
   ],
   "scope": "Fresh disposable nested candidate realm preparation; no native candidate installed or qualified"

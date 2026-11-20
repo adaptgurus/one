@@ -1,0 +1,86 @@
+{
+  "started": "2026-11-20T06:00:38.781122+00:00",
+  "scope": "OWNED_STORAGE_BIND_BOUNDARIES_AND_FRESH_CLIENT_RETRY",
+  "phases": [
+    {
+      "ip": "192.168.247.11",
+      "label": "ls-onedrs-rc-01-unmount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-01-unmount-storage-boundary-r2.log",
+      "log_sha256": "28a1e7a65a6f36f276438f377e6cc0dfeb53cd6416d1df573d4ae07bcfa9964a"
+    },
+    {
+      "ip": "192.168.247.12",
+      "label": "ls-onedrs-rc-02-unmount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-02-unmount-storage-boundary-r2.log",
+      "log_sha256": "28a1e7a65a6f36f276438f377e6cc0dfeb53cd6416d1df573d4ae07bcfa9964a"
+    },
+    {
+      "ip": "192.168.247.13",
+      "label": "ls-onedrs-rc-03-unmount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-03-unmount-storage-boundary-r2.log",
+      "log_sha256": "28a1e7a65a6f36f276438f377e6cc0dfeb53cd6416d1df573d4ae07bcfa9964a"
+    },
+    {
+      "ip": "192.168.247.14",
+      "label": "ls-onedrs-rc-04-unmount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-04-unmount-storage-boundary-r2.log",
+      "log_sha256": "28a1e7a65a6f36f276438f377e6cc0dfeb53cd6416d1df573d4ae07bcfa9964a"
+    },
+    {
+      "ip": "192.168.247.15",
+      "label": "ls-onedrs-rc-05-unmount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-05-unmount-storage-boundary-r2.log",
+      "log_sha256": "28a1e7a65a6f36f276438f377e6cc0dfeb53cd6416d1df573d4ae07bcfa9964a"
+    },
+    {
+      "ip": "192.168.247.16",
+      "label": "storage-server",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/storage-server-storage-boundary-r2.log",
+      "log_sha256": "12781014f2b3b42beb0c52de84429a80888dd63b0fe61dd32d9f2fe1e135cc73"
+    },
+    {
+      "ip": "192.168.247.11",
+      "label": "ls-onedrs-rc-01-remount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-01-remount-storage-boundary-r2.log",
+      "log_sha256": "0a03940ec7b909c823cdf8b4642670540033f7abc2450575e8aed467e70a32eb"
+    },
+    {
+      "ip": "192.168.247.12",
+      "label": "ls-onedrs-rc-02-remount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-02-remount-storage-boundary-r2.log",
+      "log_sha256": "cb0d0855f78cf847a9f9f9f5f9dd19960367f4370a223cc31ee7bb8e0e73f950"
+    },
+    {
+      "ip": "192.168.247.13",
+      "label": "ls-onedrs-rc-03-remount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-03-remount-storage-boundary-r2.log",
+      "log_sha256": "b114492d08895ea20279a9066a8e16150c9fd0e82baaca8c512757290de00057"
+    },
+    {
+      "ip": "192.168.247.14",
+      "label": "ls-onedrs-rc-04-remount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-04-remount-storage-boundary-r2.log",
+      "log_sha256": "c7d88e1dd5da0865ca0694426abf5c77df45ef2e951954880624c025ccf90fa7"
+    },
+    {
+      "ip": "192.168.247.15",
+      "label": "ls-onedrs-rc-05-remount",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-05-remount-storage-boundary-r2.log",
+      "log_sha256": "f10cd43fa8accfb9f642845c4b89cced71995d397b7db95bf8d74098bbe1c961"
+    }
+  ],
+  "status": "PASS",
+  "ended": "2026-11-20T06:00:47.952348+00:00",
+  "free_host_bytes": 23212765184
+}

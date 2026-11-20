@@ -1,0 +1,154 @@
+{
+  "status": "PASS",
+  "at": "2026-11-20T06:11:15.655219+00:00",
+  "scope": "FRESH_NFS42_SHARED_ACCESS_AND_EXISTING_CUSTODY_NOT_PRODUCTION_OR_PHYSICAL_FAILURE_PROOF",
+  "shared_read_checks": 75,
+  "node_reads": [
+    {
+      "status": "PASS",
+      "read_checks": 15,
+      "files": [
+        "files/.rc-access-ls-onedrs-rc-01",
+        "files/.rc-access-ls-onedrs-rc-02",
+        "files/.rc-access-ls-onedrs-rc-03",
+        "files/.rc-access-ls-onedrs-rc-04",
+        "files/.rc-access-ls-onedrs-rc-05",
+        "images/.rc-access-ls-onedrs-rc-01",
+        "images/.rc-access-ls-onedrs-rc-02",
+        "images/.rc-access-ls-onedrs-rc-03",
+        "images/.rc-access-ls-onedrs-rc-04",
+        "images/.rc-access-ls-onedrs-rc-05",
+        "system/.rc-access-ls-onedrs-rc-01",
+        "system/.rc-access-ls-onedrs-rc-02",
+        "system/.rc-access-ls-onedrs-rc-03",
+        "system/.rc-access-ls-onedrs-rc-04",
+        "system/.rc-access-ls-onedrs-rc-05"
+      ],
+      "uid": 9869,
+      "node": "ls-onedrs-rc-01"
+    },
+    {
+      "status": "PASS",
+      "read_checks": 15,
+      "files": [
+        "files/.rc-access-ls-onedrs-rc-01",
+        "files/.rc-access-ls-onedrs-rc-02",
+        "files/.rc-access-ls-onedrs-rc-03",
+        "files/.rc-access-ls-onedrs-rc-04",
+        "files/.rc-access-ls-onedrs-rc-05",
+        "images/.rc-access-ls-onedrs-rc-01",
+        "images/.rc-access-ls-onedrs-rc-02",
+        "images/.rc-access-ls-onedrs-rc-03",
+        "images/.rc-access-ls-onedrs-rc-04",
+        "images/.rc-access-ls-onedrs-rc-05",
+        "system/.rc-access-ls-onedrs-rc-01",
+        "system/.rc-access-ls-onedrs-rc-02",
+        "system/.rc-access-ls-onedrs-rc-03",
+        "system/.rc-access-ls-onedrs-rc-04",
+        "system/.rc-access-ls-onedrs-rc-05"
+      ],
+      "uid": 9869,
+      "node": "ls-onedrs-rc-02"
+    },
+    {
+      "status": "PASS",
+      "read_checks": 15,
+      "files": [
+        "files/.rc-access-ls-onedrs-rc-01",
+        "files/.rc-access-ls-onedrs-rc-02",
+        "files/.rc-access-ls-onedrs-rc-03",
+        "files/.rc-access-ls-onedrs-rc-04",
+        "files/.rc-access-ls-onedrs-rc-05",
+        "images/.rc-access-ls-onedrs-rc-01",
+        "images/.rc-access-ls-onedrs-rc-02",
+        "images/.rc-access-ls-onedrs-rc-03",
+        "images/.rc-access-ls-onedrs-rc-04",
+        "images/.rc-access-ls-onedrs-rc-05",
+        "system/.rc-access-ls-onedrs-rc-01",
+        "system/.rc-access-ls-onedrs-rc-02",
+        "system/.rc-access-ls-onedrs-rc-03",
+        "system/.rc-access-ls-onedrs-rc-04",
+        "system/.rc-access-ls-onedrs-rc-05"
+      ],
+      "uid": 9869,
+      "node": "ls-onedrs-rc-03"
+    },
+    {
+      "status": "PASS",
+      "read_checks": 15,
+      "files": [
+        "files/.rc-access-ls-onedrs-rc-01",
+        "files/.rc-access-ls-onedrs-rc-02",
+        "files/.rc-access-ls-onedrs-rc-03",
+        "files/.rc-access-ls-onedrs-rc-04",
+        "files/.rc-access-ls-onedrs-rc-05",
+        "images/.rc-access-ls-onedrs-rc-01",
+        "images/.rc-access-ls-onedrs-rc-02",
+        "images/.rc-access-ls-onedrs-rc-03",
+        "images/.rc-access-ls-onedrs-rc-04",
+        "images/.rc-access-ls-onedrs-rc-05",
+        "system/.rc-access-ls-onedrs-rc-01",
+        "system/.rc-access-ls-onedrs-rc-02",
+        "system/.rc-access-ls-onedrs-rc-03",
+        "system/.rc-access-ls-onedrs-rc-04",
+        "system/.rc-access-ls-onedrs-rc-05"
+      ],
+      "uid": 9869,
+      "node": "ls-onedrs-rc-04"
+    },
+    {
+      "status": "PASS",
+      "read_checks": 15,
+      "files": [
+        "files/.rc-access-ls-onedrs-rc-01",
+        "files/.rc-access-ls-onedrs-rc-02",
+        "files/.rc-access-ls-onedrs-rc-03",
+        "files/.rc-access-ls-onedrs-rc-04",
+        "files/.rc-access-ls-onedrs-rc-05",
+        "images/.rc-access-ls-onedrs-rc-01",
+        "images/.rc-access-ls-onedrs-rc-02",
+        "images/.rc-access-ls-onedrs-rc-03",
+        "images/.rc-access-ls-onedrs-rc-04",
+        "images/.rc-access-ls-onedrs-rc-05",
+        "system/.rc-access-ls-onedrs-rc-01",
+        "system/.rc-access-ls-onedrs-rc-02",
+        "system/.rc-access-ls-onedrs-rc-03",
+        "system/.rc-access-ls-onedrs-rc-04",
+        "system/.rc-access-ls-onedrs-rc-05"
+      ],
+      "uid": 9869,
+      "node": "ls-onedrs-rc-05"
+    }
+  ],
+  "existing_domain_identities_unchanged": 52,
+  "existing_network_definitions_unchanged": true,
+  "existing_outer_nfs_exports_and_service_identities_unchanged": true,
+  "old_r13_share_read_access": {
+    "scope": "READ_ONLY_EXISTING_R13_SHARE_ACCESS",
+    "uid": 9869,
+    "checks": [
+      {
+        "target": "/var/lib/one/datastores/102",
+        "source": "192.168.246.1:/system",
+        "fstype": "nfs4",
+        "readable": true,
+        "uid": 9869,
+        "gid": 9869,
+        "entries": 4
+      },
+      {
+        "target": "/var/lib/one/datastores/103",
+        "source": "192.168.246.1:/images",
+        "fstype": "nfs4",
+        "readable": true,
+        "uid": 9869,
+        "gid": 9869,
+        "entries": 1
+      }
+    ]
+  },
+  "unallowlisted_outer_nfs_connection_denied": true,
+  "fences_contains_no_files_or_secrets": true,
+  "five_original_host_pins_preserved": true,
+  "free_host_bytes": 22793560064
+}

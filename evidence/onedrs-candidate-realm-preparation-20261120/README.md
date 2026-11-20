@@ -18,7 +18,8 @@ The earlier R13 realm at 192.168.246.0/24 and its read-only soak are separate an
 - Local MariaDB 10.5.29 was prepared with loopback binding, WSREP disabled, empty native schemas, and READ-COMMITTED isolation. Native Raft bootstrap still requires the final candidate and a common authoritative database/auth bootstrap.
 - The native oneadmin account has UID/GID 9869 across all five nodes. All 25 native SSH matrix checks passed with strict, preseeded host keys.
 - Creating the sixth storage VM preserved the then-existing 52 running domains' UUIDs, processes, start ticks and definitions, all existing network definitions, and the outer NFS service/export custody.
-- The new storage VM's NFSv4.2-only service configuration passed its local checks. Its initial compute data-write test subsequently failed with a read-only export result. Storage usability is therefore **not passed** in this checkpoint; the failed receipt is retained pending correction and a new data-path check.
+- The new storage VM's initial compute data-write test failed because its read-only pseudo-root and writable child exports lacked mount boundaries. The correction is confined to the new storage VM: separate backing directories and persistent bind mounts, a read-only pseudo-root/fence leaf, and writable data leaves. The final qualification passed 75 native oneadmin cross-node reads against actual server hashes. The initial failure is retained.
+- Final storage qualification preserved all 52 preexisting domain identities/processes/definitions, existing networks/routes, outer NFS service/export identity, and both old R13 share read paths. An unallowlisted outer-host connection to new storage port 2049 was refused; the fence leaf was empty, original five SSH pins were preserved, and parent free space was 22,793,560,064 bytes. This is one software storage domain on the same physical parent.
 
 ## Retained failures and limits
 
@@ -36,4 +37,6 @@ Host free-space checks use a 15 GiB floor. Concurrent activity outside this real
 
 Private SSH keys, cloud-init user data, seed ISOs, bootstrap credentials, client option files and raw native database snapshots are excluded. Source scripts generate or read protected credentials at runtime and contain no credential values. Referenced private install logs remain on the owned parent with their hashes recorded in the receipts.
 
-The next gates are usable shared storage, the exact combined native build and signed package dependency closure, native controller bootstrap, actual VM placement/migration/recovery with fences, and a new uninterrupted installed-candidate soak. Earlier source tests and the older R13 soak do not satisfy those gates.
+The next gates are the exact combined native build and signed package dependency closure, native controller bootstrap, actual VM placement/migration/recovery with fences, and a new uninterrupted installed-candidate soak. Earlier source tests and the older R13 soak do not satisfy those gates.
+
+The first final storage observer also refused an incorrect old-realm known-hosts path before proceeding. Its failure receipt and the corrected observer are retained; no new key was accepted through trust-on-first-use. Final storage PASS is dated 2026-11-20 06:11:15 UTC.
