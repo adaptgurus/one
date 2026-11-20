@@ -25,7 +25,10 @@ def feed():
         for path in sorted(queue.glob("*.json")):
             item = json.loads(path.read_text())
             encoded = base64.b64encode(item["xml"].encode()).decode()
-            send("OPTIMIZE SUCCESS " + str(item["cid"]) + " " + encoded)
+            operation = item.get("operation", "OPTIMIZE")
+            if operation not in ("OPTIMIZE", "PLACE"):
+                raise ValueError("unexpected controlled response operation")
+            send(operation + " SUCCESS " + str(item["cid"]) + " " + encoded)
             path.rename(path.with_suffix(".sent"))
 
 thread = None

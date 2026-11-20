@@ -112,6 +112,9 @@ def inspect_rows(vm_rows, plan_rows, history_rows):
             counts["canonical_histories"] += 1
             pending = flag(history, "CHECKED_CAPACITY_PENDING")
             enforced = flag(history, "ENFORCE_CAPACITY")
+            canceling = flag(history, "ENFORCED_ADMISSION_CANCELING")
+            if canceling:
+                blocked("VM", vid, "native enforced admission cancellation has not completed")
             generations = [history.findtext(key, "") for key in
                            ("CHECKED_PLAN_GENERATION", "PLAN_ACTION_GENERATION")]
             for generation in generations:

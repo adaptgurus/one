@@ -94,6 +94,7 @@ private:
 
     int          plan_id   = -2;
     int          action_id = -1;
+    std::string  plan_action_generation;
 
     // Native-owned identity, retained through completion and history copies.
     // User VM templates cannot set these fields. The pending phase is an LCM state.
@@ -105,6 +106,9 @@ private:
     // Preserve the existing deploy/migrate RPC intent across asynchronous LCM.
     // Old records and explicit force requests retain their previous semantics.
     bool enforce_capacity = false;
+    int enforced_admission_state = -1;
+    int enforced_admission_lcm_state = -1;
+    bool enforced_admission_canceling = false;
 
     time_t       stime;
     time_t       etime;

@@ -25,6 +25,7 @@
 #include "ScheduledActionPool.h"
 #include "VirtualNetworkPool.h"
 #include "DispatchManager.h"
+#include "LifeCycleManager.h"
 #include "VirtualMachineManager.h"
 #include "ScopeGuard.h"
 #include <functional>
@@ -718,7 +719,11 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
 
     DispatchManager * dm = nd.get_dm();
 
-    dm->deploy(std::move(vm), att);
+    if (dm->deploy(std::move(vm), att) != 0)
+    {
+        att.resp_msg = "Cannot persist native deployment dispatch state";
+        return Request::INTERNAL;
+    }
 
     return Request::SUCCESS;
 }
@@ -761,6 +766,12 @@ Request::ErrorCode VirtualMachineAPI::action(int vid,
         att.resp_id = vid;
 
         return Request::NO_EXISTS;
+    }
+
+    if (vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native capacity admission is pending; recover-failure or wait for admission";
+        return Request::ACTION;
     }
 
     switch (action)
@@ -3316,6 +3327,22 @@ Request::ErrorCode VirtualMachineAPI::recover(int vid,
         return Request::ACTION;
     }
 
+    if (vm->capacity_admission_pending())
+    {
+        if (op != 0)
+        {
+            att.resp_msg = "Unconsumed enforced admission can only be canceled with recover-failure";
+            return Request::ACTION;
+        }
+        std::string why;
+        if (!Nebula::instance().get_lcm()->cancel_enforced_admission(vm, why))
+        {
+            att.resp_msg = why;
+            return Request::ACTION;
+        }
+        return Request::SUCCESS;
+    }
+
     if (op == 1 && vm->capacity_enforced() && vm->capacity_admission_state())
     {
         auto target = Nebula::instance().get_hpool()->get(vm->get_hid());
@@ -4431,7 +4458,7 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_add(int vid,
         return Request::NO_EXISTS;
     }
 
-    if (vm->checked_capacity_pending() ||
+    if (vm->capacity_admission_pending() ||
         vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
     {
         att.resp_msg = "VMGroup membership cannot change during checked migration admission";
@@ -4499,7 +4526,7 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_del(int vid,
         return Request::NO_EXISTS;
     }
 
-    if (vm->checked_capacity_pending() ||
+    if (vm->capacity_admission_pending() ||
         vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
     {
         att.resp_msg = "VMGroup membership cannot change during checked migration admission";
@@ -4528,8 +4555,14 @@ int VirtualMachineAPI::add_history(VirtualMachine * vm,
                                    bool             enforce,
                                    RequestAttributes& att)
 {
+    const int origin_state = vm->get_state(), origin_lcm = vm->get_lcm_state();
     vm->add_history(hid, cid, hostname, vmm_mad, tm_mad, ds_id);
     vm->capacity_enforced(enforce);
+    if (enforce) vm->enforced_admission_origin(origin_state, origin_lcm);
+    att.capacity_admission_sequence = vm->history_sequence();
+    vm->plan_id(att.plan_action.plan_id);
+    vm->action_id(att.plan_action.action_id);
+    vm->plan_action_generation(att.plan_action.generation);
 
     if (!att.checked_plan_generation.empty())
     {
@@ -4544,8 +4577,8 @@ int VirtualMachineAPI::add_history(VirtualMachine * vm,
         vm->set_state(VirtualMachine::CHECKED_MIGRATE_PENDING);
     }
 
-    if ((!att.checked_plan_generation.empty() ? vmpool->upsert_checked_history(vm) :
-         vmpool->insert_history(vm)) != 0)
+    if (((enforce || !att.plan_action.generation.empty() || !att.checked_plan_generation.empty()) ?
+         vmpool->upsert_checked_history(vm) : vmpool->insert_history(vm)) != 0)
     {
         att.resp_msg = "Cannot update virtual machine history";
 

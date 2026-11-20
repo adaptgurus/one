@@ -31,9 +31,51 @@
 
 using namespace std;
 
-void LifeCycleManager::trigger_deploy(int vid)
+namespace
 {
-    trigger([this, vid]
+bool persist_native_plan_action(VirtualMachinePool* pool, VirtualMachine* vm,
+        const RequestAttributes::NativePlanAction& context, bool new_history = false)
+{
+    // Called only inside an accepted native state branch with the VM locked.
+    // User requests carry an empty context and must not complete an older plan.
+    vm->plan_id(context.plan_id);
+    vm->action_id(context.action_id);
+    vm->plan_action_generation(context.generation);
+    vm->checked_plan_generation("");
+    vm->checked_eligibility_sha256("");
+    vm->checked_plan_term(0);
+    vm->checked_capacity_pending(false);
+
+    const bool owned = !context.generation.empty();
+    const int history_rc = new_history ?
+        (owned ? pool->upsert_checked_history(vm) : pool->insert_history(vm)) :
+        pool->update_history(vm);
+    if (history_rc != 0 && owned)
+    {
+        vm->log("LCM", Log::ERROR, "Cannot persist native plan action history; refusing driver dispatch");
+        return false;
+    }
+    if (pool->update(vm) != 0 && owned)
+    {
+        vm->log("LCM", Log::ERROR, "Cannot persist native plan action state; refusing driver dispatch");
+        return false;
+    }
+    return true;
+}
+
+void reject_native_plan_action(std::unique_ptr<VirtualMachine>& vm,
+        const RequestAttributes::NativePlanAction& context)
+{
+    vm.reset(); // The plan lock is never acquired with the VM lock held.
+    if (!context.generation.empty())
+        Nebula::instance().get_planm()->action_failure(
+            context.plan_id, context.action_id, context.generation);
+}
+}
+
+void LifeCycleManager::trigger_deploy(int vid, int admission_sequence)
+{
+    trigger([this, vid, admission_sequence]
     {
         ostringstream       os;
 
@@ -41,6 +83,12 @@ void LifeCycleManager::trigger_deploy(int vid)
 
         if ( vm == nullptr )
         {
+            return;
+        }
+
+        if (admission_sequence >= 0 && vm->history_sequence() != admission_sequence)
+        {
+            vm->log("LCM", Log::INFO, "Ignoring a superseded native admission event");
             return;
         }
 
@@ -125,13 +173,21 @@ void LifeCycleManager::trigger_suspend(int vid, const RequestAttributes& ra)
     int uid = ra.uid;
     int gid = ra.gid;
     int req_id = ra.req_id;
+    const auto plan_action = ra.plan_action;
 
-    trigger([this, vid, uid, gid, req_id]
+    trigger([this, vid, uid, gid, req_id, plan_action]
     {
         auto vm = vmpool->get(vid);
 
         if ( vm == nullptr )
         {
+            return;
+        }
+
+        if (vm->capacity_admission_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Refusing VM action during native capacity admission");
+            reject_native_plan_action(vm, plan_action);
             return;
         }
 
@@ -148,9 +204,7 @@ void LifeCycleManager::trigger_suspend(int vid, const RequestAttributes& ra)
 
             vm->set_action(VMActions::SUSPEND_ACTION, uid, gid, req_id);
 
-            vmpool->update_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
             //----------------------------------------------------
 
@@ -159,6 +213,7 @@ void LifeCycleManager::trigger_suspend(int vid, const RequestAttributes& ra)
         else
         {
             vm->log("LCM", Log::ERROR, "suspend_action, VM in a wrong state.");
+            reject_native_plan_action(vm, plan_action);
         }
     });
 }
@@ -171,13 +226,21 @@ void LifeCycleManager::trigger_stop(int vid, const RequestAttributes& ra)
     int uid = ra.uid;
     int gid = ra.gid;
     int req_id = ra.req_id;
+    const auto plan_action = ra.plan_action;
 
-    trigger([this, vid, uid, gid, req_id]
+    trigger([this, vid, uid, gid, req_id, plan_action]
     {
         auto vm = vmpool->get(vid);
 
         if ( vm == nullptr )
         {
+            return;
+        }
+
+        if (vm->capacity_admission_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Refusing VM action during native capacity admission");
+            reject_native_plan_action(vm, plan_action);
             return;
         }
 
@@ -194,9 +257,7 @@ void LifeCycleManager::trigger_stop(int vid, const RequestAttributes& ra)
 
             vm->set_action(VMActions::STOP_ACTION, uid, gid, req_id);
 
-            vmpool->update_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
             //----------------------------------------------------
 
@@ -226,9 +287,7 @@ void LifeCycleManager::trigger_stop(int vid, const RequestAttributes& ra)
 
             vm->set_epilog_stime(time(0));
 
-            vmpool->update_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
             //----------------------------------------------------
 
@@ -241,6 +300,7 @@ void LifeCycleManager::trigger_stop(int vid, const RequestAttributes& ra)
         else
         {
             vm->log("LCM", Log::ERROR, "stop_action, VM in a wrong state.");
+            reject_native_plan_action(vm, plan_action);
         }
     });
 }
@@ -297,6 +357,113 @@ bool LifeCycleManager::prepare_enforced_prolog_transfer(VirtualMachine* vm)
     }
     return persisted(vmpool->update_history(vm), "target history") &&
            persisted(vmpool->update(vm), "VM state");
+}
+
+bool LifeCycleManager::cancel_enforced_admission(
+        std::unique_ptr<VirtualMachine>& vm, std::string& error)
+{
+    const auto refused = [&error](const std::string& why)
+    {
+        error = "Enforced admission remains unresolved: " + why;
+        return false;
+    };
+    auto raftm = Nebula::instance().get_raftm();
+    if (!raftm || (!raftm->is_solo() && !raftm->is_leader()))
+        return refused("reconciliation requires the current native leader");
+    if (!vm || !vm->capacity_enforced() || vm->checked_capacity_pending() ||
+        !vm->capacity_admission_pending())
+        return refused("request is not an unconsumed ordinary enforced admission");
+
+    const int origin_state = vm->enforced_admission_state();
+    const int origin_lcm = vm->enforced_admission_lcm_state();
+    const bool initial = (origin_state == VirtualMachine::HOLD ||
+                          origin_state == VirtualMachine::PENDING) &&
+                         origin_lcm == VirtualMachine::LCM_INIT &&
+                         ((vm->history_sequence() == 0 && !vm->hasPreviousHistory()) ||
+                          vm->previous_is_canceled_initial_admission());
+    const bool source_running = origin_state == VirtualMachine::ACTIVE &&
+                                origin_lcm == VirtualMachine::RUNNING;
+    const bool source_offline = (origin_state == VirtualMachine::POWEROFF ||
+                                origin_state == VirtualMachine::SUSPENDED) &&
+                               origin_lcm == VirtualMachine::LCM_INIT;
+    const bool migration = (source_running || source_offline) &&
+                            vm->hasPreviousHistory() &&
+                            vm->get_hid() != vm->get_previous_hid() &&
+                            vm->get_ds_id() == vm->get_previous_ds_id() &&
+                            vm->get_cid() == vm->get_previous_cid();
+    HostShareCapacity capacity;
+    vm->get_capacity(capacity);
+    if ((!initial && !migration) || vm->is_pinned() ||
+        !capacity.nodes.empty() || !capacity.pci.empty())
+        return refused("origin, pinning, PCI, NUMA, datastore or cluster requires explicit reconciliation");
+
+    // STIME0 is published before LCM can dispatch. A stable origin VM with an
+    // open predecessor is also pre-dispatch because enforced LCM must persist
+    // its nonstable state before invoking a driver. Later MIGRATE/PROLOG states
+    // with started histories use the existing native recovery path.
+    if (!vm->enforced_admission_canceling() && vm->get_history_stime() != 0 &&
+        !(migration && vm->get_state() == origin_state &&
+          vm->get_lcm_state() == origin_lcm && vm->is_previous_history_open()))
+        return refused("driver admission may already have started");
+
+    const int plan_id = vm->plan_id(), action_id = vm->action_id();
+    const auto generation = vm->plan_action_generation();
+    const auto persisted = [&refused](int rc, const char* step)
+    {
+        return rc == 0 || refused(std::string("failed durable ") + step);
+    };
+    // The marker survives a history/VM write failure, including initial deploy
+    // whose original HOLD/PENDING state has no prior history to copy.
+    vm->enforced_admission_canceling(true);
+    if (!persisted(vmpool->update_history(vm.get()), "cancellation marker")) return false;
+    if (!persisted(hpool->del_checked_capacity(vm->get_hid(), capacity),
+                   "target capacity release")) return false;
+
+    const auto now = time(nullptr);
+    if (migration)
+    {
+        // A cold/offline admission can release the source before its final
+        // history write. Reacquire through the same current-capacity ledger;
+        // existing source membership is idempotent and must not be double added.
+        std::string capacity_error;
+        const int rc = hpool->add_capacity(vm->get_previous_hid(), capacity, true, &capacity_error);
+        if (!persisted(rc, "source capacity reservation")) return false;
+    }
+    vm->set_template_error_message("Enforced admission canceled before driver dispatch");
+    vm->set_etime(now);
+    if (!persisted(vmpool->update_history(vm.get()), "target history")) return false;
+
+    if (migration)
+    {
+        vm->set_previous_etime(now);
+        vm->set_previous_running_etime(now);
+        if (!persisted(vmpool->update_previous_history(vm.get()), "source history")) return false;
+        vm->cp_previous_history();
+        vm->set_stime(now);
+        vm->set_running_stime(now);
+        if (!source_running) vm->set_running_etime(now);
+        vm->set_state(static_cast<VirtualMachine::VmState>(origin_state));
+        vm->set_state(static_cast<VirtualMachine::LcmState>(origin_lcm));
+        vm->set_vm_info();
+        if (!persisted(vmpool->upsert_checked_history(vm.get()), "restored source history")) return false;
+        if (!persisted(vmpool->update(vm.get()), "restored VM state")) return false;
+    }
+    else
+    {
+        vm->set_state(static_cast<VirtualMachine::VmState>(origin_state));
+        vm->set_state(static_cast<VirtualMachine::LcmState>(origin_lcm));
+        if (!persisted(vmpool->update(vm.get()), "restored initial VM state")) return false;
+        // Record the canceled native attempt only after its original VM state
+        // is durable. A failed final clear remains retryable via recover-failure.
+        vm->set_stime(now);
+        vm->enforced_admission_canceling(false);
+        if (!persisted(vmpool->update_history(vm.get()), "completed cancellation")) return false;
+    }
+
+    vm.reset();
+    if (plan_id >= -1)
+        Nebula::instance().get_planm()->action_failure(plan_id, action_id, generation);
+    return true;
 }
 
 bool LifeCycleManager::cancel_checked_migration(
@@ -451,8 +618,9 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
     int uid = ra.uid;
     int gid = ra.gid;
     int req_id = ra.req_id;
+    const int admission_sequence = ra.capacity_admission_sequence;
 
-    trigger([this, vid, uid, gid, req_id, vm_action]
+    trigger([this, vid, uid, gid, req_id, vm_action, admission_sequence]
     {
         HostShareCapacity sr;
         Template quota_tmpl;
@@ -463,6 +631,12 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
 
         if ( vm == nullptr )
         {
+            return;
+        }
+
+        if (admission_sequence >= 0 && vm->history_sequence() != admission_sequence)
+        {
+            vm->log("LCM", Log::INFO, "Ignoring a superseded native admission event");
             return;
         }
 
@@ -663,8 +837,9 @@ void LifeCycleManager::trigger_live_migrate(int vid, const RequestAttributes& ra
     int uid = ra.uid;
     int gid = ra.gid;
     int req_id = ra.req_id;
+    const int admission_sequence = ra.capacity_admission_sequence;
 
-    trigger([this, vid, uid, gid, req_id]
+    trigger([this, vid, uid, gid, req_id, admission_sequence]
     {
         ostringstream os;
 
@@ -672,6 +847,12 @@ void LifeCycleManager::trigger_live_migrate(int vid, const RequestAttributes& ra
 
         if ( vm == nullptr )
         {
+            return;
+        }
+
+        if (admission_sequence >= 0 && vm->history_sequence() != admission_sequence)
+        {
+            vm->log("LCM", Log::INFO, "Ignoring a superseded native admission event");
             return;
         }
 
@@ -760,14 +941,22 @@ void LifeCycleManager::trigger_shutdown(int vid, bool hard,
     int uid = ra.uid;
     int gid = ra.gid;
     int req_id = ra.req_id;
+    const auto plan_action = ra.plan_action;
 
-    trigger([this, hard, vid, uid, gid, req_id]
+    trigger([this, hard, vid, uid, gid, req_id, plan_action]
     {
         auto vm = vmpool->get(vid);
         VirtualMachineTemplate quota_tmpl;
 
         if ( vm == nullptr )
         {
+            return;
+        }
+
+        if (vm->capacity_admission_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Refusing VM action during native capacity admission");
+            reject_native_plan_action(vm, plan_action);
             return;
         }
 
@@ -792,6 +981,13 @@ void LifeCycleManager::trigger_shutdown(int vid, bool hard,
         if (hard && (vm->get_state() == VirtualMachine::ACTIVE &&
                      lcm_state == VirtualMachine::SHUTDOWN))
         {
+            if (!plan_action.generation.empty())
+            {
+                vm->log("LCM", Log::ERROR, "Native plan action cannot replace an in-flight driver operation");
+                reject_native_plan_action(vm, plan_action);
+                return;
+            }
+
             // Cancel previous shutdown action
             vmm->trigger_driver_cancel(vid);
 
@@ -813,21 +1009,20 @@ void LifeCycleManager::trigger_shutdown(int vid, bool hard,
                 vm->set_action(VMActions::TERMINATE_HARD_ACTION, uid, gid,
                                req_id);
 
-                vmm->trigger_cancel(vid);
             }
             else
             {
                 vm->set_action(VMActions::TERMINATE_ACTION, uid, gid,
                                req_id);
 
-                vmm->trigger_shutdown(vid);
             }
 
             vm->set_resched(false);
 
-            vmpool->update_history(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
-            vmpool->update(vm.get());
+            if (hard) vmm->trigger_cancel(vid);
+            else vmm->trigger_shutdown(vid);
         }
         else if (vm->get_state() == VirtualMachine::SUSPENDED ||
                  vm->get_state() == VirtualMachine::POWEROFF)
@@ -839,9 +1034,7 @@ void LifeCycleManager::trigger_shutdown(int vid, bool hard,
 
             vm->set_epilog_stime(time(0));
 
-            vmpool->update_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
             //----------------------------------------------------
 
@@ -861,9 +1054,7 @@ void LifeCycleManager::trigger_shutdown(int vid, bool hard,
 
             vm->set_epilog_stime(time(0));
 
-            vmpool->update_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
             //----------------------------------------------------
 
@@ -876,6 +1067,7 @@ void LifeCycleManager::trigger_shutdown(int vid, bool hard,
         else
         {
             vm->log("LCM", Log::ERROR, "shutdown_action, VM in a wrong state.");
+            reject_native_plan_action(vm, plan_action);
         }
     });
 }
@@ -889,8 +1081,9 @@ void LifeCycleManager::trigger_undeploy(int vid, bool hard,
     int uid = ra.uid;
     int gid = ra.gid;
     int req_id = ra.req_id;
+    const auto plan_action = ra.plan_action;
 
-    trigger([this, hard, vid, uid, gid, req_id]
+    trigger([this, hard, vid, uid, gid, req_id, plan_action]
     {
         auto vm = vmpool->get(vid);
 
@@ -899,11 +1092,25 @@ void LifeCycleManager::trigger_undeploy(int vid, bool hard,
             return;
         }
 
+        if (vm->capacity_admission_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Refusing VM action during native capacity admission");
+            reject_native_plan_action(vm, plan_action);
+            return;
+        }
+
         auto lcm_state = vm->get_lcm_state();
 
         if (hard && (vm->get_state() == VirtualMachine::ACTIVE &&
                      lcm_state == VirtualMachine::SHUTDOWN_UNDEPLOY))
         {
+            if (!plan_action.generation.empty())
+            {
+                vm->log("LCM", Log::ERROR, "Native plan action cannot replace an in-flight driver operation");
+                reject_native_plan_action(vm, plan_action);
+                return;
+            }
+
             // Cancel previous undeploy action
             vmm->trigger_driver_cancel(vid);
 
@@ -927,19 +1134,18 @@ void LifeCycleManager::trigger_undeploy(int vid, bool hard,
                 vm->set_action(VMActions::UNDEPLOY_HARD_ACTION, uid, gid,
                                req_id);
 
-                vmm->trigger_cancel(vid);
             }
             else
             {
                 vm->set_action(VMActions::UNDEPLOY_ACTION, uid, gid,
                                req_id);
 
-                vmm->trigger_shutdown(vid);
             }
 
-            vmpool->update_history(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
-            vmpool->update(vm.get());
+            if (hard) vmm->trigger_cancel(vid);
+            else vmm->trigger_shutdown(vid);
         }
         else if (vm->get_state() == VirtualMachine::POWEROFF)
         {
@@ -966,9 +1172,7 @@ void LifeCycleManager::trigger_undeploy(int vid, bool hard,
 
             vm->set_epilog_stime(time(0));
 
-            vmpool->update_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
             //----------------------------------------------------
 
@@ -982,6 +1186,7 @@ void LifeCycleManager::trigger_undeploy(int vid, bool hard,
         else
         {
             vm->log("LCM", Log::ERROR, "undeploy_action, VM in a wrong state.");
+            reject_native_plan_action(vm, plan_action);
         }
     });
 }
@@ -1012,8 +1217,9 @@ void LifeCycleManager::trigger_poweroff(int vid, bool hard,
     int uid = ra.uid;
     int gid = ra.gid;
     int req_id = ra.req_id;
+    const auto plan_action = ra.plan_action;
 
-    trigger([this, hard, vid, uid, gid, req_id]
+    trigger([this, hard, vid, uid, gid, req_id, plan_action]
     {
         auto vm = vmpool->get(vid);
 
@@ -1022,11 +1228,25 @@ void LifeCycleManager::trigger_poweroff(int vid, bool hard,
             return;
         }
 
+        if (vm->capacity_admission_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Refusing VM action during native capacity admission");
+            reject_native_plan_action(vm, plan_action);
+            return;
+        }
+
         auto lcm_state = vm->get_lcm_state();
 
         if (hard && (vm->get_state() == VirtualMachine::ACTIVE &&
                      lcm_state == VirtualMachine::SHUTDOWN_POWEROFF))
         {
+            if (!plan_action.generation.empty())
+            {
+                vm->log("LCM", Log::ERROR, "Native plan action cannot replace an in-flight driver operation");
+                reject_native_plan_action(vm, plan_action);
+                return;
+            }
+
             // Cancel previous shutdown action
             vmm->trigger_driver_cancel(vid);
 
@@ -1050,22 +1270,22 @@ void LifeCycleManager::trigger_poweroff(int vid, bool hard,
                 vm->set_action(VMActions::POWEROFF_HARD_ACTION, uid, gid,
                                req_id);
 
-                vmm->trigger_cancel(vid);
             }
             else
             {
                 vm->set_action(VMActions::POWEROFF_ACTION, uid, gid, req_id);
 
-                vmm->trigger_shutdown(vid);
             }
 
-            vmpool->update_history(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
-            vmpool->update(vm.get());
+            if (hard) vmm->trigger_cancel(vid);
+            else vmm->trigger_shutdown(vid);
         }
         else
         {
             vm->log("LCM", Log::ERROR, "poweroff_action, VM in a wrong state.");
+            reject_native_plan_action(vm, plan_action);
         }
     });
 }
@@ -1078,8 +1298,9 @@ void LifeCycleManager::trigger_restore(int vid, const RequestAttributes& ra)
     int uid = ra.uid;
     int gid = ra.gid;
     int req_id = ra.req_id;
+    const auto plan_action = ra.plan_action;
 
-    trigger([this, vid, uid, gid, req_id]
+    trigger([this, vid, uid, gid, req_id, plan_action]
     {
         ostringstream os;
 
@@ -1087,6 +1308,13 @@ void LifeCycleManager::trigger_restore(int vid, const RequestAttributes& ra)
 
         if ( vm == nullptr )
         {
+            return;
+        }
+
+        if (vm->capacity_admission_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Refusing VM action during native capacity admission");
+            reject_native_plan_action(vm, plan_action);
             return;
         }
 
@@ -1105,7 +1333,7 @@ void LifeCycleManager::trigger_restore(int vid, const RequestAttributes& ra)
 
             vm->set_etime(the_time);
 
-            vmpool->update_history(vm.get());
+            if (vmpool->update_history(vm.get()) != 0 && !plan_action.generation.empty()) return;
 
             vm->cp_history();
 
@@ -1115,9 +1343,7 @@ void LifeCycleManager::trigger_restore(int vid, const RequestAttributes& ra)
 
             vm->set_action(VMActions::RESUME_ACTION, uid, gid, req_id);
 
-            vmpool->insert_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action, true)) return;
 
             //----------------------------------------------------
 
@@ -1126,6 +1352,7 @@ void LifeCycleManager::trigger_restore(int vid, const RequestAttributes& ra)
         else
         {
             vm->log("LCM", Log::ERROR, "restore_action, VM in a wrong state.");
+            reject_native_plan_action(vm, plan_action);
         }
     });
 }
@@ -1138,8 +1365,9 @@ void LifeCycleManager::trigger_restart(int vid, const RequestAttributes& ra)
     int uid = ra.uid;
     int gid = ra.gid;
     int req_id = ra.req_id;
+    const auto plan_action = ra.plan_action;
 
-    trigger([this, vid, uid, gid, req_id]
+    trigger([this, vid, uid, gid, req_id, plan_action]
     {
         auto vm = vmpool->get(vid);
 
@@ -1148,12 +1376,19 @@ void LifeCycleManager::trigger_restart(int vid, const RequestAttributes& ra)
             return;
         }
 
+        if (vm->capacity_admission_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Refusing VM action during native capacity admission");
+            reject_native_plan_action(vm, plan_action);
+            return;
+        }
+
         if (vm->get_state() == VirtualMachine::ACTIVE &&
             vm->get_lcm_state() == VirtualMachine::UNKNOWN)
         {
             vm->set_state(VirtualMachine::BOOT_UNKNOWN);
 
-            vmpool->update(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action)) return;
 
             vmm->trigger_deploy(vid);
         }
@@ -1167,7 +1402,7 @@ void LifeCycleManager::trigger_restart(int vid, const RequestAttributes& ra)
 
             vm->set_etime(the_time);
 
-            vmpool->update_history(vm.get());
+            if (vmpool->update_history(vm.get()) != 0 && !plan_action.generation.empty()) return;
 
             vm->cp_history();
 
@@ -1177,15 +1412,14 @@ void LifeCycleManager::trigger_restart(int vid, const RequestAttributes& ra)
 
             vm->set_action(VMActions::RESUME_ACTION, uid, gid, req_id);
 
-            vmpool->insert_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (!persist_native_plan_action(vmpool, vm.get(), plan_action, true)) return;
 
             vmm->trigger_deploy(vid);
         }
         else
         {
             vm->log("LCM", Log::ERROR, "restart_action, VM in a wrong state.");
+            reject_native_plan_action(vm, plan_action);
         }
     });
 }
@@ -1206,7 +1440,7 @@ void LifeCycleManager::trigger_delete(int vid, const RequestAttributes& ra)
 
         if ( auto vm = vmpool->get(vid) )
         {
-            if (vm->checked_capacity_pending() ||
+            if (vm->capacity_admission_pending() ||
                 vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
             {
                 vm->log("LCM", Log::ERROR, "Refusing cleanup during checked migration admission");
@@ -1282,7 +1516,7 @@ void LifeCycleManager::trigger_delete_recreate(int vid,
 
         if ( auto vm = vmpool->get(vid) )
         {
-            if (vm->checked_capacity_pending() ||
+            if (vm->capacity_admission_pending() ||
                 vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
             {
                 vm->log("LCM", Log::ERROR, "Refusing cleanup during checked migration admission");

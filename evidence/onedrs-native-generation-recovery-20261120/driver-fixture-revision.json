@@ -1,0 +1,7 @@
+{
+  "utc": "2026-11-20T06:08:35.663639+00:00",
+  "change": "Held DEPLOY SUCCESS replies now include required inert deploy ID; native source and executed migration reply semantics unchanged. Fixed before generation/orphan companion runs; subsequent native restart loads this fixture.",
+  "last_completed_check": "PASS pending_api_cleanup_plan_error",
+  "fixture_sha256": "8bf925126612e568ac77d623cec9077dc9647727ed70a8db9732a3fe4f36d0e7",
+  "future_companion_started": false
+}

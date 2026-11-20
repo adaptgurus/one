@@ -2126,11 +2126,15 @@ void VirtualMachine::cp_history()
                        history->action_id,
                        vm_xml);
 
+    htmp->plan_action_generation = history->plan_action_generation;
     htmp->checked_plan_generation = history->checked_plan_generation;
     htmp->checked_eligibility_sha256 = history->checked_eligibility_sha256;
     htmp->checked_plan_term = history->checked_plan_term;
     htmp->checked_capacity_pending = history->checked_capacity_pending;
     htmp->enforce_capacity = history->enforce_capacity;
+    htmp->enforced_admission_state = history->enforced_admission_state;
+    htmp->enforced_admission_lcm_state = history->enforced_admission_lcm_state;
+    htmp->enforced_admission_canceling = history->enforced_admission_canceling;
 
     previous_history = move(history);
     history          = move(htmp);
@@ -2162,11 +2166,15 @@ void VirtualMachine::cp_previous_history()
                        previous_history->action_id,
                        vm_xml);
 
+    htmp->plan_action_generation = previous_history->plan_action_generation;
     htmp->checked_plan_generation = previous_history->checked_plan_generation;
     htmp->checked_eligibility_sha256 = previous_history->checked_eligibility_sha256;
     htmp->checked_plan_term = previous_history->checked_plan_term;
     htmp->checked_capacity_pending = previous_history->checked_capacity_pending;
     htmp->enforce_capacity = previous_history->enforce_capacity;
+    htmp->enforced_admission_state = previous_history->enforced_admission_state;
+    htmp->enforced_admission_lcm_state = previous_history->enforced_admission_lcm_state;
+    htmp->enforced_admission_canceling = previous_history->enforced_admission_canceling;
 
     previous_history = move(history);
     history          = move(htmp);

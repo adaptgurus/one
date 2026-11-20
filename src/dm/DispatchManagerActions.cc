@@ -63,9 +63,9 @@ int DispatchManager::deploy(unique_ptr<VirtualMachine> vm,
     {
         vm->set_state(VirtualMachine::ACTIVE);
 
-        vmpool->update(vm.get());
+        if (vmpool->update(vm.get()) != 0 && vm->capacity_enforced()) return -2;
 
-        lcm->trigger_deploy(vid);
+        lcm->trigger_deploy(vid, ra.capacity_admission_sequence);
     }
     else
     {

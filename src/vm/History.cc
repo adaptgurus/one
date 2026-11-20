@@ -310,11 +310,15 @@ string& History::to_xml(string& xml, bool database) const
         "<DS_ID>"      << ds_id         << "</DS_ID>" <<
         "<PLAN_ID>"    << plan_id       << "</PLAN_ID>" <<
         "<ACTION_ID>"  << action_id     << "</ACTION_ID>" <<
+        "<PLAN_ACTION_GENERATION>" << plan_action_generation << "</PLAN_ACTION_GENERATION>" <<
         "<CHECKED_PLAN_GENERATION>" << checked_plan_generation << "</CHECKED_PLAN_GENERATION>" <<
         "<CHECKED_ELIGIBILITY_SHA256>" << checked_eligibility_sha256 << "</CHECKED_ELIGIBILITY_SHA256>" <<
         "<CHECKED_PLAN_TERM>" << checked_plan_term << "</CHECKED_PLAN_TERM>" <<
         "<CHECKED_CAPACITY_PENDING>" << checked_capacity_pending << "</CHECKED_CAPACITY_PENDING>" <<
         "<ENFORCE_CAPACITY>" << enforce_capacity << "</ENFORCE_CAPACITY>" <<
+        "<ENFORCED_ADMISSION_STATE>" << enforced_admission_state << "</ENFORCED_ADMISSION_STATE>" <<
+        "<ENFORCED_ADMISSION_LCM_STATE>" << enforced_admission_lcm_state << "</ENFORCED_ADMISSION_LCM_STATE>" <<
+        "<ENFORCED_ADMISSION_CANCELING>" << enforced_admission_canceling << "</ENFORCED_ADMISSION_CANCELING>" <<
         "<PSTIME>"     << prolog_stime  << "</PSTIME>"<<
         "<PETIME>"     << prolog_etime  << "</PETIME>"<<
         "<RSTIME>"     << running_stime << "</RSTIME>"<<
@@ -419,6 +423,13 @@ int History::rebuild_attributes()
     // For backward compatibility do not fail if plan or action ID is not found
     xpath(plan_id, "/HISTORY/PLAN_ID", -2);
     xpath(action_id, "/HISTORY/ACTION_ID", -1);
+    xpath(plan_action_generation, "/HISTORY/PLAN_ACTION_GENERATION", "");
+    if (!plan_action_generation.empty() &&
+        (plan_action_generation.size() != 64 || plan_id < -1 || action_id < 0 ||
+         plan_action_generation.find_first_not_of("0123456789abcdef") != std::string::npos))
+    {
+        return -1;
+    }
     xpath(checked_plan_generation, "/HISTORY/CHECKED_PLAN_GENERATION", "");
     xpath(checked_eligibility_sha256, "/HISTORY/CHECKED_ELIGIBILITY_SHA256", "");
     if (!checked_eligibility_sha256.empty() &&
@@ -437,6 +448,14 @@ int History::rebuild_attributes()
     xpath(enforce, "/HISTORY/ENFORCE_CAPACITY", "");
     if (!enforce.empty() && enforce != "0" && enforce != "1") return -1;
     enforce_capacity = enforce == "1";
+    xpath(enforced_admission_state, "/HISTORY/ENFORCED_ADMISSION_STATE", -1);
+    xpath(enforced_admission_lcm_state, "/HISTORY/ENFORCED_ADMISSION_LCM_STATE", -1);
+    std::string canceling;
+    xpath(canceling, "/HISTORY/ENFORCED_ADMISSION_CANCELING", "");
+    if (!canceling.empty() && canceling != "0" && canceling != "1") return -1;
+    enforced_admission_canceling = canceling == "1";
+    if (enforced_admission_canceling &&
+        (!enforce_capacity || enforced_admission_state < 0 || enforced_admission_lcm_state < 0)) return -1;
     if (!checked_plan_generation.empty() &&
         (checked_plan_generation.size() != 64 || plan_id < 0 || action_id < 0 ||
          checked_plan_generation.find_first_not_of("0123456789abcdef") != std::string::npos))

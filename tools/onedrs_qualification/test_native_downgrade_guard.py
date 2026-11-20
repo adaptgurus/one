@@ -72,6 +72,13 @@ class NativeDowngradeGuardTests(unittest.TestCase):
         self.previous()
         self.assertFalse(self.ready())
 
+    def test_canceled_history_stays_blocked_until_final_marker_ack(self):
+        self.vm(state=2, lcm=0, enforced=1, stime=1, etime=2)
+        body = self.db.execute("SELECT body FROM history WHERE vid=7 AND seq=0").fetchone()[0]
+        body = body.replace("</HISTORY>", "<ENFORCED_ADMISSION_CANCELING>1</ENFORCED_ADMISSION_CANCELING></HISTORY>")
+        self.db.execute("UPDATE history SET body=? WHERE vid=7 AND seq=0", (body,))
+        self.assertFalse(self.ready())
+
     def test_missing_canonical_predecessor_fails_closed(self):
         self.vm(sequence=1, enforced=1, stime=2)
         self.assertFalse(self.ready())

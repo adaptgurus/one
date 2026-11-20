@@ -1,0 +1,213 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T05:54:30.421787+00:00",
+  "binary_sha256": "b30da9e7989459e08e150f90c2d561e5cfe218b6cc05745369f54f642a1feba1",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger-origin-capture-live-target-reserved_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ledger_origin_live-target-reserved_captured_before_history_admission",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger-origin-restart-live-target-reserved_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ledger_origin_live-target-reserved_actual_reserved_target",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger_origin_live-target-reserved_native_cancel_restores_ledger_and_origin",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger-origin-capture-offline-source-release_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_fixture_retains_native_source_capacity",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger_origin_offline-source-release_captured_before_history_admission",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger-origin-restart-offline-source-release_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ledger_origin_offline-source-release_actual_reserved_target",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger_origin_offline-source-release_native_cancel_restores_ledger_and_origin",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger-origin-capture-initial-reserved_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ledger_origin_initial-reserved_captured_before_history_admission",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger-origin-restart-initial-reserved_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ledger_origin_initial-reserved_actual_reserved_target",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger_origin_initial-reserved_native_cancel_restores_ledger_and_origin",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger-cancel-fault-target-release_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ledger_cancel_target-release_refuses_false_recovery_success",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger_cancel_target-release_idempotent_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger-cancel-fault-source-reservation_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ledger_cancel_source-reservation_refuses_false_recovery_success",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger_cancel_source-reservation_idempotent_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger-cancel-source-capacity-drift_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ledger_cancel_source_capacity_drift_remains_unresolved",
+      "result": "PASS"
+    },
+    {
+      "name": "ledger_cancel_source_capacity_retry_is_native_and_accounted",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "origin-ledger",
+  "ordinary_ledger_gap_images": [
+    {
+      "case": "live-target-reserved",
+      "vm": 0,
+      "history_sequence": 1,
+      "sha256": "c9ac22daca59a8925e598fb38306a750cbc8260297b9b7834fb82e5306c1e6af",
+      "origin": "native host transaction captured all canonical rows before history STIME and driver dispatch"
+    },
+    {
+      "case": "offline-source-release",
+      "vm": 0,
+      "history_sequence": 1,
+      "sha256": "86a357def8f166105e835818d1512afba6111da74fb9678bb7cdab1915325907",
+      "origin": "native host transaction captured all canonical rows before history STIME and driver dispatch"
+    },
+    {
+      "case": "initial-reserved",
+      "vm": 3,
+      "history_sequence": 0,
+      "sha256": "5a34393093b773f0fb7556b2bd5301d830893a098b0d313b4bface11cbe0ed1f",
+      "origin": "native host transaction captured all canonical rows before history STIME and driver dispatch"
+    }
+  ],
+  "status": "PASS",
+  "finished_at": "2026-11-20T05:55:55.921509+00:00"
+}

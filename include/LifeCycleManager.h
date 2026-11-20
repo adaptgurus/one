@@ -88,6 +88,7 @@ public:
     bool revert_migrate_after_failure(VirtualMachine* vm, bool live);
     int reserve_checked_migration_capacity(std::unique_ptr<VirtualMachine>& vm, bool live);
     bool cancel_checked_migration(std::unique_ptr<VirtualMachine>& vm, const std::string& reason);
+    bool cancel_enforced_admission(std::unique_ptr<VirtualMachine>& vm, std::string& error);
     bool recover_checked_migrations(bool new_epoch, unsigned int term);
     bool persist_checked_migration_admission(VirtualMachine* vm);
     bool has_enforced_capacity(VirtualMachine* vm);
@@ -169,7 +170,7 @@ public:
     // -------------------------------------------------------------------------
     // External Actions, triggered by user requests
     // -------------------------------------------------------------------------
-    void trigger_deploy(int vid);
+    void trigger_deploy(int vid, int admission_sequence = -1);
     void trigger_suspend(int vid, const RequestAttributes& ra);
     void trigger_restore(int vid, const RequestAttributes& ra);
     void trigger_stop(int vid, const RequestAttributes& ra);

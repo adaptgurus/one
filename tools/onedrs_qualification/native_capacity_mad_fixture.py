@@ -16,13 +16,19 @@ def send(op,ident="",result="SUCCESS",extra=""):
         print(" ".join(x for x in [op,result,ident,extra] if x),flush=True)
 def controller():
     while not stop.wait(.02):
+        for path in root.glob("callback-*.json"):
+            item = json.loads(path.read_text())
+            if item["mode"] != mode:
+                continue
+            send(item["operation"], str(item["id"]), item.get("result", "SUCCESS"), item.get("extra", ""))
+            path.rename(path.with_suffix(".sent"))
         with lock:
             work=list(pending)
         for op,ident in work:
             release=root/("release-"+op+"-"+ident)
             if release.exists():
                 result=release.read_text().strip() or "SUCCESS"
-                send(op,ident,result)
+                send(op,ident,result,"fixture-"+ident if op=="DEPLOY" and result=="SUCCESS" else "")
                 release.unlink()
                 with lock:pending.remove((op,ident))
 thread=threading.Thread(target=controller,daemon=True);thread.start()

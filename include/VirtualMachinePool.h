@@ -200,8 +200,9 @@ public:
         return vm->insert_history(db);
     }
 
-    // Only used while creating/recovering an exclusively locked checked
-    // migration. The next sequence can only be an unreferenced partial prior write.
+    // Used only while creating/recovering an exclusively locked native
+    // admission. The sequence is derived from the canonical VM history; its
+    // unpublished next sequence can only be a partial prior API/recovery write.
     int upsert_checked_history(VirtualMachine * vm)
     {
         return vm->history ? vm->history->insert_replace(db, false, true) : -1;
