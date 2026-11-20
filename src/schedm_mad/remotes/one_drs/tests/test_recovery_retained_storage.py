@@ -4,7 +4,7 @@ ROOT=pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from lib.mapper.model import Allocation,Capacity,DStoreCapacity,DStoreRequirement,HostCapacity,VMRequirements,VMState
 from lib.mapper.ilp_optimizer import ILPOptimizer
-from pulp import COIN_CMD
+from pulp import PULP_CBC_CMD
 
 class RetainedRecoveryStorage(unittest.TestCase):
     @staticmethod
@@ -13,7 +13,7 @@ class RetainedRecoveryStorage(unittest.TestCase):
 
     def optimizer(self,workloads,current,total=50000,used=40000,host_used=1024,criteria="pack",balance_constraints=None):
         hosts=[HostCapacity(id=i,cluster_id=0,cpu=Capacity(total=4,usage=1),memory=Capacity(total=8192,usage=host_used)) for i in (1,2)]
-        opt=ILPOptimizer(current_placement=current,vm_requirements=workloads,vm_groups=[],host_capacities=hosts,dstore_capacities=[DStoreCapacity(id=42,size=Capacity(total=total,usage=used),cluster_ids=[0])],image_dstore_capacities=[],vnet_capacities=[],criteria=criteria,balance_constraints=balance_constraints,allowed_storage_migrations=0,solver=COIN_CMD(path='/usr/lib/one/python/pulp/solverdir/cbc/linux/i64/cbc',msg=False))
+        opt=ILPOptimizer(current_placement=current,vm_requirements=workloads,vm_groups=[],host_capacities=hosts,dstore_capacities=[DStoreCapacity(id=42,size=Capacity(total=total,usage=used),cluster_ids=[0])],image_dstore_capacities=[],vnet_capacities=[],criteria=criteria,balance_constraints=balance_constraints,allowed_storage_migrations=0,solver=PULP_CBC_CMD(msg=False))
         self.assertTrue(opt._narrow)
         opt.map()
         return opt
