@@ -89,7 +89,7 @@ def run(ctx):
           len(transfers) == 1 and bool(re.fullmatch('[0-9a-f]{64}', transfers[0]['request_token'] or '')) and
           transfers[0]['request_token'] != token)
     # The protocol message is observed through its global warning before readback.
-    global_log = P / 'log/oned.log'
+    global_log = OUT / 'driver-correlation-stdout.log'
     offset = global_log.stat().st_size
     send(added, 'DEPLOY', token, extra='-')
     waitfor(lambda: 'Ignoring malformed native deployment acknowledgement' in global_log.read_bytes()[offset:].decode(errors='replace'))
