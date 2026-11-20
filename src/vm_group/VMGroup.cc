@@ -21,6 +21,7 @@
 #include "Nebula.h"
 #include "VirtualMachinePool.h"
 #include "VirtualMachine.h"
+#include "NebulaUtil.h"
 
 using namespace std;
 
@@ -759,5 +760,221 @@ int VMGroup::check_affinity(int vmid, int my_hid, const string& role_name,
         return -1;
     }
 
+    return 0;
+}
+
+
+/* -------------------------------------------------------------------------- */
+/* Native serialized placement admission                                      */
+/* -------------------------------------------------------------------------- */
+
+namespace
+{
+// A proposed target is not a settled placement. In particular, cold migration
+// may close its source history before a failure can restore that source.
+// Therefore history openness alone is insufficient: all nonstable ACTIVE
+// states remain unresolved. Genuine unplaced peers do not block initial boot.
+int settled_group_host(const VirtualMachine& vm, int& hid)
+{
+    hid = -1;
+    if (vm.checked_capacity_pending() || vm.is_previous_history_open() ||
+        vm.get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
+    {
+        return VMGroup::PLACEMENT_BUSY;
+    }
+
+    switch (vm.get_state())
+    {
+        case VirtualMachine::ACTIVE:
+            if (vm.get_lcm_state() != VirtualMachine::RUNNING)
+                return VMGroup::PLACEMENT_BUSY;
+            break;
+        case VirtualMachine::POWEROFF:
+        case VirtualMachine::SUSPENDED:
+            if (vm.get_lcm_state() != VirtualMachine::LCM_INIT)
+                return VMGroup::PLACEMENT_BUSY;
+            break;
+        case VirtualMachine::INIT:
+        case VirtualMachine::PENDING:
+        case VirtualMachine::HOLD:
+        case VirtualMachine::STOPPED:
+        case VirtualMachine::UNDEPLOYED:
+        case VirtualMachine::DONE:
+        case VirtualMachine::CLONING:
+        case VirtualMachine::CLONING_FAILURE:
+            return vm.is_history_open() ? VMGroup::PLACEMENT_BUSY : 0;
+        default:
+            return VMGroup::PLACEMENT_INVALID;
+    }
+
+    if (!vm.hasHistory() || vm.get_hid() < 0)
+        return VMGroup::PLACEMENT_INVALID;
+    hid = vm.get_hid();
+    return 0;
+}
+}
+
+int VMGroup::peer_placements(int excluding_vmid, map<int, int>& placements,
+                              string& error)
+{
+    auto vmpool = Nebula::instance().get_vmpool();
+    set<int> seen;
+    placements.clear();
+    for (auto role : _roles)
+    {
+        if (role->id() < 0 || role->id() >= VMGroupRoles::MAX_ROLES)
+        {
+            error = "Native VMGroup has an invalid role identity";
+            return PLACEMENT_INVALID;
+        }
+        for (int vmid : role->get_vms())
+        {
+            if (vmid < 0 || !seen.insert(vmid).second)
+            {
+                error = "Native VMGroup membership is inconsistent";
+                return PLACEMENT_INVALID;
+            }
+            if (vmid == excluding_vmid) continue;
+            // Never acquire another VM's mutable object lock under this group.
+            auto vm = vmpool->get_ro(vmid);
+            if (!vm)
+            {
+                error = "Native VMGroup member " + to_string(vmid) + " is unavailable";
+                return PLACEMENT_UNAVAILABLE;
+            }
+            auto membership = vm->get_template_attribute("VMGROUP");
+            int gid = -1;
+            if (!membership || membership->vector_value("VMGROUP_ID", gid) != 0 ||
+                gid != get_oid() || membership->vector_value("ROLE") != role->name())
+            {
+                error = "Native VMGroup member " + to_string(vmid) + " has inconsistent membership";
+                return PLACEMENT_INVALID;
+            }
+            int hid = -1;
+            const int rc = settled_group_host(*vm, hid);
+            if (rc != 0)
+            {
+                error = "Native VMGroup member " + to_string(vmid) +
+                    (rc == PLACEMENT_BUSY ? " has an unresolved placement transition" :
+                                           " has no trustworthy settled placement");
+                return rc;
+            }
+            placements[vmid] = hid;
+        }
+    }
+    error.clear();
+    return 0;
+}
+
+int VMGroup::check_membership_change(int excluding_vmid, string& error)
+{
+    map<int, int> placements;
+    return peer_placements(excluding_vmid, placements, error);
+}
+
+string VMGroup::placement_sha256() const
+{
+    string xml;
+    to_xml(xml);
+    return one_util::sha256_digest(xml);
+}
+
+int VMGroup::check_placement(int vmid, int hid, const string& role_name,
+                              string& error, int max_group_migrations,
+                              bool require_member)
+{
+    auto role = _roles.get(role_name);
+    if (vmid < 0 || hid < 0 || !role || max_group_migrations < -1 ||
+        (require_member && role->get_vms().count(vmid) == 0))
+    {
+        error = "Native VMGroup placement identity is invalid or no longer a member";
+        return PLACEMENT_INVALID;
+    }
+    for (auto item : _roles)
+    {
+        if (item->name() != role_name && item->get_vms().count(vmid) != 0)
+        {
+            error = "Native VMGroup VM belongs to a different role";
+            return PLACEMENT_INVALID;
+        }
+        if (item->id() < 0 || item->id() >= VMGroupRoles::MAX_ROLES)
+        {
+            error = "Native VMGroup has an invalid role identity";
+            return PLACEMENT_INVALID;
+        }
+    }
+    if (check_consistency(error) != 0) return PLACEMENT_INVALID;
+    if (!role->check_host_affinity(hid))
+    {
+        error = "Target violates native VMGroup HOST_AFFINED/HOST_ANTI_AFFINED rules";
+        return PLACEMENT_INVALID;
+    }
+
+    VMGroupRule::rule_set affined, anti, reduced;
+    if (get_rules(VMGroupPolicy::AFFINED, affined, error) != 0 ||
+        get_rules(VMGroupPolicy::ANTI_AFFINED, anti, error) != 0)
+        return PLACEMENT_INVALID;
+    VMGroupRule::reduce(affined, reduced);
+
+    const int my_role_id = role->id();
+    bool anti_affined_member = role->policy() == VMGroupPolicy::ANTI_AFFINED;
+    for (const auto& rule : anti)
+    {
+        const auto& roles = rule.get_roles();
+        if (!roles.test(my_role_id)) continue;
+        for (int id = 0; id < VMGroupRoles::MAX_ROLES; ++id)
+        {
+            auto other = _roles.get(id);
+            if (id != my_role_id && roles.test(id) && other && other->size_vms() > 0)
+                anti_affined_member = true;
+        }
+    }
+    if (max_group_migrations == 0 && anti_affined_member)
+    {
+        error = "Native MAX_GROUP_MIGRATIONS=0 freezes anti-affined replica migration";
+        return PLACEMENT_INVALID;
+    }
+
+    map<int, int> placements;
+    const int rc = peer_placements(vmid, placements, error);
+    if (rc != 0) return rc;
+
+    const auto compatible = [&](VMGroupRole* peer_role, VMGroupPolicy policy)
+    {
+        for (int peer : peer_role->get_vms())
+        {
+            if (peer == vmid) continue;
+            const auto found = placements.find(peer);
+            if (found == placements.end())
+            {
+                error = "Native VMGroup peer placement snapshot is incomplete";
+                return false;
+            }
+            if (found->second < 0) continue;
+            if ((policy == VMGroupPolicy::AFFINED && found->second != hid) ||
+                (policy == VMGroupPolicy::ANTI_AFFINED && found->second == hid))
+            {
+                error = "Target violates native VMGroup role placement against VM " + to_string(peer);
+                return false;
+            }
+        }
+        return true;
+    };
+    if (!compatible(role, role->policy())) return PLACEMENT_INVALID;
+    for (const auto* rules : {&reduced, &anti})
+    {
+        for (const auto& rule : *rules)
+        {
+            const auto& roles = rule.get_roles();
+            if (!roles.test(my_role_id)) continue;
+            for (int id = 0; id < VMGroupRoles::MAX_ROLES; ++id)
+            {
+                if (id == my_role_id || !roles.test(id)) continue;
+                auto other = _roles.get(id);
+                if (!other || !compatible(other, rule.get_policy())) return PLACEMENT_INVALID;
+            }
+        }
+    }
+    error.clear();
     return 0;
 }

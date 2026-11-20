@@ -140,6 +140,30 @@ public:
      */
     int check_affinity(int vmid, int hid, const std::string& role, std::string& error);
 
+    // Admission uses the existing native group object lock. These return values
+    // distinguish an invalid request from a transient, explicitly unadmitted one.
+    static constexpr int PLACEMENT_INVALID = -1;
+    static constexpr int PLACEMENT_UNAVAILABLE = -2;
+    static constexpr int PLACEMENT_BUSY = -3;
+
+    /**
+     * Validate a single native placement while the caller retains this group's
+     * PoolSQL lock through VM history publication / capacity reservation.
+     * Peer VM objects are read-only snapshots; no peer VM lock is acquired.
+     * Positive migration budgets are conservatively serialized to one pending
+     * transition per native group. Zero freezes anti-affined replica moves.
+     * A -3 result is retryable only BEFORE any VM admission side effect.
+     */
+    int check_placement(int vmid, int hid, const std::string& role,
+                        std::string& error, int max_group_migrations = -1,
+                        bool require_member = true);
+
+    /** Refuse membership/policy edits while any other member is unresolved. */
+    int check_membership_change(int excluding_vmid, std::string& error);
+
+    /** Bind native membership and constraints to the exact serialized input. */
+    std::string placement_sha256() const;
+
 private:
     // -------------------------------------------------------------------------
     // Friends
@@ -236,6 +260,9 @@ private:
     /**
      *  The role set
      */
+    int peer_placements(int excluding_vmid, std::map<int, int>& placements,
+                        std::string& error);
+
     VMGroupRoles _roles;
 };
 
