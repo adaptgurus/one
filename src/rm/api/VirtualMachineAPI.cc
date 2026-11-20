@@ -279,9 +279,9 @@ Request::ErrorCode VirtualMachineAPI::update(int oid,
         return Request::NO_EXISTS;
     }
 
-    if (vm->capacity_admission_pending())
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
     {
-        att.resp_msg = "Native capacity admission is pending; recover-failure before changing this VM";
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile before changing this VM";
         return Request::ACTION;
     }
 
@@ -599,9 +599,9 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
         return Request::NO_EXISTS;
     }
 
-    if (vm->capacity_admission_pending())
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
     {
-        att.resp_msg = "Native capacity admission is pending; recover-failure before changing this VM";
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile before changing this VM";
         return Request::ACTION;
     }
 
@@ -780,9 +780,9 @@ Request::ErrorCode VirtualMachineAPI::action(int vid,
         return Request::NO_EXISTS;
     }
 
-    if (vm->capacity_admission_pending())
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
     {
-        att.resp_msg = "Native capacity admission is pending; recover-failure or wait for admission";
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile";
         return Request::ACTION;
     }
 
@@ -976,9 +976,9 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
         return Request::NO_EXISTS;
     }
 
-    if (vm->capacity_admission_pending())
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
     {
-        att.resp_msg = "Native capacity admission is pending; recover-failure before changing this VM";
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile before changing this VM";
         return Request::ACTION;
     }
 
@@ -3088,9 +3088,9 @@ Request::ErrorCode VirtualMachineAPI::resize(int vid,
     /* ---------------------------------------------------------------------- */
     if ( auto vm = vmpool->get_ro(vid) )
     {
-        if (vm->capacity_admission_pending())
+        if (vm->driver_request_pending() || vm->capacity_admission_pending())
         {
-            att.resp_msg = "Native capacity admission is pending; recover-failure before resizing";
+            att.resp_msg = "Native admission or driver request is unresolved; resizing is refused";
             return Request::ACTION;
         }
 
@@ -3225,9 +3225,9 @@ Request::ErrorCode VirtualMachineAPI::update_conf(int vid,
         return Request::NO_EXISTS;
     }
 
-    if (vm->capacity_admission_pending())
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
     {
-        att.resp_msg = "Native capacity admission is pending; recover-failure before changing this VM";
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile before changing this VM";
         return Request::ACTION;
     }
 
@@ -3348,6 +3348,11 @@ Request::ErrorCode VirtualMachineAPI::recover(int vid,
         att.resp_id = vid;
 
         return Request::NO_EXISTS;
+    }
+
+    if (!one_drs_driver::manual_recovery(vm.get(), vmpool, att.resp_msg))
+    {
+        return Request::ACTION;
     }
 
     if (vm->checked_capacity_pending() ||
@@ -4488,7 +4493,7 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_add(int vid,
         return Request::NO_EXISTS;
     }
 
-    if (vm->capacity_admission_pending() ||
+    if (vm->driver_request_pending() || vm->capacity_admission_pending() ||
         vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
     {
         att.resp_msg = "VMGroup membership cannot change during checked migration admission";
@@ -4556,7 +4561,7 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_del(int vid,
         return Request::NO_EXISTS;
     }
 
-    if (vm->capacity_admission_pending() ||
+    if (vm->driver_request_pending() || vm->capacity_admission_pending() ||
         vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
     {
         att.resp_msg = "VMGroup membership cannot change during checked migration admission";

@@ -454,6 +454,8 @@ void TransferManager::trigger_prolog(VirtualMachine * vm)
 
         xfr.close();
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
+
         vm.reset();
 
         {
@@ -616,6 +618,8 @@ void TransferManager::trigger_prolog_migr(VirtualMachine * vm)
 
         xfr.close();
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
+
         vm.reset();
 
         {
@@ -770,6 +774,8 @@ void TransferManager::trigger_prolog_resume(VirtualMachine * vm)
 
         xfr.close();
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
+
         vm.reset();
 
         {
@@ -893,6 +899,8 @@ void TransferManager::trigger_prolog_attach(VirtualMachine * vm)
         }
 
         xfr.close();
+
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
 
         vm.reset();
 
@@ -1111,6 +1119,8 @@ void TransferManager::trigger_epilog(bool local, VirtualMachine * vm)
 
         xfr.close();
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
+
         vm.reset();
 
         {
@@ -1263,6 +1273,8 @@ void TransferManager::trigger_epilog_stop(VirtualMachine * vm)
             << vm->get_ds_id() << endl;
 
         xfr.close();
+
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
 
         vm.reset();
 
@@ -1494,6 +1506,8 @@ void TransferManager::trigger_epilog_delete(bool local, VirtualMachine * vm)
 
         xfr.close();
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
+
         vm.reset();
 
         {
@@ -1582,6 +1596,8 @@ void TransferManager::trigger_epilog_delete_previous(VirtualMachine * vm)
         }
 
         xfr.close();
+
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
 
         vm.reset();
 
@@ -1672,6 +1688,8 @@ void TransferManager::trigger_epilog_delete_both(VirtualMachine * vm)
         }
 
         xfr.close();
+
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
 
         vm.reset();
 
@@ -1774,6 +1792,8 @@ void TransferManager::trigger_epilog_detach(VirtualMachine * vm)
         epilog_transfer_command(vm.get(), vm->get_hostname(), disk, xfr);
 
         xfr.close();
+
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
 
         vm.reset();
 
@@ -1933,6 +1953,8 @@ void TransferManager::trigger_saveas_hot(int vid)
 
         xfr.close();
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
+
         vm.reset();
 
         {
@@ -2081,6 +2103,8 @@ void TransferManager::do_snapshot_action(int vid, const char * snap_action)
     {
         goto error_common;
     }
+
+    if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
 
     vm.reset();
 
@@ -2241,6 +2265,8 @@ void TransferManager::trigger_resize(int vid)
 
         xfr.close();
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
+
         vm.reset();
 
         {
@@ -2332,6 +2358,8 @@ void TransferManager::trigger_restore(int vid, int img_id, int inc_id,
         xfr.close();
 
         {
+            if (!one_drs_driver::prepare(vm.get(), vmpool, "TRANSFER", xfr_name)) return;
+
             transfer_msg_t msg(TransferManagerMessages::TRANSFER, "", vid, xfr_name);
             tm_md->write(msg);
         }

@@ -922,6 +922,12 @@ error_state:
 int DispatchManager::recover(unique_ptr<VirtualMachine> vm, bool success,
                              const RequestAttributes& ra, string& error_str)
 {
+    if (vm->driver_request_pending())
+    {
+        error_str = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     int rc = 0;
     int vid = vm->get_oid();
 
@@ -963,6 +969,12 @@ int DispatchManager::retry(unique_ptr<VirtualMachine> vm,
                            const RequestAttributes& ra,
                            string& error_str)
 {
+    if (vm->driver_request_pending())
+    {
+        error_str = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     int rc = 0;
 
     switch (vm->get_state())
@@ -992,6 +1004,12 @@ int DispatchManager::delete_vm(unique_ptr<VirtualMachine> vm,
                                const RequestAttributes& ra,
                                string& error)
 {
+    if (vm->driver_request_pending())
+    {
+        error = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     ostringstream oss;
 
     HostShareCapacity sr;
@@ -1063,6 +1081,12 @@ int DispatchManager::delete_vm(int vid, const RequestAttributes& ra,
 int DispatchManager::delete_recreate(unique_ptr<VirtualMachine> vm,
                                      const RequestAttributes& ra, string& error)
 {
+    if (vm->driver_request_pending())
+    {
+        error = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     int rc = 0;
 
     Template vm_quotas_snp;
@@ -1154,6 +1178,12 @@ int DispatchManager::delete_recreate(unique_ptr<VirtualMachine> vm,
 int DispatchManager::delete_vm_db(unique_ptr<VirtualMachine> vm,
                                   const RequestAttributes& ra, string& error_str)
 {
+    if (vm->driver_request_pending())
+    {
+        error_str = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     HostShareCapacity sr;
 
     ostringstream oss;
@@ -2836,9 +2866,9 @@ int DispatchManager::resize(int vid, float cpu, int vcpu, long memory, bool enfo
         return -1;
     }
 
-    if (vm->capacity_admission_pending())
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
     {
-        error_str = "Native capacity admission is pending; recover-failure before resizing";
+        error_str = "Native admission or driver request is unresolved; resizing is refused";
         return -1;
     }
 

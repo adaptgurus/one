@@ -228,6 +228,12 @@
                     <xs:element name="ENFORCED_ADMISSION_STATE" type="xs:int" minOccurs="0"/>
                     <xs:element name="ENFORCED_ADMISSION_LCM_STATE" type="xs:int" minOccurs="0"/>
                     <xs:element name="ENFORCED_ADMISSION_CANCELING" type="xs:boolean" minOccurs="0"/>
+                    <xs:element name="DRIVER_REQUEST_TOKEN" type="xs:string" minOccurs="0"/>
+                    <xs:element name="DRIVER_REQUEST_OWNER" type="xs:string" minOccurs="0"/>
+                    <xs:element name="DRIVER_REQUEST_OPERATION" type="xs:string" minOccurs="0"/>
+                    <xs:element name="DRIVER_REQUEST_STATE" type="xs:int" minOccurs="0"/>
+                    <xs:element name="DRIVER_REQUEST_LCM_STATE" type="xs:int" minOccurs="0"/>
+                    <xs:element name="DRIVER_REQUEST_PENDING" type="xs:boolean" minOccurs="0"/>
                     <xs:element name="PSTIME" type="xs:integer"/>
                     <xs:element name="PETIME" type="xs:integer"/>
                     <xs:element name="RSTIME" type="xs:integer"/>

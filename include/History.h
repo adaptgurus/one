@@ -17,6 +17,8 @@
 #ifndef HISTORY_H_
 #define HISTORY_H_
 
+#include "NativeDriverRequest.h"
+
 #include "ObjectSQL.h"
 #include "ObjectXML.h"
 #include "VMActions.h"
@@ -109,6 +111,8 @@ private:
     int enforced_admission_state = -1;
     int enforced_admission_lcm_state = -1;
     bool enforced_admission_canceling = false;
+
+    NativeDriverRequestState driver_request;
 
     time_t       stime;
     time_t       etime;

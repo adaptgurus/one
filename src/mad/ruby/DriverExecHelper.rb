@@ -117,6 +117,11 @@ module DriverExecHelper
     # Sends a message to the OpenNebula core through stdout
     # rubocop:disable Metrics/ParameterLists
     def send_message(action = '-', result = RESULT[:failure], id = '-', info = '-')
+        context = Thread.current[:one_drs_request]
+        if context && action.to_s.upcase.to_sym == context[:action] &&
+           id.to_s == context[:id] && !%w[LOG POLL INIT].include?(action.to_s.upcase)
+            info = "#{context[:header]} #{info}"
+        end
         @send_mutex.synchronize do
             STDOUT.puts "#{action} #{result} #{id} #{info}"
             STDOUT.flush

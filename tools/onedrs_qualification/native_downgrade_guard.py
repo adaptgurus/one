@@ -113,6 +113,16 @@ def inspect_rows(vm_rows, plan_rows, history_rows):
             pending = flag(history, "CHECKED_CAPACITY_PENDING")
             enforced = flag(history, "ENFORCE_CAPACITY")
             canceling = flag(history, "ENFORCED_ADMISSION_CANCELING")
+            driver_pending = flag(history, "DRIVER_REQUEST_PENDING")
+            driver_token = history.findtext("DRIVER_REQUEST_TOKEN", "")
+            driver_owner = history.findtext("DRIVER_REQUEST_OWNER", "")
+            for identity in (driver_token, driver_owner):
+                if identity and (len(identity) != 64 or any(c not in "0123456789abcdef" for c in identity)):
+                    raise InvalidState("invalid native driver request identity")
+            if driver_pending:
+                if not driver_token or not driver_owner:
+                    raise InvalidState("pending native driver request has no identity")
+                blocked("VM", vid, "native driver request has not been acknowledged or explicitly reconciled")
             if canceling:
                 blocked("VM", vid, "native enforced admission cancellation has not completed")
             generations = [history.findtext(key, "") for key in

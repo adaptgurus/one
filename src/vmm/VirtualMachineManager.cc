@@ -456,6 +456,8 @@ void VirtualMachineManager::trigger_deploy(int vid)
                 vm->get_ds_id(),
                 -1);
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "DEPLOY", drv_msg)) return;
+
         vmd->deploy(vid, drv_msg);
 
         vmpool->update(vm.get());
@@ -568,6 +570,8 @@ void VirtualMachineManager::trigger_save(int vid)
                           ds_id,
                           -1);
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "SAVE", drv_msg)) return;
+
         vmd->save(vid, drv_msg);
 
         return;
@@ -665,6 +669,8 @@ void VirtualMachineManager::trigger_shutdown(int vid)
                           vm->to_xml(vm_tmpl),
                           ds_id,
                           -1);
+
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "SHUTDOWN", drv_msg)) return;
 
         vmd->shutdown(vid, drv_msg);
 
@@ -892,6 +898,8 @@ void VirtualMachineManager::trigger_cancel(int vid)
                           ds_id,
                           -1);
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "CANCEL", drv_msg)) return;
+
         vmd->cancel(vid, drv_msg);
 
         return;
@@ -966,6 +974,8 @@ void VirtualMachineManager::trigger_cancel_previous(int vid)
                 vm->to_xml(vm_tmpl),
                 vm->get_ds_id(),
                 -1);
+
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "CANCEL", drv_msg)) return;
 
         vmd->cancel(vid, drv_msg);
 
@@ -1051,6 +1061,8 @@ void VirtualMachineManager::trigger_cleanup(int vid, bool cancel_previous)
                           vm->get_ds_id(),
                           -1);
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "CLEANUP", drv_msg)) return;
+
         vmd->cleanup(vid, drv_msg);
 
         return;
@@ -1134,6 +1146,8 @@ void VirtualMachineManager::trigger_cleanup_previous(int vid)
                 vm->get_ds_id(),
                 -1);
 
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "CLEANUP", drv_msg)) return;
+
         vmd->cleanup(vid, drv_msg);
 
         return;
@@ -1212,6 +1226,8 @@ void VirtualMachineManager::trigger_migrate(int vid)
                 vm->to_xml(vm_tmpl),
                 vm->get_previous_ds_id(),
                 -1);
+
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "MIGRATE", drv_msg)) return;
 
         vmd->migrate(vid, drv_msg);
 
@@ -1310,6 +1326,8 @@ void VirtualMachineManager::trigger_restore(int vid)
                 vm->to_xml(vm_tmpl),
                 vm->get_ds_id(),
                 -1);
+
+        if (!one_drs_driver::prepare(vm.get(), vmpool, "RESTORE", drv_msg)) return;
 
         vmd->restore(vid, drv_msg);
 
