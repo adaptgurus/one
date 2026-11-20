@@ -147,7 +147,8 @@ module OpenNebula
             'HOTPLUG_SAVEAS_STOPPED',
             'BACKUP',
             'BACKUP_POWEROFF',
-            'RESTORE'
+            'RESTORE',
+            'CHECKED_MIGRATE_PENDING'
         ]
 
         SHORT_VM_STATES={
@@ -235,7 +236,8 @@ module OpenNebula
             'HOTPLUG_SAVEAS_STOPPED'     => 'hotp',
             'BACKUP'            => 'back',
             'BACKUP_POWEROFF'   => 'back',
-            'RESTORE'           => 'rest'
+            'RESTORE'           => 'rest',
+            'CHECKED_MIGRATE_PENDING' => 'miga'
         }
 
         HISTORY_ACTION=[

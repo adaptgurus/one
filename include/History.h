@@ -95,6 +95,12 @@ private:
     int          plan_id   = -2;
     int          action_id = -1;
 
+    // Native-owned identity, retained through completion and history copies.
+    // User VM templates cannot set these fields. The pending phase is an LCM state.
+    std::string  checked_plan_generation;
+    unsigned int checked_plan_term = 0;
+    bool checked_capacity_pending = false;
+
     time_t       stime;
     time_t       etime;
 
@@ -167,7 +173,7 @@ private:
      *    @param replace Execute an INSERT or a REPLACE
      *    @return 0 on success
      */
-    int insert_replace(SqlDB *db, bool replace);
+    int insert_replace(SqlDB *db, bool replace, bool upsert = false);
 
     /**
      *  Callback function to unmarshall a history object (History::select)

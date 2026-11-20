@@ -12,11 +12,20 @@
         <xs:element name="VNETS" type="IDS"/>
         <xs:element name="TEMPLATE" type="xs:anyType"/>
         <xs:element name="TEMPLATE_SHA256" type="xs:string" minOccurs="0"/>
+        <xs:element name="ONE_DRS_CHECKED_CAPABILITIES" minOccurs="0">
+          <xs:complexType><xs:sequence>
+            <xs:element name="VERSION" type="xs:integer"/>
+            <xs:element name="MIGRATION" type="xs:string"/>
+            <xs:element name="CAPACITY" type="xs:string"/>
+            <xs:element name="RECOVERY" type="xs:string"/>
+          </xs:sequence></xs:complexType>
+        </xs:element>
         <xs:element name="PLAN" minOccurs="0" maxOccurs="1">
               <xs:complexType>
                 <xs:sequence>
                   <xs:element name="ID" type="xs:integer"/>
                   <xs:element name="STATE" type="xs:integer"/>
+                  <xs:element name="CHECKED_EXECUTION" type="xs:int" minOccurs="0"/>
                   <xs:element name="GENERATION" type="xs:string" minOccurs="0"/>
                   <xs:element name="TEMPLATE_SHA256" type="xs:string" minOccurs="0"/>
                   <xs:element name="ACTION">

@@ -141,6 +141,7 @@ public:
     bool renew_generation();
 
     /** Validate an approved READY plan before changing its state. Caller holds the plan lock. */
+    int validate_checked(const std::string& expected_sha256, std::string& error) const;
     int start_checked(const std::string& expected_sha256, std::string& error);
 
     /**
@@ -166,8 +167,11 @@ public:
         _state = state;
     }
 
+    bool checked_execution() const { return _checked_execution; }
+
     void clear()
     {
+        _checked_execution = false;
         _state = PlanState::NONE;
         _actions.clear();
     }
@@ -225,6 +229,7 @@ private:
 
     std::string _generation;
     std::string _template_sha256;
+    bool _checked_execution = false;
 
     /**
      * List of actions which should be exectuted

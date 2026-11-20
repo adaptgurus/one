@@ -26,6 +26,8 @@
 #include "PlanPool.h"
 #include "Plan.h"
 #include "VirtualMachineAPI.h"
+#include "LifeCycleManager.h"
+#include "HostPool.h"
 
 using namespace std;
 
@@ -257,6 +259,30 @@ int PlanManager::start_plan_checked(int cid, const std::string& expected_plan_sh
             error = "Plan was not computed against the approved cluster template";
             return -1;
         }
+        if (plan->validate_checked(expected_plan_sha256, error) != 0) return -1;
+        std::set<int> vm_ids;
+        for (const auto& action : plan->actions())
+        {
+            if (!vm_ids.insert(action.vm_id()).second)
+            {
+                error = "Checked migration plan contains repeated VM actions";
+                return -1;
+            }
+            // Read-only preflight avoids taking VM locks under the cluster lock.
+            // The API repeats this check under its VM lock before any mutation.
+            auto vm = vm_pool->get_ro(action.vm_id());
+            auto host = Nebula::instance().get_hpool()->get_ro(action.host_id());
+            if (!vm || !host || host->get_cluster_id() != cid ||
+                host->get_state() != Host::MONITORED)
+            {
+                error = "Checked migration plan VM/target host is unavailable in the approved cluster";
+                return -1;
+            }
+            if (!vm->checked_migration_supported(action.host_id(), cid, action.ds_id(), error))
+            {
+                return -1;
+            }
+        }
         if (plan->start_checked(expected_plan_sha256, error) != 0) return -1;
         if (plan_pool->update(plan.get()) != 0)
         {
@@ -273,7 +299,7 @@ void PlanManager::timer_action()
     auto& nd = Nebula::instance();
     RaftManager * raftm = nd.get_raftm();
 
-    if (!raftm || (!raftm->is_leader() && !raftm->is_solo()))
+    if (!ready.load() || !raftm || (!raftm->is_leader() && !raftm->is_solo()))
     {
         return;
     }
@@ -316,8 +342,9 @@ void PlanManager::timer_action()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-bool PlanManager::start_action(int plan_id, PlanAction& action)
+bool PlanManager::start_action(Plan& plan, PlanAction& action)
 {
+    const int plan_id = plan.cid();
     const string& aname = action.operation();
     VMActions::Action vm_action = VMActions::NONE_ACTION;
     VMActions::action_from_str(aname, vm_action);
@@ -330,6 +357,27 @@ bool PlanManager::start_action(int plan_id, PlanAction& action)
                          PoolObjectSQL::VM);
 
     ra.set_auth_op(vm_action);
+    if (plan.checked_execution())
+    {
+        ra.checked_plan_id = plan_id;
+        ra.checked_action_id = action.id();
+        ra.checked_plan_generation = plan.generation();
+        ra.checked_plan_term = Nebula::instance().get_raftm()->get_term();
+    }
+
+    if (plan.checked_execution())
+    {
+        // Once native VM admission can begin, the plan action must already be
+        // durable. A crash must not turn an accepted action back into READY.
+        action.timestamp(time(nullptr));
+        action.state(PlanState::APPLYING);
+        if (plan_pool->update(&plan) != 0)
+        {
+            action.state(PlanState::ERROR);
+            NebulaLog::error("PLM", "Cannot persist checked action admission");
+            return false;
+        }
+    }
 
     Request request("internal action");
     VirtualMachineAPI api(request);
@@ -359,7 +407,7 @@ bool PlanManager::start_action(int plan_id, PlanAction& action)
         rc = api.migrate(action.vm_id(),
                          action.host_id(),
                          live_resched,
-                         false,
+                         plan.checked_execution(),
                          action.ds_id(),
                          cold_migrate_mode,
                          ra);
@@ -389,6 +437,7 @@ bool PlanManager::start_action(int plan_id, PlanAction& action)
         return false;
     }
 
+    if (!plan.checked_execution())
     if (auto vm = vm_pool->get(action.vm_id()))
     {
         vm->plan_id(plan_id);
@@ -405,12 +454,20 @@ bool PlanManager::start_action(int plan_id, PlanAction& action)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void PlanManager::action_finished(int plan_id, int action_id, PlanState state)
+void PlanManager::action_finished(int plan_id, int action_id, PlanState state,
+                                  const std::string& generation)
 {
     auto plan = plan_pool->get(plan_id);
 
     if (!plan)
     {
+        return;
+    }
+
+    if ((plan->checked_execution() && generation.empty()) ||
+        (!generation.empty() && plan->generation() != generation))
+    {
+        NebulaLog::info("PLM", "Ignoring completion for a superseded checked plan generation");
         return;
     }
 
@@ -462,7 +519,7 @@ void PlanManager::execute_plan(Plan& plan)
             break;
         }
 
-        if (start_action(plan.cid(), *action))
+        if (start_action(plan, *action))
         {
             host_actions[action->host_id()]++;
             cluster_actions++;
@@ -477,6 +534,18 @@ void PlanManager::execute_plan(Plan& plan)
 
 void PlanManager::execute_plans()
 {
+    if (!ready.load()) return;
+    std::lock_guard<std::mutex> execution_lock(execution_mutex);
+    auto& nd = Nebula::instance();
+    auto raftm = nd.get_raftm();
+    if (!raftm || (!raftm->is_leader() && !raftm->is_solo())) return;
+
+    const auto term = raftm->get_term();
+    const bool new_epoch = recovered_term != term;
+    // First dispatch in every leader epoch cancels requests that never reached a
+    // driver. Later passes retry storage failures or a stalled admission queue.
+    if (!nd.get_lcm()->recover_checked_migrations(new_epoch, term)) return;
+    recovered_term = term;
     auto plans = plan_pool->get_active_plans();
 
     NebulaLog::info("PLM", "Found " + to_string(plans.size()) + " active plans");

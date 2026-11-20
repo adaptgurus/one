@@ -150,7 +150,7 @@ void History::non_persistent_data()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int History::insert_replace(SqlDB *db, bool replace)
+int History::insert_replace(SqlDB *db, bool replace, bool upsert)
 {
     ostringstream   oss;
 
@@ -181,7 +181,7 @@ int History::insert_replace(SqlDB *db, bool replace)
     }
     else
     {
-        oss << "INSERT INTO " << one_db::history_table
+        oss << (upsert ? "REPLACE INTO " : "INSERT INTO ") << one_db::history_table
             << " (" << one_db::history_db_names << ") VALUES ("
             <<          oid             << ","
             <<          seq             << ","
@@ -310,6 +310,9 @@ string& History::to_xml(string& xml, bool database) const
         "<DS_ID>"      << ds_id         << "</DS_ID>" <<
         "<PLAN_ID>"    << plan_id       << "</PLAN_ID>" <<
         "<ACTION_ID>"  << action_id     << "</ACTION_ID>" <<
+        "<CHECKED_PLAN_GENERATION>" << checked_plan_generation << "</CHECKED_PLAN_GENERATION>" <<
+        "<CHECKED_PLAN_TERM>" << checked_plan_term << "</CHECKED_PLAN_TERM>" <<
+        "<CHECKED_CAPACITY_PENDING>" << checked_capacity_pending << "</CHECKED_CAPACITY_PENDING>" <<
         "<PSTIME>"     << prolog_stime  << "</PSTIME>"<<
         "<PETIME>"     << prolog_etime  << "</PETIME>"<<
         "<RSTIME>"     << running_stime << "</RSTIME>"<<
@@ -414,6 +417,21 @@ int History::rebuild_attributes()
     // For backward compatibility do not fail if plan or action ID is not found
     xpath(plan_id, "/HISTORY/PLAN_ID", -2);
     xpath(action_id, "/HISTORY/ACTION_ID", -1);
+    xpath(checked_plan_generation, "/HISTORY/CHECKED_PLAN_GENERATION", "");
+    xpath(checked_plan_term, "/HISTORY/CHECKED_PLAN_TERM", 0u);
+    int pending = 0;
+    xpath(pending, "/HISTORY/CHECKED_CAPACITY_PENDING", 0);
+    if ((pending != 0 && pending != 1) || (pending && checked_plan_generation.empty()))
+    {
+        return -1;
+    }
+    checked_capacity_pending = pending == 1;
+    if (!checked_plan_generation.empty() &&
+        (checked_plan_generation.size() != 64 || plan_id < 0 || action_id < 0 ||
+         checked_plan_generation.find_first_not_of("0123456789abcdef") != std::string::npos))
+    {
+        return -1;
+    }
 
     rc += xpath(hostname, "/HISTORY/HOSTNAME", "not_found");
 

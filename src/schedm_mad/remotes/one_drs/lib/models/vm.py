@@ -1025,6 +1025,18 @@ class Vm:
                     "required": True,
                 },
             )
+            checked_plan_generation: Optional[str] = field(
+                default=None,
+                metadata={"name": "CHECKED_PLAN_GENERATION", "type": "Element"},
+            )
+            checked_plan_term: Optional[int] = field(
+                default=None,
+                metadata={"name": "CHECKED_PLAN_TERM", "type": "Element"},
+            )
+            checked_capacity_pending: Optional[bool] = field(
+                default=None,
+                metadata={"name": "CHECKED_CAPACITY_PENDING", "type": "Element"},
+            )
             pstime: Optional[int] = field(
                 default=None,
                 metadata={

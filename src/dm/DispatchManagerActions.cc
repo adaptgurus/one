@@ -102,9 +102,15 @@ int DispatchManager::migrate(VirtualMachine * vm, int poff_migrate,
     oss << "Migrating VM " << vid;
     NebulaLog::log("DiM", Log::DEBUG, oss);
 
+    const bool checked_pending =
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING &&
+        !ra.checked_plan_generation.empty() &&
+        vm->checked_plan_generation() == ra.checked_plan_generation &&
+        vm->plan_id() == ra.checked_plan_id && vm->action_id() == ra.checked_action_id;
+
     if ((vm->get_state()     == VirtualMachine::ACTIVE &&
          (vm->get_lcm_state() == VirtualMachine::RUNNING ||
-          vm->get_lcm_state() == VirtualMachine::UNKNOWN )) ||
+          vm->get_lcm_state() == VirtualMachine::UNKNOWN || checked_pending)) ||
         vm->get_state() == VirtualMachine::POWEROFF ||
         vm->get_state() == VirtualMachine::SUSPENDED)
     {
@@ -160,8 +166,14 @@ int DispatchManager::live_migrate(VirtualMachine * vm,
     oss << "Live-migrating VM " << vid;
     NebulaLog::log("DiM", Log::DEBUG, oss);
 
+    const bool checked_pending =
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING &&
+        !ra.checked_plan_generation.empty() &&
+        vm->checked_plan_generation() == ra.checked_plan_generation &&
+        vm->plan_id() == ra.checked_plan_id && vm->action_id() == ra.checked_action_id;
+
     if (vm->get_state()     == VirtualMachine::ACTIVE &&
-        vm->get_lcm_state() == VirtualMachine::RUNNING )
+        (vm->get_lcm_state() == VirtualMachine::RUNNING || checked_pending))
     {
         lcm->trigger_live_migrate(vid, ra);
     }

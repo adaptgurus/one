@@ -1361,6 +1361,8 @@ void Nebula::start(bool bootstrap_only)
 
         lcm->init_managers();
 
+        planm->activate();
+
         marketm->init_managers();
 
         // ---- Start the Request Manager & Information Manager----

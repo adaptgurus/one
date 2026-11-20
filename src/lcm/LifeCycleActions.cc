@@ -25,6 +25,8 @@
 #include "VirtualMachinePool.h"
 #include "VirtualNetworkPool.h"
 #include "Request.h"
+#include "PlanManager.h"
+#include "RaftManager.h"
 
 using namespace std;
 
@@ -238,6 +240,141 @@ void LifeCycleManager::trigger_stop(int vid, const RequestAttributes& ra)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+bool LifeCycleManager::cancel_checked_migration(
+        std::unique_ptr<VirtualMachine>& vm, const std::string& reason)
+{
+    const auto generation = vm->checked_plan_generation();
+    const int plan_id = vm->plan_id(), action_id = vm->action_id();
+    if (!vm->checked_capacity_pending() || generation.empty() ||
+        !vm->hasPreviousHistory() || plan_id < 0 || action_id < 0 ||
+        vm->get_cid() != plan_id || vm->get_previous_cid() != plan_id)
+    {
+        vm->log("LCM", Log::ERROR, "Invalid checked pending migration history; refusing automatic recovery");
+        return false;
+    }
+
+    HostShareCapacity capacity;
+    vm->get_capacity(capacity);
+    if (vm->is_pinned() || !capacity.nodes.empty() || !capacity.pci.empty() ||
+        vm->get_hid() == vm->get_previous_hid() || vm->get_ds_id() != vm->get_previous_ds_id())
+    {
+        vm->log("LCM", Log::ERROR, "Unsupported checked pending migration; refusing automatic recovery");
+        return false;
+    }
+    if (vm->get_hid() != vm->get_previous_hid() &&
+        hpool->del_checked_capacity(vm->get_hid(), capacity) != 0)
+    {
+        vm->log("LCM", Log::ERROR, "Cannot persist checked reservation release; keeping request pending");
+        return false;
+    }
+
+    // No driver action is allowed while the native pending bit is true. These
+    // writes are retryable with the same next history sequence if oned stops.
+    const auto now = time(nullptr);
+    vm->set_template_error_message("Checked migration canceled: " + reason);
+    vm->set_etime(now);
+    if (vmpool->update_history(vm.get()) != 0) return false;
+    vm->set_previous_etime(now);
+    vm->set_previous_running_etime(now);
+    if (vmpool->update_previous_history(vm.get()) != 0) return false;
+
+    vm->cp_previous_history();
+    vm->set_stime(now);
+    vm->set_running_stime(now);
+    if (vmpool->upsert_checked_history(vm.get()) != 0) return false;
+    vm->set_state(VirtualMachine::RUNNING);
+    if (vmpool->update(vm.get()) != 0) return false;
+
+    vm.reset(); // Never take the plan lock while a VM lock is held.
+    Nebula::instance().get_planm()->action_failure(plan_id, action_id, generation);
+    return true;
+}
+
+bool LifeCycleManager::recover_checked_migrations(bool new_epoch, unsigned int term)
+{
+    std::vector<int> ids;
+    // Include pre-driver MIGRATE/SAVE_MIGRATE: the VM state is persisted before
+    // the final history admission bit, so a crash in that window remains safe.
+    if (vmpool->search(ids, "state = 3 AND lcm_state IN (4, 7, 72)") != 0) return false;
+    bool complete = true;
+    for (auto id : ids)
+    {
+        auto vm = vmpool->get(id);
+        if (!vm) { complete = false; continue; }
+        if (!vm->checked_capacity_pending()) continue;
+        if (!new_epoch && vm->checked_plan_term() == term && vm->get_history_stime() + 30 > time(nullptr))
+        {
+            continue;
+        }
+        if (!cancel_checked_migration(vm, new_epoch ?
+            "controller restarted or leadership changed before admission" :
+            "capacity admission did not complete")) complete = false;
+    }
+    return complete;
+}
+
+int LifeCycleManager::reserve_checked_migration_capacity(
+        std::unique_ptr<VirtualMachine>& vm, bool live)
+{
+    if (!vm->checked_capacity_pending()) return 0;
+    auto raftm = Nebula::instance().get_raftm();
+    if (!raftm || (!raftm->is_solo() && !raftm->is_leader()))
+    {
+        vm->log("LCM", Log::ERROR, "Deferring checked admission to the current leader");
+        return -1;
+    }
+    const int plan_id = vm->plan_id();
+    std::string error;
+    HostShareCapacity capacity;
+    vm->get_capacity(capacity);
+
+    if (vm->get_lcm_state() != VirtualMachine::CHECKED_MIGRATE_PENDING ||
+        vm->checked_plan_generation().empty() || !vm->hasPreviousHistory() ||
+        plan_id < 0 || vm->action_id() < 0 ||
+        vm->get_cid() != plan_id || vm->get_previous_cid() != plan_id ||
+        vm->checked_plan_term() != raftm->get_term() ||
+        (vm->get_action() == VMActions::LIVE_MIGRATE_ACTION) != live)
+    {
+        error = "native checked request identity or leader epoch changed";
+    }
+    else
+    {
+        const int rc = hpool->add_checked_capacity(vm->get_hid(), plan_id, capacity, error,
+                                                    [&]() { return vmpool->update(vm.get()); },
+                                                    vm->get_hid() == vm->get_previous_hid());
+        if (rc == 0) return 1;
+        if (rc == -2)
+        {
+            // A failed write can be ambiguous. Keep the native pending record;
+            // recovery reloads the authoritative ledger and releases idempotently.
+            vm->log("LCM", Log::ERROR, error + "; request remains pending without driver dispatch");
+            return -1;
+        }
+    }
+    cancel_checked_migration(vm, error);
+    return -1;
+}
+
+bool LifeCycleManager::persist_checked_migration_admission(VirtualMachine* vm)
+{
+    // Host capacity is already durable. Persist all native state before clearing
+    // the last pending marker; never call a VMM/TM driver after any failed write.
+    if (vmpool->update_history(vm) != 0 ||
+        vmpool->update_previous_history(vm) != 0 ||
+        vmpool->update(vm) != 0)
+    {
+        vm->log("LCM", Log::ERROR, "Cannot persist checked migration state; refusing driver dispatch");
+        return false;
+    }
+    vm->checked_capacity_pending(false);
+    if (vmpool->update_history(vm) != 0)
+    {
+        vm->log("LCM", Log::ERROR, "Cannot persist checked admission completion; refusing driver dispatch");
+        return false;
+    }
+    return true;
+}
+
 void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
                                        VMActions::Action vm_action)
 {
@@ -260,11 +397,15 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
         }
 
         if (vm->get_state()     == VirtualMachine::ACTIVE &&
-            vm->get_lcm_state() == VirtualMachine::RUNNING)
+            (vm->get_lcm_state() == VirtualMachine::RUNNING ||
+             vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING))
         {
             //----------------------------------------------------
             //                SAVE_MIGRATE STATE
             //----------------------------------------------------
+
+            int checked_capacity = reserve_checked_migration_capacity(vm, false);
+            if (checked_capacity < 0) return;
 
             vm->set_state(VirtualMachine::SAVE_MIGRATE);
 
@@ -272,7 +413,7 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
 
             vm->get_capacity(sr);
 
-            if ( vm->get_hid() != vm->get_previous_hid() )
+            if ( checked_capacity == 0 && vm->get_hid() != vm->get_previous_hid() )
             {
                 hpool->add_capacity(vm->get_hid(), sr);
             }
@@ -283,13 +424,18 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
 
             vm->set_vm_info();
 
-            vmpool->update_history(vm.get());
-
             vm->set_previous_action(vm_action, uid, gid, req_id);
 
-            vmpool->update_previous_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (checked_capacity == 1)
+            {
+                if (!persist_checked_migration_admission(vm.get())) return;
+            }
+            else
+            {
+                vmpool->update_history(vm.get());
+                vmpool->update_previous_history(vm.get());
+                vmpool->update(vm.get());
+            }
 
             //----------------------------------------------------
 
@@ -407,7 +553,8 @@ void LifeCycleManager::trigger_live_migrate(int vid, const RequestAttributes& ra
         }
 
         if (vm->get_state()     == VirtualMachine::ACTIVE &&
-            vm->get_lcm_state() == VirtualMachine::RUNNING)
+            (vm->get_lcm_state() == VirtualMachine::RUNNING ||
+             vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING))
         {
             HostShareCapacity sr;
 
@@ -415,13 +562,16 @@ void LifeCycleManager::trigger_live_migrate(int vid, const RequestAttributes& ra
             //                   MIGRATE STATE
             //----------------------------------------------------
 
+            int checked_capacity = reserve_checked_migration_capacity(vm, true);
+            if (checked_capacity < 0) return;
+
             vm->set_state(VirtualMachine::MIGRATE);
 
             vm->set_resched(false);
 
             vm->get_capacity(sr);
 
-            if ( vm->get_hid() != vm->get_previous_hid() )
+            if ( checked_capacity == 0 && vm->get_hid() != vm->get_previous_hid() )
             {
                 hpool->add_capacity(vm->get_hid(), sr);
             }
@@ -430,14 +580,19 @@ void LifeCycleManager::trigger_live_migrate(int vid, const RequestAttributes& ra
 
             vm->set_vm_info();
 
-            vmpool->update_history(vm.get());
-
             vm->set_previous_action(VMActions::LIVE_MIGRATE_ACTION, uid, gid,
                                     req_id);
 
-            vmpool->update_previous_history(vm.get());
-
-            vmpool->update(vm.get());
+            if (checked_capacity == 1)
+            {
+                if (!persist_checked_migration_admission(vm.get())) return;
+            }
+            else
+            {
+                vmpool->update_history(vm.get());
+                vmpool->update_previous_history(vm.get());
+                vmpool->update(vm.get());
+            }
 
             //----------------------------------------------------
 
@@ -905,6 +1060,13 @@ void LifeCycleManager::trigger_delete(int vid, const RequestAttributes& ra)
 
         if ( auto vm = vmpool->get(vid) )
         {
+            if (vm->checked_capacity_pending() ||
+                vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
+            {
+                vm->log("LCM", Log::ERROR, "Refusing cleanup during checked migration admission");
+                return;
+            }
+
             if ( vm->get_state() != VirtualMachine::ACTIVE )
             {
                 vm->log("LCM", Log::ERROR, "clean_action, VM in a wrong state.");
@@ -974,6 +1136,13 @@ void LifeCycleManager::trigger_delete_recreate(int vid,
 
         if ( auto vm = vmpool->get(vid) )
         {
+            if (vm->checked_capacity_pending() ||
+                vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
+            {
+                vm->log("LCM", Log::ERROR, "Refusing cleanup during checked migration admission");
+                return;
+            }
+
             auto state = vm->get_state();
 
             if ( state != VirtualMachine::ACTIVE &&
