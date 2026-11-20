@@ -5,6 +5,7 @@ from lib.models.cluster_pool import ClusterPool
 from lib.models.datastore_pool import DatastorePool
 from lib.models.host_pool import HostPool
 from lib.models.requirements import Requirements
+from lib.models.native_eligibility import NativeEligibility
 from lib.models.vm_group_pool import VmGroupPool
 from lib.models.vm_pool_extended import VmPool
 from lib.models.vnet_pool_extended import VnetPool
@@ -70,4 +71,9 @@ class SchedulerDriverAction:
             "type": "Element",
             "required": True,
         },
+    )
+
+    one_drs_eligibility: Optional[NativeEligibility] = field(
+        default=None,
+        metadata={"name": "ONE_DRS_ELIGIBILITY", "type": "Element"},
     )

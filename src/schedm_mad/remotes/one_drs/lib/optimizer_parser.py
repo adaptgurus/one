@@ -219,6 +219,29 @@ class OptimizerParser:
             raise ValueError("Invalid native cluster template SHA-256")
         return digest
 
+    @property
+    def plan_eligibility(self) -> dict[tuple[int, int], str] | None:
+        """Echo only the candidate identities captured in native optimizer input."""
+        native = self.scheduler_driver_action.one_drs_eligibility
+        if native is None:
+            return None  # Legacy input stays explicitly unbound.
+        allowed = {}
+        for vm in self.scheduler_driver_action.requirements.vm:
+            if type(vm.id) is not int or vm.id < 0 or vm.id in allowed or vm.hosts is None:
+                raise ValueError("Invalid native eligibility requirement identity")
+            allowed[vm.id] = set(vm.hosts.id)
+        tokens = {}
+        for candidate in native.candidate:
+            vm_id, host_id, digest = candidate.vm_id, candidate.host_id, candidate.sha256
+            if (type(vm_id) is not int or type(host_id) is not int or vm_id < 0 or host_id < 0
+                    or host_id not in allowed.get(vm_id, set())
+                    or not isinstance(digest, str) or len(digest) != 64
+                    or any(c not in "0123456789abcdef" for c in digest)
+                    or (vm_id, host_id) in tokens):
+                raise ValueError("Invalid or duplicate native eligibility candidate")
+            tokens[(vm_id, host_id)] = digest
+        return tokens
+
     @classmethod
     def _resolve_solver_path(cls, path: str) -> str:
         machine = platform.machine().lower()

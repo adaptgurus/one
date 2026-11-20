@@ -18,6 +18,17 @@
         <xs:element ref="VM_GROUP_POOL" minOccurs="1" maxOccurs="1"/>
         <xs:element ref="CLUSTER_POOL" minOccurs="1" maxOccurs="1"/>
         <xs:element ref="REQUIREMENTS" minOccurs="1" maxOccurs="1"/>
+        <xs:element name="ONE_DRS_ELIGIBILITY" minOccurs="0">
+          <xs:complexType><xs:sequence>
+            <xs:element name="CANDIDATE" minOccurs="0" maxOccurs="unbounded">
+              <xs:complexType><xs:sequence>
+                <xs:element name="VM_ID" type="xs:integer"/>
+                <xs:element name="HOST_ID" type="xs:integer"/>
+                <xs:element name="SHA256" type="xs:string"/>
+              </xs:sequence></xs:complexType>
+            </xs:element>
+          </xs:sequence></xs:complexType>
+        </xs:element>
       </xs:sequence>
     </xs:complexType>
   </xs:element>

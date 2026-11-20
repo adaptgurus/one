@@ -1,0 +1,347 @@
+{
+  "scope": "PRIVATE_NATIVE_ELIGIBILITY_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T04:35:42.228924+00:00",
+  "binary_sha256": "459d28d6ce40b788cdc1baec6ac86773817b65bef40f70910980f49ebdfc77b2",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_eligibility_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "native-source-positive_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795149365169417383.input",
+      "result": "PASS",
+      "input_sha256": "d6e3e06666f14691de24f0bd3f992cb5f2109facb56f49a9363c0368761cf673"
+    },
+    {
+      "name": "native_plan_echoes_input_token",
+      "result": "PASS"
+    },
+    {
+      "name": "current_native_readback_eligible",
+      "result": "PASS"
+    },
+    {
+      "name": "unrelated_monitoring_does_not_expire_token",
+      "result": "PASS"
+    },
+    {
+      "name": "native_bound_apply_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "eligibility_persisted_in_native_history",
+      "result": "PASS"
+    },
+    {
+      "name": "bound_native_migration_reaches_done",
+      "result": "PASS"
+    },
+    {
+      "name": "token-missing_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795149374286693157.input",
+      "result": "PASS",
+      "input_sha256": "d6e3e06666f14691de24f0bd3f992cb5f2109facb56f49a9363c0368761cf673"
+    },
+    {
+      "name": "token_missing_checked_apply_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "token_missing_ready_plan_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "token_missing_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "token_missing_no_history_or_capacity_change",
+      "result": "PASS"
+    },
+    {
+      "name": "token-forged_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795149383467740666.input",
+      "result": "PASS",
+      "input_sha256": "d6e3e06666f14691de24f0bd3f992cb5f2109facb56f49a9363c0368761cf673"
+    },
+    {
+      "name": "token_forged_checked_apply_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "token_forged_ready_plan_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "token_forged_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "token_forged_no_history_or_capacity_change",
+      "result": "PASS"
+    },
+    {
+      "name": "token-borrowed_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795149392649333012.input",
+      "result": "PASS",
+      "input_sha256": "d6e3e06666f14691de24f0bd3f992cb5f2109facb56f49a9363c0368761cf673"
+    },
+    {
+      "name": "token_borrowed_checked_apply_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "token_borrowed_ready_plan_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "token_borrowed_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "token_borrowed_no_history_or_capacity_change",
+      "result": "PASS"
+    },
+    {
+      "name": "requirement-drift_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795149401836713065.input",
+      "result": "PASS",
+      "input_sha256": "d6e3e06666f14691de24f0bd3f992cb5f2109facb56f49a9363c0368761cf673"
+    },
+    {
+      "name": "requirement_drift_native_readback_stale",
+      "result": "PASS"
+    },
+    {
+      "name": "requirement_drift_checked_apply_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "requirement_drift_ready_plan_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "requirement_drift_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "requirement_drift_no_history_or_capacity_change",
+      "result": "PASS"
+    },
+    {
+      "name": "label-drift_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795149411038511800.input",
+      "result": "PASS",
+      "input_sha256": "a77e8c1cc16c1cbcbc98bcb3d5741a914a8b38897f9aa74265f6deec16eb4c01"
+    },
+    {
+      "name": "target_label_drift_native_readback_stale",
+      "result": "PASS"
+    },
+    {
+      "name": "target_label_drift_checked_apply_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "target_label_drift_ready_plan_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "target_label_drift_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "target_label_drift_no_history_or_capacity_change",
+      "result": "PASS"
+    },
+    {
+      "name": "group-unsupported_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795149420057316988.input",
+      "result": "PASS",
+      "input_sha256": "e4cd023ab1936edc48d6e915edf60d4fc977cd34e3b83f4a2ebc313d0394b190"
+    },
+    {
+      "name": "VMGroup_scope_reported_unsupported",
+      "result": "PASS"
+    },
+    {
+      "name": "VMGroup_unqualified_checked_apply_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "VMGroup_unqualified_ready_plan_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "VMGroup_unqualified_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "VMGroup_unqualified_no_history_or_capacity_change",
+      "result": "PASS"
+    },
+    {
+      "name": "owner-authorization-drift_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795149429343157903.input",
+      "result": "PASS",
+      "input_sha256": "fb4bf9e05064cdb1ca23fd77e1d6c6e7c623a2a4685e011dc44b24007d3cc0d8"
+    },
+    {
+      "name": "current_owner_acl_revocation_reported_stale",
+      "result": "PASS"
+    },
+    {
+      "name": "owner_acl_revoked_checked_apply_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "owner_acl_revoked_ready_plan_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "owner_acl_revoked_no_guest_driver",
+      "result": "PASS"
+    },
+    {
+      "name": "owner_acl_revoked_no_history_or_capacity_change",
+      "result": "PASS"
+    },
+    {
+      "name": "late-target-label-drift_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795149438539281177.input",
+      "result": "PASS",
+      "input_sha256": "a77e8c1cc16c1cbcbc98bcb3d5741a914a8b38897f9aa74265f6deec16eb4c01"
+    },
+    {
+      "name": "late_label_drift_accepted_before_native_state_transition",
+      "result": "PASS"
+    },
+    {
+      "name": "late_label_drift_source_running",
+      "result": "PASS"
+    },
+    {
+      "name": "late_label_drift_target_reservation_released",
+      "result": "PASS"
+    },
+    {
+      "name": "late_label_drift_source_accounting_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "late_label_drift_no_driver_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "late_label_drift_plan_error",
+      "result": "PASS"
+    },
+    {
+      "name": "late_label_checked_inside_native_admission",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "status": "PASS",
+  "finished_at": "2026-11-20T04:37:23.757621+00:00"
+}

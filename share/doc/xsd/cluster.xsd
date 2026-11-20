@@ -18,6 +18,7 @@
             <xs:element name="MIGRATION" type="xs:string"/>
             <xs:element name="CAPACITY" type="xs:string"/>
             <xs:element name="RECOVERY" type="xs:string"/>
+            <xs:element name="ELIGIBILITY" type="xs:string" minOccurs="0"/>
           </xs:sequence></xs:complexType>
         </xs:element>
         <xs:element name="PLAN" minOccurs="0" maxOccurs="1">
@@ -37,6 +38,7 @@
                         <xs:element name="OPERATION" type="xs:string"/>
                         <xs:element name="HOST_ID" type="xs:integer"/>
                         <xs:element name="DS_ID" type="xs:integer"/>
+                        <xs:element name="ELIGIBILITY_SHA256" type="xs:string" minOccurs="0"/>
                         <xs:element name="TIMESTAMP" type="xs:integer"/>
                       </xs:sequence>
                     </xs:complexType>
@@ -45,6 +47,13 @@
               </xs:complexType>
         </xs:element>
         <xs:element name="PLAN_SHA256" type="xs:string" minOccurs="0"/>
+        <xs:element name="ONE_DRS_PLAN_ELIGIBILITY" minOccurs="0">
+          <xs:complexType><xs:sequence>
+            <xs:element name="STATE" type="xs:string"/>
+            <xs:element name="REASON" type="xs:string"/>
+            <xs:element name="SCOPE" type="xs:string"/>
+          </xs:sequence></xs:complexType>
+        </xs:element>
       </xs:sequence>
     </xs:complexType>
   </xs:element>

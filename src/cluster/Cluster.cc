@@ -21,6 +21,8 @@
 #include "DatastorePool.h"
 #include "PlanPool.h"
 #include "HostPool.h"
+#include "VirtualMachinePool.h"
+#include "OneDRSEligibility.h"
 
 #include <sstream>
 
@@ -441,9 +443,10 @@ string& Cluster::to_xml(string& xml) const
         vnets.to_xml(vnet_collection_xml)    <<
         obj_template->to_xml(template_xml)   <<
         "<TEMPLATE_SHA256>" << template_sha256() << "</TEMPLATE_SHA256>" <<
-        "<ONE_DRS_CHECKED_CAPABILITIES><VERSION>2</VERSION>"
-        "<MIGRATION>RUNNING_UNPINNED_NO_PCI_SAME_DATASTORE_CROSS_HOST</MIGRATION>"
+        "<ONE_DRS_CHECKED_CAPABILITIES><VERSION>3</VERSION>"
+        "<MIGRATION>RUNNING_UNPINNED_NO_PCI_NO_VMGROUP_SAME_DATASTORE_CROSS_HOST</MIGRATION>"
         "<CAPACITY>ATOMIC</CAPACITY><RECOVERY>PENDING_CANCEL</RECOVERY>"
+        "<ELIGIBILITY>SOURCE_BOUND_CURRENT_OWNER_REQUIREMENTS</ELIGIBILITY>"
         "</ONE_DRS_CHECKED_CAPABILITIES>" <<
         plan_xml                             <<
         "</CLUSTER>";
@@ -579,13 +582,48 @@ void Cluster::load_plan()
     auto plpool = Nebula::instance().get_planpool();
     plan_xml.clear();
 
+    std::string eligibility_state = "NOT_READY";
+    std::string eligibility_reason = "No READY native migration recommendation";
     if (auto plan = plpool->get_ro(oid))
     {
         if (plan->state() != PlanState::NONE)
         {
             plan_xml = plan->to_xml() + "<PLAN_SHA256>" + plan->sha256() + "</PLAN_SHA256>";
         }
+        if (plan->state() == PlanState::READY && !plan->actions().empty() &&
+            automation() == Cluster::DrsAutomation::MANUAL)
+        {
+            eligibility_state = "ELIGIBLE";
+            eligibility_reason.clear();
+            for (const auto& action : plan->actions())
+            {
+                if (action.operation() != "migrate" || action.state() != PlanState::READY)
+                {
+                    eligibility_state = "UNSUPPORTED";
+                    eligibility_reason = "Native recommendation is outside checked migration scope";
+                    break;
+                }
+                auto vm = Nebula::instance().get_vmpool()->get_ro(action.vm_id());
+                auto host = Nebula::instance().get_hpool()->get_ro(action.host_id());
+                if (!vm || !host)
+                {
+                    eligibility_state = "STALE";
+                    eligibility_reason = "Native recommendation references an unavailable VM or host";
+                    break;
+                }
+                if (!one_drs_eligibility::validate(*vm, *host, *this,
+                        action.eligibility_sha256(), false, eligibility_reason, &eligibility_state)) break;
+                if (!vm->checked_migration_supported(action.host_id(), oid, action.ds_id(), eligibility_reason))
+                {
+                    eligibility_state = "UNSUPPORTED";
+                    break;
+                }
+            }
+        }
     }
+    plan_xml += "<ONE_DRS_PLAN_ELIGIBILITY><STATE>" + eligibility_state +
+        "</STATE><REASON>" + one_util::escape_xml(eligibility_reason) +
+        "</REASON><SCOPE>" + one_drs_eligibility::SCOPE + "</SCOPE></ONE_DRS_PLAN_ELIGIBILITY>";
 }
 
 /* -------------------------------------------------------------------------- */

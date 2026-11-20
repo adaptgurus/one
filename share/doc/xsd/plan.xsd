@@ -13,6 +13,7 @@
               <xs:element name="OPERATION" type="xs:string" minOccurs="1" maxOccurs="1"/>
               <xs:element name="HOST_ID" type="xs:integer" minOccurs="0" maxOccurs="1"/>
               <xs:element name="DS_ID" type="xs:integer" minOccurs="0" maxOccurs="1"/>
+              <xs:element name="ELIGIBILITY_SHA256" type="xs:string" minOccurs="0"/>
               <xs:element name="NIC" minOccurs="0" maxOccurs="unbounded">
                 <xs:complexType>
                   <xs:sequence>

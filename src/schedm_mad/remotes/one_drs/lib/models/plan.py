@@ -60,6 +60,10 @@ class Plan:
                 "type": "Element",
             },
         )
+        eligibility_sha256: Optional[str] = field(
+            default=None,
+            metadata={"name": "ELIGIBILITY_SHA256", "type": "Element"},
+        )
         nic: list["Plan.Action.Nic"] = field(
             default_factory=list,
             metadata={

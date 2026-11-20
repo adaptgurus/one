@@ -16,6 +16,7 @@
 
 #include "SchedulerManagerDriver.h"
 #include "SchedulerHostContext.h"
+#include "OneDRSEligibility.h"
 #include "SchedulerManagerMatch.h"
 
 #include "AclManager.h"
@@ -156,6 +157,25 @@ int SchedulerManagerDriver::scheduler_message(SchedRequest& sr, std::ostringstre
     sr.clpool.to_xml(oss);
 
     sr.match.to_xml(oss);
+
+    // Bind each candidate to the same cached VM, target and policy objects
+    // serialized above. The optimizer may only echo a native candidate token.
+    oss << "<ONE_DRS_ELIGIBILITY>";
+    for (const auto& entry : sr.match.requirements)
+    {
+        auto vm = sr.vmpool.get(entry.first);
+        if (!vm || !vm->hasHistory()) continue;
+        for (int hid : entry.second.host_ids)
+        {
+            auto host = sr.hpool.get(hid);
+            auto cluster = host ? sr.clpool.get(host->get_cluster_id()) : nullptr;
+            if (!host || !cluster) return -1;
+            const auto digest = one_drs_eligibility::identity(*vm, *host, *cluster);
+            oss << "<CANDIDATE><VM_ID>" << entry.first << "</VM_ID><HOST_ID>" << hid
+                << "</HOST_ID><SHA256>" << digest << "</SHA256></CANDIDATE>";
+        }
+    }
+    oss << "</ONE_DRS_ELIGIBILITY>";
 
     oss << "</SCHEDULER_DRIVER_ACTION>";
 

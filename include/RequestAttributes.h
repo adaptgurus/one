@@ -139,6 +139,7 @@ public:
     int checked_plan_id = -2;
     int checked_action_id = -1;
     std::string checked_plan_generation;
+    std::string checked_eligibility_sha256;
     unsigned int checked_plan_term = 0;
     VMActions::Action checked_migrate_action = VMActions::NONE_ACTION;
 

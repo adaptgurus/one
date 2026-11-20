@@ -43,6 +43,11 @@ int PlanAction::from_xml_node(const xmlNodePtr node, int hint_id)
     rc &= tmpl.get("HOST_ID", _host_id);
     rc &= tmpl.get("DS_ID", _ds_id);
 
+    tmpl.get("ELIGIBILITY_SHA256", _eligibility_sha256);
+    if (!_eligibility_sha256.empty() && (_eligibility_sha256.size() != 64 ||
+        !std::all_of(_eligibility_sha256.begin(), _eligibility_sha256.end(), [](unsigned char c)
+        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))) return -1;
+
     tmpl.get("TIMESTAMP", _timestamp);
 
     tmpl.get("STATE", tmp_int);
@@ -85,6 +90,7 @@ std::string PlanAction::to_xml() const
         << "<OPERATION>"  << _operation  << "</OPERATION>"
         << "<HOST_ID>"    << _host_id    << "</HOST_ID>"
         << "<DS_ID>"      << _ds_id      << "</DS_ID>"
+        << "<ELIGIBILITY_SHA256>" << _eligibility_sha256 << "</ELIGIBILITY_SHA256>"
         << "<TIMESTAMP>"  << _timestamp  << "</TIMESTAMP>";
 
     for (const auto& nic : _nics)
@@ -191,7 +197,7 @@ int Plan::validate_checked(const std::string& expected_sha256, std::string& erro
     }
     if (_actions.empty() || std::any_of(_actions.begin(), _actions.end(), [](const PlanAction& action)
         { return action.operation() != "migrate" || action.state() != PlanState::READY ||
-                 action.vm_id() < 0 || action.host_id() < 0; }))
+                 action.vm_id() < 0 || action.host_id() < 0 || action.eligibility_sha256().empty(); }))
     {
         error = "Checked OneDRS execution requires only READY migration actions";
         return -1;

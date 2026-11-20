@@ -28,6 +28,7 @@
 #include "VirtualMachineAPI.h"
 #include "LifeCycleManager.h"
 #include "HostPool.h"
+#include "OneDRSEligibility.h"
 
 using namespace std;
 
@@ -278,7 +279,9 @@ int PlanManager::start_plan_checked(int cid, const std::string& expected_plan_sh
                 error = "Checked migration plan VM/target host is unavailable in the approved cluster";
                 return -1;
             }
-            if (!vm->checked_migration_supported(action.host_id(), cid, action.ds_id(), error))
+            if (!vm->checked_migration_supported(action.host_id(), cid, action.ds_id(), error) ||
+                !one_drs_eligibility::validate(*vm, *host, *cluster,
+                    action.eligibility_sha256(), false, error))
             {
                 return -1;
             }
@@ -362,6 +365,7 @@ bool PlanManager::start_action(Plan& plan, PlanAction& action)
         ra.checked_plan_id = plan_id;
         ra.checked_action_id = action.id();
         ra.checked_plan_generation = plan.generation();
+        ra.checked_eligibility_sha256 = action.eligibility_sha256();
         ra.checked_plan_term = Nebula::instance().get_raftm()->get_term();
     }
 

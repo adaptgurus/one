@@ -48,14 +48,15 @@ def _get_operations(
 
 
 class OptimizerSerializer:
-    __slots__ = ("xml_serializer", "plan_id", "template_sha256")
+    __slots__ = ("xml_serializer", "plan_id", "template_sha256", "eligibility")
 
-    def __init__(self, plan_id, template_sha256=None):
+    def __init__(self, plan_id, template_sha256=None, eligibility=None):
         xml_config = SerializerConfig(indent="  ", xml_declaration=False)
         xml_context = XmlContext()
         self.xml_serializer = XmlSerializer(context=xml_context, config=xml_config)
         self.plan_id = plan_id
         self.template_sha256 = template_sha256
+        self.eligibility = eligibility
 
     def render(self, output: Union[Plan, SchedulerDriverAction]) -> str:
         return self.xml_serializer.render(output)
@@ -89,12 +90,19 @@ class OptimizerSerializer:
                 if operation.startswith("migrate_"):
                     operation = "migrate"
 
+                token = None
+                if operation == "migrate" and self.eligibility is not None:
+                    token = self.eligibility.get((alloc.vm_id, alloc.host_id))
+                    if token is None:
+                        raise ValueError("Optimizer selected a target absent from native eligibility input")
+
                 actions.append(
                     Plan.Action(
                         vm_id=alloc.vm_id,
                         operation=operation,
                         host_id=alloc.host_id,
                         ds_id=dstore_id,
+                        eligibility_sha256=token,
                         nic=[
                             Plan.Action.Nic(nic_id, network_id)
                             for nic_id, network_id in alloc.nics.items()

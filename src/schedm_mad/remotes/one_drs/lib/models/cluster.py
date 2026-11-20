@@ -62,6 +62,9 @@ class Cluster:
         default=None,
         metadata={"name": "ONE_DRS_CHECKED_CAPABILITIES", "type": "Element"},
     )
+    one_drs_plan_eligibility: Optional["Cluster.OneDrsPlanEligibility"] = field(
+        default=None, metadata={"name": "ONE_DRS_PLAN_ELIGIBILITY", "type": "Element"},
+    )
     plan_sha256: Optional[str] = field(
         default=None,
         metadata={"name": "PLAN_SHA256", "type": "Element"},
@@ -80,6 +83,13 @@ class Cluster:
         migration: Optional[str] = field(default=None, metadata={"name": "MIGRATION", "type": "Element"})
         capacity: Optional[str] = field(default=None, metadata={"name": "CAPACITY", "type": "Element"})
         recovery: Optional[str] = field(default=None, metadata={"name": "RECOVERY", "type": "Element"})
+        eligibility: Optional[str] = field(default=None, metadata={"name": "ELIGIBILITY", "type": "Element"})
+
+    @dataclass
+    class OneDrsPlanEligibility:
+        state: Optional[str] = field(default=None, metadata={"name": "STATE", "type": "Element"})
+        reason: Optional[str] = field(default=None, metadata={"name": "REASON", "type": "Element"})
+        scope: Optional[str] = field(default=None, metadata={"name": "SCOPE", "type": "Element"})
 
     @dataclass
     class Hosts:
@@ -191,6 +201,9 @@ class Cluster:
                     "type": "Element",
                     "required": True,
                 },
+            )
+            eligibility_sha256: Optional[str] = field(
+                default=None, metadata={"name": "ELIGIBILITY_SHA256", "type": "Element"},
             )
             ds_id: Optional[int] = field(
                 default=None,

@@ -44,7 +44,7 @@ def main():
     placement = optimizer._opt_placement
 
     # Serialize Optimizer response
-    serializer = OptimizerSerializer(parser.plan_id, parser.plan_template_sha256)
+    serializer = OptimizerSerializer(parser.plan_id, parser.plan_template_sha256, parser.plan_eligibility)
     scheduler_output, logs = serializer.build_optimizer_output(
         curr_placement=optimizer._curr_placement,
         opt_placement=placement

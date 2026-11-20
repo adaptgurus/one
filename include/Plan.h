@@ -63,6 +63,8 @@ public:
         return _host_id;
     }
 
+    const std::string& eligibility_sha256() const { return _eligibility_sha256; }
+
     int ds_id() const
     {
         return _ds_id;
@@ -90,6 +92,7 @@ public:
 
 private:
     std::string _operation;
+    std::string _eligibility_sha256;
 
     PlanState _state = PlanState::READY;
 

@@ -2127,6 +2127,7 @@ void VirtualMachine::cp_history()
                        vm_xml);
 
     htmp->checked_plan_generation = history->checked_plan_generation;
+    htmp->checked_eligibility_sha256 = history->checked_eligibility_sha256;
     htmp->checked_plan_term = history->checked_plan_term;
     htmp->checked_capacity_pending = history->checked_capacity_pending;
     htmp->enforce_capacity = history->enforce_capacity;
@@ -2162,6 +2163,7 @@ void VirtualMachine::cp_previous_history()
                        vm_xml);
 
     htmp->checked_plan_generation = previous_history->checked_plan_generation;
+    htmp->checked_eligibility_sha256 = previous_history->checked_eligibility_sha256;
     htmp->checked_plan_term = previous_history->checked_plan_term;
     htmp->checked_capacity_pending = previous_history->checked_capacity_pending;
     htmp->enforce_capacity = previous_history->enforce_capacity;
@@ -2208,6 +2210,11 @@ bool VirtualMachine::checked_migration_supported(int target_hid, int target_cid,
     if (get_hid() == target_hid || (target_ds != -1 && target_ds != get_ds_id()))
     {
         error = "Checked migration supports only cross-host moves within the same datastore";
+        return false;
+    }
+    if (get_template_attribute("VMGROUP") != nullptr)
+    {
+        error = "VMGroup checked migration requires separate admission qualification";
         return false;
     }
     HostShareCapacity capacity;

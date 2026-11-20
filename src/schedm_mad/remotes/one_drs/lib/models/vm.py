@@ -1029,6 +1029,10 @@ class Vm:
                 default=None,
                 metadata={"name": "CHECKED_PLAN_GENERATION", "type": "Element"},
             )
+            checked_eligibility_sha256: Optional[str] = field(
+                default=None,
+                metadata={"name": "CHECKED_ELIGIBILITY_SHA256", "type": "Element"},
+            )
             checked_plan_term: Optional[int] = field(
                 default=None,
                 metadata={"name": "CHECKED_PLAN_TERM", "type": "Element"},
