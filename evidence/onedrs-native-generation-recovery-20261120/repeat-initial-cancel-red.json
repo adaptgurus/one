@@ -1,0 +1,310 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T05:47:33.623584+00:00",
+  "binary_sha256": "9aa12718a84e856c001ee9e61c0179fe3ee20e607924e60d3733cacda2725c3d",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-capture-live_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795153676562825789.input",
+      "result": "PASS",
+      "input_sha256": "44e372946eb65a04314af474376973c73c0340a5dc1808da274cdbbddd83c79b"
+    },
+    {
+      "name": "origin_live_captures_real_native_api_commit",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_durable_origin_matches_actual_state",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-restart-live_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ordinary_api_gap_old_callback_cannot_finish_new_generation",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_unsafe_recover_1_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_unsafe_recover_2_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_unsafe_recover_3_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_unsafe_recover_4_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_unsafe_recover_5_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_power_action_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_native_recover_failure_restores_origin",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_no_driver_replay_and_target_released",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_source_accounting_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_cancellation_fails_only_its_own_plan",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-capture-poweroff_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_fixture_retains_native_source_capacity",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_captures_real_native_api_commit",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_durable_origin_matches_actual_state",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-restart-poweroff_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "origin_poweroff_unsafe_recover_1_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_unsafe_recover_2_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_unsafe_recover_3_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_unsafe_recover_4_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_unsafe_recover_5_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_power_action_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_native_recover_failure_restores_origin",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_no_driver_replay_and_target_released",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_poweroff_source_accounting_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-capture-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "origin_deploy_captures_real_native_api_commit",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_deploy_durable_origin_matches_actual_state",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-restart-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "origin_deploy_unsafe_recover_1_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_deploy_unsafe_recover_2_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_deploy_unsafe_recover_3_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_deploy_unsafe_recover_4_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_deploy_unsafe_recover_5_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_deploy_power_action_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_deploy_native_recover_failure_restores_origin",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_deploy_no_driver_replay_and_target_released",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-capture-deploy-repeat_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "origin_deploy-repeat_captures_real_native_api_commit",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_deploy-repeat_durable_origin_matches_actual_state",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-repeat-cancel_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "origin",
+  "ordinary_gap_images": [
+    {
+      "case": "live",
+      "vm": 0,
+      "state": 3,
+      "lcm_state": 3,
+      "history_sequence": 1,
+      "sha256": "c9a8446178886bc125fc016f16ba45fb5d2f2cc26063d004ffc716dfabac6a03",
+      "origin": "native API transaction rows captured before LCM enqueue, restored without fabricated state"
+    },
+    {
+      "case": "poweroff",
+      "vm": 0,
+      "state": 8,
+      "lcm_state": 0,
+      "history_sequence": 1,
+      "sha256": "144cf020e4ff7039ccbcf59bb0258910838ff40c09d81fddd5cc1c7740128281",
+      "origin": "native API transaction rows captured before LCM enqueue, restored without fabricated state"
+    },
+    {
+      "case": "deploy",
+      "vm": 3,
+      "state": 2,
+      "lcm_state": 0,
+      "history_sequence": 0,
+      "sha256": "1b877133db65b9c18935687ed45705cf575bef77f00dc98981f9aace30fc011d",
+      "origin": "native API transaction rows captured before LCM enqueue, restored without fabricated state"
+    },
+    {
+      "case": "deploy-repeat",
+      "vm": 3,
+      "state": 2,
+      "lcm_state": 0,
+      "history_sequence": 1,
+      "sha256": "dbd431432e0b651db2b678650d0feebe5c032ba2778b31504c5000e6e307c651",
+      "origin": "native API transaction rows captured before LCM enqueue, restored without fabricated state"
+    }
+  ],
+  "status": "FAIL",
+  "error": "one.vm.recover failed: [one.vm.recover] Enforced admission remains unresolved: origin, pinning, PCI, NUMA, datastore or cluster requires explicit reconciliation",
+  "finished_at": "2026-11-20T05:48:45.370102+00:00"
+}

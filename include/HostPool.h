@@ -17,6 +17,7 @@
 #ifndef HOST_POOL_H_
 #define HOST_POOL_H_
 
+#include <functional>
 #include "PoolSQL.h"
 #include "Host.h"
 #include "HostMonitoringTemplate.h"
@@ -148,22 +149,96 @@ public:
      *
      *   @return 0 on success -1 in case of failure
      */
-    int add_capacity(int oid, HostShareCapacity &sr)
+    int add_checked_capacity(int oid, int expected_cluster, HostShareCapacity& sr,
+                             std::string& error, const std::function<int()>& persist_request,
+                             const std::function<bool(Host&, std::string&)>& validate_eligibility,
+                             bool already_on_host = false)
     {
-        int rc = 0;
-
-        if ( auto host = get(oid) )
+        auto host = get(oid);
+        if (!host)
         {
-            host->add_capacity(sr);
-
-            update(host.get());
+            error = "Checked migration target host is unavailable";
+            return -2;
         }
-        else
+        if (host->get_cluster_id() != expected_cluster || host->get_state() != Host::MONITORED)
         {
-            rc = -1;
+            error = "Checked migration target is no longer an enabled monitored host in the approved cluster";
+            return -1;
         }
+        // Current owner/requirements and source token are checked under this
+        // same target lock before either a new or replayed reservation is accepted.
+        if (!validate_eligibility(*host, error)) return -1;
+        const bool accounted = host->get_vm_ids().count(sr.vmid) != 0;
+        if (already_on_host)
+        {
+            if (accounted) return 0;
+            error = "Checked migration source host no longer accounts for the VM";
+            return -1;
+        }
+        // The caller holds the VM in durable checked pending state. The API
+        // rejected prior target membership before writing that history, and all
+        // other native lifecycle/capacity mutations reject this state. Membership
+        // here is therefore an idempotent replay of this pending reservation.
+        if (accounted) return 0;
+        if (!host->test_capacity(sr, error, true)) return -1;
+        host->add_capacity(sr);
+        // PCI/NUMA allocation can update the VM template through capacity
+        // pointers. Its pending record must be durable before the host ledger,
+        // so restart can release/reuse the exact committed allocation.
+        if (persist_request() != 0)
+        {
+            error = "Unable to persist checked migration allocation metadata";
+            return -2;
+        }
+        if (update(host.get()) != 0)
+        {
+            error = "Unable to persist checked migration capacity reservation";
+            return -2;
+        }
+        return 0;
+    }
 
-        return rc;
+    int del_checked_capacity(int oid, HostShareCapacity& sr)
+    {
+        auto host = get(oid);
+        if (!host) return -1;
+        if (host->get_vm_ids().count(sr.vmid) == 0) return 0;
+        host->del_capacity(sr);
+        return update(host.get());
+    }
+
+    int add_capacity(int oid, HostShareCapacity &sr, bool enforce = false,
+                     std::string* error = nullptr,
+                     const std::function<int()>& persist_request = {})
+    {
+        auto host = get(oid);
+        if (!host)
+        {
+            if (error) *error = "Target host is unavailable";
+            return -1;
+        }
+        // The same native ledger is used by checked migration, deploy, migrate
+        // and resize. Retrying a reservation already owned by this VM is a no-op.
+        if (host->get_vm_ids().count(sr.vmid) != 0) return 0;
+        std::string reason;
+        if (enforce && !host->test_capacity(sr, reason, true))
+        {
+            if (error) *error = "Enforced capacity admission refused: " + reason;
+            return -2;
+        }
+        host->add_capacity(sr);
+        if (enforce && persist_request && persist_request() != 0)
+        {
+            if (error) *error = "Enforced capacity admission could not persist VM allocation metadata";
+            return -3;
+        }
+        const int rc = update(host.get());
+        if (enforce && rc != 0)
+        {
+            if (error) *error = "Enforced capacity admission could not persist host accounting";
+            return -3;
+        }
+        return 0;
     }
 
     /**

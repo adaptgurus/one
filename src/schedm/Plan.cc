@@ -17,6 +17,9 @@
 #include "Plan.h"
 #include "NebulaLog.h"
 #include "OneDB.h"
+#include "NebulaUtil.h"
+#include <openssl/rand.h>
+#include <algorithm>
 
 using namespace std;
 
@@ -39,6 +42,11 @@ int PlanAction::from_xml_node(const xmlNodePtr node, int hint_id)
     rc &= tmpl.get("OPERATION", _operation);
     rc &= tmpl.get("HOST_ID", _host_id);
     rc &= tmpl.get("DS_ID", _ds_id);
+
+    tmpl.get("ELIGIBILITY_SHA256", _eligibility_sha256);
+    if (!_eligibility_sha256.empty() && (_eligibility_sha256.size() != 64 ||
+        !std::all_of(_eligibility_sha256.begin(), _eligibility_sha256.end(), [](unsigned char c)
+        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); }))) return -1;
 
     tmpl.get("TIMESTAMP", _timestamp);
 
@@ -82,6 +90,7 @@ std::string PlanAction::to_xml() const
         << "<OPERATION>"  << _operation  << "</OPERATION>"
         << "<HOST_ID>"    << _host_id    << "</HOST_ID>"
         << "<DS_ID>"      << _ds_id      << "</DS_ID>"
+        << "<ELIGIBILITY_SHA256>" << _eligibility_sha256 << "</ELIGIBILITY_SHA256>"
         << "<TIMESTAMP>"  << _timestamp  << "</TIMESTAMP>";
 
     for (const auto& nic : _nics)
@@ -135,26 +144,143 @@ bool Plan::action_finished(int id, PlanState state)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+std::string OneDRSPlanRequest::to_xml() const
+{
+    if (!present()) return "";
+    std::ostringstream out;
+    out << "<REQUEST><NONCE>" << nonce << "</NONCE>"
+        << "<ACTION>" << action << "</ACTION><STATE>" << state << "</STATE>"
+        << "<TEMPLATE_SHA256>" << template_sha256 << "</TEMPLATE_SHA256>"
+        << "<BASE_PLAN_SHA256>" << base_plan_sha256 << "</BASE_PLAN_SHA256>"
+        << "<PLAN_GENERATION>" << plan_generation << "</PLAN_GENERATION>"
+        << "<ERROR>" << one_util::escape_xml(error) << "</ERROR>"
+        << "<INSTANCE>" << instance << "</INSTANCE><STARTED_AT>" << started_at
+        << "</STARTED_AT></REQUEST>";
+    return out.str();
+}
+
+void Plan::begin_generate(const std::string& nonce, const std::string& policy,
+                         const std::string& base, const std::string& instance)
+{
+    clear();
+    _generation.clear();
+    _template_sha256 = policy;
+    _request = {nonce, "GENERATE", "GENERATING", policy, base, "", "", instance,
+                static_cast<long long>(time(nullptr))};
+}
+
+bool Plan::accept_generated(const Plan& response)
+{
+    if (!generating() || response.response_nonce() != _request.nonce ||
+        response.template_sha256() != _request.template_sha256) return false;
+    if (!renew_generation()) return false;
+    _actions = response._actions;
+    _state = _actions.empty() ? PlanState::NONE : PlanState::READY;
+    _request.state = _actions.empty() ? "NOOP" : "READY";
+    _request.plan_generation = _generation;
+    _request.error.clear();
+    return true;
+}
+
+void Plan::generation_error(const std::string& reason)
+{
+    if (!generating()) return;
+    _actions.clear();
+    _state = PlanState::NONE;
+    _checked_execution = false;
+    _generation.clear();
+    _request.state = "ERROR";
+    _request.error = reason.substr(0, 512);
+    _request.plan_generation.clear();
+}
+
+void Plan::reject_ready(const std::string& nonce, const std::string& policy,
+                       const std::string& base, const std::string& instance)
+{
+    const auto rejected = _generation;
+    clear();
+    _request = {nonce, "REJECT", "REJECTED", policy, base, rejected, "", instance,
+                static_cast<long long>(time(nullptr))};
+}
+
 string Plan::to_xml() const
 {
     ostringstream oss;
 
     oss << "<PLAN>"
         << "<ID>"    << _cid << "</ID>"
-        << "<STATE>" << _state << "</STATE>";
+        << "<STATE>" << _state << "</STATE>"
+        << "<CHECKED_EXECUTION>" << _checked_execution << "</CHECKED_EXECUTION>"
+        << "<GENERATION>" << _generation << "</GENERATION>"
+        << "<TEMPLATE_SHA256>" << _template_sha256 << "</TEMPLATE_SHA256>";
 
     for (const auto& action : _actions)
     {
         oss << action.to_xml();
     }
 
-    oss << "</PLAN>";
+    oss << _request.to_xml() << "</PLAN>";
 
     return oss.str();
 }
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+std::string Plan::sha256() const
+{
+    return one_util::sha256_digest(to_xml());
+}
+
+bool Plan::renew_generation()
+{
+    unsigned char nonce[32];
+    if (RAND_bytes(nonce, sizeof(nonce)) != 1) return false;
+    _checked_execution = false;
+    _generation = one_util::sha256_digest(std::string(
+        reinterpret_cast<const char*>(nonce), sizeof(nonce)));
+    return true;
+}
+
+int Plan::validate_checked(const std::string& expected_sha256, std::string& error) const
+{
+    if (generating())
+    {
+        error = "Native recommendation generation is in progress";
+        return -1;
+    }
+    if (_state != PlanState::READY)
+    {
+        error = "Approved plan is no longer READY";
+        return -1;
+    }
+    if (_generation.empty())
+    {
+        error = "Plan predates checked execution; generate a new plan";
+        return -1;
+    }
+    if (_actions.empty() || std::any_of(_actions.begin(), _actions.end(), [](const PlanAction& action)
+        { return action.operation() != "migrate" || action.state() != PlanState::READY ||
+                 action.vm_id() < 0 || action.host_id() < 0 || action.eligibility_sha256().empty(); }))
+    {
+        error = "Checked OneDRS execution requires only READY migration actions";
+        return -1;
+    }
+    if (expected_sha256 != sha256())
+    {
+        error = "Plan identity changed; refresh and approve the current plan";
+        return -1;
+    }
+    return 0;
+}
+
+int Plan::start_checked(const std::string& expected_sha256, std::string& error)
+{
+    if (validate_checked(expected_sha256, error) != 0) return -1;
+    _checked_execution = true;
+    _state = PlanState::APPLYING;
+    return 0;
+}
 
 int Plan::from_xml(const std::string& xml)
 {
@@ -244,6 +370,81 @@ int Plan::rebuild_attributes()
     xpath(tmp_int, "/PLAN/STATE", -1); // State can be empty
 
     _state = static_cast<PlanState>(tmp_int);
+    int checked = 0;
+    xpath(checked, "/PLAN/CHECKED_EXECUTION", 0);
+    if (checked != 0 && checked != 1) return -1;
+    _checked_execution = checked == 1;
+    xpath(_generation, "/PLAN/GENERATION", "");
+    xpath(_template_sha256, "/PLAN/TEMPLATE_SHA256", "");
+    if (!_template_sha256.empty() && (_template_sha256.size() != 64 ||
+        !std::all_of(_template_sha256.begin(), _template_sha256.end(), [](unsigned char c)
+        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); })))
+    {
+        return -1;
+    }
+    if (!_generation.empty() && (_generation.size() != 64 ||
+        !std::all_of(_generation.begin(), _generation.end(), [](unsigned char c)
+        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); })))
+    {
+        return -1;
+    }
+
+    const auto valid_digest = [](const std::string& value)
+    {
+        return value.size() == 64 && std::all_of(value.begin(), value.end(),
+            [](unsigned char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
+    };
+    const auto scalar = [this](const std::string& path, std::string& value, bool required)
+    {
+        std::vector<xmlNodePtr> nodes;
+        get_nodes(path, nodes);
+        const bool good = nodes.size() == (required ? 1U : 0U) || (!required && nodes.size() == 1);
+        ObjectXML::free_nodes(nodes);
+        if (!good) return false;
+        xpath(value, path.c_str(), "");
+        return true;
+    };
+    _request = {};
+    std::vector<xmlNodePtr> requests;
+    get_nodes("/PLAN/REQUEST", requests);
+    const auto request_count = requests.size();
+    ObjectXML::free_nodes(requests);
+    if (request_count > 1) return -1;
+    if (request_count == 1)
+    {
+        for (const auto& pair : std::vector<std::pair<const char*, std::string*>>
+            {{"NONCE", &_request.nonce}, {"ACTION", &_request.action},
+             {"STATE", &_request.state}, {"TEMPLATE_SHA256", &_request.template_sha256},
+             {"BASE_PLAN_SHA256", &_request.base_plan_sha256},
+             {"PLAN_GENERATION", &_request.plan_generation}, {"ERROR", &_request.error},
+             {"INSTANCE", &_request.instance}})
+        {
+            if (!scalar(std::string("/PLAN/REQUEST/") + pair.first, *pair.second, true)) return -1;
+        }
+        std::string started;
+        if (!scalar("/PLAN/REQUEST/STARTED_AT", started, true) || started.empty() ||
+            started.find_first_not_of("0123456789") != std::string::npos) return -1;
+        try { _request.started_at = std::stoll(started); } catch (...) { return -1; }
+        if (!valid_digest(_request.nonce) || !valid_digest(_request.template_sha256) ||
+            !valid_digest(_request.instance) || _request.started_at <= 0 ||
+            (!_request.base_plan_sha256.empty() && !valid_digest(_request.base_plan_sha256)) ||
+            (!_request.plan_generation.empty() && !valid_digest(_request.plan_generation)) ||
+            _request.error.size() > 512) return -1;
+        if (_request.action == "GENERATE")
+        {
+            if (_request.state != "GENERATING" && _request.state != "READY" &&
+                _request.state != "NOOP" && _request.state != "ERROR") return -1;
+        }
+        else if (_request.action == "REJECT")
+        {
+            if (_request.state != "REJECTED" && _request.state != "ERROR") return -1;
+        }
+        else return -1;
+    }
+    if (!scalar("/PLAN/REQUEST_NONCE", _response_nonce, false) ||
+        !scalar("/PLAN/REQUEST_ERROR", _response_error, false) ||
+        (!_response_nonce.empty() && !valid_digest(_response_nonce)) ||
+        _response_error.size() > 512 || (!_response_error.empty() && _response_nonce.empty())) return -1;
 
     vector<xmlNodePtr> action_nodes;
 

@@ -11,12 +11,27 @@
         <xs:element name="DATASTORES" type="IDS"/>
         <xs:element name="VNETS" type="IDS"/>
         <xs:element name="TEMPLATE" type="xs:anyType"/>
+        <xs:element name="TEMPLATE_SHA256" type="xs:string" minOccurs="0"/>
+        <xs:element name="ONE_DRS_CHECKED_CAPABILITIES" minOccurs="0">
+          <xs:complexType><xs:sequence>
+            <xs:element name="VERSION" type="xs:integer"/>
+            <xs:element name="MIGRATION" type="xs:string"/>
+            <xs:element name="CAPACITY" type="xs:string"/>
+            <xs:element name="RECOVERY" type="xs:string"/>
+            <xs:element name="ELIGIBILITY" type="xs:string" minOccurs="0"/>
+            <xs:element name="GENERATE" type="xs:string" minOccurs="0"/>
+            <xs:element name="REJECT" type="xs:string" minOccurs="0"/>
+          </xs:sequence></xs:complexType>
+        </xs:element>
         <xs:element name="PLAN" minOccurs="0" maxOccurs="1">
               <xs:complexType>
                 <xs:sequence>
                   <xs:element name="ID" type="xs:integer"/>
                   <xs:element name="STATE" type="xs:integer"/>
-                  <xs:element name="ACTION">
+                  <xs:element name="CHECKED_EXECUTION" type="xs:int" minOccurs="0"/>
+                  <xs:element name="GENERATION" type="xs:string" minOccurs="0"/>
+                  <xs:element name="TEMPLATE_SHA256" type="xs:string" minOccurs="0"/>
+                  <xs:element name="ACTION" minOccurs="0" maxOccurs="unbounded">
                     <xs:complexType>
                       <xs:sequence>
                         <xs:element name="ID" type="xs:integer"/>
@@ -25,12 +40,34 @@
                         <xs:element name="OPERATION" type="xs:string"/>
                         <xs:element name="HOST_ID" type="xs:integer"/>
                         <xs:element name="DS_ID" type="xs:integer"/>
+                        <xs:element name="ELIGIBILITY_SHA256" type="xs:string" minOccurs="0"/>
                         <xs:element name="TIMESTAMP" type="xs:integer"/>
                       </xs:sequence>
                     </xs:complexType>
                   </xs:element>
+                  <xs:element name="REQUEST" minOccurs="0">
+                    <xs:complexType><xs:sequence>
+                      <xs:element name="NONCE" type="xs:string"/>
+                      <xs:element name="ACTION" type="xs:string"/>
+                      <xs:element name="STATE" type="xs:string"/>
+                      <xs:element name="TEMPLATE_SHA256" type="xs:string"/>
+                      <xs:element name="BASE_PLAN_SHA256" type="xs:string"/>
+                      <xs:element name="PLAN_GENERATION" type="xs:string"/>
+                      <xs:element name="ERROR" type="xs:string"/>
+                      <xs:element name="INSTANCE" type="xs:string"/>
+                      <xs:element name="STARTED_AT" type="xs:long"/>
+                    </xs:sequence></xs:complexType>
+                  </xs:element>
                 </xs:sequence>
               </xs:complexType>
+        </xs:element>
+        <xs:element name="PLAN_SHA256" type="xs:string" minOccurs="0"/>
+        <xs:element name="ONE_DRS_PLAN_ELIGIBILITY" minOccurs="0">
+          <xs:complexType><xs:sequence>
+            <xs:element name="STATE" type="xs:string"/>
+            <xs:element name="REASON" type="xs:string"/>
+            <xs:element name="SCOPE" type="xs:string"/>
+          </xs:sequence></xs:complexType>
         </xs:element>
       </xs:sequence>
     </xs:complexType>

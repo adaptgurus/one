@@ -64,7 +64,8 @@ public:
      *  Send an optization request for a cluster
      *    @param cluster_id of the cluster to load balance
      */
-    void trigger_optimize(int cluster_id);
+    void trigger_optimize(int cluster_id, const std::string& request_nonce = "",
+                          const std::string& expected_template = "");
 
     /**
      * Placement finished, if needed start a new placement

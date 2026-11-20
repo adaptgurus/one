@@ -22,6 +22,9 @@
 #include "OneDB.h"
 
 #include <vector>
+#include <atomic>
+#include <mutex>
+#include <limits>
 
 class ClusterPool;
 class PlanPool;
@@ -44,7 +47,13 @@ public:
 
     void finalize();
 
+    // Called after all manager cross references are initialized.
+    void activate() { ready.store(true); }
+
     void add_plan(const std::string& xml);
+    const std::string& request_instance() const { return planning_instance; }
+    void finish_generate(int cid, const std::string& nonce, bool noop,
+                         const std::string& error);
 
     /**
      * Start applying plan actions
@@ -53,21 +62,34 @@ public:
      * @return 0 on success, -1 otherwise
      */
     int start_plan(int cid, std::string& error);
+    int start_plan_checked(int cid, const std::string& expected_plan_sha256,
+                           const std::string& expected_template_sha256,
+                           std::string& error);
 
-    void action_success(int plan_id, int action_id)
+    void action_success(int plan_id, int action_id, const std::string& generation = "")
     {
-        action_finished(plan_id, action_id, PlanState::DONE);
+        action_finished(plan_id, action_id, PlanState::DONE, generation);
     }
 
-    void action_failure(int plan_id, int action_id)
+    void action_failure(int plan_id, int action_id, const std::string& generation = "")
     {
-        action_finished(plan_id, action_id, PlanState::ERROR);
+        action_finished(plan_id, action_id, PlanState::ERROR, generation);
+    }
+
+    void checked_action_failure(int plan_id, int action_id, const std::string& generation)
+    {
+        action_finished(plan_id, action_id, PlanState::ERROR, generation);
     }
 
 private:
     /**
      * Timer to periodically checks and starts the placement actions.
      */
+    std::atomic<bool> ready{false};
+    std::mutex execution_mutex;
+    std::string planning_instance;
+    void recover_generating_requests();
+    unsigned int recovered_term = std::numeric_limits<unsigned int>::max();
     Timer timer_thread;
 
     ClusterPool        *cluster_pool;
@@ -93,9 +115,10 @@ private:
      */
     void timer_action();
 
-    bool start_action(int plan_id, PlanAction& action);
+    bool start_action(Plan& plan, PlanAction& action);
 
-    void action_finished(int plan_id, int action_id, PlanState state);
+    void action_finished(int plan_id, int action_id, PlanState state,
+                         const std::string& generation = "");
 
     void execute_plan(Plan& plan);
 

@@ -1,0 +1,5 @@
+{
+  "status": "STOPPED_TEST_SETUP_DEFECT",
+  "private_namespace_init_pid": 134457,
+  "reason": "Earlier cold suite leaves LIVE_RESCHEDS=0; generic live companion needs explicit fixture reset. Native binary unchanged."
+}

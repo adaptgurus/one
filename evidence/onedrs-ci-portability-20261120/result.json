@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-11-20T01:59:45.983178+00:00",
+  "source_base": "287597415537ebeff69d0e7f15c122533d104cc0",
+  "scope": "Independent source CI portability validation; no live deployment or hosted CI claim",
+  "checks": {
+    "original_pulp_only_imports": {
+      "expected": "FAIL",
+      "errors": 8,
+      "reason": "yaml module missing; xsdata also absent from original dependencies"
+    },
+    "original_lab_absolute_solver_path": {
+      "expected": "FAIL",
+      "tests_run": 16,
+      "errors": 10,
+      "reason": "CBC path absent in private mount namespace"
+    },
+    "fixed_scheduler_normal": {
+      "result": "PASS",
+      "tests": 93,
+      "skipped": 0
+    },
+    "fixed_scheduler_optimized": {
+      "result": "PASS",
+      "tests": 93,
+      "skipped": 0
+    },
+    "pip_check": "PASS"
+  },
+  "dependencies": {
+    "PuLP": "3.3.2",
+    "PyYAML": "6.0.1",
+    "xsdata": "26.2",
+    "typing_extensions": "4.16.0"
+  },
+  "isolation": {
+    "python": "3.12 isolated virtual environment (-I)",
+    "host_library_hidden_in_test_namespace": "/usr/lib/one/python",
+    "mount_propagation": "private",
+    "host_solver_still_exists": true,
+    "live_service_operations": 0
+  },
+  "logs": {
+    "before-fix-clean-deps.log": "5535279724e2d61539a760eb73fa1d3d7258adea88460f09f2e9217c6e3ba56c",
+    "before-fix-no-lab-solver.log": "c1e63d0ac1e999f5305860b67b84b0d90b17748f77ff684e51155942b68c73c6",
+    "after-fix-no-lab-dependencies.log": "fa380d2d0b0db990581971401f49b6ea92d28e11f6b19d4c0a53ead07445605c",
+    "after-fix-no-lab-dependencies-optimized.log": "163d85a2808e40f945e25d6481a512ddd3452eb9192f4443f7ef7faa39367fe1",
+    "pip-check.log": "9261363b733079a641c2e4cc9bc46ffa1d8336945a87f807b6cf68847dbc9b09",
+    "pip-freeze.log": "85832aa3caddbe1739cb06ba1e33724a7d71357f6853102f2eac4c55c3739f5e"
+  }
+}

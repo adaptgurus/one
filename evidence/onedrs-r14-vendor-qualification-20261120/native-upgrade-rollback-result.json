@@ -1,0 +1,131 @@
+{
+  "scope": "PRIVATE_VENDOR_R8_R14_R8_R14_NATIVE_DATABASE_AND_PLAN_COMPATIBILITY",
+  "started_at": "2026-11-20T02:28:39.992466+00:00",
+  "registered_hosts_and_vms": 0,
+  "steps": [
+    {
+      "label": "baseline_start",
+      "binary_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "version": "7.4.1",
+      "shutdown_exit": 0
+    },
+    {
+      "label": "candidate_upgrade",
+      "binary_sha256": "54964060a4c477fb19920315dd745ddab9e12cf32697a285017c15703783ba7b",
+      "version": "7.4.1",
+      "shutdown_exit": 0
+    },
+    {
+      "label": "baseline_rollback",
+      "binary_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+      "version": "7.4.1",
+      "shutdown_exit": 0
+    },
+    {
+      "label": "candidate_reupgrade",
+      "binary_sha256": "54964060a4c477fb19920315dd745ddab9e12cf32697a285017c15703783ba7b",
+      "version": "7.4.1",
+      "shutdown_exit": 0
+    }
+  ],
+  "checks": [
+    {
+      "name": "baseline_start_version_is_vendor_7_4_1",
+      "result": "PASS"
+    },
+    {
+      "name": "baseline_start_executable_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "baseline_start_zero_hosts_and_vms",
+      "result": "PASS"
+    },
+    {
+      "name": "baseline_start_clean_shutdown",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_upgrade_version_is_vendor_7_4_1",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_upgrade_executable_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_upgrade_zero_hosts_and_vms",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_reads_original_cluster_template",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_checked_policy_write_preserves_unrelated_attributes",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_persists_generated_policy_bound_plan",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_upgrade_clean_shutdown",
+      "result": "PASS"
+    },
+    {
+      "name": "baseline_rollback_version_is_vendor_7_4_1",
+      "result": "PASS"
+    },
+    {
+      "name": "baseline_rollback_executable_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "baseline_rollback_zero_hosts_and_vms",
+      "result": "PASS"
+    },
+    {
+      "name": "original_reads_candidate_checked_policy",
+      "result": "PASS"
+    },
+    {
+      "name": "original_reads_candidate_extended_plan",
+      "result": "PASS"
+    },
+    {
+      "name": "baseline_rollback_clean_shutdown",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_reupgrade_version_is_vendor_7_4_1",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_reupgrade_executable_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_reupgrade_zero_hosts_and_vms",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_reads_original_write_after_rollback",
+      "result": "PASS"
+    },
+    {
+      "name": "plan_generation_and_digest_survive_legacy_readback_and_restart",
+      "result": "PASS"
+    },
+    {
+      "name": "policy_binding_detects_original_api_policy_change",
+      "result": "PASS"
+    },
+    {
+      "name": "candidate_reupgrade_clean_shutdown",
+      "result": "PASS"
+    }
+  ],
+  "result": "PASS",
+  "ended_at": "2026-11-20T02:29:26.351799+00:00"
+}

@@ -178,7 +178,8 @@ class VMRequirements:
         self,
         host_capacities: Collection[HostCapacity],
         dstore_capacities: Collection[DStoreCapacity],
-        free: bool = True
+        free: bool = True,
+        retained_shared_dstores: Optional[dict[int, int]] = None,
     ) -> list[DStoreMatches]:
         vm_id = self.id
         var_name = 'free' if free else 'total'
@@ -217,8 +218,15 @@ class VMRequirements:
             shared_dstore_ids: list[int] = []
             for dstore_id in req.shared_dstore_ids:
                 shared_dstore_cap = shared_dstore_caps[dstore_id]
-                # NOTE: This check is probably redundant.
-                if getattr(shared_dstore_cap.size, var_name) >= req.size:
+                # In PLACE, a rescheduled VM retaining this exact shared
+                # allocation needs no second disk copy. This is per-VM/per-
+                # requirement retention, never extra free space for new VMs.
+                retained = (
+                    free and self.state is VMState.RESCHED
+                    and (retained_shared_dstores or {}).get(req_id) == dstore_id
+                )
+                required_size = 0 if retained else req.size
+                if getattr(shared_dstore_cap.size, var_name) >= required_size:
                     shared_dstore_ids.append(dstore_id)
 
             # Matches.

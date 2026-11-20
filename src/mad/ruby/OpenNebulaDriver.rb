@@ -215,7 +215,20 @@ class OpenNebulaDriver < ActionManager
                 cancel_action(action_id)
                 log(action_id, "Driver command for #{action_id} cancelled")
             else
-                trigger_action(action, action_id, *args)
+                context = nil
+                if args[1]&.start_with?('ONE_DRS_REQUEST=')
+                    header = args.delete_at(1)
+                    unless header.match?(/\AONE_DRS_REQUEST=[0-9a-f]{64}\z/)
+                        log(action_id, 'Malformed native request identity; action refused')
+                        next
+                    end
+                    context = {
+                        :header => header.freeze,
+                        :action => action,
+                        :id => action_id.to_s.freeze
+                    }.freeze
+                end
+                trigger_action_with_context(action, action_id, context, *args)
             end
         end
     end

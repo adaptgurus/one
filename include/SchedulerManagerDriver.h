@@ -52,7 +52,8 @@ public:
 
     void place() const;
 
-    void optimize(int cluster_id) const;
+    void optimize(int cluster_id, const std::string& request_nonce = "",
+                  const std::string& expected_template = "") const;
 
     void log_vm(int id, const std::string& msg) const;
 

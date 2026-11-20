@@ -1,0 +1,408 @@
+{
+  "status": "PASS",
+  "scope": "OWNED_FRESH_BRIDGE_VXLAN_ONLY_NO_NATIVE_GUEST_ACCEPTANCE",
+  "at": "2026-11-20T07:08:09.676694+00:00",
+  "results": [
+    {
+      "status": "PASS",
+      "node": "ls-onedrs-rc-02",
+      "routes": [
+        {
+          "dst": "default",
+          "gateway": "192.168.247.1",
+          "dev": "eth0",
+          "protocol": "static",
+          "metric": 100,
+          "flags": []
+        },
+        {
+          "dst": "10.247.20.0/24",
+          "dev": "br-rc-guest",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "10.247.20.12",
+          "flags": []
+        },
+        {
+          "dst": "192.168.247.0/24",
+          "dev": "eth0",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "192.168.247.12",
+          "metric": 100,
+          "flags": []
+        }
+      ],
+      "eth0_addresses": [
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:12",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ],
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "192.168.247.12",
+              "prefixlen": 24,
+              "broadcast": "192.168.247.255",
+              "scope": "global",
+              "noprefixroute": true,
+              "label": "eth0",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::5054:ff:feda:2712",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ],
+      "management_profile_sha256": "66adae7a7f4d5dcddae33d530ca15c65b6e18a9bec4c231f1f460002f165c1ab",
+      "nfs_unchanged": true,
+      "firewall_active": "active",
+      "network_unit": "active",
+      "ownership": {
+        "boot_id": "4b72d936-ccca-418a-b33c-6f8974917e46",
+        "ifindices": {
+          "br-rc-guest": 3,
+          "vxrc24720": 4
+        },
+        "phase": "READY",
+        "realm": "ls-onedrs-rc-20261120",
+        "uuid": "3f3f7e61-e460-48af-868a-d806f9c7afb2"
+      },
+      "files_sha256": {
+        "/usr/local/libexec/ls-onedrs-rc-guest-network-20261120": "ba6c8cf979bf2a7967848f224729ffa5b6e90d4bde290c82e0607e5c140fa262",
+        "/etc/NetworkManager/conf.d/90-ls-onedrs-rc-guest-20261120.conf": "115161a880c4092fbf1a1c4c0fef572f24276514bb8c691f3e69ecc99ed6026f",
+        "/etc/firewalld/zones/onedrs-rc.xml": "064894875ea923fc933be8af8c947feb5c5210866923a99bc38c254ca451dc02",
+        "/etc/firewalld/zones/onedrs-rc-guest.xml": "5239f3e54a5c21f065d809565ae424d02133dc846321bbdb3a89af11352ddd25",
+        "/etc/systemd/system/ls-onedrs-rc-guest-network-20261120.service": "6ad00b0ac306e038d8fda77e89a0fcb64531310d8fab5de24391d919584363b9"
+      },
+      "selinux": "Enforcing",
+      "independent_ssh": true,
+      "rollback_canceled_after_readback": true
+    },
+    {
+      "status": "PASS",
+      "node": "ls-onedrs-rc-03",
+      "routes": [
+        {
+          "dst": "default",
+          "gateway": "192.168.247.1",
+          "dev": "eth0",
+          "protocol": "static",
+          "metric": 100,
+          "flags": []
+        },
+        {
+          "dst": "10.247.20.0/24",
+          "dev": "br-rc-guest",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "10.247.20.13",
+          "flags": []
+        },
+        {
+          "dst": "192.168.247.0/24",
+          "dev": "eth0",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "192.168.247.13",
+          "metric": 100,
+          "flags": []
+        }
+      ],
+      "eth0_addresses": [
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:13",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ],
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "192.168.247.13",
+              "prefixlen": 24,
+              "broadcast": "192.168.247.255",
+              "scope": "global",
+              "noprefixroute": true,
+              "label": "eth0",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::5054:ff:feda:2713",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ],
+      "management_profile_sha256": "6d2578ccc7f9882a916820877d072b7078bc744412d963be661be4ff7e6f2dce",
+      "nfs_unchanged": true,
+      "firewall_active": "active",
+      "network_unit": "active",
+      "ownership": {
+        "boot_id": "829d70cc-62c4-452e-9843-a43b693ff7b0",
+        "ifindices": {
+          "br-rc-guest": 3,
+          "vxrc24720": 4
+        },
+        "phase": "READY",
+        "realm": "ls-onedrs-rc-20261120",
+        "uuid": "3872092d-4ebd-43cb-a515-74174cd2e2fe"
+      },
+      "files_sha256": {
+        "/usr/local/libexec/ls-onedrs-rc-guest-network-20261120": "ba6c8cf979bf2a7967848f224729ffa5b6e90d4bde290c82e0607e5c140fa262",
+        "/etc/NetworkManager/conf.d/90-ls-onedrs-rc-guest-20261120.conf": "115161a880c4092fbf1a1c4c0fef572f24276514bb8c691f3e69ecc99ed6026f",
+        "/etc/firewalld/zones/onedrs-rc.xml": "064894875ea923fc933be8af8c947feb5c5210866923a99bc38c254ca451dc02",
+        "/etc/firewalld/zones/onedrs-rc-guest.xml": "5239f3e54a5c21f065d809565ae424d02133dc846321bbdb3a89af11352ddd25",
+        "/etc/systemd/system/ls-onedrs-rc-guest-network-20261120.service": "8f8bdfbaa513097e853a72973b968c1d886649ad95e3b7b464da4b2cec98a0b2"
+      },
+      "selinux": "Enforcing",
+      "independent_ssh": true,
+      "rollback_canceled_after_readback": true
+    },
+    {
+      "status": "PASS",
+      "node": "ls-onedrs-rc-04",
+      "routes": [
+        {
+          "dst": "default",
+          "gateway": "192.168.247.1",
+          "dev": "eth0",
+          "protocol": "static",
+          "metric": 100,
+          "flags": []
+        },
+        {
+          "dst": "10.247.20.0/24",
+          "dev": "br-rc-guest",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "10.247.20.14",
+          "flags": []
+        },
+        {
+          "dst": "192.168.247.0/24",
+          "dev": "eth0",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "192.168.247.14",
+          "metric": 100,
+          "flags": []
+        }
+      ],
+      "eth0_addresses": [
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:14",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ],
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "192.168.247.14",
+              "prefixlen": 24,
+              "broadcast": "192.168.247.255",
+              "scope": "global",
+              "noprefixroute": true,
+              "label": "eth0",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::5054:ff:feda:2714",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ],
+      "management_profile_sha256": "7d205332041eb2a184de79bf961d2269e523c86e14aacdc66457b5a34a30f6ba",
+      "nfs_unchanged": true,
+      "firewall_active": "active",
+      "network_unit": "active",
+      "ownership": {
+        "boot_id": "47ace943-b5dd-4b24-97e3-b4dc069163c9",
+        "ifindices": {
+          "br-rc-guest": 3,
+          "vxrc24720": 4
+        },
+        "phase": "READY",
+        "realm": "ls-onedrs-rc-20261120",
+        "uuid": "b9e1a75f-78f8-46da-89c2-5183ab69ada3"
+      },
+      "files_sha256": {
+        "/usr/local/libexec/ls-onedrs-rc-guest-network-20261120": "ba6c8cf979bf2a7967848f224729ffa5b6e90d4bde290c82e0607e5c140fa262",
+        "/etc/NetworkManager/conf.d/90-ls-onedrs-rc-guest-20261120.conf": "115161a880c4092fbf1a1c4c0fef572f24276514bb8c691f3e69ecc99ed6026f",
+        "/etc/firewalld/zones/onedrs-rc.xml": "064894875ea923fc933be8af8c947feb5c5210866923a99bc38c254ca451dc02",
+        "/etc/firewalld/zones/onedrs-rc-guest.xml": "5239f3e54a5c21f065d809565ae424d02133dc846321bbdb3a89af11352ddd25",
+        "/etc/systemd/system/ls-onedrs-rc-guest-network-20261120.service": "4bec6f0ce1ef340c1a65c3be5b7083b4258938230bca533281a24885d387c761"
+      },
+      "selinux": "Enforcing",
+      "independent_ssh": true,
+      "rollback_canceled_after_readback": true
+    },
+    {
+      "status": "PASS",
+      "node": "ls-onedrs-rc-05",
+      "routes": [
+        {
+          "dst": "default",
+          "gateway": "192.168.247.1",
+          "dev": "eth0",
+          "protocol": "static",
+          "metric": 100,
+          "flags": []
+        },
+        {
+          "dst": "10.247.20.0/24",
+          "dev": "br-rc-guest",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "10.247.20.15",
+          "flags": []
+        },
+        {
+          "dst": "192.168.247.0/24",
+          "dev": "eth0",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "192.168.247.15",
+          "metric": 100,
+          "flags": []
+        }
+      ],
+      "eth0_addresses": [
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:15",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ],
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "192.168.247.15",
+              "prefixlen": 24,
+              "broadcast": "192.168.247.255",
+              "scope": "global",
+              "noprefixroute": true,
+              "label": "eth0",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::5054:ff:feda:2715",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ],
+      "management_profile_sha256": "e17e8b4205aa59397829205048c284904caabbd627b169fc83bdb663837a617b",
+      "nfs_unchanged": true,
+      "firewall_active": "active",
+      "network_unit": "active",
+      "ownership": {
+        "boot_id": "01d4f203-fce4-4610-99ac-364775722792",
+        "ifindices": {
+          "br-rc-guest": 3,
+          "vxrc24720": 4
+        },
+        "phase": "READY",
+        "realm": "ls-onedrs-rc-20261120",
+        "uuid": "22a9092c-bfc7-4f90-81ea-988d25c37e34"
+      },
+      "files_sha256": {
+        "/usr/local/libexec/ls-onedrs-rc-guest-network-20261120": "ba6c8cf979bf2a7967848f224729ffa5b6e90d4bde290c82e0607e5c140fa262",
+        "/etc/NetworkManager/conf.d/90-ls-onedrs-rc-guest-20261120.conf": "115161a880c4092fbf1a1c4c0fef572f24276514bb8c691f3e69ecc99ed6026f",
+        "/etc/firewalld/zones/onedrs-rc.xml": "064894875ea923fc933be8af8c947feb5c5210866923a99bc38c254ca451dc02",
+        "/etc/firewalld/zones/onedrs-rc-guest.xml": "5239f3e54a5c21f065d809565ae424d02133dc846321bbdb3a89af11352ddd25",
+        "/etc/systemd/system/ls-onedrs-rc-guest-network-20261120.service": "155d27a867ba42f348b9df79ae1141907820101e6f384feb812ca76b9e895f76"
+      },
+      "selinux": "Enforcing",
+      "independent_ssh": true,
+      "rollback_canceled_after_readback": true
+    }
+  ],
+  "free_host_bytes": 28652769280
+}

@@ -1,0 +1,272 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T04:16:47.741147+00:00",
+  "binary_sha256": "8a31919626c19a80739877690fa3ccd68133cd5f6f37ac888235f48c4fb89bf1",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v2_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-success_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_checked_request_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_native_sequence_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_native_accounting",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-before-tm-source-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_source-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_source-history_refuses_tm_before_durable_write",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_source-history_native_retry_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-before-tm-target-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_target-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_target-history_refuses_tm_before_durable_write",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_target-history_native_retry_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-before-tm-source-ledger_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_source-ledger_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_source-ledger_refuses_tm_before_durable_write",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_source-ledger_native_retry_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-before-tm-vm-body_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_vm-body_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_vm-body_refuses_tm_before_durable_write",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_vm-body_native_retry_completes",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-target-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_target-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-history_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-history_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-history_history_retry_idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-target-ledger_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_target-ledger_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-ledger_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-ledger_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_target-ledger_history_retry_idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-source-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_source-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_source-history_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_source-history_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_source-history_history_retry_idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-restored-history_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_restored-history_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_restored-history_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_restored-history_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_restored-history_history_retry_idempotent",
+      "result": "PASS"
+    },
+    {
+      "name": "cold-rollback-vm-body_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "cold_rollback_vm-body_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_vm-body_does_not_claim_restored",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_vm-body_retry_restores_source",
+      "result": "PASS"
+    },
+    {
+      "name": "cold_rollback_vm-body_history_retry_idempotent",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "cold",
+  "status": "PASS",
+  "finished_at": "2026-11-20T04:18:40.015927+00:00"
+}

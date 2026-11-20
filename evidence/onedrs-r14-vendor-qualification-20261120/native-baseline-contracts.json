@@ -1,0 +1,22 @@
+{
+  "vendor_source": "/root/onedrs-shutdown-rca-20261115/vendor-build",
+  "private_copy": "/root/ls-onedrs-r14-vendor-build-20261120",
+  "reviewed_source_commit": "5995c42b8a0fb17ad959e5eb6af2d9e6da0f4037",
+  "patch_sha256": "07d6fa20200bf0fdbea78f2971a2f4682997967dd07237568f479f8662503faf",
+  "baseline_binaries": {
+    "src/nebula/oned": "006c90bc98ab63336b0df24b58da44e95cced3b7cf0be6eb5282de8150a3272e",
+    "src/monitor/src/monitor/onemonitord": "7db8929252d6fd2036a36c8308ccb3a1f0839ff7d0280bcb3b3a44f0b19b758b"
+  },
+  "preserved_contracts": {
+    "include/Nebula.h": "a6b31a9196f0ec8762d58998528ef516781b05874b2bb989431e3bd9f6930bc5",
+    "include/OneDB.h": "810a9a32f23ada54ed3460cd48dc62d048dbdc8d4f757cded7702f4c402011b5",
+    "src/template/Template.cc": "eba8847be0fc824abbca95da5d504b3e8fba93db03ac7a749e3eb7cb17334bec",
+    "include/Driver.h": "41b1c277cbaa9521886ba9138083f8bf5fee87c7234b9d785101fcceb7a001e8",
+    "include/StreamManager.h": "9929d875fba550b2fa6053a2fcd067635e5618c32260b3328d685e069c579e68",
+    "include/StringBuffer.h": "3969454afc37e40524fe7322a2eded4e7b7018c4c0a1199a9425e6905e6d0da0",
+    "src/monitor/include/TCPStream.h": "6a422a899ab75494ff2bfedada037ccb03d219c79d6160e0438d1e45ffebf18e",
+    "src/monitor/include/UDPStream.h": "55bab764ed82b6183931e7da845bb9d1c95691ac787e055e4a22c9aada0caa0a",
+    "src/schedm/SchedulerManagerDriver.cc": "8b7224f850055f442ccbbf95610f0ca2579a01f949b85cc12ecda01f04205b76",
+    "include/NebulaService.h": "d77c9cd7b0bdc7a1e1f470d00803eb9e954bd56aef6e3e8cba58842fedd75cb0"
+  }
+}

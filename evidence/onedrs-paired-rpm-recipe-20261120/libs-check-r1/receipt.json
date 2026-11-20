@@ -1,0 +1,35 @@
+{
+  "schema": "onedrs.native-rpm-pair/v1",
+  "source_commit": "dcf578de4fecdeb9d87190473a23e4e45ab9ad35",
+  "packager_sha256": "01e022aa08de5a963328dc72bde24cdf7d4a3e53860e345478356386c3f71317",
+  "created_at": "2026-11-20T07:48:38.747694+00:00",
+  "release": "20.ls.onedrs.dcf578de.libscheck.lab.el9",
+  "scope": "PACKAGE_INTEGRITY_ONLY",
+  "production_certified": false,
+  "vendor_libs_sha256": "d785f97ab0bf4b8dbb2015556f6910aa1e9ee1010d973c57ade95ef9ad278457",
+  "vendor_libs_signature": "/root/ls-onedrs-paired-package-20261120/vendor-rpms/opennebula-libs-7.4.1-1.el9.noarch.rpm: digests signatures OK",
+  "status": "PASS_LIBRARY_PACKAGE_INTEGRITY_ONLY",
+  "packages": [
+    {
+      "verified_regular_files": 242,
+      "vendor_scriptlets_unchanged": true,
+      "dependency_semantics_preserved": true,
+      "dependency_provenance_flags_ignored": [
+        "FIND_REQUIRES",
+        "FIND_PROVIDES"
+      ],
+      "file_modes_flags_ownership_verified": true,
+      "path": "/root/ls-onedrs-paired-package-20261120/libs-check-r1/rpmbuild/RPMS/noarch/opennebula-libs-7.4.1-20.ls.onedrs.dcf578de.libscheck.lab.el9.noarch.rpm",
+      "sha256": "a9123a3d3341bac8d6655e9eab4aef5d2b83af10d9108bc02d462da843e1d1d4",
+      "bytes": 227252,
+      "nevra": "opennebula-libs-7.4.1-20.ls.onedrs.dcf578de.libscheck.lab.el9.noarch",
+      "spec_sha256": "a3848c01eea383eff2ac928f6d5443e45b8fd502912509c129f7f65b18f042e4",
+      "log_sha256": "5f43c16a25036e45d9849781344ad82e31a53011ff8055c4dfd5900e0879a01f",
+      "signature": "NONE"
+    }
+  ],
+  "vendor_libs_files_verified": 242,
+  "library_changed_files": [
+    "/usr/lib/one/ruby/ActionManager.rb"
+  ]
+}

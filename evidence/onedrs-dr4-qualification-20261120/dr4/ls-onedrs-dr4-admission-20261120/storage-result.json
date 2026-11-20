@@ -1,0 +1,90 @@
+{
+  "started_utc": "2026-11-20T02:21:45.171233+00:00",
+  "scope": "DR4 client NFS readiness, not storage fencing",
+  "before": {
+    "104": {
+      "target": "/var/lib/one/datastores/104",
+      "source": "172.17.40.215:/Pool_1/SHARED_DATA/Ls_two_DATA/dcdr-lab-20260930/files/ls-k1p0-20261025-3d188077/storage-20261026/system",
+      "fstype": "nfs4",
+      "options": "ro,nosuid,nodev,noexec,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=172.17.60.88,local_lock=none,addr=172.17.40.215"
+    },
+    "105": {
+      "target": "/var/lib/one/datastores/105",
+      "source": "172.17.40.215:/Pool_1/SHARED_DATA/Ls_two_DATA/dcdr-lab-20260930/files/ls-k1p0-20261025-3d188077/storage-20261026/image",
+      "fstype": "nfs4",
+      "options": "ro,nosuid,nodev,noexec,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=172.17.60.88,local_lock=none,addr=172.17.40.215"
+    }
+  },
+  "result": "PASS_NATIVE_NFS_RW_CROSS_HOST_AND_LOCK_SEMANTICS",
+  "witness": {
+    "run_id": "ls-onedrs-dr4-qual-34e94ab5521b49818d7004f99e64f70f",
+    "results": [
+      {
+        "ds": "104",
+        "witness": ".ls-onedrs-dr4-qual-34e94ab5521b49818d7004f99e64f70f",
+        "initial_sha256": "5afb020da73c30a64f4ea496c3635b378b50e529e7be77f25772e7e8c72c4209",
+        "peer_reads": [
+          {
+            "host": "172.17.60.80",
+            "sha256": "5afb020da73c30a64f4ea496c3635b378b50e529e7be77f25772e7e8c72c4209",
+            "uid": 9869
+          },
+          {
+            "host": "172.17.60.81",
+            "sha256": "5afb020da73c30a64f4ea496c3635b378b50e529e7be77f25772e7e8c72c4209",
+            "uid": 9869
+          },
+          {
+            "host": "172.17.60.82",
+            "sha256": "5afb020da73c30a64f4ea496c3635b378b50e529e7be77f25772e7e8c72c4209",
+            "uid": 9869
+          }
+        ],
+        "cross_host_advisory_lock": true,
+        "reverse_write_sha256": "cc73e52907ae67fc6e33fad83862eac4b14f50babdca270887c50125092080b5",
+        "owned_witness_removed": true
+      },
+      {
+        "ds": "105",
+        "witness": ".ls-onedrs-dr4-qual-34e94ab5521b49818d7004f99e64f70f",
+        "initial_sha256": "e19f65ee9bbd2aafd7ce530805855a24e50dfe49fda871d43123190469dd6a1f",
+        "peer_reads": [
+          {
+            "host": "172.17.60.80",
+            "sha256": "e19f65ee9bbd2aafd7ce530805855a24e50dfe49fda871d43123190469dd6a1f",
+            "uid": 9869
+          },
+          {
+            "host": "172.17.60.81",
+            "sha256": "e19f65ee9bbd2aafd7ce530805855a24e50dfe49fda871d43123190469dd6a1f",
+            "uid": 9869
+          },
+          {
+            "host": "172.17.60.82",
+            "sha256": "e19f65ee9bbd2aafd7ce530805855a24e50dfe49fda871d43123190469dd6a1f",
+            "uid": 9869
+          }
+        ],
+        "cross_host_advisory_lock": true,
+        "reverse_write_sha256": "ee6ec94f784792482768ba605259240e8735604d4325a0fd770ccfa0267ae2ae",
+        "owned_witness_removed": true
+      }
+    ],
+    "existing_workload_files_written": false
+  },
+  "after": {
+    "104": {
+      "target": "/var/lib/one/datastores/104",
+      "source": "172.17.40.215:/Pool_1/SHARED_DATA/Ls_two_DATA/dcdr-lab-20260930/files/ls-k1p0-20261025-3d188077/storage-20261026/system",
+      "fstype": "nfs4",
+      "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=172.17.60.88,local_lock=none,addr=172.17.40.215"
+    },
+    "105": {
+      "target": "/var/lib/one/datastores/105",
+      "source": "172.17.40.215:/Pool_1/SHARED_DATA/Ls_two_DATA/dcdr-lab-20260930/files/ls-k1p0-20261025-3d188077/storage-20261026/image",
+      "fstype": "nfs4",
+      "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=1048576,wsize=1048576,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=172.17.60.88,local_lock=none,addr=172.17.40.215"
+    }
+  },
+  "ended_utc": "2026-11-20T02:21:47.991726+00:00"
+}

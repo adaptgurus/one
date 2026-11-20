@@ -18,6 +18,7 @@
 #define LIFE_CYCLE_MANAGER_H_
 
 #include "Listener.h"
+#include "NativeDriverRequest.h"
 #include "VMActions.h"
 
 //Forward definitions
@@ -33,6 +34,7 @@ class DatastorePool;
 class SecurityGroupPool;
 class VirtualMachinePool;
 class VirtualMachine;
+class VMGroup;
 class VirtualNetworkPool;
 class RequestAttributes;
 
@@ -85,27 +87,47 @@ public:
     // -------------------------------------------------------------------------
     void start_prolog_migrate(VirtualMachine* vm);
 
-    void revert_migrate_after_failure(VirtualMachine* vm, bool live);
+    bool revert_migrate_after_failure(VirtualMachine* vm, bool live);
+    bool prepare_group_placement(std::unique_ptr<VirtualMachine>& vm,
+                                 std::unique_ptr<VMGroup>& group, bool migration);
+    int reserve_checked_migration_capacity(std::unique_ptr<VirtualMachine>& vm, bool live,
+                                          std::unique_ptr<VMGroup>& group);
+    bool cancel_checked_migration(std::unique_ptr<VirtualMachine>& vm, const std::string& reason);
+    bool cancel_enforced_admission(std::unique_ptr<VirtualMachine>& vm, std::string& error);
+    bool recover_checked_migrations(bool new_epoch, unsigned int term);
+    bool persist_checked_migration_admission(VirtualMachine* vm);
+    bool has_enforced_capacity(VirtualMachine* vm);
+    bool prepare_enforced_prolog_transfer(VirtualMachine* vm);
 
-    void trigger_save_success(int vid);
-    void trigger_save_failure(int vid);
+    void trigger_save_success(int vid) { trigger_save_success(vid, NativeDriverReply{}); }
+    void trigger_save_success(int vid, const NativeDriverReply& reply);
+    void trigger_save_failure(int vid) { trigger_save_failure(vid, NativeDriverReply{}); }
+    void trigger_save_failure(int vid, const NativeDriverReply& reply);
 
-    void trigger_deploy_success(int vid);
-    void trigger_deploy_failure(int vid);
+    void trigger_deploy_success(int vid) { trigger_deploy_success(vid, NativeDriverReply{}); }
+    void trigger_deploy_success(int vid, const NativeDriverReply& reply);
+    void trigger_deploy_failure(int vid) { trigger_deploy_failure(vid, NativeDriverReply{}); }
+    void trigger_deploy_failure(int vid, const NativeDriverReply& reply);
 
-    void trigger_shutdown_success(int vid);
-    void trigger_shutdown_failure(int vid);
+    void trigger_shutdown_success(int vid) { trigger_shutdown_success(vid, NativeDriverReply{}); }
+    void trigger_shutdown_success(int vid, const NativeDriverReply& reply);
+    void trigger_shutdown_failure(int vid) { trigger_shutdown_failure(vid, NativeDriverReply{}); }
+    void trigger_shutdown_failure(int vid, const NativeDriverReply& reply);
 
     void trigger_monitor_suspend(int vid);
     void trigger_monitor_done(int vid);
     void trigger_monitor_poweroff(int vid);
     void trigger_monitor_poweron(int vid);
 
-    void trigger_prolog_success(int vid);
-    void trigger_prolog_failure(int vid);
+    void trigger_prolog_success(int vid) { trigger_prolog_success(vid, NativeDriverReply{}); }
+    void trigger_prolog_success(int vid, const NativeDriverReply& reply);
+    void trigger_prolog_failure(int vid) { trigger_prolog_failure(vid, NativeDriverReply{}); }
+    void trigger_prolog_failure(int vid, const NativeDriverReply& reply);
 
-    void trigger_epilog_success(int vid);
-    void trigger_epilog_failure(int vid);
+    void trigger_epilog_success(int vid) { trigger_epilog_success(vid, NativeDriverReply{}); }
+    void trigger_epilog_success(int vid, const NativeDriverReply& reply);
+    void trigger_epilog_failure(int vid) { trigger_epilog_failure(vid, NativeDriverReply{}); }
+    void trigger_epilog_failure(int vid, const NativeDriverReply& reply);
 
     void trigger_attach_success(int vid);
     void trigger_attach_failure(int vid);
@@ -122,7 +144,8 @@ public:
     void trigger_detach_nic_success(int vid);
     void trigger_detach_nic_failure(int vid);
 
-    void trigger_cleanup_callback(int vid);
+    void trigger_cleanup_callback(int vid) { trigger_cleanup_callback(vid, NativeDriverReply{}); }
+    void trigger_cleanup_callback(int vid, const NativeDriverReply& reply);
 
     void trigger_snapshot_create_success(int vid);
     void trigger_snapshot_create_failure(int vid);
@@ -163,7 +186,7 @@ public:
     // -------------------------------------------------------------------------
     // External Actions, triggered by user requests
     // -------------------------------------------------------------------------
-    void trigger_deploy(int vid);
+    void trigger_deploy(int vid, int admission_sequence = -1);
     void trigger_suspend(int vid, const RequestAttributes& ra);
     void trigger_restore(int vid, const RequestAttributes& ra);
     void trigger_stop(int vid, const RequestAttributes& ra);

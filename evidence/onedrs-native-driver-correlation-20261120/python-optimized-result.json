@@ -1,0 +1,12 @@
+[
+  {
+    "suite": "test_native_downgrade_guard.py",
+    "exit_code": 0,
+    "optimized": true
+  },
+  {
+    "suite": "test_native_runtime_manifest.py",
+    "exit_code": 0,
+    "optimized": true
+  }
+]

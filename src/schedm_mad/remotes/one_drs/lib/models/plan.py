@@ -15,6 +15,16 @@ class Plan:
             "required": True,
         },
     )
+    template_sha256: Optional[str] = field(
+        default=None,
+        metadata={"name": "TEMPLATE_SHA256", "type": "Element"},
+    )
+    request_nonce: Optional[str] = field(
+        default=None, metadata={"name": "REQUEST_NONCE", "type": "Element"},
+    )
+    request_error: Optional[str] = field(
+        default=None, metadata={"name": "REQUEST_ERROR", "type": "Element"},
+    )
     action: list["Plan.Action"] = field(
         default_factory=list,
         metadata={
@@ -55,6 +65,10 @@ class Plan:
                 "name": "DS_ID",
                 "type": "Element",
             },
+        )
+        eligibility_sha256: Optional[str] = field(
+            default=None,
+            metadata={"name": "ELIGIBILITY_SHA256", "type": "Element"},
         )
         nic: list["Plan.Action.Nic"] = field(
             default_factory=list,

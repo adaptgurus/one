@@ -26,6 +26,10 @@
 #include "PlanPool.h"
 #include "Plan.h"
 #include "VirtualMachineAPI.h"
+#include "LifeCycleManager.h"
+#include "HostPool.h"
+#include "OneDRSEligibility.h"
+#include "VMGroupPool.h"
 
 using namespace std;
 
@@ -49,6 +53,8 @@ PlanManager::PlanManager(time_t timer,
     , drs_last(time(0))
 {
     NebulaLog::info("PLM", "Staring Plan Manager...");
+    Plan identity;
+    if (identity.renew_generation()) planning_instance = identity.generation();
 
     auto& nd = Nebula::instance();
 
@@ -100,61 +106,70 @@ void PlanManager::add_plan(const string& xml)
         return;
     }
 
-    if (plan.actions().empty())
+    if (plan.actions().empty() && plan.response_nonce().empty())
     {
-        NebulaLog::debug("PLM", "Plan has no actions, skipping...");
+        NebulaLog::debug("PLM", "Legacy plan has no actions, skipping...");
         return;
     }
 
-    if (auto cplan = plan_pool->get(plan.cid()))
     {
-        if (plan.cid() == -1)
-        {
-            NebulaLog::info("PLM", "Adding new placement plan");
-
-            if (cplan->state() == PlanState::APPLYING)
-            {
-                NebulaLog::info("PLM", "Cannot add plan. A placement plan is already in progress.");
-                return;
-            }
-
-            cplan->from_xml(xml);
-
-            cplan->state(PlanState::APPLYING);
-        }
-        else if (auto cluster = cluster_pool->get_ro(plan.cid()))
-        {
-            NebulaLog::info("PLM", "Adding new plan for cluster " + to_string(plan.cid()));
-
-            if (cplan->state() == PlanState::APPLYING)
-            {
-                NebulaLog::info("PLM", "Cannot add cluster optimization plan. A plan is already in progress.");
-                return;
-            }
-
-            cplan->from_xml(xml);
-
-            if (cluster->automation() == Cluster::DrsAutomation::FULL)
-            {
-                cplan->state(PlanState::APPLYING);
-            }
-            else
-            {
-                cplan->state(PlanState::READY);
-            }
-        }
-        else
+        // Cluster -> plan is the common order used by checked execution and deletion.
+        // Hold both through policy validation and persistence of a computed plan.
+        auto cluster = plan.cid() >= 0 ? cluster_pool->get(plan.cid()) : nullptr;
+        if (plan.cid() >= 0 && !cluster)
         {
             NebulaLog::error("PLM", "Optimization plan for non-existent cluster " + to_string(plan.cid()));
             return;
         }
-
-        plan_pool->update(cplan.get());
-    }
-    else
-    {
-        NebulaLog::error("PLM", "Plan not found, unable to update plan for cluster " + to_string(plan.cid()));
-        return;
+        auto cplan = plan_pool->get(plan.cid());
+        if (!cplan)
+        {
+            NebulaLog::error("PLM", "Plan not found, unable to update plan for cluster " + to_string(plan.cid()));
+            return;
+        }
+        if (cplan->state() == PlanState::APPLYING)
+        {
+            NebulaLog::info("PLM", "Cannot add plan. A plan is already in progress.");
+            return;
+        }
+        if (cplan->has_request() || !plan.response_nonce().empty())
+        {
+            if (!cplan->generating() || plan.response_nonce() != cplan->request().nonce)
+            {
+                NebulaLog::info("PLM", "Discarding unbound or stale checked optimizer response");
+                return;
+            }
+            if (!cluster || cluster->automation() != Cluster::DrsAutomation::MANUAL ||
+                cluster->template_sha256() != cplan->request().template_sha256 ||
+                plan.template_sha256() != cplan->request().template_sha256)
+                cplan->generation_error("Cluster policy changed while generating recommendations");
+            else if (!plan.response_error().empty())
+                cplan->generation_error("Native optimizer could not produce recommendations");
+            else if (!cplan->accept_generated(plan))
+                cplan->generation_error("Unable to initialize generated recommendation identity");
+            if (plan_pool->update(cplan.get()) != 0)
+                NebulaLog::error("PLM", "Unable to persist checked generation result");
+            // Checked Generate only publishes a result. It never dispatches actions.
+            return;
+        }
+        if (cluster && !plan.template_sha256().empty() &&
+            plan.template_sha256() != cluster->template_sha256())
+        {
+            NebulaLog::error("PLM", "Discarding optimization plan computed against a stale cluster template");
+            return;
+        }
+        if (cplan->from_xml(xml) != 0 || !cplan->renew_generation())
+        {
+            NebulaLog::error("PLM", "Unable to initialize generated plan identity");
+            return;
+        }
+        cplan->state(plan.cid() == -1 || cluster->automation() == Cluster::DrsAutomation::FULL
+                     ? PlanState::APPLYING : PlanState::READY);
+        if (plan_pool->update(cplan.get()) != 0)
+        {
+            NebulaLog::error("PLM", "Unable to persist new plan");
+            return;
+        }
     }
 
     // Clear previous scheduling messages for all VM actions
@@ -184,6 +199,11 @@ void PlanManager::add_plan(const string& xml)
 /* -------------------------------------------------------------------------- */
 static int start_check_plan(Plan& p, std::string& error)
 {
+    if (p.has_request())
+    {
+        error = "Checked recommendation lifecycle requires planexecutechecked";
+        return -1;
+    }
     switch(p.state())
     {
         case PlanState::NONE:
@@ -234,18 +254,137 @@ int PlanManager::start_plan(int cid, std::string& error)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+int PlanManager::start_plan_checked(int cid, const std::string& expected_plan_sha256,
+                                    const std::string& expected_template_sha256,
+                                    std::string& error)
+{
+    {
+        // Match PlanDelete's lock order. The cluster stays locked through the
+        // durable READY -> APPLYING transition, so policy and plan checks are atomic.
+        auto cluster = cluster_pool->get(cid);
+        if (!cluster)
+        {
+            error = "Cluster not found";
+            return -1;
+        }
+        if (cluster->template_sha256() != expected_template_sha256)
+        {
+            error = "Cluster template changed; refresh and approve the current policy";
+            return -1;
+        }
+        if (cluster->automation() != Cluster::DrsAutomation::MANUAL)
+        {
+            error = "Checked plan execution requires manual automation";
+            return -1;
+        }
+        auto plan = plan_pool->get(cid);
+        if (!plan)
+        {
+            error = "Plan not found";
+            return -1;
+        }
+        if (plan->template_sha256() != expected_template_sha256)
+        {
+            error = "Plan was not computed against the approved cluster template";
+            return -1;
+        }
+        if (plan->validate_checked(expected_plan_sha256, error) != 0) return -1;
+        std::set<int> vm_ids;
+        for (const auto& action : plan->actions())
+        {
+            if (!vm_ids.insert(action.vm_id()).second)
+            {
+                error = "Checked migration plan contains repeated VM actions";
+                return -1;
+            }
+            // Read-only preflight avoids taking VM locks under the cluster lock.
+            // The API repeats this check under its VM lock before any mutation.
+            auto vm = vm_pool->get_ro(action.vm_id());
+            auto host = Nebula::instance().get_hpool()->get_ro(action.host_id());
+            if (!vm || !host || host->get_cluster_id() != cid ||
+                host->get_state() != Host::MONITORED)
+            {
+                error = "Checked migration plan VM/target host is unavailable in the approved cluster";
+                return -1;
+            }
+            std::unique_ptr<VMGroup> group;
+            if (auto membership = vm->get_template_attribute("VMGROUP"))
+            {
+                int gid = -1;
+                if (membership->vector_value("VMGROUP_ID", gid) == 0)
+                    group = Nebula::instance().get_vmgrouppool()->get_ro(gid);
+            }
+            if (!vm->checked_migration_supported(action.host_id(), cid, action.ds_id(), error) ||
+                !one_drs_eligibility::validate(*vm, *host, *cluster,
+                    action.eligibility_sha256(), false, error, nullptr, group.get()))
+            {
+                return -1;
+            }
+        }
+        if (plan->start_checked(expected_plan_sha256, error) != 0) return -1;
+        if (plan_pool->update(plan.get()) != 0)
+        {
+            error = "Unable to persist approved plan execution";
+            return -1;
+        }
+    }
+    execute_plans();
+    return 0;
+}
+
+void PlanManager::finish_generate(int cid, const std::string& nonce, bool noop,
+                                  const std::string& error)
+{
+    auto cluster = cluster_pool->get(cid);
+    if (!cluster) return;
+    auto plan = plan_pool->get(cid);
+    if (!plan || !plan->generating() || plan->request().nonce != nonce) return;
+    if (noop && cluster->automation() == Cluster::DrsAutomation::MANUAL &&
+        cluster->template_sha256() == plan->request().template_sha256)
+    {
+        Plan response;
+        const auto xml = "<PLAN><ID>" + std::to_string(cid) + "</ID><TEMPLATE_SHA256>" +
+            plan->request().template_sha256 + "</TEMPLATE_SHA256><REQUEST_NONCE>" +
+            nonce + "</REQUEST_NONCE></PLAN>";
+        if (response.from_xml(xml) != 0 || !plan->accept_generated(response))
+            plan->generation_error("Unable to persist an empty native recommendation");
+    }
+    else plan->generation_error(error.empty() ? "Native recommendation generation failed" : error);
+    if (plan_pool->update(plan.get()) != 0)
+        NebulaLog::error("PLM", "Unable to persist checked generation completion");
+}
+
+void PlanManager::recover_generating_requests()
+{
+    std::vector<int> clusters;
+    if (cluster_pool->list(clusters) != 0) return;
+    for (int cid : clusters)
+    {
+        auto observed = plan_pool->get_ro(cid);
+        if (!observed || !observed->generating()) continue;
+        const auto request = observed->request();
+        const bool restarted = request.instance != planning_instance;
+        const bool expired = time(nullptr) - request.started_at >= 600;
+        if (restarted || expired)
+            finish_generate(cid, request.nonce, false, restarted
+                ? "Native planner restarted before generation completed; submit a new approved request"
+                : "Native optimizer response timed out; submit a new approved request");
+    }
+}
+
 void PlanManager::timer_action()
 {
     auto& nd = Nebula::instance();
     RaftManager * raftm = nd.get_raftm();
 
-    if (!raftm || (!raftm->is_leader() && !raftm->is_solo()))
+    if (!ready.load() || !raftm || (!raftm->is_leader() && !raftm->is_solo()))
     {
         return;
     }
 
     NebulaLog::info("PLM", "Starting Plan Manager timer action...");
 
+    recover_generating_requests();
     execute_plans();
 
     // Periodically run DRS (Cluster optimization) for all clusters
@@ -282,8 +421,9 @@ void PlanManager::timer_action()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-bool PlanManager::start_action(int plan_id, PlanAction& action)
+bool PlanManager::start_action(Plan& plan, PlanAction& action)
 {
+    const int plan_id = plan.cid();
     const string& aname = action.operation();
     VMActions::Action vm_action = VMActions::NONE_ACTION;
     VMActions::action_from_str(aname, vm_action);
@@ -296,6 +436,26 @@ bool PlanManager::start_action(int plan_id, PlanAction& action)
                          PoolObjectSQL::VM);
 
     ra.set_auth_op(vm_action);
+    ra.plan_action = {plan_id, action.id(), plan.generation()};
+    if (plan.checked_execution())
+    {
+        ra.checked_plan_id = plan_id;
+        ra.checked_action_id = action.id();
+        ra.checked_plan_generation = plan.generation();
+        ra.checked_eligibility_sha256 = action.eligibility_sha256();
+        ra.checked_plan_term = Nebula::instance().get_raftm()->get_term();
+    }
+
+    // Every native scheduler action owns a durable generation before any
+    // asynchronous VM or driver dispatch can begin.
+    action.timestamp(time(nullptr));
+    action.state(PlanState::APPLYING);
+    if (plan_pool->update(&plan) != 0)
+    {
+        action.state(PlanState::ERROR);
+        NebulaLog::error("PLM", "Cannot persist native plan action admission");
+        return false;
+    }
 
     Request request("internal action");
     VirtualMachineAPI api(request);
@@ -325,7 +485,7 @@ bool PlanManager::start_action(int plan_id, PlanAction& action)
         rc = api.migrate(action.vm_id(),
                          action.host_id(),
                          live_resched,
-                         false,
+                         true,
                          action.ds_id(),
                          cold_migrate_mode,
                          ra);
@@ -339,6 +499,15 @@ bool PlanManager::start_action(int plan_id, PlanAction& action)
 
     if (rc != Request::SUCCESS)
     {
+        if (ra.group_placement_busy)
+        {
+            // This flag is set only before API admission writes. A queued LCM
+            // failure must never return to READY or replay a guest operation.
+            action.timestamp(0);
+            action.state(PlanState::READY);
+            if (plan_pool->update(&plan) != 0) action.state(PlanState::ERROR);
+            return false;
+        }
         action.state(PlanState::ERROR);
 
         auto error_msg = Request::failure_message(rc, ra, aname, ra.resp_obj);
@@ -355,14 +524,6 @@ bool PlanManager::start_action(int plan_id, PlanAction& action)
         return false;
     }
 
-    if (auto vm = vm_pool->get(action.vm_id()))
-    {
-        vm->plan_id(plan_id);
-        vm->action_id(action.id());
-
-        vm_pool->update_history(vm.get());
-    }
-
     action.state(PlanState::APPLYING);
 
     return true;
@@ -371,12 +532,19 @@ bool PlanManager::start_action(int plan_id, PlanAction& action)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void PlanManager::action_finished(int plan_id, int action_id, PlanState state)
+void PlanManager::action_finished(int plan_id, int action_id, PlanState state,
+                                  const std::string& generation)
 {
     auto plan = plan_pool->get(plan_id);
 
     if (!plan)
     {
+        return;
+    }
+
+    if (plan->generation() != generation)
+    {
+        NebulaLog::info("PLM", "Ignoring completion for a superseded native plan generation");
         return;
     }
 
@@ -428,10 +596,14 @@ void PlanManager::execute_plan(Plan& plan)
             break;
         }
 
-        if (start_action(plan.cid(), *action))
+        if (start_action(plan, *action))
         {
             host_actions[action->host_id()]++;
             cluster_actions++;
+        }
+        else if (action->state() == PlanState::READY)
+        {
+            break; // Explicit nonmutating group-busy deferral.
         }
     }
 
@@ -443,6 +615,18 @@ void PlanManager::execute_plan(Plan& plan)
 
 void PlanManager::execute_plans()
 {
+    if (!ready.load()) return;
+    std::lock_guard<std::mutex> execution_lock(execution_mutex);
+    auto& nd = Nebula::instance();
+    auto raftm = nd.get_raftm();
+    if (!raftm || (!raftm->is_leader() && !raftm->is_solo())) return;
+
+    const auto term = raftm->get_term();
+    const bool new_epoch = recovered_term != term;
+    // First dispatch in every leader epoch cancels requests that never reached a
+    // driver. Later passes retry storage failures or a stalled admission queue.
+    if (!nd.get_lcm()->recover_checked_migrations(new_epoch, term)) return;
+    recovered_term = term;
     auto plans = plan_pool->get_active_plans();
 
     NebulaLog::info("PLM", "Found " + to_string(plans.size()) + " active plans");

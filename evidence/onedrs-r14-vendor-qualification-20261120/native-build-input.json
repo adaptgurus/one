@@ -1,0 +1,27 @@
+{
+  "started_utc": "2026-11-20T02:25:17.288608+00:00",
+  "reviewed_source_commit": "5995c42b8a0fb17ad959e5eb6af2d9e6da0f4037",
+  "vendor_source": "/root/onedrs-shutdown-rca-20261115/vendor-build",
+  "private_copy": "/root/ls-onedrs-r14-vendor-build-20261120",
+  "command": [
+    "scons",
+    "-Q",
+    "-j8",
+    "mysql=yes",
+    "grpc=yes",
+    "systemd=yes",
+    "sqlite=yes",
+    "xmlrpc_pkgconf=yes",
+    "parsers=no",
+    "gitversion=5995c42b8a0f-ls7.4.1-backport",
+    "src/nebula/oned",
+    "src/monitor/src/monitor/onemonitord"
+  ],
+  "compiler_flags": {
+    "CFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "CXXFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "LDFLAGS": "-Wl,-z,relro -Wl,--as-needed  -Wl,-z,now -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -flto=12"
+  },
+  "status": "BUILDING",
+  "native_global_trust_or_services_changed": false
+}

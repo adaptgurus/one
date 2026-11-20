@@ -150,7 +150,7 @@ void History::non_persistent_data()
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-int History::insert_replace(SqlDB *db, bool replace)
+int History::insert_replace(SqlDB *db, bool replace, bool upsert)
 {
     ostringstream   oss;
 
@@ -181,7 +181,7 @@ int History::insert_replace(SqlDB *db, bool replace)
     }
     else
     {
-        oss << "INSERT INTO " << one_db::history_table
+        oss << (upsert ? "REPLACE INTO " : "INSERT INTO ") << one_db::history_table
             << " (" << one_db::history_db_names << ") VALUES ("
             <<          oid             << ","
             <<          seq             << ","
@@ -310,6 +310,21 @@ string& History::to_xml(string& xml, bool database) const
         "<DS_ID>"      << ds_id         << "</DS_ID>" <<
         "<PLAN_ID>"    << plan_id       << "</PLAN_ID>" <<
         "<ACTION_ID>"  << action_id     << "</ACTION_ID>" <<
+        "<PLAN_ACTION_GENERATION>" << plan_action_generation << "</PLAN_ACTION_GENERATION>" <<
+        "<CHECKED_PLAN_GENERATION>" << checked_plan_generation << "</CHECKED_PLAN_GENERATION>" <<
+        "<CHECKED_ELIGIBILITY_SHA256>" << checked_eligibility_sha256 << "</CHECKED_ELIGIBILITY_SHA256>" <<
+        "<CHECKED_PLAN_TERM>" << checked_plan_term << "</CHECKED_PLAN_TERM>" <<
+        "<CHECKED_CAPACITY_PENDING>" << checked_capacity_pending << "</CHECKED_CAPACITY_PENDING>" <<
+        "<ENFORCE_CAPACITY>" << enforce_capacity << "</ENFORCE_CAPACITY>" <<
+        "<ENFORCED_ADMISSION_STATE>" << enforced_admission_state << "</ENFORCED_ADMISSION_STATE>" <<
+        "<ENFORCED_ADMISSION_LCM_STATE>" << enforced_admission_lcm_state << "</ENFORCED_ADMISSION_LCM_STATE>" <<
+        "<ENFORCED_ADMISSION_CANCELING>" << enforced_admission_canceling << "</ENFORCED_ADMISSION_CANCELING>" <<
+        "<DRIVER_REQUEST_TOKEN>" << driver_request.token << "</DRIVER_REQUEST_TOKEN>" <<
+        "<DRIVER_REQUEST_OWNER>" << driver_request.owner << "</DRIVER_REQUEST_OWNER>" <<
+        "<DRIVER_REQUEST_OPERATION>" << driver_request.operation << "</DRIVER_REQUEST_OPERATION>" <<
+        "<DRIVER_REQUEST_STATE>" << driver_request.state << "</DRIVER_REQUEST_STATE>" <<
+        "<DRIVER_REQUEST_LCM_STATE>" << driver_request.lcm_state << "</DRIVER_REQUEST_LCM_STATE>" <<
+        "<DRIVER_REQUEST_PENDING>" << driver_request.pending << "</DRIVER_REQUEST_PENDING>" <<
         "<PSTIME>"     << prolog_stime  << "</PSTIME>"<<
         "<PETIME>"     << prolog_etime  << "</PETIME>"<<
         "<RSTIME>"     << running_stime << "</RSTIME>"<<
@@ -414,6 +429,70 @@ int History::rebuild_attributes()
     // For backward compatibility do not fail if plan or action ID is not found
     xpath(plan_id, "/HISTORY/PLAN_ID", -2);
     xpath(action_id, "/HISTORY/ACTION_ID", -1);
+    xpath(plan_action_generation, "/HISTORY/PLAN_ACTION_GENERATION", "");
+    if (!plan_action_generation.empty() &&
+        (plan_action_generation.size() != 64 || plan_id < -1 || action_id < 0 ||
+         plan_action_generation.find_first_not_of("0123456789abcdef") != std::string::npos))
+    {
+        return -1;
+    }
+    xpath(checked_plan_generation, "/HISTORY/CHECKED_PLAN_GENERATION", "");
+    xpath(checked_eligibility_sha256, "/HISTORY/CHECKED_ELIGIBILITY_SHA256", "");
+    if (!checked_eligibility_sha256.empty() &&
+        (checked_eligibility_sha256.size() != 64 ||
+         checked_eligibility_sha256.find_first_not_of("0123456789abcdef") != std::string::npos)) return -1;
+
+    xpath(checked_plan_term, "/HISTORY/CHECKED_PLAN_TERM", 0u);
+    int pending = 0;
+    xpath(pending, "/HISTORY/CHECKED_CAPACITY_PENDING", 0);
+    if ((pending != 0 && pending != 1) || (pending && checked_plan_generation.empty()))
+    {
+        return -1;
+    }
+    checked_capacity_pending = pending == 1;
+    std::string enforce;
+    xpath(enforce, "/HISTORY/ENFORCE_CAPACITY", "");
+    if (!enforce.empty() && enforce != "0" && enforce != "1") return -1;
+    enforce_capacity = enforce == "1";
+    xpath(enforced_admission_state, "/HISTORY/ENFORCED_ADMISSION_STATE", -1);
+    xpath(enforced_admission_lcm_state, "/HISTORY/ENFORCED_ADMISSION_LCM_STATE", -1);
+    std::string canceling;
+    xpath(canceling, "/HISTORY/ENFORCED_ADMISSION_CANCELING", "");
+    if (!canceling.empty() && canceling != "0" && canceling != "1") return -1;
+    enforced_admission_canceling = canceling == "1";
+    xpath(driver_request.token, "/HISTORY/DRIVER_REQUEST_TOKEN", "");
+    xpath(driver_request.owner, "/HISTORY/DRIVER_REQUEST_OWNER", "");
+    xpath(driver_request.operation, "/HISTORY/DRIVER_REQUEST_OPERATION", "");
+    xpath(driver_request.state, "/HISTORY/DRIVER_REQUEST_STATE", -1);
+    xpath(driver_request.lcm_state, "/HISTORY/DRIVER_REQUEST_LCM_STATE", -1);
+    std::string driver_pending;
+    xpath(driver_pending, "/HISTORY/DRIVER_REQUEST_PENDING", "");
+    if (!driver_pending.empty() && driver_pending != "0" && driver_pending != "1") return -1;
+    driver_request.pending = driver_pending == "1";
+    if (driver_request.token.empty())
+    {
+        if (!driver_request.owner.empty() || !driver_request.operation.empty() ||
+            driver_request.state != -1 || driver_request.lcm_state != -1 ||
+            driver_request.pending) return -1;
+    }
+    else
+    {
+        const auto& op = driver_request.operation;
+        if (!one_drs_driver::token_valid(driver_request.token) ||
+            !one_drs_driver::token_valid(driver_request.owner) ||
+            driver_request.state < 0 || driver_request.lcm_state < 0 ||
+            (op != "DEPLOY" && op != "RESTORE" && op != "MIGRATE" &&
+             op != "SAVE" && op != "SHUTDOWN" && op != "CANCEL" &&
+             op != "CLEANUP" && op != "TRANSFER")) return -1;
+    }
+    if (enforced_admission_canceling &&
+        (!enforce_capacity || enforced_admission_state < 0 || enforced_admission_lcm_state < 0)) return -1;
+    if (!checked_plan_generation.empty() &&
+        (checked_plan_generation.size() != 64 || plan_id < 0 || action_id < 0 ||
+         checked_plan_generation.find_first_not_of("0123456789abcdef") != std::string::npos))
+    {
+        return -1;
+    }
 
     rc += xpath(hostname, "/HISTORY/HOSTNAME", "not_found");
 

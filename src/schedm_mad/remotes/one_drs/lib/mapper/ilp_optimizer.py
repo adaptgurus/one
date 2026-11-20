@@ -408,7 +408,13 @@ class ILPOptimizer(Mapper):
             dstore_matches = vm_req.find_storage_matches(
                 host_capacities=vm_host_matches[vm_id],
                 dstore_capacities=all_dstore_caps.values(),
-                free=free
+                free=free,
+                retained_shared_dstores={
+                    req_id: dstore_id
+                    for (existing_vm_id, req_id), dstore_id
+                    in used_shared_dstores.items()
+                    if existing_vm_id == vm_id
+                },
             )
             all_dstore_matches += dstore_matches
 
@@ -882,7 +888,7 @@ class ILPOptimizer(Mapper):
         # Grouping by shared datastores.
         shared_dstore_req: ddict[int, LinExpr] = ddict(LinExpr)
         for (vm_id, req_id, dstore_id), xs_var in xs_next_shared.items():
-            req_size = all_vm_reqs[vm_id].storage[req_id].size
+            req_size = self._shared_storage_increment(vm_id, req_id, dstore_id)
             shared_dstore_req[dstore_id] += xs_var * req_size
 
         # The storage demanded by all VMs allocated to a shared
@@ -1173,6 +1179,16 @@ class ILPOptimizer(Mapper):
             ns_migr[req_idx] += xs_var
             self._max_ns_migr_vms += 1
 
+    def _shared_storage_increment(self, vm_id: int, req_id: int, dstore_id: int):
+        # Narrow native recovery reuses bytes already in datastore usage.
+        # Use one accounting rule for hard capacity and space balancing;
+        # no retained allocation lends free space to another/new workload.
+        vm_req = self._vm_reqs[vm_id]
+        if (self._narrow and vm_req.state is VMState.RESCHED
+                and self._used_shared_dstores.get((vm_id, req_id)) == dstore_id):
+            return 0
+        return vm_req.storage[req_id].size
+
     def _add_dstore_space_variable(self, name: str) -> Var:
         model = self._model
         all_vm_reqs = self._vm_reqs
@@ -1193,7 +1209,7 @@ class ILPOptimizer(Mapper):
         # Grouping by shared datastores.
         shared_dstore_req: ddict[int, LinExpr] = ddict(LinExpr)
         for (vm_id, req_id, dstore_id), xs_var in self._xs_next_shared.items():
-            req_size = all_vm_reqs[vm_id].storage[req_id].size
+            req_size = self._shared_storage_increment(vm_id, req_id, dstore_id)
             shared_dstore_req[dstore_id] += xs_var * req_size
 
         if self._narrow:

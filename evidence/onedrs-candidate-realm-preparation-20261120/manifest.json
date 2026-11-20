@@ -1,0 +1,389 @@
+{
+  "files": [
+    {
+      "bytes": 1388,
+      "path": "receipts/provisioning.json",
+      "sha256": "bb82827b4f7f2dcf3ee5c27ec81ce96790de3bb77f7748fbf8bafb556707703e",
+      "source": "/root/ls-onedrs-rc-20261120/provisioning.json"
+    },
+    {
+      "bytes": 1369,
+      "path": "receipts/provisioning-failure.json",
+      "sha256": "5a77272eff1c4aedca78eb31483bac2d0102ff16d14db18a72805b9f31f2f77c",
+      "source": "/root/ls-onedrs-rc-20261120/provisioning-failure.json"
+    },
+    {
+      "bytes": 1086,
+      "path": "receipts/static-r2-failure.json",
+      "sha256": "1b75df6a692e927ef0f19a60bdf7896dc03e06b5c84ed9bb59c435f43aad59eb",
+      "source": "/root/ls-onedrs-rc-20261120/static-r2-failure.json"
+    },
+    {
+      "bytes": 1419,
+      "path": "receipts/start-r3-result.json",
+      "sha256": "97e942f616266e99963616b8b55710e7c231f0df858221d6b99804397018b879",
+      "source": "/root/ls-onedrs-rc-20261120/start-r3-result.json"
+    },
+    {
+      "bytes": 486,
+      "path": "receipts/provisioning-custody-reconciled.json",
+      "sha256": "4bdafdcbee3067e29490271dbe7b11413a69b1ad9205dc568217d5b71899495e",
+      "source": "/root/ls-onedrs-rc-20261120/provisioning-custody-reconciled.json"
+    },
+    {
+      "bytes": 1643,
+      "path": "receipts/first-ssh-readiness.json",
+      "sha256": "d0311d93420c1c8fc0244782157dd78a4c0f2e63d06c0c0eb6379a32d0b6f63d",
+      "source": "/root/ls-onedrs-rc-20261120/first-ssh-readiness.json"
+    },
+    {
+      "bytes": 1999,
+      "path": "receipts/baseline-install-result.json",
+      "sha256": "4493aa4f22ddbc1e9337965ed673aceb65c1c39aa1e81eb2da3b2acf54205712",
+      "source": "/root/ls-onedrs-rc-20261120/baseline-install-result.json"
+    },
+    {
+      "bytes": 2012,
+      "path": "receipts/baseline-install-r2-result.json",
+      "sha256": "24b3a751562ae87d417fb4ba269b29c364c14d3b0594bce60fd8c3841f9100f9",
+      "source": "/root/ls-onedrs-rc-20261120/baseline-install-r2-result.json"
+    },
+    {
+      "bytes": 619,
+      "path": "receipts/vendor-query-r1-result.json",
+      "sha256": "1d9e93c27e0c1058a4a93440e73ced978ce820dbded9be81db0ed01febaf2cf3",
+      "source": "/root/ls-onedrs-rc-20261120/vendor-query-r1-result.json"
+    },
+    {
+      "bytes": 2071,
+      "path": "receipts/vendor-install-r1-result.json",
+      "sha256": "430163c899d8a9be4d0376dc3f250360b0a16eca650c64209b4521a5f3200192",
+      "source": "/root/ls-onedrs-rc-20261120/vendor-install-r1-result.json"
+    },
+    {
+      "bytes": 2071,
+      "path": "receipts/vendor-install-r2-result.json",
+      "sha256": "213a832428fd4d55ee15d524c24c95f01be9eb4180109e9833aac64fb65ed1e5",
+      "source": "/root/ls-onedrs-rc-20261120/vendor-install-r2-result.json"
+    },
+    {
+      "bytes": 1940,
+      "path": "receipts/controller-prepare-r1-result.json",
+      "sha256": "1be8a84fc7132095ebfbe7de63f90b4ec407ed5ada04c2b42299d8ee6f133967",
+      "source": "/root/ls-onedrs-rc-20261120/controller-prepare-r1-result.json"
+    },
+    {
+      "bytes": 4625,
+      "path": "receipts/native-ssh-matrix-r1.json",
+      "sha256": "43d46cb18ba8b103435ffa951eed057afebe0d9598d1be4fd83e2a8f8ac229e3",
+      "source": "/root/ls-onedrs-rc-20261120/native-ssh-matrix-r1.json"
+    },
+    {
+      "bytes": 941,
+      "path": "receipts/storage-provisioning.json",
+      "sha256": "a3abb0d58d7f9e6186673e298d0c4994851e5e52d46a690d8f28fca6f94ad0df",
+      "source": "/root/ls-onedrs-rc-20261120/storage-provisioning.json"
+    },
+    {
+      "bytes": 397,
+      "path": "receipts/storage-configure-r1-result.json",
+      "sha256": "4d456604f0bb37a350f5828e1d0e8adc3c66c5574389ad383d00a1a0d626491b",
+      "source": "/root/ls-onedrs-rc-20261120/storage-configure-r1-result.json"
+    },
+    {
+      "bytes": 2055,
+      "path": "receipts/storage-preflight-r1.json",
+      "sha256": "2984826213e32f7a9cfd9747e872d558e8a7e1b77ab182d32be31542b2b3d0b3",
+      "source": "/root/ls-onedrs-rc-20261120/storage-preflight-r1.json"
+    },
+    {
+      "bytes": 2279,
+      "path": "receipts/storage-preflight-protocol-r1.json",
+      "sha256": "77260835da1df8868738c6eedaab9afdb4b2ff541fa82e10734be3e609574235",
+      "source": "/root/ls-onedrs-rc-20261120/storage-preflight-protocol-r1.json"
+    },
+    {
+      "bytes": 1926,
+      "path": "receipts/compute-storage-r1-result.json",
+      "sha256": "0590cf13252820244af875cb077af6f6977e09f615850ccdfceee5c1740f24dc",
+      "source": "/root/ls-onedrs-rc-20261120/compute-storage-r1-result.json"
+    },
+    {
+      "bytes": 15403,
+      "path": "receipts/before-host.json",
+      "sha256": "9fba9eac7fea0b4e3bcf1f1099ef8b3668de3d7640c1b2e067982d5c60f3a74c",
+      "source": "/root/ls-onedrs-rc-20261120/before-host.json"
+    },
+    {
+      "bytes": 15500,
+      "path": "receipts/static-r2-before-host.json",
+      "sha256": "48d47afcf3a6378af73b554fc8a2a983e958688002efe2f00d17f7ef9e393255",
+      "source": "/root/ls-onedrs-rc-20261120/static-r2-before-host.json"
+    },
+    {
+      "bytes": 15703,
+      "path": "receipts/start-r3-before-host.json",
+      "sha256": "73fe0f8356c2aff0aa85b079031dc3b955f68e7f871dafcbebdef930ea6d849e",
+      "source": "/root/ls-onedrs-rc-20261120/start-r3-before-host.json"
+    },
+    {
+      "bytes": 16893,
+      "path": "receipts/start-r3-after-host.json",
+      "sha256": "e7266b3fbf4af02e55c6552f5fa7caed29b9c7c8e3bbb7570495801edf1fffdc",
+      "source": "/root/ls-onedrs-rc-20261120/start-r3-after-host.json"
+    },
+    {
+      "bytes": 17731,
+      "path": "receipts/storage-before-host.json",
+      "sha256": "2912c71da95a8278bb2434e18736f7b17d510aeeab051abf89c72d59a1344616",
+      "source": "/root/ls-onedrs-rc-20261120/storage-before-host.json"
+    },
+    {
+      "bytes": 17974,
+      "path": "receipts/storage-after-host.json",
+      "sha256": "94a4ad2ced29d3175057185ad12ca5e629177556427ac43a7de9247d8362cfe9",
+      "source": "/root/ls-onedrs-rc-20261120/storage-after-host.json"
+    },
+    {
+      "bytes": 9913,
+      "path": "scripts/ls-onedrs-rc-provision-20261120.py",
+      "sha256": "e2a2d557f3798f8fd94b3309cd513b6814d2cffbde13b8dab5d6e2f6a726634e",
+      "source": "/root/ls-onedrs-rc-provision-20261120.py"
+    },
+    {
+      "bytes": 3909,
+      "path": "scripts/ls-onedrs-rc-provision-static-r2-20261120.py",
+      "sha256": "9715c576c9740ed32f426aa6469a02361774137a083257a2a3c1f834b76c4a76",
+      "source": "/root/ls-onedrs-rc-provision-static-r2-20261120.py"
+    },
+    {
+      "bytes": 2748,
+      "path": "scripts/ls-onedrs-rc-provision-start-r3-20261120.py",
+      "sha256": "0690137dd90d6bb187007978f7c7f35cf789de81a2640d1f72b8becfd24abfea",
+      "source": "/root/ls-onedrs-rc-provision-start-r3-20261120.py"
+    },
+    {
+      "bytes": 3056,
+      "path": "scripts/ls-onedrs-rc-baseline-20261120.py",
+      "sha256": "5fedd18282da680f0d5c304bd27dac394a5d7be4d1329bb0452b92ef0541f73e",
+      "source": "/root/ls-onedrs-rc-baseline-20261120.py"
+    },
+    {
+      "bytes": 3067,
+      "path": "scripts/ls-onedrs-rc-baseline-r2-20261120.py",
+      "sha256": "8579ff389110825cecc2585f6b3ece3f56d544d92c95a0836902906dfd3aa254",
+      "source": "/root/ls-onedrs-rc-baseline-r2-20261120.py"
+    },
+    {
+      "bytes": 7346,
+      "path": "scripts/vendor_dependency_prepare.py",
+      "sha256": "2b4b6a580c8464b461e84dc69ae86fe9c52516077b1828d3111fcdc8e28430ae",
+      "source": "/root/ls-onedrs-rc-20261120/vendor_dependency_prepare.py"
+    },
+    {
+      "bytes": 7991,
+      "path": "scripts/vendor_dependency_prepare_r2.py",
+      "sha256": "5d8359e15077d58534933ee0d8d751722cbd760aa0583cef07e0f6d768733fbc",
+      "source": "/root/ls-onedrs-rc-20261120/vendor_dependency_prepare_r2.py"
+    },
+    {
+      "bytes": 8714,
+      "path": "scripts/prepare_controllers.py",
+      "sha256": "01b60b1ab4879a80b726fa792367b92ccea76e19c6e13612d3b5410ac10eeeeb",
+      "source": "/root/ls-onedrs-rc-20261120/prepare_controllers.py"
+    },
+    {
+      "bytes": 7662,
+      "path": "scripts/provision_storage.py",
+      "sha256": "7eab09d76cc1bc81faa95ef8b0f8fd0964083015b7c304363a3ad88e5a33afaf",
+      "source": "/root/ls-onedrs-rc-20261120/provision_storage.py"
+    },
+    {
+      "bytes": 6407,
+      "path": "scripts/configure_storage.py",
+      "sha256": "45efa4ca6c0519c746d36b5bf9d7084615bf2162e28cf6ae08feb5bd84246d0e",
+      "source": "/root/ls-onedrs-rc-20261120/configure_storage.py"
+    },
+    {
+      "bytes": 7098,
+      "path": "scripts/prepare_compute_storage.py",
+      "sha256": "cae4197076263087b4a1e1e51b8e2276f1ef9f11c1da7a7efa79584bf11d73f3",
+      "source": "/root/ls-onedrs-rc-20261120/prepare_compute_storage.py"
+    },
+    {
+      "bytes": 5353,
+      "path": "scripts/verify_realm_storage_r3.py",
+      "sha256": "c523ae866d387f97be24a0ad614f943a0a30538cea9da8e4fdb4cf4afdf2a006",
+      "source": "/root/ls-onedrs-rc-20261120/verify_realm_storage_r3.py"
+    },
+    {
+      "bytes": 5181,
+      "path": "receipts/storage-qualification-r3.json",
+      "sha256": "b72bec9025c257994c580754e84d0e2537392fda6fb627cc0efb36904680422c",
+      "source": "/root/ls-onedrs-rc-20261120/storage-qualification-r3.json"
+    },
+    {
+      "bytes": 5261,
+      "path": "scripts/verify_realm_storage.py",
+      "sha256": "99330e595110f0a3379bb5480f6b0c5f39c52a0afaec38067f185b07bcda351c",
+      "source": "/root/ls-onedrs-rc-20261120/verify_realm_storage.py"
+    },
+    {
+      "bytes": 504,
+      "path": "receipts/storage-qualification-r2-attempt1.json",
+      "sha256": "89d9c17981bc7b4271d6655c737f728a09b1652755581c223333b65568a7c59a",
+      "source": "/root/ls-onedrs-rc-20261120/storage-qualification-r2-attempt1.json"
+    },
+    {
+      "bytes": 7924,
+      "path": "scripts/repair_storage_mount_boundaries.py",
+      "sha256": "ae8f938998c99d14984ad7cb23c761c660f84a5315f35e8b6732ed6a4fbd76f4",
+      "source": "/root/ls-onedrs-rc-20261120/repair_storage_mount_boundaries.py"
+    },
+    {
+      "bytes": 3311,
+      "path": "receipts/storage-boundary-r2-result.json",
+      "sha256": "d602fca9a88a847368c494989cb368b9e539829ffb0ee6cffea369507f224911",
+      "source": "/root/ls-onedrs-rc-20261120/storage-boundary-r2-result.json"
+    },
+    {
+      "bytes": 28239,
+      "path": "network/guest-network-preflight-r1.json",
+      "sha256": "94b6f801ead727094aae5524373427282d1918dc4ad5fbc5b16fe110ef59b1ea",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-preflight-r1.json"
+    },
+    {
+      "bytes": 445,
+      "path": "network/guest-network-first-r1.json",
+      "sha256": "2d537ec15c2ead66ff0ee8ad11c00c18f9695efa9973f3731920c6177b554322",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r1.json"
+    },
+    {
+      "bytes": 579,
+      "path": "network/guest-network-first-r1-rca.json",
+      "sha256": "a5aca231799439ec362cf6030742ec3d3b12dc0c6c8e5ebbe7399193171267c3",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r1-rca.json"
+    },
+    {
+      "bytes": 1013,
+      "path": "network/guest-network-first-r2.json",
+      "sha256": "85c96d2f7f905da1702276fb2ecc3c1cac95727f7d623af7edacfe467d0cab8a",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r2.json"
+    },
+    {
+      "bytes": 7166,
+      "path": "network/guest-network-first-r2-diagnostic.json",
+      "sha256": "3dd4b8457db30c6f98f7979dfc69c9d913516b64aeb20d7ceb614f6437af7d0d",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r2-diagnostic.json"
+    },
+    {
+      "bytes": 10518,
+      "path": "network/guest-network-first-r3.json",
+      "sha256": "c02139c2e8c2f80463f66a7cdac965758fd5acb65f48997c88d597e95e8a2d84",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r3.json"
+    },
+    {
+      "bytes": 13211,
+      "path": "network/guest-network-followers-r3.json",
+      "sha256": "bba7e69ce425c5a2bc1a2fbba7c0749cb4277fa106077b14d4badf6bf2539841",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-followers-r3.json"
+    },
+    {
+      "bytes": 60123,
+      "path": "network/guest-network-qualification-r3.json",
+      "sha256": "3baef3708b14c05d9734b32dc756ef256018d4151d845954976d1222a21483ef",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-qualification-r3.json"
+    },
+    {
+      "bytes": 5181,
+      "path": "network/storage-network-custody-r4.json",
+      "sha256": "b8dc753bd73cf2b919e7b40efb9229e7adc1848a8a599d86378ed2ff9e06000d",
+      "source": "/root/ls-onedrs-rc-20261120/storage-network-custody-r4.json"
+    },
+    {
+      "bytes": 4870,
+      "path": "network/guest_network_node_r3.py",
+      "sha256": "ba6c8cf979bf2a7967848f224729ffa5b6e90d4bde290c82e0607e5c140fa262",
+      "source": "/root/ls-onedrs-rc-20261120/guest_network_node_r3.py"
+    },
+    {
+      "bytes": 9224,
+      "path": "network/prepare_guest_network_r3.py",
+      "sha256": "f0dac7cdac86aeeda600572dbb3d3a9dc230311c5e45df765ec5587a8bb5373c",
+      "source": "/root/ls-onedrs-rc-20261120/prepare_guest_network_r3.py"
+    },
+    {
+      "bytes": 6854,
+      "path": "network/reconcile_guest_network_r3.py",
+      "sha256": "0774162cdb406cd5cc77a6038b72fb2f486e7bb488bebabc26825c9092e68da5",
+      "source": "/root/ls-onedrs-rc-20261120/reconcile_guest_network_r3.py"
+    },
+    {
+      "bytes": 6949,
+      "path": "network/qualify_guest_network_r3.py",
+      "sha256": "d45576d49eaf6aa394e40540ef34be0108f40c58784124716c7c1fc6fc70fa56",
+      "source": "/root/ls-onedrs-rc-20261120/qualify_guest_network_r3.py"
+    },
+    {
+      "bytes": 2410,
+      "path": "bootstrap/realm-allowlist.json",
+      "sha256": "5911487abf74555c790aad971c288b5a741e41caa651a1b0c8d7e425955e0c24",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/realm-allowlist.json"
+    },
+    {
+      "bytes": 1457,
+      "path": "bootstrap/key-custody.json",
+      "sha256": "8860ae081ff3f722f83f371052476ce30b7219c56b5b0dc379a85ea03f6f32d2",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/key-custody.json"
+    },
+    {
+      "bytes": 7086,
+      "path": "bootstrap/native-bootstrap.json",
+      "sha256": "5cc3fc7a608444b37ffa20b071c1486931717f528faa1e67c6c6f0db9ed5a407",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/native-bootstrap.json"
+    },
+    {
+      "bytes": 2846,
+      "path": "bootstrap/onedrs-rc-zone.xml",
+      "sha256": "07b374f7859c9d2df6cae240f171a06fc7fcd67ad675096bab2dd75691a425ab",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/onedrs-rc-zone.xml"
+    },
+    {
+      "bytes": 14481,
+      "path": "bootstrap/FENCING.md",
+      "sha256": "f98e8e41909015f88063d3c05e1fa8424ce3b1adc58d7a7fa9f229c8f23194f6",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/FENCING.md"
+    },
+    {
+      "bytes": 7391,
+      "path": "bootstrap/render_native_configs.py",
+      "sha256": "6398976b85361c7df2a3741fe7a65419ac0f825d48bc62df0c2401c6c285a224",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/render_native_configs.py"
+    },
+    {
+      "bytes": 5053,
+      "path": "bootstrap/test_render_native_configs.py",
+      "sha256": "966d32471400ab247c6693177c6ad13355378310e4493f30343fb0dd5c022b6b",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/test_render_native_configs.py"
+    },
+    {
+      "bytes": 450,
+      "path": "bootstrap/config-render-source-tests-r1.json",
+      "sha256": "ed90d2202f289bf22ca7a380dfe55c67a3effd3c6d52dbb93d2f1678749661e6",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/config-render-source-tests-r1.json"
+    },
+    {
+      "bytes": 743,
+      "path": "bootstrap/config-render-source-tests-r2.json",
+      "sha256": "59c0aabeb531fa6070805e58786a5559d86473008d918e11cdbe4bdc2028b186",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/config-render-source-tests-r2.json"
+    },
+    {
+      "bytes": 1223,
+      "path": "bootstrap/config-render-source-tests-r2.log",
+      "sha256": "4bffb2262b7b6315b72442442f5c0ff85876cbcebe5c3d09e01e12190edc7415",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/config-render-source-tests-r2.log"
+    }
+  ],
+  "scope": "Fresh disposable nested candidate realm preparation; no native candidate installed or qualified"
+}

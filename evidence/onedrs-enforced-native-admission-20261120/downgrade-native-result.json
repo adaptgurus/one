@@ -1,0 +1,71 @@
+{
+  "stable-baseline": {
+    "database_sha256": "ee273868516a3ce65803fb2e24a7d3d841feca618ebe9400d1bdea4e748fa390",
+    "database_unchanged": true,
+    "schema": 1,
+    "scope": "READ_ONLY_NATIVE_DATABASE_DOWNGRADE_STATE_GATE",
+    "database_ready_for_older_binary": true,
+    "required_call_phase": "after placement writers are frozen, replication synchronized, and controller stopped",
+    "counts": {
+      "vms": 3,
+      "plans": 3,
+      "canonical_histories": 3
+    },
+    "blockers": [],
+    "request_metadata_to_retain": [],
+    "request_metadata_note": "R8 can discard unknown terminal request metadata when it rewrites a plan; retain this report externally."
+  },
+  "native-reserved-pending": {
+    "database_sha256": "865ac3101b5b037ce8e9b17e0086c6dcab8ba32022b1f2aa11ff8fc0d513eaeb",
+    "database_unchanged": true,
+    "schema": 1,
+    "scope": "READ_ONLY_NATIVE_DATABASE_DOWNGRADE_STATE_GATE",
+    "database_ready_for_older_binary": false,
+    "required_call_phase": "after placement writers are frozen, replication synchronized, and controller stopped",
+    "counts": {
+      "vms": 3,
+      "plans": 3,
+      "canonical_histories": 3
+    },
+    "blockers": [
+      {
+        "resource": "VM",
+        "id": 0,
+        "reason": "CHECKED_MIGRATE_PENDING is not understood by the older binary"
+      },
+      {
+        "resource": "VM",
+        "id": 0,
+        "reason": "native checked admission is pending"
+      },
+      {
+        "resource": "VM",
+        "id": 0,
+        "reason": "checked or enforced operation has not reached a stable native state"
+      },
+      {
+        "resource": "PLAN",
+        "id": 100,
+        "reason": "plan is APPLYING and must be drained or reconciled"
+      }
+    ],
+    "request_metadata_to_retain": [],
+    "request_metadata_note": "R8 can discard unknown terminal request metadata when it rewrites a plan; retain this report externally."
+  },
+  "native-completed-callbacks": {
+    "database_sha256": "cf538bf3404c5fedde701bf195fa22695ffca2376c06798f004217f58d70d673",
+    "database_unchanged": true,
+    "schema": 1,
+    "scope": "READ_ONLY_NATIVE_DATABASE_DOWNGRADE_STATE_GATE",
+    "database_ready_for_older_binary": true,
+    "required_call_phase": "after placement writers are frozen, replication synchronized, and controller stopped",
+    "counts": {
+      "vms": 3,
+      "plans": 3,
+      "canonical_histories": 3
+    },
+    "blockers": [],
+    "request_metadata_to_retain": [],
+    "request_metadata_note": "R8 can discard unknown terminal request metadata when it rewrites a plan; retain this report externally."
+  }
+}

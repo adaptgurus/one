@@ -1,0 +1,49 @@
+{
+  "at_utc": "2026-11-20T05:03:58.701664+00:00",
+  "changed_existing_domains": [],
+  "changed_existing_networks": [
+    "ls-onedrs-rc-20261120"
+  ],
+  "earlier_failures_preserved": true,
+  "existing_domain_count": 46,
+  "free_bytes_after": 59572064256,
+  "image_directory_mode": "0750 root:oneadmin",
+  "members": [
+    {
+      "ip": "192.168.247.11",
+      "mac": "52:54:00:da:27:11",
+      "name": "ls-onedrs-rc-01",
+      "uuid": "7f0e6ce9-dd5d-4598-a863-5fac81b27bc1"
+    },
+    {
+      "ip": "192.168.247.12",
+      "mac": "52:54:00:da:27:12",
+      "name": "ls-onedrs-rc-02",
+      "uuid": "3f3f7e61-e460-48af-868a-d806f9c7afb2"
+    },
+    {
+      "ip": "192.168.247.13",
+      "mac": "52:54:00:da:27:13",
+      "name": "ls-onedrs-rc-03",
+      "uuid": "3872092d-4ebd-43cb-a515-74174cd2e2fe"
+    },
+    {
+      "ip": "192.168.247.14",
+      "mac": "52:54:00:da:27:14",
+      "name": "ls-onedrs-rc-04",
+      "uuid": "b9e1a75f-78f8-46da-89c2-5183ab69ada3"
+    },
+    {
+      "ip": "192.168.247.15",
+      "mac": "52:54:00:da:27:15",
+      "name": "ls-onedrs-rc-05",
+      "uuid": "22a9092c-bfc7-4f90-81ea-988d25c37e34"
+    }
+  ],
+  "missing_existing_routes": [],
+  "native_candidate_installed": false,
+  "private_seed_modes": "0600 oneadmin:oneadmin",
+  "soak_started": false,
+  "source_sha256": "0690137dd90d6bb187007978f7c7f35cf789de81a2640d1f72b8becfd24abfea",
+  "state": "BOOT_REQUESTED_CUSTODY_DIFFERENCE"
+}

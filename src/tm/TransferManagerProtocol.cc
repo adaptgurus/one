@@ -54,6 +54,17 @@ void TransferManager::_transfer(unique_ptr<transfer_msg_t> msg)
         return;
     }
 
+    const auto reply = one_drs_driver::parse(msg->type_str(), msg->status(), msg->payload(), true);
+    if (!reply.valid ||
+        (reply.external && !one_drs_driver::matches(vm.get(), reply)) ||
+        (!reply.external && (vm->driver_request_pending() ||
+                             one_drs_driver::critical_transfer_state(vm.get()))))
+    {
+        vm->log("TrM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native transfer reply");
+        return;
+    }
+    msg->payload(reply.payload);
+
     if (vm->get_lcm_state() == VirtualMachine::LCM_INIT)
     {
         oss.str("");
@@ -74,14 +85,14 @@ void TransferManager::_transfer(unique_ptr<transfer_msg_t> msg)
             case VirtualMachine::PROLOG_MIGRATE_POWEROFF:
             case VirtualMachine::PROLOG_MIGRATE_SUSPEND:
             case VirtualMachine::PROLOG_MIGRATE_UNKNOWN:
-                lcm->trigger_prolog_success(id);
+                lcm->trigger_prolog_success(id, reply);
                 break;
 
             case VirtualMachine::EPILOG:
             case VirtualMachine::EPILOG_STOP:
             case VirtualMachine::EPILOG_UNDEPLOY:
             case VirtualMachine::CLEANUP_RESUBMIT:
-                lcm->trigger_epilog_success(id);
+                lcm->trigger_epilog_success(id, reply);
                 break;
 
             case VirtualMachine::HOTPLUG_SAVEAS:
@@ -129,7 +140,7 @@ void TransferManager::_transfer(unique_ptr<transfer_msg_t> msg)
         oss.str("");
         oss << "Error executing image transfer script";
 
-        if (!info.empty() && info[0] != '-')
+        if (!reply.external && !info.empty() && info[0] != '-')
         {
             oss << ": " << info;
 
@@ -148,14 +159,14 @@ void TransferManager::_transfer(unique_ptr<transfer_msg_t> msg)
             case VirtualMachine::PROLOG_MIGRATE_POWEROFF:
             case VirtualMachine::PROLOG_MIGRATE_SUSPEND:
             case VirtualMachine::PROLOG_MIGRATE_UNKNOWN:
-                lcm->trigger_prolog_failure(id);
+                lcm->trigger_prolog_failure(id, reply);
                 break;
 
             case VirtualMachine::EPILOG:
             case VirtualMachine::EPILOG_STOP:
             case VirtualMachine::EPILOG_UNDEPLOY:
             case VirtualMachine::CLEANUP_RESUBMIT:
-                lcm->trigger_epilog_failure(id);
+                lcm->trigger_epilog_failure(id, reply);
                 break;
 
             case VirtualMachine::HOTPLUG_SAVEAS:

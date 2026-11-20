@@ -1,0 +1,38 @@
+Executing(%prep): /bin/sh -e /var/tmp/rpm-tmp.J6fORd
++ umask 022
++ cd /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILD
++ RPM_EC=0
+++ jobs -p
++ exit 0
+Executing(%build): /bin/sh -e /var/tmp/rpm-tmp.35j37L
++ umask 022
++ cd /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILD
++ RPM_EC=0
+++ jobs -p
++ exit 0
+Executing(%install): /bin/sh -e /var/tmp/rpm-tmp.0vNEeh
++ umask 022
++ cd /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILD
++ '[' /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILDROOT/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.x86_64 '!=' / ']'
++ rm -rf /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILDROOT/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.x86_64
+++ dirname /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILDROOT/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.x86_64
++ mkdir -p /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILDROOT
++ mkdir /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILDROOT/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.x86_64
++ mkdir -p /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILDROOT/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.x86_64
++ cp -a /root/ls-onedrs-paired-package-20261120/pair-check-r2/libs-payload/. /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILDROOT/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.x86_64/
++ /usr/lib/rpm/check-buildroot
+Processing files: opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.noarch
+Provides: opennebula-libs = 7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9
+Requires(interp): /bin/sh
+Requires(rpmlib): rpmlib(CompressedFileNames) <= 3.0.4-1 rpmlib(FileDigests) <= 4.6.0-1 rpmlib(PayloadFilesHavePrefix) <= 4.0-1
+Requires(post): /bin/sh
+Obsoletes: opennebula-ruby < 5.13.80
+Checking for unpackaged file(s): /usr/lib/rpm/check-files /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILDROOT/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.x86_64
+Wrote: /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/RPMS/noarch/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.noarch.rpm
+Executing(%clean): /bin/sh -e /var/tmp/rpm-tmp.nz2n7R
++ umask 022
++ cd /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILD
++ /usr/bin/rm -rf /root/ls-onedrs-paired-package-20261120/pair-check-r2/rpmbuild/BUILDROOT/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck2.lab.el9.x86_64
++ RPM_EC=0
+++ jobs -p
++ exit 0

@@ -63,9 +63,9 @@ int DispatchManager::deploy(unique_ptr<VirtualMachine> vm,
     {
         vm->set_state(VirtualMachine::ACTIVE);
 
-        vmpool->update(vm.get());
+        if (vmpool->update(vm.get()) != 0 && vm->capacity_enforced()) return -2;
 
-        lcm->trigger_deploy(vid);
+        lcm->trigger_deploy(vid, ra.capacity_admission_sequence);
     }
     else
     {
@@ -102,9 +102,15 @@ int DispatchManager::migrate(VirtualMachine * vm, int poff_migrate,
     oss << "Migrating VM " << vid;
     NebulaLog::log("DiM", Log::DEBUG, oss);
 
+    const bool checked_pending =
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING &&
+        !ra.checked_plan_generation.empty() &&
+        vm->checked_plan_generation() == ra.checked_plan_generation &&
+        vm->plan_id() == ra.checked_plan_id && vm->action_id() == ra.checked_action_id;
+
     if ((vm->get_state()     == VirtualMachine::ACTIVE &&
          (vm->get_lcm_state() == VirtualMachine::RUNNING ||
-          vm->get_lcm_state() == VirtualMachine::UNKNOWN )) ||
+          vm->get_lcm_state() == VirtualMachine::UNKNOWN || checked_pending)) ||
         vm->get_state() == VirtualMachine::POWEROFF ||
         vm->get_state() == VirtualMachine::SUSPENDED)
     {
@@ -160,8 +166,14 @@ int DispatchManager::live_migrate(VirtualMachine * vm,
     oss << "Live-migrating VM " << vid;
     NebulaLog::log("DiM", Log::DEBUG, oss);
 
+    const bool checked_pending =
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING &&
+        !ra.checked_plan_generation.empty() &&
+        vm->checked_plan_generation() == ra.checked_plan_generation &&
+        vm->plan_id() == ra.checked_plan_id && vm->action_id() == ra.checked_action_id;
+
     if (vm->get_state()     == VirtualMachine::ACTIVE &&
-        vm->get_lcm_state() == VirtualMachine::RUNNING )
+        (vm->get_lcm_state() == VirtualMachine::RUNNING || checked_pending))
     {
         lcm->trigger_live_migrate(vid, ra);
     }
@@ -910,6 +922,12 @@ error_state:
 int DispatchManager::recover(unique_ptr<VirtualMachine> vm, bool success,
                              const RequestAttributes& ra, string& error_str)
 {
+    if (vm->driver_request_pending())
+    {
+        error_str = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     int rc = 0;
     int vid = vm->get_oid();
 
@@ -951,6 +969,12 @@ int DispatchManager::retry(unique_ptr<VirtualMachine> vm,
                            const RequestAttributes& ra,
                            string& error_str)
 {
+    if (vm->driver_request_pending())
+    {
+        error_str = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     int rc = 0;
 
     switch (vm->get_state())
@@ -980,6 +1004,12 @@ int DispatchManager::delete_vm(unique_ptr<VirtualMachine> vm,
                                const RequestAttributes& ra,
                                string& error)
 {
+    if (vm->driver_request_pending())
+    {
+        error = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     ostringstream oss;
 
     HostShareCapacity sr;
@@ -1051,6 +1081,12 @@ int DispatchManager::delete_vm(int vid, const RequestAttributes& ra,
 int DispatchManager::delete_recreate(unique_ptr<VirtualMachine> vm,
                                      const RequestAttributes& ra, string& error)
 {
+    if (vm->driver_request_pending())
+    {
+        error = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     int rc = 0;
 
     Template vm_quotas_snp;
@@ -1142,6 +1178,12 @@ int DispatchManager::delete_recreate(unique_ptr<VirtualMachine> vm,
 int DispatchManager::delete_vm_db(unique_ptr<VirtualMachine> vm,
                                   const RequestAttributes& ra, string& error_str)
 {
+    if (vm->driver_request_pending())
+    {
+        error_str = "Native driver request is still outstanding; operation cannot supersede its reply";
+        return -2;
+    }
+
     HostShareCapacity sr;
 
     ostringstream oss;
@@ -2794,7 +2836,12 @@ static int test_set_capacity(VirtualMachine * vm, float cpu, long mem, int vcpu,
 
         host->add_capacity(sr);
 
-        hpool->update(host.get());
+        const int stored = hpool->update(host.get());
+        if (stored != 0 && enforce)
+        {
+            error = "Cannot persist enforced resize capacity";
+            return -1;
+        }
     }
     else
     {
@@ -2819,6 +2866,12 @@ int DispatchManager::resize(int vid, float cpu, int vcpu, long memory, bool enfo
         return -1;
     }
 
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
+    {
+        error_str = "Native admission or driver request is unresolved; resizing is refused";
+        return -1;
+    }
+
     int rc;
     bool update_history = true;
 
@@ -2839,10 +2892,13 @@ int DispatchManager::resize(int vid, float cpu, int vcpu, long memory, bool enfo
 
         case VirtualMachine::ACTIVE:
         {
-            if (vm->get_lcm_state() != VirtualMachine::RUNNING)
+            if (vm->get_lcm_state() != VirtualMachine::RUNNING ||
+                (vm->capacity_enforced() && vm->is_previous_history_open()))
             {
                 rc = -1;
-                error_str = "Cannot resize a VM in state " + vm->state_str();
+                error_str = vm->capacity_enforced() && vm->is_previous_history_open() ?
+                    "Cannot resize while enforced migration history is open" :
+                    "Cannot resize a VM in state " + vm->state_str();
                 break;
             }
 

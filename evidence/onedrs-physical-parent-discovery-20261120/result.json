@@ -1,0 +1,50 @@
+{
+  "scope": "Bounded read-only discovery; no parent login or fencing attempted",
+  "result": "NO_VERIFIED_PARENT_ENDPOINT_OR_MAPPING",
+  "input_fact": "Prior user supplied DSS8 FQDN dss8.imd.gov.in; original DR1-DR4 asserted on DSS7/DSS8",
+  "dns_from": "DC2",
+  "observations": [
+    {
+      "name": "dss8.imd.gov.in",
+      "getent_exit": 0,
+      "addresses": [
+        "192.168.14.142"
+      ]
+    },
+    {
+      "name": "dss7.imd.gov.in",
+      "getent_exit": 0,
+      "addresses": [
+        "192.168.14.142"
+      ]
+    },
+    {
+      "name": "onedrs-no-such-node-check-20261120.imd.gov.in",
+      "getent_exit": 0,
+      "addresses": [
+        "192.168.14.142"
+      ]
+    }
+  ],
+  "interpretation": "All three, including the deliberate nonexistent negative control, resolve to the same address; not sufficient evidence of a Proxmox management endpoint",
+  "existing_host_pin_checks": {
+    "devices": [
+      "DC2",
+      "DR1",
+      "DR2",
+      "DR3"
+    ],
+    "names": [
+      "192.168.14.142",
+      "dss8.imd.gov.in"
+    ],
+    "all_absent": true
+  },
+  "unresolved": [
+    "authenticated original DR1-DR4 parent/node/VMID mapping",
+    "verified host keys or trusted management TLS identity",
+    "authorized working fencing path"
+  ],
+  "mutations": 0,
+  "excluded": "No access to GPU guests, unrelated DSS1/DSS2, separate PDC/PDR lab, or parent power"
+}

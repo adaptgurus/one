@@ -1,0 +1,113 @@
+{
+  "scope": "PRIVATE_NATIVE_XMLRPC_CAS_AND_AUTHORIZATION_NO_HOSTS_OR_VMS",
+  "started_at": "2026-11-20T02:33:09.915329+00:00",
+  "binary_sha256": "54964060a4c477fb19920315dd745ddab9e12cf32697a285017c15703783ba7b",
+  "private_namespaces": [
+    "mount",
+    "network",
+    "pid"
+  ],
+  "checks": [
+    {
+      "name": "first-start_authenticated_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "first-start_zero_hosts_and_vms",
+      "result": "PASS"
+    },
+    {
+      "name": "service_user_has_only_isolated_non_admin_group",
+      "result": "PASS"
+    },
+    {
+      "name": "native_template_identity_available",
+      "result": "PASS"
+    },
+    {
+      "name": "non_admin_optimize",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "non_admin_planexecute",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "non_admin_plandelete",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "non_admin_checked_policy",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "non_admin_checked_execute",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "authorization_denials_preserve_template",
+      "result": "PASS"
+    },
+    {
+      "name": "malformed_identity_0_",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "malformed_identity_63_a",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "malformed_identity_64_A",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "malformed_identity_64_z",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "exact_checked_arity",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "unrelated_attribute_injection",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "duplicate_policy_vectors",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "scalar_policy",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "checked_policy_cannot_enable_automatic_execution",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "invalid_updates_preserve_template",
+      "result": "PASS"
+    }
+  ],
+  "result": "FAIL",
+  "error": "one.acl.addrule failed: [one.acl.addrule] Rule ?? /??  ?? is malformed: [user] is missing one of the INDIVIDUAL, GROUP or ALL bits; [resource] is missing one of the INDIVIDUAL, GROUP, CLUSTER or ALL bits; [resource] type is missing; wrong [rights], it cannot be 0; [zone] is missing one of the INDIVIDUAL or ALL bits",
+  "shutdown_exit_codes": [
+    0
+  ],
+  "ended_at": "2026-11-20T02:33:21.798207+00:00"
+}

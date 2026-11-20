@@ -1,0 +1,9 @@
+{
+  "status": "FAIL_SOURCE_TEST_ONLY",
+  "at": "2026-11-20T06:28:20.564996+00:00",
+  "tests": 16,
+  "errors": 1,
+  "error": "Preservation test incorrectly assumed exactly one vendor VM_MAD vector; actual reference contains multiple. No native/config mutation was executed.",
+  "test_sha256": "61237096c6fd25f5ee38514ef7387766c6608f63a908b186c303780ddd2b2f93",
+  "renderer_sha256": "72f27bfb3e2ac6d61620cd3ba404179f4e09693187a5909aef1915d4d52dfc6c"
+}

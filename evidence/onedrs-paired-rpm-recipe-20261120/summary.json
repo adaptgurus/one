@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-11-20T07:56:16.395733+00:00",
+  "status": "PASS_PACKAGE_RECIPE_AND_UNPACKED_RUNTIME_ONLY",
+  "source_commit": "62461a18d40dc758c1c0a7c2b0ca3d331b320186",
+  "scope": "Correlation source slice; no combined reserve/group/fence candidate, signing, install, service change, live hypervisor test or release qualification",
+  "package_nevras": [
+    "opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.noarch",
+    "opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64"
+  ],
+  "package_sha256": [
+    "91e25def7439371343fb26499c0607abd93212f0097ceed535afe3a2164d3f4e",
+    "acf74cd94dab43ae421a98a55402491da519f616c41d82247116537eb5315d04"
+  ],
+  "runtime_files": 92,
+  "python_files": 244,
+  "excluded_generated_bytecode_files": 178,
+  "ruby_protocol_checks": 17,
+  "native_build_receipt_sha256": "f1a4c4bc5bde94178619585e230aa8db1b7a3070586625b21edb0b8b5e4585ef",
+  "source_library_rpm_signature_verified": true,
+  "original_vendor_scriptlets_retained": true,
+  "exact_server_to_library_dependency": true,
+  "package_signatures": "NONE",
+  "production_ready": false,
+  "retained_failures": {
+    "pair-check-r1": "Packager compared a canonical JSON digest to pretty-printed file bytes; all 244 pinned source digests matched. Corrected canonical verification.",
+    "pair-check-r2": "Previously generated CPython 3.12 bytecode was present outside source manifest. Only caches whose original source is pinned are excluded; other unexpected files still refuse."
+  }
+}

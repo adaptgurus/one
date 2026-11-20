@@ -26,6 +26,8 @@
 #include <string>
 #include <thread>
 #include <atomic>
+#include <mutex>
+#include <chrono>
 #include "StreamManager.h"
 
 /**
@@ -52,10 +54,7 @@ public:
 
     ~Driver()
     {
-        if (stream_thr.joinable())
-        {
-            stream_thr.join();
-        }
+        stop(1);
     }
 
     /**
@@ -65,13 +64,26 @@ public:
      */
     int start(std::string& error)
     {
-        if ( start_driver(error) == -1 )
+        std::lock_guard<std::mutex> lock(lifecycle_mutex);
+        if (terminate.load() || pid > 0 || stream_thr.joinable())
         {
+            error = "Driver is already active or has been stopped";
             return -1;
         }
-
+        if (start_driver(error) == -1)
+        {
+            stop_driver(0);
+            return -1;
+        }
+        int reader_fd = fcntl(from_drv, F_DUPFD_CLOEXEC, 0);
+        if (reader_fd < 0)
+        {
+            error = "Cannot duplicate driver reader";
+            stop_driver(0);
+            return -1;
+        }
+        streamer.fd(reader_fd);
         start_listener();
-
         return 0;
     }
 
@@ -81,9 +93,20 @@ public:
      */
     void stop(int secs)
     {
+        // Terminal intent precedes the lifecycle lock: a listener already
+        // retiring a failed child must observe stop before spawning another.
         terminate.store(true);
-
-        stop_driver(secs);
+        streamer.request_stop();
+        std::lock_guard<std::mutex> join_lock(stop_mutex);
+        {
+            std::lock_guard<std::mutex> lock(lifecycle_mutex);
+            stop_driver(secs);
+        }
+        if (stream_thr.joinable() && stream_thr.get_id() != std::this_thread::get_id())
+        {
+            stream_thr.join();
+        }
+        streamer.drain();
     }
 
     /**
@@ -91,7 +114,7 @@ public:
      */
     void write(const std::string&  str) const
     {
-        (void) ::write(to_drv, str.c_str(), str.size());
+        write_cancellable(str);
     };
 
     /**
@@ -99,7 +122,8 @@ public:
      */
     void write(const MSG& msg) const
     {
-        msg.write_to(to_drv);
+        std::string serialized;
+        if (msg.write_to(serialized) == 0) write_cancellable(serialized);
     };
 
     /**
@@ -167,6 +191,44 @@ private:
      *  sync listner thread termination
      */
     std::atomic<bool> terminate = {false};
+    mutable std::mutex lifecycle_mutex;
+    std::mutex stop_mutex;
+    mutable std::mutex write_mutex;
+
+    int duplicate_writer() const
+    {
+        std::lock_guard<std::mutex> lock(lifecycle_mutex);
+        if (terminate.load() || to_drv < 0) return -1;
+        return fcntl(to_drv, F_DUPFD_CLOEXEC, 0);
+    }
+
+    void write_cancellable(const std::string& data) const
+    {
+        // Serialize protocol messages, but never hold the lifecycle lock while
+        // a child is back-pressured. Nonblocking mode is set before any writer
+        // gets this descriptor, so terminal stop can always cancel the wait.
+        std::lock_guard<std::mutex> message_lock(write_mutex);
+        const int fd = duplicate_writer();
+        if (fd < 0) return;
+        size_t offset = 0;
+        while (offset < data.size() && !terminate.load())
+        {
+            const auto written = ::write(fd, data.data() + offset, data.size() - offset);
+            if (written > 0) { offset += static_cast<size_t>(written); continue; }
+            if (written < 0 && errno == EINTR) continue;
+            if (written < 0 && (errno == EAGAIN || errno == EWOULDBLOCK))
+            {
+                pollfd fds[2] = {{fd, POLLOUT, 0}, {streamer.cancellation_fd(), POLLIN, 0}};
+                int ready;
+                do { ready = poll(fds, 2, -1); } while (ready < 0 && errno == EINTR);
+                if (ready <= 0 || fds[1].revents != 0 ||
+                    (fds[0].revents & (POLLERR | POLLHUP | POLLNVAL))) break;
+                continue;
+            }
+            break;
+        }
+        close(fd);
+    }
 
     /**
      *  Reconnect callback, called when the driver restarts
@@ -204,37 +266,40 @@ template<typename MSG>
 void Driver<MSG>
 ::stop_driver(int secs)
 {
-    if ( pid == -1 )
+    const pid_t owned_pid = pid;
+    pid = -1;
+    if (to_drv >= 0)
     {
-        return;
+        // Shutdown must not wait forever for space in an unresponsive pipe.
+        int flags = fcntl(to_drv, F_GETFL);
+        if (flags >= 0) (void) fcntl(to_drv, F_SETFL, flags | O_NONBLOCK);
+        const char finalize[] = "FINALIZE\n";
+        (void) ::write(to_drv, finalize, sizeof(finalize) - 1);
+        close(to_drv);
+        to_drv = -1;
     }
-
-    char buf[]="FINALIZE\n";
-
-    ::write(to_drv, buf, strlen(buf));
-
-    close(from_drv);
-    close(to_drv);
-
-    bool success = false;
-
-    for (int i=0; i < secs; ++i)
+    // StreamManager owns a distinct read descriptor and a cancellation event;
+    // closing this lifecycle descriptor cannot be reused under a blocked read.
+    if (from_drv >= 0) {close(from_drv);from_drv = -1;}
+    if (owned_pid <= 0) return;
+    bool reaped = false;
+    for (int i = 0; i < secs; ++i)
     {
         int status;
-
-        if ( waitpid(pid, &status, WNOHANG) != 0 )
-        {
-            success = true;
-            break;
-        }
-
+        const auto result = waitpid(owned_pid, &status, WNOHANG);
+        if (result == owned_pid || (result < 0 && errno == ECHILD))
+        {reaped = true;break;}
+        if (result < 0 && errno != EINTR) break;
         sleep(1);
     }
-
-    if (!success)
+    if (!reaped)
     {
-        kill(pid, SIGKILL);
-    };
+        int status;
+        const auto result = waitpid(owned_pid, &status, WNOHANG);
+        if (result == owned_pid || (result < 0 && errno == ECHILD)) return;
+        (void) kill(owned_pid, SIGKILL);
+        while (waitpid(owned_pid, &status, 0) < 0 && errno == EINTR) {}
+    }
 }
 
 /* -------------------------------------------------------------------------- */
@@ -248,11 +313,18 @@ int Driver<MSG>
     int to_drv_pipe[2];
     int from_drv_pipe[2];
 
-    if ( pipe(to_drv_pipe) == -1 || pipe(from_drv_pipe) == -1 )
+    if (pipe2(to_drv_pipe, O_CLOEXEC) == -1)
     {
         error = "Cannot create driver pipes, ";
         error.append(strerror(errno));
 
+        return -1;
+    }
+
+    if (pipe2(from_drv_pipe, O_CLOEXEC) == -1)
+    {
+        close(to_drv_pipe[0]);close(to_drv_pipe[1]);
+        error = "Cannot create driver output pipe";
         return -1;
     }
 
@@ -262,6 +334,8 @@ int Driver<MSG>
     switch (pid)
     {
         case -1: // Error
+            close(to_drv_pipe[0]);close(to_drv_pipe[1]);
+            close(from_drv_pipe[0]);close(from_drv_pipe[1]);
             error = "Error forking to start driver, ";
             error.append(strerror(errno));
             return -1;
@@ -272,9 +346,7 @@ int Driver<MSG>
 
             if ( dup2(to_drv_pipe[0], 0) != 0 || dup2(from_drv_pipe[1], 1) != 1 )
             {
-                error = "Error setting communication pipes, ";
-                error.append(strerror(errno));
-                return -1;
+                _exit(127);
             }
 
             close(to_drv_pipe[0]);
@@ -284,9 +356,7 @@ int Driver<MSG>
 
             execlp(cmd.c_str(), cmd.c_str(), arg.c_str(), (char*)NULL);
 
-            error = "Error starting driver, ";
-            error.append(strerror(errno));
-            return -1;
+            _exit(127);
 
         default:
             break;
@@ -301,6 +371,12 @@ int Driver<MSG>
 
     fcntl(to_drv, F_SETFD, FD_CLOEXEC);
     fcntl(from_drv, F_SETFD, FD_CLOEXEC);
+    const int writer_flags = fcntl(to_drv, F_GETFL);
+    if (writer_flags < 0 || fcntl(to_drv, F_SETFL, writer_flags | O_NONBLOCK) < 0)
+    {
+        error = "Cannot make driver writer cancellable";
+        return -1;
+    }
 
     //Send INIT command and wait for response (INIT [SUCCESS|FAILURE]) up to 10s
     char   buffer[32];
@@ -314,7 +390,11 @@ int Driver<MSG>
     tv.tv_sec  = 10;
     tv.tv_usec = 0;
 
-    write("INIT\n");
+    if (::write(to_drv, "INIT\n", 5) != 5)
+    {
+        error = "Driver initialization write failed";
+        return -1;
+    }
 
     int rc = select(from_drv + 1, &rfds, 0, 0, &tv);
 
@@ -357,21 +437,35 @@ template<typename MSG>
 void Driver<MSG>
 ::start_listener()
 {
-    streamer.fd(from_drv);
-
     stream_thr = std::thread([this]()
     {
-        while(streamer.action_loop(concurrency) == -1 && !terminate.load())
+        while (!terminate.load() && streamer.action_loop(concurrency) == -1)
         {
-            std::string error;
-
-            stop_driver(1);
-
-            start_driver(error);
-
-            streamer.fd(from_drv);
-
-            if (reconnect_callback) reconnect_callback();
+            bool restarted = false;
+            while (!terminate.load() && !restarted)
+            {
+                {
+                    std::lock_guard<std::mutex> lock(lifecycle_mutex);
+                    if (terminate.load()) break;
+                    std::string error;
+                    stop_driver(1);
+                    if (terminate.load()) break;
+                    if (start_driver(error) == 0)
+                    {
+                        const int reader_fd = fcntl(from_drv, F_DUPFD_CLOEXEC, 0);
+                        if (reader_fd >= 0)
+                        {
+                            streamer.fd(reader_fd);
+                            restarted = true;
+                        }
+                    }
+                    if (!restarted) stop_driver(0);
+                }
+                if (!restarted && !terminate.load())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            }
+            if (restarted && !terminate.load() && reconnect_callback)
+                reconnect_callback();
         }
     });
 }

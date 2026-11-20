@@ -1,0 +1,180 @@
+{
+  "scope": "PRIVATE_LOOPBACK_NATIVE_DRIVER_CORRELATION_WITH_INERT_MADS",
+  "started_at": "2026-11-20T07:27:54.634145+00:00",
+  "binary_sha256": "4940c8a1285b0b8cfd58223971068e4ae45d837afc93ad53c511a2614579490e",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "driver-correlation_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795159697556198096.input",
+      "result": "PASS",
+      "input_sha256": "1e3bf8565f3da783e294fff926fd69fe779e9255707122a6df019866a70f5e04"
+    },
+    {
+      "name": "first_correlated_migration_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "dispatch_identity_is_native_and_persisted",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_0_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_1_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_2_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_3_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_4_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_5_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "rejected_recovery_dispatches_no_cancel_or_replacement",
+      "result": "PASS"
+    },
+    {
+      "name": "untagged_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "wrong-token_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "wrong-operation_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "wrong_operation_cannot_mutate_deploy_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "invalid_replies_leave_first_action_applying",
+      "result": "PASS"
+    },
+    {
+      "name": "new_history_does_not_copy_pending_request",
+      "result": "PASS"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795159698014249385.input",
+      "result": "PASS",
+      "input_sha256": "3aefb7e977a3ad399ed27e2a24a1be9af1dc39d045ecc5b22a6a16637c04e265"
+    },
+    {
+      "name": "second_same_vm_generation_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "replacement_request_has_distinct_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "obsolete-success_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "obsolete-failure_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "old_same_vm_replies_cannot_complete_new_generation",
+      "result": "PASS"
+    },
+    {
+      "name": "stale_failure_does_not_mutate_new_vm_error",
+      "result": "PASS"
+    },
+    {
+      "name": "duplicate-completion_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "duplicate_completion_leaves_capacity_and_history_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "successful_request_retains_consumed_tombstone",
+      "result": "PASS"
+    },
+    {
+      "name": "native_prolog_and_deploy_use_distinct_correlated_requests",
+      "result": "PASS"
+    },
+    {
+      "name": "malformed_success_cannot_retire_deployment_request",
+      "result": "PASS"
+    },
+    {
+      "name": "valid_deployment_acknowledgement_completes_exact_request",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "driver-correlation",
+  "fault_injection": false,
+  "hypervisor_operations": false,
+  "same_vm_generation_result": {
+    "first_generation": "7a51977f60edf2647c8e29038b0419345361f50385e4e684bf0bcfe8f7538002",
+    "second_generation": "104e11ae1dc4e2f3058bb78811e6a86675d63f6397ba4765873d4ff6584eff6b",
+    "first_request_token": "324af0d516e69dd0e2b4411b0940729643f32490be9d17d6833b2c4b496e0c4c",
+    "second_request_token": "d1b66191a30d7b89488592fd026a743c3ebc6f0964e3a6bfbd7acc4b05964b87",
+    "migration_requests": 2,
+    "old_replies_refused": 2,
+    "final_plan_state": "2"
+  },
+  "status": "PASS",
+  "finished_at": "2026-11-20T07:28:23.693215+00:00"
+}

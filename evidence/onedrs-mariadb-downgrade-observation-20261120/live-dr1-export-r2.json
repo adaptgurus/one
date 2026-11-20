@@ -1,0 +1,44 @@
+{
+  "counts": {
+    "history_rows": 379,
+    "plan_rows": 4,
+    "vm_rows": 55
+  },
+  "credentials_logged": false,
+  "path": "/root/ls-onedrs-native-downgrade-20261120/live-observation-r2.json",
+  "raw_rows_in_report": false,
+  "schema": "onedrs.native-db-snapshot/v1",
+  "snapshot_sha256": "04dc1da5e8ff5ec8d1f171602c511df286644a9bcbee6ebbbef99dad79251039",
+  "state": "EXPORTED_READ_ONLY_NOT_ROLLBACK_AUTHORIZATION",
+  "transaction": {
+    "consistent_snapshot": true,
+    "controller_stopped_or_writers_frozen_by_exporter": false,
+    "database": "opennebula",
+    "ended_utc": "2026-11-20T05:23:48.166719+00:00",
+    "isolation": "REPEATABLE-READ",
+    "local_endpoint": true,
+    "read_only": true,
+    "server_hostname": "dr1",
+    "server_id": 1,
+    "server_version": "10.5.29-MariaDB",
+    "started_utc": "2026-11-20T05:23:48.088487+00:00",
+    "table_engines": {
+      "history": "InnoDB",
+      "plan_pool": "InnoDB",
+      "vm_pool": "InnoDB"
+    },
+    "wsrep_observation_note": "Galera status is observed at transaction boundaries, outside table MVCC",
+    "wsrep_status": {
+      "begin": {
+        "WSREP_CLUSTER_SIZE": "0",
+        "WSREP_CLUSTER_STATUS": "Disconnected",
+        "WSREP_READY": "OFF"
+      },
+      "end": {
+        "WSREP_CLUSTER_SIZE": "0",
+        "WSREP_CLUSTER_STATUS": "Disconnected",
+        "WSREP_READY": "OFF"
+      }
+    }
+  }
+}

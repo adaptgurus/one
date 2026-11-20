@@ -1,0 +1,10 @@
+{
+  "run": "ls-onedrs-dr4-qualification-20261120",
+  "started_utc": "2026-11-20T02:41:45.620393+00:00",
+  "result": "FAIL",
+  "original_vm_count": 31,
+  "original_cluster_changed": false,
+  "cluster_id": 103,
+  "error": "RuntimeError('one.cluster.update: [one.cluster.update] Cannot update template. Error cluster template contains invalid POLICY')",
+  "ended_utc": "2026-11-20T02:41:45.660569+00:00"
+}

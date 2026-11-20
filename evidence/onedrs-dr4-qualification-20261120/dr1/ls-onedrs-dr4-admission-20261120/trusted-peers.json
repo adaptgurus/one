@@ -1,0 +1,16 @@
+{
+  "hostname": "dr1",
+  "uuid": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+  "peers": [
+    {
+      "hostname": "dr4",
+      "uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+      "host_public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA4W79WefTwAX0WC6S+oR+QyAH5RGAc9ybkJ1ReYy7G1",
+      "oneadmin_public_keys": {
+        "id_ed25519.pub": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIIXWe9iBelXuOxdOT5hbRUs7VFbNbiKuUG3YCFIAVbE ls-onedrs-dr4-native-20261120"
+      },
+      "ip": "172.17.60.88",
+      "deviceId": "f025a86f-1724-42a3-83b1-855f0b7d79ce"
+    }
+  ]
+}

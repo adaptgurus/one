@@ -1,0 +1,74 @@
+{
+  "utc": "2026-11-19T00:15:13.042326+00:00",
+  "source_commit": "06dc1aaac0bce10d2cf06c56d9dd1f71e29d2054",
+  "installed_on_original_dr1_dr3": false,
+  "scope": "isolated native OpenNebula v7.4.1 SQLite API, loopback-only, empty native host pool; not VM migration/production soak",
+  "rpm": {
+    "name": "opennebula-7.4.1-13.ls.onedrs.06dc1aaa.lab.el9.x86_64.rpm",
+    "sha256": "e4b80a7146a53e8c11101dd6341118070c36f782dd3579eba78f4e655a8abcce",
+    "signed": false
+  },
+  "tests": {
+    "scheduler-py312": {
+      "count": 93,
+      "status": "PASS",
+      "log_sha256": "2f64edd6ca42b1be8a5d7f16231038f09bcf6cc4ff0e0e2e5e00dbfa3d403143"
+    },
+    "scheduler-py312-O": {
+      "count": 93,
+      "status": "PASS",
+      "log_sha256": "6e695ee8973d57789c1b2daafc681669d0f3cdfee787584c7fdd1471cadc3bed"
+    },
+    "rollback-py39": {
+      "count": 63,
+      "status": "PASS",
+      "log_sha256": "85f1cd14c33f131ad893619b8a1763136b89b158b8687a889d234eac4c5860a8"
+    },
+    "rollback-py39-O": {
+      "count": 63,
+      "status": "PASS",
+      "log_sha256": "8f34342ee83a5cf972439b7efcda80a8c9f909b015a1f7a5c8ffadba6ba82236"
+    }
+  },
+  "runtime": {
+    "status": "PASS",
+    "network": "private network namespace, no routes",
+    "stages": [
+      {
+        "label": "original-start",
+        "binary_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+        "version": "7.4.1",
+        "authenticated_api_ready": true,
+        "native_host_pool_empty": true,
+        "shutdown_exit": 0
+      },
+      {
+        "label": "candidate-upgrade-start",
+        "binary_sha256": "006c90bc98ab63336b0df24b58da44e95cced3b7cf0be6eb5282de8150a3272e",
+        "version": "7.4.1",
+        "authenticated_api_ready": true,
+        "native_host_pool_empty": true,
+        "shutdown_exit": 0
+      },
+      {
+        "label": "original-rollback-start",
+        "binary_sha256": "d3c7480078450fdf567676afaa73d56590417ef27b6c3196e533ba4b50293bd1",
+        "version": "7.4.1",
+        "authenticated_api_ready": true,
+        "native_host_pool_empty": true,
+        "shutdown_exit": 0
+      }
+    ],
+    "candidate_read_and_write_native_API": true,
+    "original_reads_candidate_write_and_cleans": true
+  },
+  "original_dr_control_plane_mutated": false,
+  "remaining": [
+    "signed exact candidate and independent review",
+    "DR4 guest management bridge and qualified datastore admission",
+    "real owned-VM placement/rescheduling/failure and secure-state recovery",
+    "fencing/quorum partition evidence",
+    "V7 UI and BFF E2E",
+    "fresh 12h installed-candidate soak"
+  ]
+}

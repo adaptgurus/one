@@ -1,0 +1,7 @@
+{
+  "result": "PASS_OTHER_QEMU_CUSTODY_AND_SOURCE_ABSENCE",
+  "host": "dr1",
+  "preserved_guest_count": 5,
+  "owned_vm_returned": true,
+  "selinux": "Enforcing"
+}

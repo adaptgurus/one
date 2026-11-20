@@ -255,6 +255,56 @@ public:
 /* ------------------------------------------------------------------------- */
 /* ------------------------------------------------------------------------- */
 
+class ClusterPlanExecuteCheckedXRPC : public RequestXRPC, public ClusterAPI
+{
+public:
+    ClusterPlanExecuteCheckedXRPC()
+        : RequestXRPC("one.cluster.planexecutechecked",
+                      "Execute the approved plan only if plan and cluster identities still match",
+                      "A:siss")
+        , ClusterAPI(static_cast<Request&>(*this)) {}
+
+    void request_execute(xmlrpc_c::paramList const& paramList,
+                         RequestAttributesXRPC& att) override;
+};
+
+class ClusterUpdateDrsCheckedXRPC : public RequestXRPC, public ClusterAPI
+{
+public:
+    ClusterUpdateDrsCheckedXRPC()
+        : RequestXRPC("one.cluster.updatedrschecked",
+                      "Replace only ONE_DRS if the approved cluster template still matches",
+                      "A:siss")
+        , ClusterAPI(static_cast<Request&>(*this)) {}
+
+    void request_execute(xmlrpc_c::paramList const& paramList,
+                         RequestAttributesXRPC& att) override;
+};
+
+class ClusterOptimizeCheckedXRPC : public RequestXRPC, public ClusterAPI
+{
+public:
+    ClusterOptimizeCheckedXRPC()
+        : RequestXRPC("one.cluster.optimizechecked",
+                      "Generate recommendations for an approved native policy and base plan",
+                      "A:sisss")
+        , ClusterAPI(static_cast<Request&>(*this)) {}
+    void request_execute(xmlrpc_c::paramList const& paramList,
+                         RequestAttributesXRPC& att) override;
+};
+
+class ClusterPlanRejectCheckedXRPC : public RequestXRPC, public ClusterAPI
+{
+public:
+    ClusterPlanRejectCheckedXRPC()
+        : RequestXRPC("one.cluster.planrejectchecked",
+                      "Reject an approved READY recommendation with durable request readback",
+                      "A:sisss")
+        , ClusterAPI(static_cast<Request&>(*this)) {}
+    void request_execute(xmlrpc_c::paramList const& paramList,
+                         RequestAttributesXRPC& att) override;
+};
+
 class ClusterPlanDeleteXRPC : public RequestXRPC, public ClusterAPI
 {
 public:

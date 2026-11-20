@@ -1,0 +1,58 @@
+[
+  {
+    "host": "dr1",
+    "stage": "/root/ls-onedrs-migration-endpoint-20261120",
+    "dmi": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+    "helper": {
+      "sha256": "46d1a4c89a34f519f348869182c4caaf0b75dafe288f502e3e9a2bdb121af4ed",
+      "mode": "0o755",
+      "uid": 0,
+      "rpm": "layersentry-ovn-bootstrap-0.0.20261001-54.candidate.gitbf1fd4afa6b2.el9.x86_64"
+    },
+    "protected_files": 21,
+    "domains": 5,
+    "bridge_mac": "4e:72:c3:d4:31:cf"
+  },
+  {
+    "host": "dr2",
+    "stage": "/root/ls-onedrs-migration-endpoint-20261120",
+    "dmi": "7a8de079-0a04-4bc6-8c53-e3439d7ce94d",
+    "helper": {
+      "sha256": "46d1a4c89a34f519f348869182c4caaf0b75dafe288f502e3e9a2bdb121af4ed",
+      "mode": "0o755",
+      "uid": 0,
+      "rpm": "layersentry-ovn-bootstrap-0.0.20261001-54.candidate.gitbf1fd4afa6b2.el9.x86_64"
+    },
+    "protected_files": 20,
+    "domains": 7,
+    "bridge_mac": "bc:24:11:0e:4d:44"
+  },
+  {
+    "host": "dr3",
+    "stage": "/root/ls-onedrs-migration-endpoint-20261120",
+    "dmi": "3a521acf-c116-4c5e-a6ce-920527f45d45",
+    "helper": {
+      "sha256": "46d1a4c89a34f519f348869182c4caaf0b75dafe288f502e3e9a2bdb121af4ed",
+      "mode": "0o755",
+      "uid": 0,
+      "rpm": "layersentry-ovn-bootstrap-0.0.20261001-54.candidate.gitbf1fd4afa6b2.el9.x86_64"
+    },
+    "protected_files": 20,
+    "domains": 7,
+    "bridge_mac": "bc:24:11:e3:c6:c3"
+  },
+  {
+    "host": "dr4",
+    "stage": "/root/ls-onedrs-migration-endpoint-20261120",
+    "dmi": "87cee185-4cab-4384-afde-19a5cd3a2239",
+    "helper": {
+      "sha256": "a409ea0e1b27218de67cc5e56975b94a7ec6b9154d54243774dd1dbbd9202b9a",
+      "mode": "0o755",
+      "uid": 0,
+      "rpm": "layersentry-ovn-bootstrap-0.0.20261001-54.candidate.gitbf1fd4afa6b2.el9.x86_64"
+    },
+    "protected_files": 0,
+    "domains": 9,
+    "bridge_mac": "bc:24:11:3b:38:0f"
+  }
+]

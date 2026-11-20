@@ -1,0 +1,17 @@
+{
+  "status": "SCOPED_PENDING_GUARDS_PASS_WITH_EXPLICIT_RESIDUAL_RELEASE_RISK",
+  "created_utc": "2026-11-20T06:38:57.810992+00:00",
+  "source_parent": "dc7c988ec1f29a5020738f79b7f5646fafbd202e",
+  "native_binary_sha256": "00e1e892ecb3a3326b0c1ec0c8bc0cc6654d7c476eecd80a88d83b3331cd9c10",
+  "monitor_binary_sha256": "13552cb744c59fd1b412290586bd7bbcb31f21127724f6b207e6d16ebd25cf0a",
+  "focused_callback_checks": 12,
+  "focused_pending_api_checks": 42,
+  "original_services_or_guest_workloads_changed": false,
+  "new_tests_during_preservation": false,
+  "full_predecessor_run": {
+    "commit": "dc7c988ec1f29a5020738f79b7f5646fafbd202e",
+    "binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+    "checks": 517
+  },
+  "residual_release_risk": "VM-ID-only MAD replies can complete a replacement same-VM action after explicit post-dispatch recover-failure; native quiescence or request correlation remains required before a production claim."
+}

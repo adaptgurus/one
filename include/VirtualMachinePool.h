@@ -200,6 +200,14 @@ public:
         return vm->insert_history(db);
     }
 
+    // Used only while creating/recovering an exclusively locked native
+    // admission. The sequence is derived from the canonical VM history; its
+    // unpublished next sequence can only be a partial prior API/recovery write.
+    int upsert_checked_history(VirtualMachine * vm)
+    {
+        return vm->history ? vm->history->insert_replace(db, false, true) : -1;
+    }
+
     /**
      *  Updates the history record of a VM, the vm's mutex SHOULD be locked
      *    @param vm pointer to the virtual machine object

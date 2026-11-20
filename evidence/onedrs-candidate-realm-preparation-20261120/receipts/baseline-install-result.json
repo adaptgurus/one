@@ -1,0 +1,49 @@
+{
+  "started_utc": "2026-11-20T05:08:23.431656+00:00",
+  "scope": "Signed distribution dependencies in fresh candidate VMs only; no native candidate install",
+  "state": "FAILED",
+  "checks": [
+    {
+      "name": "ls-onedrs-rc-01",
+      "started_utc": "2026-11-20T05:08:23.433088+00:00",
+      "ended_utc": "2026-11-20T05:08:23.852409+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-01-baseline-install.log",
+      "log_sha256": "50a4f4f14cd5b56cbbdfb9f5643a7916bfadc38c8df12e8f9ab78ef2bb5a0ff0"
+    },
+    {
+      "name": "ls-onedrs-rc-02",
+      "started_utc": "2026-11-20T05:08:23.435295+00:00",
+      "ended_utc": "2026-11-20T05:08:23.855441+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-02-baseline-install.log",
+      "log_sha256": "50a4f4f14cd5b56cbbdfb9f5643a7916bfadc38c8df12e8f9ab78ef2bb5a0ff0"
+    },
+    {
+      "name": "ls-onedrs-rc-03",
+      "started_utc": "2026-11-20T05:08:23.436648+00:00",
+      "ended_utc": "2026-11-20T05:08:23.857816+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-03-baseline-install.log",
+      "log_sha256": "50a4f4f14cd5b56cbbdfb9f5643a7916bfadc38c8df12e8f9ab78ef2bb5a0ff0"
+    },
+    {
+      "name": "ls-onedrs-rc-04",
+      "started_utc": "2026-11-20T05:08:23.852801+00:00",
+      "ended_utc": "2026-11-20T05:08:24.271757+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-04-baseline-install.log",
+      "log_sha256": "50a4f4f14cd5b56cbbdfb9f5643a7916bfadc38c8df12e8f9ab78ef2bb5a0ff0"
+    },
+    {
+      "name": "ls-onedrs-rc-05",
+      "started_utc": "2026-11-20T05:08:23.856052+00:00",
+      "ended_utc": "2026-11-20T05:08:24.324036+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-05-baseline-install.log",
+      "log_sha256": "50a4f4f14cd5b56cbbdfb9f5643a7916bfadc38c8df12e8f9ab78ef2bb5a0ff0"
+    }
+  ],
+  "ended_utc": "2026-11-20T05:08:24.324636+00:00",
+  "free_host_bytes": 59152945152
+}

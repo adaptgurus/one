@@ -1,0 +1,86 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T06:27:52.182707+00:00",
+  "binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy-post-dispatch-recovery-boundary_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795156094699477629.input",
+      "result": "PASS",
+      "input_sha256": "cba6a02db30ecc93cc4e62eb28288a55676bf5f10355236430b24e9875b53c6f"
+    },
+    {
+      "name": "legacy_boundary_first_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_boundary_explicit_post_dispatch_recovery_has_no_driver_cancel",
+      "result": "PASS"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795156094944240394.input",
+      "result": "PASS",
+      "input_sha256": "d91c81592a00c95cb40e8117e51c3c8fa75a7a586bd0bd006b8983b90d40da36"
+    },
+    {
+      "name": "legacy_boundary_second_checked_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_boundary_same_vm_second_action_actually_applying",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "legacy-callback-boundary",
+  "legacy_post_dispatch_same_vm_boundary": {
+    "first_generation": "a3f58bc5b32eea22ad96548a24aea79d65b9e2f3bfeac84dec786e8963456e56",
+    "second_generation": "5674f4012000c5de4b24c7ae1e554c4ee92e3b2d5c58583f45ade13525879d1a",
+    "migration_requests": 2,
+    "released_held_replies": 1,
+    "second_plan_state_after_first_reply": "2",
+    "scope": "explicit post-dispatch native recover-failure; outside qualified pre-driver cancellation"
+  },
+  "status": "FAIL",
+  "error": "legacy_same_vm_late_reply_is_correlated_to_its_original_request",
+  "finished_at": "2026-11-20T06:28:20.212935+00:00"
+}

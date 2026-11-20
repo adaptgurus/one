@@ -1025,6 +1025,39 @@ class Vm:
                     "required": True,
                 },
             )
+            plan_action_generation: Optional[str] = field(
+                default=None,
+                metadata={"name": "PLAN_ACTION_GENERATION", "type": "Element"},
+            )
+            checked_plan_generation: Optional[str] = field(
+                default=None,
+                metadata={"name": "CHECKED_PLAN_GENERATION", "type": "Element"},
+            )
+            checked_eligibility_sha256: Optional[str] = field(
+                default=None,
+                metadata={"name": "CHECKED_ELIGIBILITY_SHA256", "type": "Element"},
+            )
+            checked_plan_term: Optional[int] = field(
+                default=None,
+                metadata={"name": "CHECKED_PLAN_TERM", "type": "Element"},
+            )
+            checked_capacity_pending: Optional[bool] = field(
+                default=None,
+                metadata={"name": "CHECKED_CAPACITY_PENDING", "type": "Element"},
+            )
+            enforce_capacity: Optional[bool] = field(
+                default=None,
+                metadata={"name": "ENFORCE_CAPACITY", "type": "Element"},
+            )
+            enforced_admission_state: Optional[int] = field(
+                default=None, metadata={"name": "ENFORCED_ADMISSION_STATE", "type": "Element"},
+            )
+            enforced_admission_lcm_state: Optional[int] = field(
+                default=None, metadata={"name": "ENFORCED_ADMISSION_LCM_STATE", "type": "Element"},
+            )
+            enforced_admission_canceling: Optional[bool] = field(
+                default=None, metadata={"name": "ENFORCED_ADMISSION_CANCELING", "type": "Element"},
+            )
             pstime: Optional[int] = field(
                 default=None,
                 metadata={

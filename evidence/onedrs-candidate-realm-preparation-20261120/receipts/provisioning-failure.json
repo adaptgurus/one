@@ -1,0 +1,7 @@
+{
+  "at_utc": "2026-11-20T05:00:21.309648+00:00",
+  "automatic_rollback": false,
+  "error": "virsh net-start exit 1: error: Failed to start network ls-onedrs-rc-20261120\nerror: internal error: Child process (VIR_BRIDGE_NAME=lsdrrc20br0 /usr/sbin/dnsmasq --conf-file=/var/lib/libvirt/dnsmasq/ls-onedrs-rc-20261120.conf --leasefile-ro --dhcp-script=/usr/libexec/libvirt_leaseshelper) unexpected exit status 5: \ndnsmasq: failed to create inotify: Too many open files\n\n",
+  "state": "STOPPED",
+  "traceback": "Traceback (most recent call last):\n  File \"/root/ls-onedrs-rc-provision-20261120.py\", line 150, in <module>\n    try:main()\n  File \"/root/ls-onedrs-rc-provision-20261120.py\", line 137, in main\n    run(['virsh','net-define',D/'network.xml']);run(['virsh','net-start',NET])\n  File \"/root/ls-onedrs-rc-provision-20261120.py\", line 18, in run\n    raise RuntimeError(f'{args[0]} {args[1] if len(args)>1 else \"\"} exit {p.returncode}: {p.stderr[-1000:]}')\nRuntimeError: virsh net-start exit 1: error: Failed to start network ls-onedrs-rc-20261120\nerror: internal error: Child process (VIR_BRIDGE_NAME=lsdrrc20br0 /usr/sbin/dnsmasq --conf-file=/var/lib/libvirt/dnsmasq/ls-onedrs-rc-20261120.conf --leasefile-ro --dhcp-script=/usr/libexec/libvirt_leaseshelper) unexpected exit status 5: \ndnsmasq: failed to create inotify: Too many open files\n\n\n"
+}

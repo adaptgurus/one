@@ -1,0 +1,7 @@
+{
+  "at_utc": "2026-11-20T05:02:38.354776+00:00",
+  "automatic_rollback": false,
+  "error": "virsh start exit 1: error: Failed to start domain 'ls-onedrs-rc-01'\nerror: Cannot access storage file '/var/lib/libvirt/images/ls-onedrs-rc-20261120/ls-onedrs-rc-01.qcow2' (as uid:9869, gid:9869): Permission denied\n",
+  "state": "STOPPED",
+  "traceback": "Traceback (most recent call last):\n  File \"/root/ls-onedrs-rc-provision-static-r2-20261120.py\", line 56, in <module>\n    try:main()\n  File \"/root/ls-onedrs-rc-provision-static-r2-20261120.py\", line 47, in main\n    p.run(['virsh','define',D/node['name']/'domain.xml']);p.run(['virsh','start',node['name']])\n  File \"/root/ls-onedrs-rc-provision-20261120.py\", line 18, in run\n    raise RuntimeError(f'{args[0]} {args[1] if len(args)>1 else \"\"} exit {p.returncode}: {p.stderr[-1000:]}')\nRuntimeError: virsh start exit 1: error: Failed to start domain 'ls-onedrs-rc-01'\nerror: Cannot access storage file '/var/lib/libvirt/images/ls-onedrs-rc-20261120/ls-onedrs-rc-01.qcow2' (as uid:9869, gid:9869): Permission denied\n\n"
+}

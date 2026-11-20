@@ -1,0 +1,42 @@
+PASS bootstrap_native_api
+PASS native_capability_v3_scope
+PASS capacity-ready_native_api
+PASS native_fixture_vms_running
+PASS native_initial_host_ledger
+PASS driver-correlation_native_api
+PASS captured_native_scheduler_input_1795159317168757715.input
+PASS first_correlated_migration_accepted
+PASS dispatch_identity_is_native_and_persisted
+PASS recovery_0_cannot_supersede_outstanding_request
+PASS recovery_1_cannot_supersede_outstanding_request
+PASS recovery_2_cannot_supersede_outstanding_request
+PASS recovery_3_cannot_supersede_outstanding_request
+PASS recovery_4_cannot_supersede_outstanding_request
+PASS recovery_5_cannot_supersede_outstanding_request
+PASS rejected_recovery_dispatches_no_cancel_or_replacement
+PASS untagged_observed_and_refused_by_native_protocol
+PASS wrong-token_observed_and_refused_by_native_protocol
+PASS wrong-operation_observed_and_refused_by_native_protocol
+PASS wrong_operation_cannot_mutate_deploy_identity
+PASS invalid_replies_leave_first_action_applying
+PASS new_history_does_not_copy_pending_request
+PASS captured_native_scheduler_input_1795159317624049626.input
+PASS second_same_vm_generation_accepted
+PASS replacement_request_has_distinct_identity
+PASS obsolete-success_observed_and_refused_by_native_protocol
+PASS obsolete-failure_observed_and_refused_by_native_protocol
+PASS old_same_vm_replies_cannot_complete_new_generation
+PASS stale_failure_does_not_mutate_new_vm_error
+PASS duplicate-completion_observed_and_refused_by_native_protocol
+PASS duplicate_completion_leaves_capacity_and_history_unchanged
+PASS successful_request_retains_consumed_tombstone
+PASS native_prolog_and_deploy_use_distinct_correlated_requests
+{"status": "FAIL", "checks": 33, "error": "[Errno 2] No such file or directory: '/root/ls-onedrs-checked-api-runtime-vendor-r19-driver-correlation-r1-20261120/prefix/log/oned.log'"}
+Traceback (most recent call last):
+  File "/root/ls-onedrs-checked-api-runtime-vendor-r19-driver-correlation-r1-20261120/native_capacity_contract.py", line 820, in <module>
+    native_driver_correlation_contract.run(globals())
+  File "/root/ls-onedrs-checked-api-runtime-vendor-r19-driver-correlation-r1-20261120/native_driver_correlation_contract.py", line 93, in run
+    offset = global_log.stat().st_size
+  File "/usr/lib64/python3.9/pathlib.py", line 1160, in stat
+    return self._accessor.stat(self)
+FileNotFoundError: [Errno 2] No such file or directory: '/root/ls-onedrs-checked-api-runtime-vendor-r19-driver-correlation-r1-20261120/prefix/log/oned.log'

@@ -1,0 +1,93 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T06:33:12.931703+00:00",
+  "binary_sha256": "00e1e892ecb3a3326b0c1ec0c8bc0cc6654d7c476eecd80a88d83b3331cd9c10",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-capture-live_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795156415848396056.input",
+      "result": "PASS",
+      "input_sha256": "3e5cf5416091ff377b0ea5206b1529a8bc7fd05386c961eb6b0966e52f65ded9"
+    },
+    {
+      "name": "origin_live_captures_real_native_api_commit",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_durable_origin_matches_actual_state",
+      "result": "PASS"
+    },
+    {
+      "name": "pending-deploy-response_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "pending_deploy_response_does_not_mutate_canonical_deploy_id",
+      "result": "PASS"
+    },
+    {
+      "name": "pending_deploy_response_preserves_native_admission",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "callback-guard",
+  "ordinary_gap_images": [
+    {
+      "case": "live",
+      "vm": 0,
+      "state": 3,
+      "lcm_state": 3,
+      "history_sequence": 1,
+      "sha256": "f8890c2207f0b08cd334ff0310d14a1d4e4fd37e822f04d12046e00bf0bb95d9",
+      "origin": "native API transaction rows captured before LCM enqueue, restored without fabricated state"
+    }
+  ],
+  "status": "PASS",
+  "finished_at": "2026-11-20T06:33:44.906247+00:00"
+}

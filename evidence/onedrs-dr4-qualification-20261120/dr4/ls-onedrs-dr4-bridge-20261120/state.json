@@ -1,0 +1,23 @@
+{
+  "status": "COMMITTED",
+  "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+  "started_utc": "2026-11-20T02:09:53.168351+00:00",
+  "mutation_started": true,
+  "activation_id": "4f627a9074e3921bc034df61aa7d7551",
+  "checkpoint": "/org/freedesktop/NetworkManager/Checkpoint/1",
+  "local_verified_utc": "2026-11-20T02:11:46.611773+00:00",
+  "ended_utc": "2026-11-20T02:12:25.085005+00:00",
+  "eight_guest_processes_and_configurations_preserved": true,
+  "external_witness": {
+    "activation_id": "4f627a9074e3921bc034df61aa7d7551",
+    "from_host": "dr1",
+    "ssh_host": "dr4",
+    "bridge_ip": "172.17.60.88",
+    "uplink_master": "br-mgmt",
+    "bridge_mac": "bc:24:11:3b:38:0f",
+    "observed_utc": "2026-11-20T02:12:00.182912+00:00",
+    "external_readback_process": 1403374,
+    "nat_egress_verified": true,
+    "nat_receipt": "nat-egress-after.json"
+  }
+}

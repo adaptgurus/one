@@ -1,0 +1,6 @@
+{
+  "scope": "LOCAL_RUBY_PROTOCOL_ONLY",
+  "status": "FAIL",
+  "reason": "Test fixture called private OpenNebulaDriver.loop via public receiver; corrected fixture to send(:loop)",
+  "production_source_change_for_retry": false
+}

@@ -1,0 +1,49 @@
+{
+  "started_utc": "2026-11-20T05:09:13.249466+00:00",
+  "scope": "Signed distribution dependencies in fresh candidate VMs only; no native candidate install",
+  "state": "PASS",
+  "checks": [
+    {
+      "name": "ls-onedrs-rc-01",
+      "started_utc": "2026-11-20T05:09:13.250790+00:00",
+      "ended_utc": "2026-11-20T05:11:13.785989+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-01-baseline-install-r2.log",
+      "log_sha256": "714cebc632e2d54c6dd03934ab2a6be3ee660c79329afa5b542320a0bf0b818a"
+    },
+    {
+      "name": "ls-onedrs-rc-02",
+      "started_utc": "2026-11-20T05:09:13.252935+00:00",
+      "ended_utc": "2026-11-20T05:11:21.486297+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-02-baseline-install-r2.log",
+      "log_sha256": "fe17604ce05aacedc7f0dab0ac4b6a74e87652c8c94a1903c371dfa0060945f0"
+    },
+    {
+      "name": "ls-onedrs-rc-03",
+      "started_utc": "2026-11-20T05:09:13.253858+00:00",
+      "ended_utc": "2026-11-20T05:11:55.416153+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-03-baseline-install-r2.log",
+      "log_sha256": "46c8f36ea39a9759d46200edf2cdc1d342f1e3635ad909ff51baaa3a70aa7c35"
+    },
+    {
+      "name": "ls-onedrs-rc-04",
+      "started_utc": "2026-11-20T05:11:13.786513+00:00",
+      "ended_utc": "2026-11-20T05:13:19.588441+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-04-baseline-install-r2.log",
+      "log_sha256": "db40d2bbf5ac4448360c03ba1dce07b5331caf274d16ad0b6e3c1151a372e928"
+    },
+    {
+      "name": "ls-onedrs-rc-05",
+      "started_utc": "2026-11-20T05:11:21.486755+00:00",
+      "ended_utc": "2026-11-20T05:14:25.021700+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-05-baseline-install-r2.log",
+      "log_sha256": "2e2780d17cd20f4582ab0880337e8f31ec6cd414215198bdae1d44273e58a7f6"
+    }
+  ],
+  "ended_utc": "2026-11-20T05:14:25.022472+00:00",
+  "free_host_bytes": 53189140480
+}

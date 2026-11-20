@@ -1,0 +1,54 @@
+{
+  "started_utc": "2026-11-20T04:34:06.563445+00:00",
+  "state": "CAPTURED",
+  "dmi": "7a8de079-0a04-4bc6-8c53-e3439d7ce94d",
+  "helper_sha256": "e2006979aef27d1d32db5c856b2840398ae23b1b06ada272009b838a37b6768f",
+  "owned_guest": null,
+  "other_guests": {
+    "one-14": {
+      "uuid": "5021598d-0a71-4ad0-88a3-55837b21206c",
+      "pid": 2382540,
+      "start_ticks": "21836739",
+      "inactive_xml_sha256": "4b0a0b197caa979403b4dfa6ddad1328874f6e9991cd22e3b44c63a66d9965a9"
+    },
+    "one-15": {
+      "uuid": "37fd7d37-0e1b-4ea4-a758-1b6f4566550c",
+      "pid": 1256970,
+      "start_ticks": "133862371",
+      "inactive_xml_sha256": "b7b46228369940c230ccddf20933603253a93b9e47cd2065502ad43abbafa0f4"
+    },
+    "one-19": {
+      "uuid": "28c34d61-5b72-4724-83f6-737c57167260",
+      "pid": 1801687,
+      "start_ticks": "134709335",
+      "inactive_xml_sha256": "e37609c9547bd1ff1b0eca830c8fc2079e467b91c3e1961459f81aee2ab9b3ba"
+    },
+    "one-22": {
+      "uuid": "549c276d-2851-4bf8-82fb-071a02084cdf",
+      "pid": 1822219,
+      "start_ticks": "134737731",
+      "inactive_xml_sha256": "08c3d3be4f931876666b8b492d6302142b7aa1f852e027ccee018f8bffc4ecc4"
+    },
+    "one-26": {
+      "uuid": "3c5629a2-7bfe-40f1-b5b5-3ec744137c7e",
+      "pid": 1842328,
+      "start_ticks": "134765626",
+      "inactive_xml_sha256": "b129d1ed0640a286442ff9914962844d8690fd0709ee2dc0165c0bc1fc473549"
+    },
+    "one-47": {
+      "uuid": "6dc761a2-fb01-48e3-9ceb-a62b30b713ba",
+      "pid": 204167,
+      "start_ticks": "230796354",
+      "inactive_xml_sha256": "8b6ef7e89c8d996be5f732a23e189cfd5e7817b3129aaf4d077f7547b787d5ec"
+    },
+    "one-48": {
+      "uuid": "437e1cfe-28c3-4bd3-adee-af20cb46f447",
+      "pid": 204504,
+      "start_ticks": "230796417",
+      "inactive_xml_sha256": "acc80a7492ccd9af097bdd52687994148b5cfe246f4dc4036a3b782aecb33b91"
+    }
+  },
+  "selinux": "Enforcing",
+  "libvirtd_pid": "2134",
+  "ended_utc": "2026-11-20T04:34:06.849337+00:00"
+}

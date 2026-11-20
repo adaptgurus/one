@@ -1,0 +1,36 @@
+{
+  "schema": 2,
+  "scope": "READ_ONLY_NATIVE_DATABASE_DOWNGRADE_STATE_GATE",
+  "database_ready_for_older_binary": false,
+  "required_call_phase": "after placement writers are frozen, replication synchronized, and controller stopped",
+  "counts": {
+    "vms": 3,
+    "plans": 3,
+    "canonical_histories": 3,
+    "canonical_previous_histories": 1
+  },
+  "blockers": [
+    {
+      "resource": "VM",
+      "id": 0,
+      "reason": "canonical previous history is still open before final admission or completion"
+    },
+    {
+      "resource": "VM",
+      "id": 0,
+      "reason": "canonical target history is published but native admission has not started"
+    }
+  ],
+  "request_metadata_to_retain": [],
+  "request_metadata_note": "R8 can discard unknown terminal request metadata when it rewrites a plan; retain this report externally.",
+  "source": {
+    "backend": "sqlite",
+    "snapshot_sha256": "1590e841a0d0370a08829712ca44c84a184dbfde1fb0eec189a38f5d8f8ef6a2",
+    "transaction": {
+      "isolation": "SERIALIZABLE",
+      "read_only": true,
+      "consistent_snapshot": true,
+      "started_utc": "2026-11-20T05:15:01.507496+00:00"
+    }
+  }
+}

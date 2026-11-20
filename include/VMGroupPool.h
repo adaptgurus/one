@@ -23,6 +23,8 @@
 
 class AuthRequest;
 
+class VirtualMachine;
+
 class VMGroupPool : public PoolSQL
 {
 public:
@@ -64,6 +66,23 @@ public:
     {
         return PoolSQL::get<VMGroup>(oid);
     }
+
+    /**
+     * Caller already holds its VM lock. Keep held_group alive through durable
+     * VM history and host reservation writes: VM -> VMGroup -> target host.
+     * Force requests take the same lock but retain native bypass semantics.
+     * max_group_migrations is -1 for non-DRS/deploy calls; checked migrations
+     * pass the approved native anti-affined replica budget.
+     */
+    int placement_guard(VirtualMachine& vm, int target_hid, bool enforce,
+                        std::unique_ptr<VMGroup>& held_group, std::string& error,
+                        int max_group_migrations = -1);
+
+    // Read the current native OneDRS disruption limit for a plan-owned move.
+    // This is a policy read, not a second placement authority.
+    int migration_limit(int cluster_id, int& limit, std::string& error);
+
+    int drop(PoolObjectSQL* object, std::string& error) override;
 
     std::unique_ptr<VMGroup> get_ro(int oid)
     {

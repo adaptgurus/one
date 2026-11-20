@@ -1,0 +1,14 @@
+{
+  "at_utc": "2026-11-20T04:33:55.006552+00:00",
+  "state": "PASS_FOUR_HOST_NATIVE_LIVE_CUSTODY",
+  "dmi": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+  "protected_qemu_guests": 5,
+  "existing_processes_and_configurations_preserved": true,
+  "owned_guest": {
+    "uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b",
+    "pid": 2058864,
+    "start_ticks": "240794443",
+    "inactive_xml_sha256": "c6871d238742eeab71c71e71b8ed9309b1f44bcc43770b60324e93a99433b5dd"
+  },
+  "selinux": "Enforcing"
+}

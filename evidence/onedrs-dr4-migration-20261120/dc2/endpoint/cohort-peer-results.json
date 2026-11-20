@@ -1,0 +1,101 @@
+[
+  {
+    "host": "dr1",
+    "started_utc": "2026-11-20T03:47:17.166793+00:00",
+    "state": "PASS_PEER_ADMISSION_AND_REACHABILITY",
+    "admission": {
+      "version": 1,
+      "host_uuid": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+      "generation": "lab-hostroles-20261005-v1",
+      "profile_sha256": "c463e7eb5f0faabe14c6a3f909f1f91cc560a53580b3d080fe1286abe4c43c2d",
+      "endpoint_sha256": "ebe7793676d06553d4c27213431d8dbb49e3299c442bfeacf6533cdaa3b59b82",
+      "peers": [
+        {
+          "peer": {
+            "hostname": "dr4",
+            "site": "dr",
+            "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+            "address": "10.201.20.6"
+          },
+          "state": "ACTIVE",
+          "updated_at": "2026-11-20T03:47:17.487905917Z"
+        }
+      ],
+      "updated_at": "2026-11-20T03:47:17.552646201Z"
+    },
+    "prepared": {
+      "profile_sha256": "c463e7eb5f0faabe14c6a3f909f1f91cc560a53580b3d080fe1286abe4c43c2d",
+      "peer_admission_sha256": "89d0d4b4acd189621328e7e587edd94f41ae12abe496c3b91d399dcc033157d6",
+      "role": "live_migration",
+      "site": "dr",
+      "host_uuid": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+      "generation": "lab-hostroles-20261005-v1",
+      "source_address": "10.201.20.2",
+      "interface": "ls-migration",
+      "target_host": "dr4",
+      "target_address": "10.201.20.6",
+      "migration_uri": "tcp://10.201.20.6",
+      "listen_address": "10.201.20.6",
+      "state": "HOST_ROLE_PREPARED_NOT_MIGRATION_OR_SOCKET_PROOF"
+    },
+    "base_and_ovn_files_preserved": true,
+    "preserved_file_count": 21,
+    "guest_processes_and_configurations_preserved": true,
+    "guest_count": 5,
+    "live_migration_qualified": false,
+    "ended_utc": "2026-11-20T03:47:18.854215+00:00"
+  },
+  {
+    "host": "dr2",
+    "started_utc": "2026-11-20T03:47:19.312386+00:00",
+    "state": "PASS_PEER_ADMISSION_AND_REACHABILITY",
+    "admission": {
+      "version": 1,
+      "host_uuid": "7a8de079-0a04-4bc6-8c53-e3439d7ce94d",
+      "generation": "lab-hostroles-20261005-v1",
+      "profile_sha256": "838af30b21f34528090beea481abf20ff03597da207cab030327b50805b294ef",
+      "endpoint_sha256": "b8775ee438eda1bbfa777fd9781bdb2358698c54afb030aa61f6390eecfc5fb6",
+      "peers": [
+        {
+          "peer": {
+            "hostname": "dr4",
+            "site": "dr",
+            "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+            "address": "10.201.20.6"
+          },
+          "state": "ACTIVE",
+          "updated_at": "2026-11-20T03:47:19.691598952Z"
+        }
+      ],
+      "updated_at": "2026-11-20T03:47:19.749754863Z"
+    },
+    "prepared": {
+      "profile_sha256": "838af30b21f34528090beea481abf20ff03597da207cab030327b50805b294ef",
+      "peer_admission_sha256": "28b76ad5bf4924f72465709937fb2a47f186e6b4402f47cebc03d2ffc30b6603",
+      "role": "live_migration",
+      "site": "dr",
+      "host_uuid": "7a8de079-0a04-4bc6-8c53-e3439d7ce94d",
+      "generation": "lab-hostroles-20261005-v1",
+      "source_address": "10.201.20.3",
+      "interface": "ls-migration",
+      "target_host": "dr4",
+      "target_address": "10.201.20.6",
+      "migration_uri": "tcp://10.201.20.6",
+      "listen_address": "10.201.20.6",
+      "state": "HOST_ROLE_PREPARED_NOT_MIGRATION_OR_SOCKET_PROOF"
+    },
+    "base_and_ovn_files_preserved": true,
+    "preserved_file_count": 20,
+    "guest_processes_and_configurations_preserved": true,
+    "guest_count": 7,
+    "live_migration_qualified": false,
+    "ended_utc": "2026-11-20T03:47:21.164275+00:00"
+  },
+  {
+    "host": "dr3",
+    "started_utc": "2026-11-20T03:47:21.753794+00:00",
+    "state": "FAILED_RETAINED_FOR_RECONCILIATION",
+    "error": "guest custody changed",
+    "ended_utc": "2026-11-20T03:47:22.065644+00:00"
+  }
+]

@@ -1,0 +1,22 @@
+{
+  "status": "PASS_FOR_SCOPED_NATIVE_GENERATION_AND_ADMISSION_RECOVERY",
+  "created_utc": "2026-11-20T06:22:00.778803+00:00",
+  "source_parent": "626d734501e6b5c20f2caa6bec2395e99042873a",
+  "build_base": "7859d8bcfb7b7830dd4f5e541729f435d4f13d84",
+  "native_patch_sha256": "dfb1f9734d74ce8a352d4e4a4febae5c923142d605a388eda72cfb7f804b30a0",
+  "native_binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+  "monitor_binary_sha256": "13552cb744c59fd1b412290586bd7bbcb31f21127724f6b207e6d16ebd25cf0a",
+  "full_native_checks": 517,
+  "scheduler_tests_normal_and_optimized": 131,
+  "qualification_tests_normal_and_optimized": 92,
+  "original_services_or_guest_workloads_changed": false,
+  "driver_scope": "inert protocol drivers in private PID/mount/network namespaces; no hypervisor migration claim",
+  "open_gates": [
+    "native VMGroup shared admission hooks and runtime qualification",
+    "native N+K material freshness/proof admission",
+    "final combined build and dependency-complete signed lab package",
+    "fresh candidate realm and original controller rollout/rollback/custody qualification",
+    "full typed operator feature closure",
+    "pre-mutation DEPLOY response pending guard and explicit post-dispatch recovery boundary"
+  ]
+}

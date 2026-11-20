@@ -1,0 +1,7 @@
+{
+  "result": "PASS_OTHER_QEMU_CUSTODY_AND_NATIVE_DESTINATION",
+  "host": "dr4",
+  "preserved_guest_count": 8,
+  "owned_vm_departed": true,
+  "selinux": "Enforcing"
+}

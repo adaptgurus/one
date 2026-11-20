@@ -1,0 +1,55 @@
+{
+  "host_nfs_state": "active",
+  "exports": [
+    {
+      "path": "/etc/exports",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "content": ""
+    },
+    {
+      "path": "/etc/exports.d/ls-onedrs-ha-e2e-20261114.exports",
+      "sha256": "913697423bb431d695731cac61c7dd9d41ae08af36e671db32775a6840af48d7",
+      "content": "/srv/ls-onedrs-ha-e2e-nfs 192.168.246.0/24(rw,sync,root_squash,no_subtree_check,fsid=0,sec=sys)\n"
+    }
+  ],
+  "effective_exports": "/srv/ls-onedrs-ha-e2e-nfs\n\t\t192.168.246.0/24(sync,wdelay,hide,no_subtree_check,fsid=0,sec=sys,rw,secure,root_squash,no_all_squash)\n",
+  "host_oneadmin": {
+    "uid": 9869,
+    "gid": 9869,
+    "home": "/var/lib/one"
+  },
+  "proposed_subtree_exists": false,
+  "free_host_bytes": 24043278336,
+  "nodes": [
+    {
+      "name": "ls-onedrs-rc-01",
+      "exit": 0,
+      "stdout": "{\"uid\": 9869, \"gid\": 9869, \"home\": \"/var/lib/one\", \"selinux\": \"Enforcing\", \"node_kvm\": \"opennebula-node-kvm-7.4.1-1.el9.noarch\"}\n",
+      "stderr": ""
+    },
+    {
+      "name": "ls-onedrs-rc-02",
+      "exit": 0,
+      "stdout": "{\"uid\": 9869, \"gid\": 9869, \"home\": \"/var/lib/one\", \"selinux\": \"Enforcing\", \"node_kvm\": \"opennebula-node-kvm-7.4.1-1.el9.noarch\"}\n",
+      "stderr": ""
+    },
+    {
+      "name": "ls-onedrs-rc-03",
+      "exit": 0,
+      "stdout": "{\"uid\": 9869, \"gid\": 9869, \"home\": \"/var/lib/one\", \"selinux\": \"Enforcing\", \"node_kvm\": \"opennebula-node-kvm-7.4.1-1.el9.noarch\"}\n",
+      "stderr": ""
+    },
+    {
+      "name": "ls-onedrs-rc-04",
+      "exit": 0,
+      "stdout": "{\"uid\": 9869, \"gid\": 9869, \"home\": \"/var/lib/one\", \"selinux\": \"Enforcing\", \"node_kvm\": \"opennebula-node-kvm-7.4.1-1.el9.noarch\"}\n",
+      "stderr": ""
+    },
+    {
+      "name": "ls-onedrs-rc-05",
+      "exit": 0,
+      "stdout": "{\"uid\": 9869, \"gid\": 9869, \"home\": \"/var/lib/one\", \"selinux\": \"Enforcing\", \"node_kvm\": \"opennebula-node-kvm-7.4.1-1.el9.noarch\"}\n",
+      "stderr": ""
+    }
+  ]
+}

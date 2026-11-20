@@ -1,0 +1,5 @@
+# Dependency closure used by the native scheduler safety suite.
+PuLP==3.3.2
+PyYAML==6.0.1
+xsdata==26.2
+typing_extensions==4.16.0

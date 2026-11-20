@@ -1,0 +1,136 @@
+{
+  "files": [
+    {
+      "path": "README.md",
+      "sha256": "a972743e11b282b01b2cbd77c06ef8eb31703e0ca1b6d0a6e7e7970002a01cb4",
+      "bytes": 1809
+    },
+    {
+      "path": "libs-check-r1/opennebula-libs-rpmbuild.log",
+      "sha256": "5f43c16a25036e45d9849781344ad82e31a53011ff8055c4dfd5900e0879a01f",
+      "bytes": 2646
+    },
+    {
+      "path": "libs-check-r1/opennebula-libs.spec",
+      "sha256": "a3848c01eea383eff2ac928f6d5443e45b8fd502912509c129f7f65b18f042e4",
+      "bytes": 21294
+    },
+    {
+      "path": "libs-check-r1/receipt.json",
+      "sha256": "372ea2962657d11860b53b371722939d17d053040344d2bf4613f281591c2d4b",
+      "bytes": 1650
+    },
+    {
+      "path": "pair-check-r1/opennebula-libs-rpmbuild.log",
+      "sha256": "d406e7f7b6b15a3536045ab5b5e99eb4afa0f33e95208249c25432e8e81ff052",
+      "bytes": 2646
+    },
+    {
+      "path": "pair-check-r1/opennebula-libs.spec",
+      "sha256": "e29520f5ad3347e3cff1afa7ec173247db060f107f93f76955d43fbeac0783d3",
+      "bytes": 21294
+    },
+    {
+      "path": "pair-check-r1/receipt.json",
+      "sha256": "bd2ca155ca1a275db48077be21b1d729e93120a70e12d4c3f07f6e1b6b844a73",
+      "bytes": 2691
+    },
+    {
+      "path": "pair-check-r2/opennebula-libs-rpmbuild.log",
+      "sha256": "bdcce192c66b2199bac9c64b9794b7e186ff113855db52485f7d2c41414e24c9",
+      "bytes": 2657
+    },
+    {
+      "path": "pair-check-r2/opennebula-libs.spec",
+      "sha256": "9dd882d5f35ee9a0b7b2b6a598291b08a5b8241ca73e7e720962e5ac6c286296",
+      "bytes": 21295
+    },
+    {
+      "path": "pair-check-r2/receipt.json",
+      "sha256": "c5c1c244affacedebee8a9ea4f7b9fccbb70d8decc8785c032399e85eb5abf34",
+      "bytes": 2709
+    },
+    {
+      "path": "pair-check-r3/onedrs-runtime-source-manifest.json",
+      "sha256": "94fbb49cd162c2492b07f7ebc00e5977a23cec284da3bac32738eeb4f4141a3d",
+      "bytes": 41037
+    },
+    {
+      "path": "pair-check-r3/opennebula-libs-rpmbuild.log",
+      "sha256": "61169cb6bc9182efc0a0dd8b3f07c2dbca6cfaea9721fe0e70b3d295d27a8e33",
+      "bytes": 2657
+    },
+    {
+      "path": "pair-check-r3/opennebula-libs.spec",
+      "sha256": "cf4048a2f3809eb4d9a8cb09591be8239fbb66eaa622425b533caa60a9bfcf42",
+      "bytes": 21295
+    },
+    {
+      "path": "pair-check-r3/opennebula-rpmbuild.log",
+      "sha256": "1e91fb96c45c54ebb334857457781c56cf1359fe5e026ab341b2633b3a02e911",
+      "bytes": 4755
+    },
+    {
+      "path": "pair-check-r3/opennebula.spec",
+      "sha256": "37cf4abcc9c4b71090010972610faeb45a99f3e5164375e509dab9eab92f764b",
+      "bytes": 126553
+    },
+    {
+      "path": "pair-check-r3/packaged-python-proof.log",
+      "sha256": "92e02a165b417cb7493944574a13ba534c98ac8a88d139d070688a509a94d496",
+      "bytes": 342
+    },
+    {
+      "path": "pair-check-r3/packaged-python-proof.py",
+      "sha256": "c3b8146e0742faa898ad060e345536cd13df48cccacd4f670dd0e14d69133fbe",
+      "bytes": 1667
+    },
+    {
+      "path": "pair-check-r3/packaged-ruby-proof.log",
+      "sha256": "5f81809b23d19582cec4aea4a3d41441acbb002212633f39f51319fd0f2b73b6",
+      "bytes": 937
+    },
+    {
+      "path": "pair-check-r3/packaged-runtime-result.json",
+      "sha256": "5a04bf2b0f44ff22b5a00eb1efabe37fc9dce25154e98024c3d98b75499ac6fd",
+      "bytes": 1830
+    },
+    {
+      "path": "pair-check-r3/receipt.json",
+      "sha256": "0ebf06872539d717bc27f5e44767a4c8a50dd8e1c39ca3498d1b96a43b2667c6",
+      "bytes": 16161
+    },
+    {
+      "path": "python-closure/payload-files.json",
+      "sha256": "e755c611b69478b9b67c6968a55756effa45bea0d6ba7ccec84a453453e752b8",
+      "bytes": 39135
+    },
+    {
+      "path": "python-closure/requirements-hashed.txt",
+      "sha256": "b5bb739b741b55b4086c3a763c8050807abed73d2ba59e5ac789fdfeb3f63262",
+      "bytes": 381
+    },
+    {
+      "path": "python-closure/result.json",
+      "sha256": "51d9e47585beebdd16205e0d4df1659ab9babe16df130908c41314d16aaa3857",
+      "bytes": 2457
+    },
+    {
+      "path": "summary.json",
+      "sha256": "1f3eb18ca59d390c4a71d51523b877e583d8bd0edb4e86ab9c05de32cb9a92cb",
+      "bytes": 1508
+    },
+    {
+      "path": "vendor/libs-inspection.json",
+      "sha256": "51eb9b9a60a45e61ae7020633a2841c9620f7f6f83116bb29d8392897745b11f",
+      "bytes": 73263
+    },
+    {
+      "path": "vendor/opennebula-libs-copy-r1.json",
+      "sha256": "5b206f3b4a419f6ce25136179912915ef15bb125a2be59284ef4350911b7ee34",
+      "bytes": 804
+    }
+  ],
+  "packager_source_sha256": "0b469e656435b878f14e4aa54f9e55ddf335d73f747f8402a7fa5d08bc056024",
+  "ruby_fixture_sha256": "8caecc4454efa56de0405f1fef738926fe012d046868d3c42e6fd6afa948d01a"
+}

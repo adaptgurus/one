@@ -5,6 +5,7 @@ from lib.models.cluster_pool import ClusterPool
 from lib.models.datastore_pool import DatastorePool
 from lib.models.host_pool import HostPool
 from lib.models.requirements import Requirements
+from lib.models.native_eligibility import NativeEligibility
 from lib.models.vm_group_pool import VmGroupPool
 from lib.models.vm_pool_extended import VmPool
 from lib.models.vnet_pool_extended import VnetPool
@@ -71,3 +72,18 @@ class SchedulerDriverAction:
             "required": True,
         },
     )
+
+    one_drs_eligibility: Optional[NativeEligibility] = field(
+        default=None,
+        metadata={"name": "ONE_DRS_ELIGIBILITY", "type": "Element"},
+    )
+
+    one_drs_request: Optional["SchedulerDriverAction.OneDrsRequest"] = field(
+        default=None, metadata={"name": "ONE_DRS_REQUEST", "type": "Element"},
+    )
+
+    @dataclass
+    class OneDrsRequest:
+        nonce: Optional[str] = field(default=None, metadata={"name": "NONCE", "type": "Element"})
+        cluster_id: Optional[int] = field(default=None, metadata={"name": "CLUSTER_ID", "type": "Element"})
+        template_sha256: Optional[str] = field(default=None, metadata={"name": "TEMPLATE_SHA256", "type": "Element"})

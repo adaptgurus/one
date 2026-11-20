@@ -68,12 +68,21 @@ Request::ErrorCode VMGroupAPI::add_role(int oid,
         return Request::NO_EXISTS;
     }
 
+    if (vmgroup->check_membership_change(-1, att.resp_msg) != 0)
+    {
+        return Request::ACTION;
+    }
+
     if (vmgroup->add_role(va, att.resp_msg) != 0)
     {
         return Request::ACTION;
     }
 
-    vmgpool->update(vmgroup.get());
+    if (vmgpool->update(vmgroup.get()) != 0)
+    {
+        att.resp_msg = "Cannot persist native VMGroup role update";
+        return Request::INTERNAL;
+    }
 
     return Request::SUCCESS;
 }
@@ -99,12 +108,21 @@ Request::ErrorCode VMGroupAPI::del_role(int oid,
         return Request::NO_EXISTS;
     }
 
+    if (vmgroup->check_membership_change(-1, att.resp_msg) != 0)
+    {
+        return Request::ACTION;
+    }
+
     if (vmgroup->del_role(role_id, att.resp_msg) != 0)
     {
         return Request::ACTION;
     }
 
-    vmgpool->update(vmgroup.get());
+    if (vmgpool->update(vmgroup.get()) != 0)
+    {
+        att.resp_msg = "Cannot persist native VMGroup role update";
+        return Request::INTERNAL;
+    }
 
     return Request::SUCCESS;
 }
@@ -140,12 +158,27 @@ Request::ErrorCode VMGroupAPI::update_role(int oid,
 
     auto vmgroup = vmgpool->get(oid);
 
+    if (!vmgroup)
+    {
+        att.resp_id = oid;
+        return Request::NO_EXISTS;
+    }
+
+    if (vmgroup->check_membership_change(-1, att.resp_msg) != 0)
+    {
+        return Request::ACTION;
+    }
+
     if (vmgroup->update_role(role_id, va, att.resp_msg) != 0)
     {
         return Request::ACTION;
     }
 
-    vmgpool->update(vmgroup.get());
+    if (vmgpool->update(vmgroup.get()) != 0)
+    {
+        att.resp_msg = "Cannot persist native VMGroup role update";
+        return Request::INTERNAL;
+    }
 
     return Request::SUCCESS;
 }

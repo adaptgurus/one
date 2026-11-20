@@ -17,6 +17,8 @@
 #ifndef HISTORY_H_
 #define HISTORY_H_
 
+#include "NativeDriverRequest.h"
+
 #include "ObjectSQL.h"
 #include "ObjectXML.h"
 #include "VMActions.h"
@@ -94,6 +96,23 @@ private:
 
     int          plan_id   = -2;
     int          action_id = -1;
+    std::string  plan_action_generation;
+
+    // Native-owned identity, retained through completion and history copies.
+    // User VM templates cannot set these fields. The pending phase is an LCM state.
+    std::string  checked_plan_generation;
+    std::string  checked_eligibility_sha256;
+    unsigned int checked_plan_term = 0;
+    bool checked_capacity_pending = false;
+
+    // Preserve the existing deploy/migrate RPC intent across asynchronous LCM.
+    // Old records and explicit force requests retain their previous semantics.
+    bool enforce_capacity = false;
+    int enforced_admission_state = -1;
+    int enforced_admission_lcm_state = -1;
+    bool enforced_admission_canceling = false;
+
+    NativeDriverRequestState driver_request;
 
     time_t       stime;
     time_t       etime;
@@ -167,7 +186,7 @@ private:
      *    @param replace Execute an INSERT or a REPLACE
      *    @return 0 on success
      */
-    int insert_replace(SqlDB *db, bool replace);
+    int insert_replace(SqlDB *db, bool replace, bool upsert = false);
 
     /**
      *  Callback function to unmarshall a history object (History::select)

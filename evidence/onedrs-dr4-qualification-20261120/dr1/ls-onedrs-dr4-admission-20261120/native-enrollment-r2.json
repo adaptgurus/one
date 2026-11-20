@@ -1,0 +1,18 @@
+{
+  "run": "ls-onedrs-dr4-qualification-20261120",
+  "started_utc": "2026-11-20T02:42:27.823718+00:00",
+  "result": "ENROLLED_DISABLED_AWAITING_MONITOR_AND_NATIVE_VM_QUALIFICATION",
+  "original_vm_count": 31,
+  "original_cluster_changed": false,
+  "cluster_id": 103,
+  "host_id": 4,
+  "original_vm_custody_preserved": true,
+  "reserved_cpu": 2200,
+  "reserved_memory_kib": 49283072,
+  "datastores": [
+    104,
+    105
+  ],
+  "automatic_scheduling": false,
+  "ended_utc": "2026-11-20T02:42:27.965397+00:00"
+}

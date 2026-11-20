@@ -1,0 +1,11 @@
+{
+  "at_utc": "2026-11-20T02:10:36.466132+00:00",
+  "exit_code": 0,
+  "guest_key_reference": "/root/ls-ovn26-dr4-canary-20261109/id_ed25519",
+  "known_host_entry_present": true,
+  "known_hosts_reference": "/root/ls-ovn26-dr4-canary-20261109/known_hosts",
+  "source": "existing OVN canary A guest at192.168.122.102",
+  "stderr": "",
+  "stdout": "{\"hostname\": \"ls-ovn26-canary-a.lab.invalid\", \"probes\": [{\"ip\": \"172.17.60.80\", \"route\": [{\"dst\": \"172.17.60.80\", \"gateway\": \"192.168.122.1\", \"dev\": \"eth0\", \"prefsrc\": \"192.168.122.102\", \"flags\": [], \"uid\": 1000, \"cache\": []}], \"exit_code\": 0, \"stdout\": \"PING 172.17.60.80 (172.17.60.80) 56(84) bytes of data.\\n64 bytes from 172.17.60.80: icmp_seq=1 ttl=63 time=0.557 ms\\n64 bytes from 172.17.60.80: icmp_seq=2 ttl=63 time=0.646 ms\\n64 bytes from 172.17.60.80: icmp_seq=3 ttl=63 time=0.560 ms\\n\\n--- 172.17.60.80 ping statistics ---\\n3 packets transmitted, 3 received, 0% packet loss, time 2061ms\\nrtt min/avg/max/mdev = 0.557/0.587/0.646/0.041 ms\\n\", \"stderr\": \"\"}, {\"ip\": \"172.17.60.65\", \"route\": [{\"dst\": \"172.17.60.65\", \"gateway\": \"192.168.122.1\", \"dev\": \"eth0\", \"prefsrc\": \"192.168.122.102\", \"flags\": [], \"uid\": 1000, \"cache\": []}], \"exit_code\": 0, \"stdout\": \"PING 172.17.60.65 (172.17.60.65) 56(84) bytes of data.\\n64 bytes from 172.17.60.65: icmp_seq=1 ttl=127 time=0.611 ms\\n64 bytes from 172.17.60.65: icmp_seq=2 ttl=127 time=0.431 ms\\n64 bytes from 172.17.60.65: icmp_seq=3 ttl=127 time=0.541 ms\\n\\n--- 172.17.60.65 ping statistics ---\\n3 packets transmitted, 3 received, 0% packet loss, time 2039ms\\nrtt min/avg/max/mdev = 0.431/0.527/0.611/0.074 ms\\n\", \"stderr\": \"\"}]}\n",
+  "strict_host_key_checking": true
+}

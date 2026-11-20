@@ -1,0 +1,213 @@
+{
+  "scope": "PRIVATE_NATIVE_XMLRPC_CAS_AND_AUTHORIZATION_NO_HOSTS_OR_VMS",
+  "started_at": "2026-11-20T02:28:31.352638+00:00",
+  "binary_sha256": "54964060a4c477fb19920315dd745ddab9e12cf32697a285017c15703783ba7b",
+  "private_namespaces": [
+    "mount",
+    "network",
+    "pid"
+  ],
+  "checks": [
+    {
+      "name": "first-start_authenticated_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "first-start_zero_hosts_and_vms",
+      "result": "PASS"
+    },
+    {
+      "name": "native_template_identity_available",
+      "result": "PASS"
+    },
+    {
+      "name": "non_admin_optimize",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "non_admin_planexecute",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "non_admin_plandelete",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "non_admin_checked_policy",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "non_admin_checked_execute",
+      "result": "PASS",
+      "error_code": 512
+    },
+    {
+      "name": "authorization_denials_preserve_template",
+      "result": "PASS"
+    },
+    {
+      "name": "malformed_identity_0_",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "malformed_identity_63_a",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "malformed_identity_64_A",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "malformed_identity_64_z",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "exact_checked_arity",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "unrelated_attribute_injection",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "duplicate_policy_vectors",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "scalar_policy",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "checked_policy_cannot_enable_automatic_execution",
+      "result": "PASS",
+      "error_code": 4096
+    },
+    {
+      "name": "invalid_updates_preserve_template",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_policy_update_preserves_unrelated_attributes",
+      "result": "PASS"
+    },
+    {
+      "name": "stale_policy_update",
+      "result": "PASS",
+      "error_code": 2048
+    },
+    {
+      "name": "concurrent_policy_updates_have_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "native_plan_generation_and_policy_binding",
+      "result": "PASS"
+    },
+    {
+      "name": "native_plan_nic_and_timestamp_readback",
+      "result": "PASS"
+    },
+    {
+      "name": "plan_digest_matches_exact_native_xml",
+      "result": "PASS"
+    },
+    {
+      "name": "identical_plan_regeneration_changes_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "superseded_plan_approval",
+      "result": "PASS",
+      "error_code": 2048
+    },
+    {
+      "name": "stale_plan_did_not_apply",
+      "result": "PASS"
+    },
+    {
+      "name": "approved_template_changed",
+      "result": "PASS",
+      "error_code": 2048
+    },
+    {
+      "name": "old_plan_cannot_be_paired_with_new_policy",
+      "result": "PASS",
+      "error_code": 2048
+    },
+    {
+      "name": "stale_inflight_optimizer_response_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "opaque_power_action_cannot_use_checked_migration_approval",
+      "result": "PASS",
+      "error_code": 2048
+    },
+    {
+      "name": "concurrent_plan_execution_has_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "completed_or_active_plan_cannot_replay",
+      "result": "PASS",
+      "error_code": 2048
+    },
+    {
+      "name": "native_plan_lifecycle_keeps_generation",
+      "result": "PASS"
+    },
+    {
+      "name": "fixture_missing_vm_fails_safely",
+      "result": "PASS"
+    },
+    {
+      "name": "legacy_unbound_plan_refused_by_checked_path",
+      "result": "PASS",
+      "error_code": 2048
+    },
+    {
+      "name": "authorized_legacy_optimize_signature_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "authorized_legacy_execute_signature_retained",
+      "result": "PASS"
+    },
+    {
+      "name": "restart_authenticated_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "restart_zero_hosts_and_vms",
+      "result": "PASS"
+    },
+    {
+      "name": "native_generation_persists_across_restart",
+      "result": "PASS"
+    },
+    {
+      "name": "all_contracts_left_zero_hosts_and_vms",
+      "result": "PASS"
+    }
+  ],
+  "shutdown_exit_codes": [
+    0,
+    0
+  ],
+  "result": "PASS",
+  "ended_at": "2026-11-20T02:28:55.167710+00:00"
+}

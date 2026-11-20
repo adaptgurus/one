@@ -1,0 +1,9 @@
+{
+  "recorded_utc": "2026-11-20T04:03:22.526933+00:00",
+  "result": "PRECHECK_FAILED_NO_NATIVE_REQUEST",
+  "command": "live-canary.py --from-host 4 --to-host 0",
+  "error": "Guest telemetry stale on one two-second sample of source-side NFS console cache",
+  "native_mutations": 0,
+  "diagnosis": "DR4 query-status and writer-local serial reads prove unchanged boot4 and advancing heartbeat; source-side shared-file reads can lag",
+  "correction": "R2 reads DR4 console through already trusted oneadmin SSH when DR4 hosts the guest, and requires bounded advancing heartbeat"
+}

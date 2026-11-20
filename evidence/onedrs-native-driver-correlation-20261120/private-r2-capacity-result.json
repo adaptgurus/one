@@ -1,0 +1,164 @@
+{
+  "scope": "PRIVATE_LOOPBACK_NATIVE_DRIVER_CORRELATION_WITH_INERT_MADS",
+  "started_at": "2026-11-20T07:23:27.571879+00:00",
+  "binary_sha256": "4940c8a1285b0b8cfd58223971068e4ae45d837afc93ad53c511a2614579490e",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "driver-correlation_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795159430478572058.input",
+      "result": "PASS",
+      "input_sha256": "210644417eb44b3554b922a62e5a309a63e630a8b2c903e2b451a1dbf96e12d9"
+    },
+    {
+      "name": "first_correlated_migration_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "dispatch_identity_is_native_and_persisted",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_0_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_1_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_2_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_3_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_4_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "recovery_5_cannot_supersede_outstanding_request",
+      "result": "PASS"
+    },
+    {
+      "name": "rejected_recovery_dispatches_no_cancel_or_replacement",
+      "result": "PASS"
+    },
+    {
+      "name": "untagged_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "wrong-token_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "wrong-operation_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "wrong_operation_cannot_mutate_deploy_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "invalid_replies_leave_first_action_applying",
+      "result": "PASS"
+    },
+    {
+      "name": "new_history_does_not_copy_pending_request",
+      "result": "PASS"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795159430964355290.input",
+      "result": "PASS",
+      "input_sha256": "63b3582199050302555bea79642eaefed89fb65023e860201ed1f0088061a790"
+    },
+    {
+      "name": "second_same_vm_generation_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "replacement_request_has_distinct_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "obsolete-success_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "obsolete-failure_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "old_same_vm_replies_cannot_complete_new_generation",
+      "result": "PASS"
+    },
+    {
+      "name": "stale_failure_does_not_mutate_new_vm_error",
+      "result": "PASS"
+    },
+    {
+      "name": "duplicate-completion_observed_and_refused_by_native_protocol",
+      "result": "PASS"
+    },
+    {
+      "name": "duplicate_completion_leaves_capacity_and_history_unchanged",
+      "result": "PASS"
+    },
+    {
+      "name": "successful_request_retains_consumed_tombstone",
+      "result": "PASS"
+    },
+    {
+      "name": "native_prolog_and_deploy_use_distinct_correlated_requests",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "driver-correlation",
+  "fault_injection": false,
+  "hypervisor_operations": false,
+  "status": "FAIL",
+  "error": "timeout: <lambda>",
+  "finished_at": "2026-11-20T07:24:08.533276+00:00"
+}

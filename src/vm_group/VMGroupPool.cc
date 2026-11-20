@@ -15,7 +15,10 @@
 /* -------------------------------------------------------------------------- */
 
 #include "VMGroupPool.h"
+#include "VirtualMachine.h"
 #include "AuthRequest.h"
+#include "Nebula.h"
+#include "ClusterPool.h"
 
 using namespace std;
 
@@ -103,17 +106,23 @@ int VMGroupPool::vmgroup_attribute(VectorAttribute * va, int uid, int vid,
         return -1;
     }
 
+    // Allocation and dynamic registration share the native group lock with
+    // placement admission. Do not change membership around an unresolved peer.
+    int rc = vmgroup->check_membership_change(vid, error);
+    if (rc != 0) return rc;
+
     va->replace("VMGROUP_ID", vmgroup->get_oid());
 
-    int rc = vmgroup->add_vm(vmg_role, vid);
+    rc = vmgroup->add_vm(vmg_role, vid);
 
     if ( rc != 0 )
     {
         error = "Role does not exist in VM Group";
     }
-    else
+    else if (update(vmgroup.get()) != 0)
     {
-        update(vmgroup.get());
+        error = "Cannot persist native VMGroup membership";
+        return VMGroup::PLACEMENT_UNAVAILABLE;
     }
 
     return rc;
@@ -160,4 +169,75 @@ void VMGroupPool::authorize(const VectorAttribute * va, int uid, AuthRequest* ar
 
         ar->add_auth(AuthRequest::USE, perm);
     }
+}
+
+
+int VMGroupPool::placement_guard(VirtualMachine& vm, int target_hid, bool enforce,
+                                  unique_ptr<VMGroup>& held_group, string& error,
+                                  int max_group_migrations)
+{
+    if (held_group)
+    {
+        error = "Native VMGroup placement guard is already held";
+        return VMGroup::PLACEMENT_INVALID;
+    }
+    auto membership = vm.get_template_attribute("VMGROUP");
+    if (!membership)
+    {
+        error.clear();
+        return 0;
+    }
+    int gid = -1;
+    if (membership->vector_value("VMGROUP_ID", gid) != 0 || gid < 0)
+    {
+        error = enforce ? "Native VMGroup identity is invalid" : "";
+        return enforce ? VMGroup::PLACEMENT_INVALID : 0;
+    }
+    held_group = get(gid);
+    if (!held_group)
+    {
+        error = enforce ? "Native VMGroup is unavailable" : "";
+        return enforce ? VMGroup::PLACEMENT_UNAVAILABLE : 0;
+    }
+    // Manual force is still an explicit native bypass, but it serializes with
+    // enforced placement and publishes its history under the same group lock.
+    if (!enforce)
+    {
+        error.clear();
+        return 0;
+    }
+    return held_group->check_placement(vm.get_oid(), target_hid,
+        membership->vector_value("ROLE"), error, max_group_migrations);
+}
+
+int VMGroupPool::migration_limit(int cluster_id, int& limit, string& error)
+{
+    limit = -1;
+    auto cluster = Nebula::instance().get_clpool()->get_ro(cluster_id);
+    if (!cluster)
+    {
+        error = "Native OneDRS migration policy is unavailable";
+        return VMGroup::PLACEMENT_UNAVAILABLE;
+    }
+    auto policy = cluster->get_template_attribute("ONE_DRS");
+    if (policy && !policy->vector_value("MAX_GROUP_MIGRATIONS").empty() &&
+        (policy->vector_value("MAX_GROUP_MIGRATIONS", limit) != 0 || limit < -1))
+    {
+        error = "Native MAX_GROUP_MIGRATIONS is invalid";
+        return VMGroup::PLACEMENT_INVALID;
+    }
+    return 0;
+}
+
+int VMGroupPool::drop(PoolObjectSQL* object, string& error)
+{
+    auto group = static_cast<VMGroup*>(object);
+    const int rc = group->check_membership_change(-1, error);
+    if (rc != 0) return rc;
+    if (group->roles().vm_size() != 0)
+    {
+        error = "Remove native VMGroup memberships before deleting the group";
+        return VMGroup::PLACEMENT_INVALID;
+    }
+    return PoolSQL::drop(object, error);
 }

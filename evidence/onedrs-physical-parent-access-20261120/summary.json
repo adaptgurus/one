@@ -1,0 +1,21 @@
+{
+  "status": "BLOCKED_EXTERNAL_IDENTITY_AND_ACCESS",
+  "scope": "Original DR1-DR4 physical parent qualification",
+  "test": "Unauthenticated read-only HTTPS GET with normal TLS verification; no insecure trust, login or credential attempt",
+  "observed": "The known DSS8 management endpoint did not establish a connection within the bounded timeout. TLS verify result zero with HTTP000 is not a verified TLS identity.",
+  "source_receipt_sha256": "e656b32f5050e2844e795a6a6e4119042ac96d9f153075b945617af90b430688",
+  "endpoint": "https://dss8.imd.gov.in:8006/api2/json/version",
+  "available_device_inventory": "No DSS or Proxmox parent management device in the attached lab inventory at the recorded check",
+  "required": [
+    "Trusted reachable parent management endpoint",
+    "Authenticated mapping of original DR1-DR4 to physical parent node and VM ID",
+    "Verified fenced-recovery path",
+    "Independent fault domains appropriate to the unchanged resilience policy"
+  ],
+  "new_candidate_qualification": "Not completed",
+  "notes": [
+    "Wildcard DNS aliases did not establish separate parent identities.",
+    "The five fresh nested test controllers share one parent; software fault results cannot establish physical N+2.",
+    "This access blocker is distinct from the user authorization, which is already present."
+  ]
+}

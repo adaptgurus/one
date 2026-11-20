@@ -20,10 +20,12 @@
 #include "ClusterPool.h"
 #include "DatastorePool.h"
 #include "HostPool.h"
+#include "OneDRSEligibility.h"
 #include "ImagePool.h"
 #include "ScheduledActionPool.h"
 #include "VirtualNetworkPool.h"
 #include "DispatchManager.h"
+#include "LifeCycleManager.h"
 #include "VirtualMachineManager.h"
 #include "ScopeGuard.h"
 #include <functional>
@@ -275,6 +277,12 @@ Request::ErrorCode VirtualMachineAPI::update(int oid,
         att.resp_id = oid;
 
         return Request::NO_EXISTS;
+    }
+
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile before changing this VM";
+        return Request::ACTION;
     }
 
     // Apply generic quota deltas
@@ -591,6 +599,12 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
         return Request::NO_EXISTS;
     }
 
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile before changing this VM";
+        return Request::ACTION;
+    }
+
     if ( vm->get_state() != VirtualMachine::PENDING &&
          vm->get_state() != VirtualMachine::HOLD &&
          vm->get_state() != VirtualMachine::STOPPED &&
@@ -598,6 +612,16 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
     {
         att.resp_msg = "Deploy action is not available for state " + vm->state_str();
 
+        return Request::ACTION;
+    }
+
+    std::unique_ptr<VMGroup> placement_group;
+    const int group_rc = nd.get_vmgrouppool()->placement_guard(*vm, hid,
+        enforce || vm->is_pinned(), placement_group, att.resp_msg);
+    if (group_rc != 0)
+    {
+        att.group_placement_busy = group_rc == VMGroup::PLACEMENT_BUSY &&
+                                   !att.plan_action.generation.empty();
         return Request::ACTION;
     }
 
@@ -701,6 +725,7 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
                     vmm_mad,
                     tm_mad,
                     ds_id,
+                    enforce,
                     att) != 0)
     {
         vm->release_vnc_port();
@@ -716,7 +741,14 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
 
     DispatchManager * dm = nd.get_dm();
 
-    dm->deploy(std::move(vm), att);
+    // New canonical history is already durable. Other group members now see
+    // the unresolved admission even after releasing this object lock.
+    placement_group.reset();
+    if (dm->deploy(std::move(vm), att) != 0)
+    {
+        att.resp_msg = "Cannot persist native deployment dispatch state";
+        return Request::INTERNAL;
+    }
 
     return Request::SUCCESS;
 }
@@ -759,6 +791,12 @@ Request::ErrorCode VirtualMachineAPI::action(int vid,
         att.resp_id = vid;
 
         return Request::NO_EXISTS;
+    }
+
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile";
+        return Request::ACTION;
     }
 
     switch (action)
@@ -951,6 +989,22 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
         return Request::NO_EXISTS;
     }
 
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile before changing this VM";
+        return Request::ACTION;
+    }
+
+    if (!att.checked_plan_generation.empty())
+    {
+        if (att.checked_action_id < 0 || cluster_id != att.checked_plan_id ||
+            !vm->checked_migration_supported(hid, cluster_id, ds_id, att.resp_msg))
+        {
+            if (att.resp_msg.empty()) att.resp_msg = "Checked migration cluster/action identity changed";
+            return Request::ACTION;
+        }
+    }
+
     if (vm->is_previous_history_open() ||
         (vm->get_state() != VirtualMachine::POWEROFF &&
          vm->get_state() != VirtualMachine::SUSPENDED &&
@@ -1006,6 +1060,41 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
         att.resp_msg = "Cannot live migrate host and datastore at the same time.";
 
         return Request::ACTION;
+    }
+
+    std::unique_ptr<VMGroup> placement_group;
+    int group_limit = -1;
+    auto group_pool = nd.get_vmgrouppool();
+    if (!att.plan_action.generation.empty() &&
+        group_pool->migration_limit(vm->get_cid(), group_limit, att.resp_msg) != 0)
+        return Request::ACTION;
+    const int group_rc = group_pool->placement_guard(*vm, hid, enforce,
+        placement_group, att.resp_msg, group_limit);
+    if (group_rc != 0)
+    {
+        att.group_placement_busy = group_rc == VMGroup::PLACEMENT_BUSY &&
+                                   !att.plan_action.generation.empty();
+        return Request::ACTION;
+    }
+
+    if (!att.checked_plan_generation.empty() && c_hid != hid)
+    {
+        // This VM lock remains held until its non-RUNNING pending state is durable.
+        // No target membership may predate that native pending history.
+        auto target = nd.get_hpool()->get(hid);
+        if (!target || target->get_vm_ids().count(vid) != 0)
+        {
+            att.resp_msg = "Checked migration target already accounts for this VM";
+            return Request::ACTION;
+        }
+        auto cluster = nd.get_clpool()->get_ro(cluster_id);
+        if (!cluster || !one_drs_eligibility::validate(*vm, *target, *cluster,
+                att.checked_eligibility_sha256, false, att.resp_msg, nullptr,
+                placement_group.get()))
+        {
+            if (att.resp_msg.empty()) att.resp_msg = "Checked migration cluster eligibility is unavailable";
+            return Request::ACTION;
+        }
     }
 
     // Check the host has enough capacity
@@ -1179,6 +1268,13 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
 
     set_volatile_disk_info(vm.get(), ds_id);
 
+    if (!att.checked_plan_generation.empty())
+    {
+        att.checked_migrate_action = live ? VMActions::LIVE_MIGRATE_ACTION :
+            poweroff == 1 ? VMActions::POFF_MIGRATE_ACTION :
+            poweroff == 2 ? VMActions::POFF_HARD_MIGRATE_ACTION : VMActions::MIGRATE_ACTION;
+    }
+
     //add_history call will also update the vm
     if (add_history(vm.get(),
                     hid,
@@ -1187,6 +1283,7 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
                     vmm_mad,
                     tm_mad,
                     ds_id,
+                    enforce,
                     att) != 0)
     {
         vm.reset();
@@ -1206,8 +1303,10 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
     // Migrate the VM
     // ------------------------------------------------------------------------
     DispatchManager* dm = nd.get_dm();
+    placement_group.reset();
 
-    if (live && vm->get_lcm_state() == VirtualMachine::RUNNING )
+    if (live && (vm->get_lcm_state() == VirtualMachine::RUNNING ||
+                 vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING))
     {
         rc = dm->live_migrate(vm.get(), att);
     }
@@ -3019,6 +3118,12 @@ Request::ErrorCode VirtualMachineAPI::resize(int vid,
     /* ---------------------------------------------------------------------- */
     if ( auto vm = vmpool->get_ro(vid) )
     {
+        if (vm->driver_request_pending() || vm->capacity_admission_pending())
+        {
+            att.resp_msg = "Native admission or driver request is unresolved; resizing is refused";
+            return Request::ACTION;
+        }
+
         vm->get_permissions(vm_perms);
 
         vm->get_template_attribute("MEMORY", omemory);
@@ -3150,6 +3255,12 @@ Request::ErrorCode VirtualMachineAPI::update_conf(int vid,
         return Request::NO_EXISTS;
     }
 
+    if (vm->driver_request_pending() || vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native admission or driver request is unresolved; wait for completion or reconcile before changing this VM";
+        return Request::ACTION;
+    }
+
     if ( !att.is_admin() )
     {
         string aname;
@@ -3267,6 +3378,44 @@ Request::ErrorCode VirtualMachineAPI::recover(int vid,
         att.resp_id = vid;
 
         return Request::NO_EXISTS;
+    }
+
+    if (!one_drs_driver::manual_recovery(vm.get(), vmpool, att.resp_msg))
+    {
+        return Request::ACTION;
+    }
+
+    if (vm->checked_capacity_pending() ||
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
+    {
+        att.resp_msg = "Checked migration admission is pending; native recovery must restore it first";
+        return Request::ACTION;
+    }
+
+    if (vm->capacity_admission_pending())
+    {
+        if (op != 0)
+        {
+            att.resp_msg = "Unconsumed enforced admission can only be canceled with recover-failure";
+            return Request::ACTION;
+        }
+        std::string why;
+        if (!Nebula::instance().get_lcm()->cancel_enforced_admission(vm, why))
+        {
+            att.resp_msg = why;
+            return Request::ACTION;
+        }
+        return Request::SUCCESS;
+    }
+
+    if (op == 1 && vm->capacity_enforced() && vm->capacity_admission_state())
+    {
+        auto target = Nebula::instance().get_hpool()->get(vm->get_hid());
+        if (!target || target->get_vm_ids().count(vid) == 0)
+        {
+            att.resp_msg = "Enforced capacity has not been admitted; retry or recover-failure before reporting success";
+            return Request::ACTION;
+        }
     }
 
     auto dm = Nebula::instance().get_dm();
@@ -4374,6 +4523,13 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_add(int vid,
         return Request::NO_EXISTS;
     }
 
+    if (vm->driver_request_pending() || vm->capacity_admission_pending() ||
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
+    {
+        att.resp_msg = "VMGroup membership cannot change during checked migration admission";
+        return Request::ACTION;
+    }
+
     // Check the VM is not a member of VM Group
     if ( vm->get_template_attribute("VMGROUP") != nullptr )
     {
@@ -4382,19 +4538,38 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_add(int vid,
         return Request::ACTION;
     }
 
-    // Check affinity
-    if ( vm->get_state() == VirtualMachine::ACTIVE )
+    // The authoritative group lock must cover both the affinity decision and
+    // publication. The earlier read-only object was used only for authorization.
+    vmg = vmgrouppool->get(vmg_id);
+    if (!vmg)
     {
-        int my_hid = vm->get_hid();
-
-        if ( my_hid != -1 )
+        att.resp_id = vmg_id;
+        att.resp_obj = PoolObjectSQL::VMGROUP;
+        return Request::NO_EXISTS;
+    }
+    vmg->get_permissions(vmg_perms);
+    AuthRequest current_auth(att.uid, att.group_ids);
+    current_auth.add_auth(AuthRequest::USE, vmg_perms);
+    if (UserPool::authorize(current_auth) != 0)
+    {
+        att.resp_msg = current_auth.message;
+        return Request::AUTHORIZATION;
+    }
+    int current_host = -1;
+    if (VMGroup::placement_host(*vm, current_host, att.resp_msg) != 0 ||
+        vmg->check_membership_change(vid, att.resp_msg) != 0)
+        return Request::ACTION;
+    for (auto current_role : vmg->roles())
+    {
+        if (current_role->name() != role && current_role->get_vms().count(vid) != 0)
         {
-            if ( vmg->check_affinity(vid, my_hid, role, att.resp_msg) != 0 )
-            {
-                return Request::ACTION;
-            }
+            att.resp_msg = "Native VMGroup already records this VM in a different role";
+            return Request::ACTION;
         }
     }
+    if (current_host >= 0 &&
+        vmg->check_placement(vid, current_host, role, att.resp_msg, -1, false) != 0)
+        return Request::ACTION;
 
     // Add to VMGroup
     unique_ptr<VectorAttribute> va = make_unique<VectorAttribute>("VMGROUP");
@@ -4402,15 +4577,24 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_add(int vid,
     va->replace("VMGROUP_ID", vmg_id);
     va->replace("ROLE", role);
 
-    if ( vmgrouppool->vmgroup_attribute(va.get(), vm->get_uid(), vid, att.resp_msg) != 0 )
+    if (vmg->add_vm(role, vid) != 0)
     {
+        att.resp_msg = "Role does not exist in native VMGroup";
         return Request::ACTION;
     }
-
+    if (vmgrouppool->update(vmg.get()) != 0)
+    {
+        att.resp_msg = "Cannot persist native VMGroup membership";
+        return Request::INTERNAL;
+    }
     vm->set_template_attribute(va.release());
-
-    vmpool->update(vm.get());
-
+    if (vmpool->update(vm.get()) != 0)
+    {
+        // Do not guess whether an ambiguous write committed. Reverse membership
+        // blocks new placement; retrying this same native operation reconciles it.
+        att.resp_msg = "Cannot persist VM membership; native group remains unresolved";
+        return Request::INTERNAL;
+    }
     return Request::SUCCESS;
 }
 
@@ -4435,12 +4619,51 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_del(int vid,
         return Request::NO_EXISTS;
     }
 
-    vm->release_vmgroup();
+    if (vm->driver_request_pending() || vm->capacity_admission_pending() ||
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
+    {
+        att.resp_msg = "VMGroup membership cannot change during checked migration admission";
+        return Request::ACTION;
+    }
 
+    auto membership = vm->get_template_attribute("VMGROUP");
+    if (!membership) return Request::SUCCESS;
+    int gid = -1;
+    int current_host = -1;
+    if (membership->vector_value("VMGROUP_ID", gid) != 0 || gid < 0 ||
+        VMGroup::placement_host(*vm, current_host, att.resp_msg) != 0)
+    {
+        if (att.resp_msg.empty()) att.resp_msg = "Native VMGroup membership identity is invalid";
+        return Request::ACTION;
+    }
+    auto group_pool = Nebula::instance().get_vmgrouppool();
+    auto group = group_pool->get(gid);
+    if (!group)
+    {
+        att.resp_obj = PoolObjectSQL::VMGROUP;
+        att.resp_id = gid;
+        return Request::NO_EXISTS;
+    }
+    // Exclude only this explicitly removed VM so the same operation can repair
+    // a group-row success followed by a failed VM-row update.
+    if (group->check_membership_change(vid, att.resp_msg) != 0)
+        return Request::ACTION;
+    if (group->del_vm(membership->vector_value("ROLE"), vid) != 0)
+    {
+        att.resp_msg = "Native VMGroup role is unavailable";
+        return Request::ACTION;
+    }
+    if (group_pool->update(group.get()) != 0)
+    {
+        att.resp_msg = "Cannot persist native VMGroup removal";
+        return Request::INTERNAL;
+    }
     vm->remove_template_attribute("VMGROUP");
-
-    vmpool->update(vm.get());
-
+    if (vmpool->update(vm.get()) != 0)
+    {
+        att.resp_msg = "Cannot persist VM membership removal; native group remains unresolved";
+        return Request::INTERNAL;
+    }
     return Request::SUCCESS;
 }
 
@@ -4454,11 +4677,33 @@ int VirtualMachineAPI::add_history(VirtualMachine * vm,
                                    const string&    vmm_mad,
                                    const string&    tm_mad,
                                    int              ds_id,
+                                   bool             enforce,
                                    RequestAttributes& att)
 {
+    const int origin_state = vm->get_state(), origin_lcm = vm->get_lcm_state();
     vm->add_history(hid, cid, hostname, vmm_mad, tm_mad, ds_id);
+    vm->capacity_enforced(enforce);
+    if (enforce) vm->enforced_admission_origin(origin_state, origin_lcm);
+    att.capacity_admission_sequence = vm->history_sequence();
+    vm->plan_id(att.plan_action.plan_id);
+    vm->action_id(att.plan_action.action_id);
+    vm->plan_action_generation(att.plan_action.generation);
 
-    if ( vmpool->insert_history(vm) != 0 )
+    if (!att.checked_plan_generation.empty())
+    {
+        vm->plan_id(att.checked_plan_id);
+        vm->action_id(att.checked_action_id);
+        vm->checked_plan_generation(att.checked_plan_generation);
+        vm->checked_eligibility_sha256(att.checked_eligibility_sha256);
+        vm->checked_plan_term(att.checked_plan_term);
+        vm->checked_capacity_pending(true);
+        vm->set_action(att.checked_migrate_action, att.uid, att.gid, att.req_id);
+        vm->set_stime(time(nullptr));
+        vm->set_state(VirtualMachine::CHECKED_MIGRATE_PENDING);
+    }
+
+    if (((enforce || !att.plan_action.generation.empty() || !att.checked_plan_generation.empty()) ?
+         vmpool->upsert_checked_history(vm) : vmpool->insert_history(vm)) != 0)
     {
         att.resp_msg = "Cannot update virtual machine history";
 

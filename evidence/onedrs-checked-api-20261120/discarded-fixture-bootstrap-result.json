@@ -1,0 +1,18 @@
+{
+  "scope": "PRIVATE_NATIVE_XMLRPC_CAS_AND_AUTHORIZATION_NO_HOSTS_OR_VMS",
+  "started_at": "2026-11-20T02:18:22.090246+00:00",
+  "binary_sha256": "527401814df3297711244cbe5da6450be3af510d9ae760e7782ee659d4aec7af",
+  "private_namespaces": [
+    "mount",
+    "network",
+    "pid"
+  ],
+  "checks": [],
+  "result": "FAIL",
+  "error": "Private native daemon exited before readiness",
+  "shutdown_exit_codes": [
+    255
+  ],
+  "shutdown_error": "Native daemon shutdown was not clean",
+  "ended_at": "2026-11-20T02:18:22.364622+00:00"
+}

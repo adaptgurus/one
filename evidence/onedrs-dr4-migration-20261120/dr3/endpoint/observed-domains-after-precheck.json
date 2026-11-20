@@ -1,0 +1,42 @@
+{
+  "one-17": {
+    "uuid": "25cd57b5-40b0-4b43-a5a1-2d4e48184a05",
+    "inactive_xml_sha256": "95de67b170b2eb3b77d2bc397a4b56784be2dee14e95ed0a31fd59ce0dd64b4e",
+    "pid": "1465565"
+  },
+  "one-20": {
+    "uuid": "07186eb6-14f7-495f-a41e-7ba52e42385c",
+    "inactive_xml_sha256": "ca1b6065dfbb3f10ba73e534deda3a4d265360a80bcc4ccf096d9d74fc3344d6",
+    "pid": "1494637"
+  },
+  "one-23": {
+    "uuid": "4e06634a-135f-455a-b55f-6fb666c36236",
+    "inactive_xml_sha256": "9e4ae1ba424944e27c998acfe4773564f783cf15387d93d5a6e4b81de9ddc832",
+    "pid": "1513431"
+  },
+  "one-25": {
+    "uuid": "135c3618-16c2-4047-baa0-7ba144f13614",
+    "inactive_xml_sha256": "53c1ec942e38529e827fef6c88cc9e87797e5c9159094b976a4526c765edfc13",
+    "pid": "1540747"
+  },
+  "one-35": {
+    "uuid": "7e0f28e4-651c-45a6-a3a3-41d0213e5303",
+    "inactive_xml_sha256": "cadc16b224050aacb374c1326226a286ff861fb0b0d565a70aeb41916c724ef4",
+    "pid": "69730"
+  },
+  "one-49": {
+    "uuid": "96db4365-d916-4419-9a13-7006c295f037",
+    "inactive_xml_sha256": "4f98b6601545fe6d577ed4bf17b2f22174276fd87c83262f06fee13a7335c806",
+    "pid": "3820209"
+  },
+  "one-50": {
+    "uuid": "a803b461-d8a0-4d0e-a94a-1c57c28a6e4f",
+    "inactive_xml_sha256": "ae8eccd09563581e5d387038b57577aceda650d21297fd19f3a296222bd83ef3",
+    "pid": "3834730"
+  },
+  "one-54": {
+    "uuid": "435b9756-4713-47ca-83fb-c519d0eaeaf4",
+    "inactive_xml_sha256": "86945329f39c69e2feec0ed83e47e6f12c34917c1226cea3b3415ba4256bb9d6",
+    "pid": "2904217"
+  }
+}

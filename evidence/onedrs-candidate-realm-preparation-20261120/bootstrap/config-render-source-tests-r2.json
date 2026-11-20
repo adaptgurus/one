@@ -1,0 +1,15 @@
+{
+  "status": "PASS",
+  "scope": "SOURCE_CONFIG_RENDER_AND_FIREWALL_SCHEMA_ONLY_NOT_NATIVE_RUNTIME",
+  "at": "2026-11-20T06:30:38.396121+00:00",
+  "unittest_exit_code": 0,
+  "tests": 16,
+  "exact_source_firewall_rules": 21,
+  "source_sha256": {
+    "render_native_configs.py": "6398976b85361c7df2a3741fe7a65419ac0f825d48bc62df0c2401c6c285a224",
+    "test_render_native_configs.py": "966d32471400ab247c6693177c6ad13355378310e4493f30343fb0dd5c022b6b",
+    "reference-oned.conf": "720f9c7cdb5d9b6fabd63cb06af0f8d3e701936b8da51618340ecbf662f31bc8",
+    "reference-monitord.conf": "30912dce456f7eba23f8e4b2cbaadcca0a2f59892e18c09c3d8369986c6a1df4",
+    "onedrs-rc-zone.xml": "07b374f7859c9d2df6cae240f171a06fc7fcd67ad675096bab2dd75691a425ab"
+  }
+}

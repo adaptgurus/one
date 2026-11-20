@@ -1,0 +1,17 @@
+{
+  "run": "ls-onedrs-dr4-canary-20261120-12e6486a",
+  "root": "/srv/layersentry-native/dr/files/ls-onedrs-dr4-canary-20261120-12e6486a",
+  "started_utc": "2026-11-20T02:50:26.643359+00:00",
+  "native_host_id": 4,
+  "qualification_cluster_id": 103,
+  "system_datastore_id": 104,
+  "purpose": "Owned 256 MiB native synthetic disk-integrity guest; not production HA acceptance",
+  "scope": "No existing VM lifecycle or original cluster policy changes",
+  "state": "DEPLOY_REQUEST_ACCEPTED",
+  "assets": {
+    "vmlinuz": "d44af9bb3f25a31bdcf9ed3f724ffd3a76f5c9eef06df9b1fed1b453b48680a6",
+    "initramfs.gz": "b6932bbe1c9338a5d83fcd7f32aa5214ee3a12fb39f9815d4f6de83d8291d643"
+  },
+  "init_sha256": "847d74041f5b6c10af69bb40b407815950f9b10f00e372af4293928e05199972",
+  "vm_id": 53
+}

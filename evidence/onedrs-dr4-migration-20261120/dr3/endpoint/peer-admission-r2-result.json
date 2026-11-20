@@ -1,0 +1,136 @@
+{
+  "started_utc": "2026-11-20T03:49:47.941590+00:00",
+  "state": "PASS_PEER_ADMISSION_AND_REACHABILITY",
+  "actions": [
+    {
+      "argv": [
+        "/usr/sbin/arping",
+        "-I",
+        "br-mgmt",
+        "-c",
+        "1",
+        "-w",
+        "3",
+        "10.201.20.6"
+      ],
+      "exit": 0,
+      "stdout": "ARPING 10.201.20.6 from 172.17.60.82 br-mgmt\nUnicast reply from 10.201.20.6 [BC:24:11:3B:38:0F]  0.842ms\nSent 1 probes (1 broadcast(s))\nReceived 1 response(s)\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "restorecon",
+        "/usr/libexec/.layersentry-host-network-role.onedrs-20261120"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "restorecon",
+        "/usr/libexec/layersentry-host-network-role"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/libexec/layersentry-host-network-role",
+        "migration-peer-admit",
+        "dr4",
+        "87cee185-4cab-4384-afde-19a5cd3a2239",
+        "10.201.20.6"
+      ],
+      "exit": 0,
+      "stdout": "{\"version\":1,\"host_uuid\":\"3a521acf-c116-4c5e-a6ce-920527f45d45\",\"generation\":\"lab-hostroles-20261005-v1\",\"profile_sha256\":\"0f5435274d7d6b4cb43c90a0435b8d199e652d383ff4777dd9ad7973afa31e23\",\"endpoint_sha256\":\"62ad29b0b3038a2cdf244e55e35d268570f3e1fe4dd683b403ac3f08f7d8aa79\",\"peers\":[{\"peer\":{\"hostname\":\"dr4\",\"site\":\"dr\",\"host_uuid\":\"87cee185-4cab-4384-afde-19a5cd3a2239\",\"address\":\"10.201.20.6\"},\"state\":\"ACTIVE\",\"updated_at\":\"2026-11-20T03:49:48.343985347Z\"}],\"updated_at\":\"2026-11-20T03:49:48.402623254Z\"}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/libexec/layersentry-host-network-role",
+        "migration-prepare",
+        "dr4"
+      ],
+      "exit": 0,
+      "stdout": "{\"profile_sha256\":\"0f5435274d7d6b4cb43c90a0435b8d199e652d383ff4777dd9ad7973afa31e23\",\"peer_admission_sha256\":\"95736c5512282884c4cbd3373799b40bf839f402e791255f4c1a7ebfa305efde\",\"role\":\"live_migration\",\"site\":\"dr\",\"host_uuid\":\"3a521acf-c116-4c5e-a6ce-920527f45d45\",\"generation\":\"lab-hostroles-20261005-v1\",\"source_address\":\"10.201.20.4\",\"interface\":\"ls-migration\",\"target_host\":\"dr4\",\"target_address\":\"10.201.20.6\",\"migration_uri\":\"tcp://10.201.20.6\",\"listen_address\":\"10.201.20.6\",\"state\":\"HOST_ROLE_PREPARED_NOT_MIGRATION_OR_SOCKET_PROOF\"}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "ping",
+        "-n",
+        "-I",
+        "ls-migration",
+        "-c",
+        "2",
+        "-W",
+        "2",
+        "10.201.20.6"
+      ],
+      "exit": 0,
+      "stdout": "PING 10.201.20.6 (10.201.20.6) from 10.201.20.4 ls-migration: 56(84) bytes of data.\n64 bytes from 10.201.20.6: icmp_seq=1 ttl=64 time=0.542 ms\n64 bytes from 10.201.20.6: icmp_seq=2 ttl=64 time=0.476 ms\n\n--- 10.201.20.6 ping statistics ---\n2 packets transmitted, 2 received, 0% packet loss, time 1004ms\nrtt min/avg/max/mdev = 0.476/0.509/0.542/0.033 ms\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "getenforce"
+      ],
+      "exit": 0,
+      "stdout": "Enforcing\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "systemctl",
+        "is-enabled",
+        "layersentry-host-network-roles.service"
+      ],
+      "exit": 0,
+      "stdout": "enabled\n",
+      "stderr": ""
+    }
+  ],
+  "admission": {
+    "version": 1,
+    "host_uuid": "3a521acf-c116-4c5e-a6ce-920527f45d45",
+    "generation": "lab-hostroles-20261005-v1",
+    "profile_sha256": "0f5435274d7d6b4cb43c90a0435b8d199e652d383ff4777dd9ad7973afa31e23",
+    "endpoint_sha256": "62ad29b0b3038a2cdf244e55e35d268570f3e1fe4dd683b403ac3f08f7d8aa79",
+    "peers": [
+      {
+        "peer": {
+          "hostname": "dr4",
+          "site": "dr",
+          "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+          "address": "10.201.20.6"
+        },
+        "state": "ACTIVE",
+        "updated_at": "2026-11-20T03:49:48.343985347Z"
+      }
+    ],
+    "updated_at": "2026-11-20T03:49:48.402623254Z"
+  },
+  "prepared": {
+    "profile_sha256": "0f5435274d7d6b4cb43c90a0435b8d199e652d383ff4777dd9ad7973afa31e23",
+    "peer_admission_sha256": "95736c5512282884c4cbd3373799b40bf839f402e791255f4c1a7ebfa305efde",
+    "role": "live_migration",
+    "site": "dr",
+    "host_uuid": "3a521acf-c116-4c5e-a6ce-920527f45d45",
+    "generation": "lab-hostroles-20261005-v1",
+    "source_address": "10.201.20.4",
+    "interface": "ls-migration",
+    "target_host": "dr4",
+    "target_address": "10.201.20.6",
+    "migration_uri": "tcp://10.201.20.6",
+    "listen_address": "10.201.20.6",
+    "state": "HOST_ROLE_PREPARED_NOT_MIGRATION_OR_SOCKET_PROOF"
+  },
+  "base_and_ovn_files_preserved": true,
+  "preserved_file_count": 20,
+  "guest_processes_and_configurations_preserved": true,
+  "guest_count": 8,
+  "live_migration_qualified": false,
+  "ended_utc": "2026-11-20T03:49:49.776001+00:00"
+}

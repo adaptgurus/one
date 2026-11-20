@@ -1,0 +1,19 @@
+{
+  "at_utc": "2026-11-20T05:23:48.672851+00:00",
+  "state": "PASS_READ_ONLY_EXPORT_AND_INSPECTION",
+  "scope": "Live R8 MariaDB observation only; placement writers were not frozen and controller was not stopped; this is not rollback authorization",
+  "exporter_sha256": "72d49b88592538392698b244368c9887542545fa100b6f8c4c394481319e4f37",
+  "guard_source_commit": "626d734501e6b5c20f2caa6bec2395e99042873a",
+  "snapshot_sha256": "04dc1da5e8ff5ec8d1f171602c511df286644a9bcbee6ebbbef99dad79251039",
+  "counts": {
+    "history_rows": 379,
+    "plan_rows": 4,
+    "vm_rows": 55
+  },
+  "oned_pid_unchanged": 2283363,
+  "raw_xml_location": "protected local DR1 snapshot only; not tracked",
+  "exclusive_client_options": true,
+  "client_environment": "fixed PATH/LC_ALL/MYSQL_HISTFILE; ambient client options and environment excluded",
+  "unit_suite": "6 focused parser and transaction-boundary tests passed after correcting the invocation directory",
+  "original_export_r1_retained": true
+}

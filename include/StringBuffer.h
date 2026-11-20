@@ -22,6 +22,8 @@
 #include <string.h>
 
 #include <string>
+#include <poll.h>
+#include <errno.h>
 
 #define STRING_BUFFER_SIZE 256
 
@@ -41,7 +43,14 @@ public:
         free(buffer);
     }
 
-    int read_line(int fd, std::string& line)
+    void reset()
+    {
+        buffer_seek = buffer;
+        line_sz = 0;
+        buffer[0] = '\0';
+    }
+
+    int read_line(int fd, std::string& line, int cancel_fd = -1)
     {
         /* Look for pending lines in the buffer */
         const char * eom = strchr(buffer_seek, '\n');
@@ -69,6 +78,18 @@ public:
         /* Read from stream */
         do
         {
+            // A driver may leave descendants holding its stdout open. A
+            // separate cancellation descriptor wakes this reader even while
+            // it is waiting for the rest of a partial protocol line.
+            if (cancel_fd >= 0)
+            {
+                if (fd < 0) return -1;
+                pollfd fds[2] = {{fd, POLLIN, 0}, {cancel_fd, POLLIN, 0}};
+                int ready;
+                do { ready = poll(fds, 2, -1); } while (ready < 0 && errno == EINTR);
+                if (ready <= 0 || fds[1].revents != 0 ||
+                    (fds[0].revents & (POLLERR | POLLNVAL))) return -1;
+            }
             int rc = ::read(fd, (void *) cur_ptr, cur_sz - line_sz - 1);
 
             if ( rc <= 0 )

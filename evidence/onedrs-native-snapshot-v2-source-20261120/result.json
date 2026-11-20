@@ -1,0 +1,30 @@
+{
+  "qualification": "SOURCE_EXPORTER_ONLY_NO_LIVE_SNAPSHOT_OR_ROLLBACK",
+  "runs": [
+    {
+      "command": [
+        "python3",
+        "-m",
+        "unittest",
+        "-v",
+        "test_native_mysql_snapshot"
+      ],
+      "returncode": 0
+    },
+    {
+      "command": [
+        "python3",
+        "-O",
+        "-m",
+        "unittest",
+        "-v",
+        "test_native_mysql_snapshot"
+      ],
+      "returncode": 0
+    }
+  ],
+  "source_sha256": {
+    "tools/onedrs_qualification/native_mysql_snapshot.py": "4667b7c2566c10a39006b738f9c26b3ce87259a82a776ae680a89b268327c73a",
+    "tools/onedrs_qualification/test_native_mysql_snapshot.py": "8035ac1c7bf70e0b016df9b9742fa5286ed3cadec79208d07286047afc7b431f"
+  }
+}

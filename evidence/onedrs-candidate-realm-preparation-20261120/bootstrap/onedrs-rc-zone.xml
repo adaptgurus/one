@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<zone target="DROP">
+  <short>Owned OneDRS RC members</short>
+  <interface name="eth0"/>
+  <rule family="ipv4">
+    <source address="192.168.247.1/32"/>
+    <port port="22" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.11/32"/>
+    <port port="22" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.12/32"/>
+    <port port="22" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.13/32"/>
+    <port port="22" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.14/32"/>
+    <port port="22" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.15/32"/>
+    <port port="22" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.11/32"/>
+    <port port="2633" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.12/32"/>
+    <port port="2633" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.13/32"/>
+    <port port="2633" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.14/32"/>
+    <port port="2633" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.15/32"/>
+    <port port="2633" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.11/32"/>
+    <port port="4124" protocol="udp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.12/32"/>
+    <port port="4124" protocol="udp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.13/32"/>
+    <port port="4124" protocol="udp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.14/32"/>
+    <port port="4124" protocol="udp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.15/32"/>
+    <port port="4124" protocol="udp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.11/32"/>
+    <port port="49152-49215" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.12/32"/>
+    <port port="49152-49215" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.13/32"/>
+    <port port="49152-49215" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.14/32"/>
+    <port port="49152-49215" protocol="tcp"/>
+    <accept/>
+  </rule>
+  <rule family="ipv4">
+    <source address="192.168.247.15/32"/>
+    <port port="49152-49215" protocol="tcp"/>
+    <accept/>
+  </rule>
+</zone>

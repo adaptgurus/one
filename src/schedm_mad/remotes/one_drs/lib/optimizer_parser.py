@@ -105,6 +105,7 @@ class OptimizerParser:
     }
 
     __slots__ = (
+        "_checked_request",
         "parser",
         "scheduler_driver_action",
         "config",
@@ -120,6 +121,10 @@ class OptimizerParser:
     )
 
     def __init__(self, stdin_data: bytes, mode: str):
+        from lib.checked_request import request_binding
+        self._checked_request = request_binding(stdin_data)
+        if self._checked_request is not None and mode.lower() != "optimize":
+            raise ValueError("Checked request is only valid for native optimization")
         self.parser = XmlParser()
         self.parser.config.fail_on_unknown_properties = False
         self.scheduler_driver_action: SchedulerDriverAction = self.parser.parse(
@@ -201,8 +206,50 @@ class OptimizerParser:
         self._used_shared_dstores = used_shared_dstores
 
     @property
+    def checked_request(self):
+        return self._checked_request
+
+    @property
     def plan_id(self) -> int:
         return self._plan_id
+
+    @property
+    def plan_template_sha256(self) -> str | None:
+        """Echo the native request's template identity without recomputing XML."""
+        if self._plan_id < 0:
+            return None
+        clusters = self.scheduler_driver_action.cluster_pool.cluster
+        matches = [cluster for cluster in clusters if int(cluster.id) == self._plan_id]
+        if len(matches) != 1:
+            raise ValueError("Optimization request must identify exactly one cluster")
+        digest = getattr(matches[0], "template_sha256", None)
+        if digest is not None and (len(digest) != 64 or any(
+                c not in "0123456789abcdef" for c in digest)):
+            raise ValueError("Invalid native cluster template SHA-256")
+        return digest
+
+    @property
+    def plan_eligibility(self) -> dict[tuple[int, int], str] | None:
+        """Echo only the candidate identities captured in native optimizer input."""
+        native = self.scheduler_driver_action.one_drs_eligibility
+        if native is None:
+            return None  # Legacy input stays explicitly unbound.
+        allowed = {}
+        for vm in self.scheduler_driver_action.requirements.vm:
+            if type(vm.id) is not int or vm.id < 0 or vm.id in allowed or vm.hosts is None:
+                raise ValueError("Invalid native eligibility requirement identity")
+            allowed[vm.id] = set(vm.hosts.id)
+        tokens = {}
+        for candidate in native.candidate:
+            vm_id, host_id, digest = candidate.vm_id, candidate.host_id, candidate.sha256
+            if (type(vm_id) is not int or type(host_id) is not int or vm_id < 0 or host_id < 0
+                    or host_id not in allowed.get(vm_id, set())
+                    or not isinstance(digest, str) or len(digest) != 64
+                    or any(c not in "0123456789abcdef" for c in digest)
+                    or (vm_id, host_id) in tokens):
+                raise ValueError("Invalid or duplicate native eligibility candidate")
+            tokens[(vm_id, host_id)] = digest
+        return tokens
 
     @classmethod
     def _resolve_solver_path(cls, path: str) -> str:
@@ -357,13 +404,14 @@ class OptimizerParser:
 
         def apply_host_constraints(requirements, host_affined, host_anti_affined):
             for vm_req in self.scheduler_driver_action.requirements.vm:
+                # Independently apply both native host constraints. Their
+                # coexistence must never discard a deny-set or restore a host
+                # excluded by native authorization / SCHED_REQUIREMENTS.
+                new_host_ids = requirements[vm_req.id].host_ids
                 if vm_req.id in host_affined:
-                    new_host_ids = host_affined[vm_req.id]
-                elif vm_req.id in host_anti_affined:
-                    current_ids = requirements[vm_req.id].host_ids
-                    new_host_ids = current_ids - host_anti_affined[vm_req.id]
-                else:
-                    continue
+                    new_host_ids = new_host_ids & host_affined[vm_req.id]
+                if vm_req.id in host_anti_affined:
+                    new_host_ids = new_host_ids - host_anti_affined[vm_req.id]
                 requirements[vm_req.id] = replace(
                     requirements[vm_req.id], host_ids=new_host_ids
                 )
@@ -579,7 +627,7 @@ class OptimizerParser:
             if vm is None:
                 raise ValueError(f"required VM {vm_req.id} is absent from native snapshot")
             try:
-                vm_state = self._map_vm_state(vm.state, vm.lcm_state)
+                vm_state = self._map_vm_requirement_state(vm, vm_req)
             except ValueError as error:
                 raise ValueError(f"VM {vm_req.id}: {error}") from error
             sys_storage, img_storage = self._build_vm_storage(vm, vm_req)
@@ -647,12 +695,14 @@ class OptimizerParser:
             )
         return vm_requirements
 
-    def _parse_vm_groups(self) -> list[VMGroup]:
-        # IDs of the required VMs
-        allowed_vm_ids = {vm.id for vm in self.scheduler_driver_action.requirements.vm}
-        # OpenNebla VM Groups
-        # groups = {group_id: {role_name: set(vm_ids)}}
-        groups = {}
+    def _parse_vm_groups(self) -> tuple[
+        list[VMGroup], dict[int, set[int]], dict[int, set[int]],
+        dict[int, set[int]], dict[int, set[int]],
+    ]:
+        # Native VMGroup definitions remain the authority. These are temporary
+        # optimizer constraints, not a separate membership or placement store.
+        required_ids = {vm.id for vm in self.scheduler_driver_action.requirements.vm}
+        members = {}
         for vm in self.scheduler_driver_action.vm_pool.vm:
             if not vm.template.vmgroup:
                 continue
@@ -661,166 +711,118 @@ class OptimizerParser:
                 for child in vm.template.vmgroup.children
             }
             gid, role = int(attrs.get("VMGROUP_ID")), attrs.get("ROLE")
-            groups.setdefault(gid, {}).setdefault(role, set()).add(vm.id)
-        # Auxiliar dict for creating role to role affinity
-        aux_vmg = {}
-        # vmg = list[VMGroup]
-        vmg, idx = [], 0
-        # Dicts for Host-VM Affinity
-        # Static VMGroup host policies are kept separate from optimizer-only
-        # peer-placement exclusions so resilience recovery reachability is not
-        # over-constrained by the current VM placement.
+            if gid < 0 or not role:
+                raise ValueError("Invalid native VMGroup membership")
+            members.setdefault(gid, {}).setdefault(role, set()).add(vm.id)
+
+        native_groups = {
+            int(group.id): group
+            for group in self.scheduler_driver_action.vm_group_pool.vm_group
+        }
+        if set(members) - set(native_groups):
+            raise ValueError("Native VMGroup definition is missing")
+
+        affined_sets, anti_sets = [], set()
         static_affined_hosts, static_anti_affined_hosts = {}, {}
-        # Create VM Groups for VM-VM and Host-VM Affinity
-        for group in self.scheduler_driver_action.vm_group_pool.vm_group:
-            gid = int(group.id)
-            if gid not in groups:
+
+        def host_ids(value):
+            result = {int(item.strip()) for item in value.split(",")}
+            if any(hid < 0 for hid in result):
+                raise ValueError("Invalid native VMGroup host constraint")
+            return result
+
+        for gid, role_members in members.items():
+            group = native_groups[gid]
+            roles = {role.name: role for role in group.roles.role}
+            if set(role_members) - set(roles):
+                raise ValueError("Native VMGroup role is missing")
+
+            for name, role in roles.items():
+                ids = role_members.get(name, set())
+                # HOST_AFFINED and HOST_ANTI_AFFINED may coexist. Preserve both
+                # for optimizer and resilience projections; neither widens the
+                # native authorization / scheduling-requirements candidates.
+                for value, destination in (
+                    (role.host_affined, static_affined_hosts),
+                    (role.host_anti_affined, static_anti_affined_hosts),
+                ):
+                    if value is not None and value.strip():
+                        hosts = host_ids(value)
+                        for vm_id in ids:
+                            destination[vm_id] = set(hosts)
+                policy = (role.policy or "").upper()
+                if ids and policy == "AFFINED":
+                    affined_sets.append(set(ids))
+                elif ids and policy == "ANTI_AFFINED":
+                    anti_sets.add(frozenset(ids))
+
+            if group.template is None:
                 continue
-            for role_obj in group.roles.role:
-                if role_obj.name not in groups[gid]:
+            for attribute in group.template.children:
+                policy = attribute.qname.upper()
+                if policy not in ("AFFINED", "ANTI_AFFINED"):
                     continue
-                if (
-                    role_obj.host_affined is not None
-                    or role_obj.host_anti_affined is not None
-                ):
-                    target_hosts = (
-                        static_affined_hosts
-                        if role_obj.host_affined is not None
-                        else static_anti_affined_hosts
-                    )
-                    host_list = (
-                        role_obj.host_affined or role_obj.host_anti_affined
-                    ).split(",")
-                    for vm_id in groups[gid][role_obj.name]:
-                        # Affined or anti-affined host policies
-                        target_hosts.setdefault(vm_id, set()).update(
-                            map(int, host_list)
-                        )
-                if role_obj.policy:
-                    vm_group = VMGroup(
-                        id=idx,
-                        affined=role_obj.policy.upper() == "AFFINED",
-                        vm_ids=groups[gid][role_obj.name],
-                    )
-                    vmg.append(vm_group)
-                    aux_vmg[(gid, role_obj.name)] = vm_group
-                    idx += 1
+                # Native VMGroupRoles::names_to_ids splits commas and trims
+                # each role. A comma followed by a space is not required.
+                names = sorted({name.strip() for name in (attribute.text or "").split(",")})
+                if any(not name or name not in roles for name in names):
+                    raise ValueError("Native VMGroup rule references an unknown role")
+                if policy == "AFFINED":
+                    ids = set().union(*(role_members.get(name, set()) for name in names))
+                    if ids:
+                        affined_sets.append(ids)
                 else:
-                    # Only for Role-Role affinity or VM-Host affinity
-                    vm_group = VMGroup(
-                        id=idx, affined=False, vm_ids=groups[gid][role_obj.name]
-                    )
-                    aux_vmg[(gid, role_obj.name)] = vm_group
-                    idx += 1
-        # The optimizer also respects current peer placement. Keep these maps
-        # distinct from the static host policies used for resilience admission.
-        affined_hosts = {
-            vm_id: set(host_ids)
-            for vm_id, host_ids in static_affined_hosts.items()
-        }
-        anti_affined_hosts = {
-            vm_id: set(host_ids)
-            for vm_id, host_ids in static_anti_affined_hosts.items()
-        }
+                    # Inter-role anti-affinity excludes pairs across roles;
+                    # it does not invent anti-affinity inside a role whose
+                    # native POLICY is absent. Intra-role rules are above.
+                    for index, left in enumerate(names):
+                        for right in names[index + 1:]:
+                            for a in role_members.get(left, set()):
+                                for b in role_members.get(right, set()):
+                                    anti_sets.add(frozenset((a, b)))
 
-        # Create VM Groups for Role-Role affinity
-        for group in self.scheduler_driver_action.vm_group_pool.vm_group:
-            gid = int(group.id)
-            if gid not in groups:
+        # Merge affinity transitively without mutating an iterated list. The
+        # existing components are disjoint, so a union cannot miss a prior one.
+        components = []
+        for ids in affined_sets:
+            merged, remaining = set(ids), []
+            for component in components:
+                if merged & component:
+                    merged |= component
+                else:
+                    remaining.append(component)
+            components = remaining + [merged]
+
+        affined_hosts = {vid: set(hosts) for vid, hosts in static_affined_hosts.items()}
+        anti_affined_hosts = {vid: set(hosts) for vid, hosts in static_anti_affined_hosts.items()}
+        constraints = [(True, ids) for ids in components]
+        constraints += [(False, set(ids)) for ids in anti_sets]
+        constraints.sort(key=lambda item: (not item[0], tuple(sorted(item[1]))))
+        result = []
+        for affined, ids in constraints:
+            required = ids & required_ids
+            if not required:
                 continue
-            if not group.template:
-                continue
-            template_attr = [
-                {child.qname.upper(): child.text} for child in group.template.children
-            ]
-            for attr in template_attr:
-                # Affined role to role
-                if "AFFINED" in attr:
-                    affined_role = VMGroup(id=idx, affined=True, vm_ids=set())
-                    for role in attr["AFFINED"].split(", "):
-                        if (gid, role) in aux_vmg:
-                            affined_role.vm_ids.update(aux_vmg[(gid, role)].vm_ids)
-                    # Add affined_role only if there are req vm with affined roles
-                    if affined_role.vm_ids:
-                        vmg.append(affined_role)
-                        idx += 1
-                # Anti affined role to role
-                elif "ANTI_AFFINED" in attr:
-                    anti_affined_role = VMGroup(id=idx, affined=False, vm_ids=set())
-                    for role in attr["ANTI_AFFINED"].split(", "):
-                        if (gid, role) in aux_vmg:
-                            # Join anti-affined VMGroups
-                            if not aux_vmg[(gid, role)].affined:
-                                anti_affined_role.vm_ids.update(
-                                    aux_vmg[(gid, role)].vm_ids
-                                )
-                            # Create special anti-affined rules for affined roles
-                            else:
-                                for _role in attr["ANTI_AFFINED"].split(", "):
-                                    if _role == role:
-                                        continue
-                                    for vm_id in aux_vmg[(gid, _role)].vm_ids:
-                                        idx += 1
-                                        extra_vmg = VMGroup(
-                                            idx,
-                                            False,
-                                            {
-                                                sorted(aux_vmg[(gid, role)].vm_ids)[0],
-                                                vm_id,
-                                            },
-                                        )
-                                        vmg.append(extra_vmg)
-                    # Add anti_affined_role only if there are req vm with anti_affined roles
-                    if anti_affined_role.vm_ids:
-                        vmg.append(anti_affined_role)
-                        idx += 1
-        # Keep all required members in the dynamic VMGroup model, including
-        # already-running VMs. Only peers outside the current scheduling
-        # request are fixed placements and should constrain required members.
-        # Dropping active members here bypasses VMGroup anti-affinity,
-        # failure-domain spreading, and MAX_GROUP_MIGRATIONS in the ILP.
-        result, idx = [], 0
-        current_placement = self._curr_alloc
-        for vm_group in vmg:
-            target_hosts = affined_hosts if vm_group.affined else anti_affined_hosts
-            required_members = set(vm_group.vm_ids) & allowed_vm_ids
-            fixed_members = set(vm_group.vm_ids) - allowed_vm_ids
+            fixed_hosts = {
+                self._curr_alloc[vid] for vid in ids - required_ids
+                if vid in self._curr_alloc and self._curr_alloc[vid] >= 0
+            }
+            for vm_id in required:
+                if affined and fixed_hosts:
+                    # Every fixed affined peer must be compatible. Conflicting
+                    # fixed placements cannot authorize either arbitrary host.
+                    allowed = fixed_hosts if len(fixed_hosts) == 1 else set()
+                    if vm_id in affined_hosts:
+                        affined_hosts[vm_id] &= allowed
+                    else:
+                        affined_hosts[vm_id] = set(allowed)
+                elif not affined and fixed_hosts:
+                    anti_affined_hosts.setdefault(vm_id, set()).update(fixed_hosts)
+            result.append(VMGroup(len(result), affined, set(required)))
 
-            if not required_members:
-                continue
-
-            for vm_id in required_members:
-                for aux_vm_id in fixed_members:
-                    if aux_vm_id in current_placement:
-                        # Fixed peers are outside this optimization request:
-                        # AFFINED members must follow them; ANTI_AFFINED
-                        # members must avoid their current host.
-                        target_hosts.setdefault(vm_id, set()).add(
-                            current_placement[aux_vm_id]
-                        )
-
-            result.append(
-                VMGroup(idx, vm_group.affined, set(required_members))
-            )
-            idx += 1
-        # Merge affined VMGroups
-        for i in range(len(result)):
-            for j in range(i + 1, len(result)):
-                if (
-                    result[i].vm_ids.intersection(result[j].vm_ids)
-                    and result[i].affined
-                    and result[j].affined
-                ):
-                    result[i].vm_ids.update(result[j].vm_ids)
-                    result.pop(j)
-        # Return a unique list that contain the affined and antiaffined roles
-        # and the dicts with the affined and anti_affined hosts
         return (
-            result,
-            affined_hosts,
-            anti_affined_hosts,
-            static_affined_hosts,
-            static_anti_affined_hosts,
+            result, affined_hosts, anti_affined_hosts,
+            static_affined_hosts, static_anti_affined_hosts,
         )
 
     def _parse_host_capacities(self) -> list[HostCapacity]:
@@ -1098,6 +1100,56 @@ class OptimizerParser:
             )
             for pci in pci_list
         ]
+
+    def _map_vm_requirement_state(self, vm, requirement) -> VMState:
+        # UNKNOWN is never a RUNNING observation. Native failed-host recovery
+        # deliberately submits ACTIVE/UNKNOWN with RESCHED=1 to PLACE after
+        # its separate fencing/ownership workflow. Model only that explicit
+        # request as RESCHED; this parser grants no fencing or mutation rights.
+        if not (
+            type(vm.state) is int and vm.state == 3
+            and type(vm.lcm_state) is int and vm.lcm_state == 16
+            and type(getattr(vm, "resched", None)) is int and vm.resched == 1
+            and str(self.mode).upper() == "PLACE"
+        ):
+            return self._map_vm_state(vm.state, vm.lcm_state)
+
+        def refuse(reason):
+            raise ValueError("unsupported native UNKNOWN recovery request: " + reason)
+
+        history = getattr(getattr(vm, "history_records", None), "history", None)
+        if not history:
+            refuse("missing current placement history")
+        seen = set()
+        for item in history:
+            if (type(item.seq) is not int or item.seq < 0
+                    or type(item.oid) is not int or item.oid != vm.id
+                    or item.seq in seen):
+                refuse("ambiguous history generation or VM identity")
+            seen.add(item.seq)
+        current = max(history, key=lambda item: item.seq)
+        if (type(current.hid) is not int or current.hid < 0
+                or type(current.ds_id) is not int or current.ds_id < 0
+                or type(current.etime) is not int or current.etime != 0
+                or self._curr_alloc.get(vm.id) != current.hid):
+            refuse("invalid or inconsistent current placement")
+        datastore = self._system_shared_dstore_attrs.get(current.ds_id)
+        if (self._used_shared_dstores.get(vm.id) != current.ds_id
+                or vm.id in self._used_local_dstores
+                or not datastore or datastore.get("TYPE") != "SYSTEM_DS"
+                or datastore.get("SHARED") != "YES"
+                or not isinstance(current.tm_mad, str)
+                or current.tm_mad.upper() != datastore.get("TM_MAD")):
+            refuse("original shared system datastore is not proven")
+        candidates = getattr(getattr(requirement, "datastores", None), "id", None)
+        if (not candidates or len(candidates) != 1
+                or type(candidates[0]) is not int or candidates[0] != current.ds_id):
+            refuse("recovery must retain the original system datastore")
+        hosts = getattr(getattr(requirement, "hosts", None), "id", None)
+        if (not hosts or any(type(h) is not int or h < 0 for h in hosts)
+                or len(set(hosts)) != len(hosts) or current.hid in hosts):
+            refuse("invalid destination set or source host is still eligible")
+        return VMState.RESCHED
 
     @staticmethod
     def _map_vm_state(state: int, lcm_state: int) -> VMState:

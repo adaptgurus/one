@@ -69,6 +69,7 @@ public:
     void stop()
     {
         terminate = true;
+        this->request_stop();
 
         shutdown(_socket, SHUT_RDWR);
 
@@ -77,7 +78,9 @@ public:
             th.join();
         }
 
-        close(_socket);
+        this->drain();
+        this->fd(-1); // StreamManager owns the socket descriptor.
+        _socket = -1;
     }
 
 protected:

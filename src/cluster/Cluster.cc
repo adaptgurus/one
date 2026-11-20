@@ -21,6 +21,9 @@
 #include "DatastorePool.h"
 #include "PlanPool.h"
 #include "HostPool.h"
+#include "VirtualMachinePool.h"
+#include "OneDRSEligibility.h"
+#include "VMGroupPool.h"
 
 #include <sstream>
 
@@ -440,6 +443,14 @@ string& Cluster::to_xml(string& xml) const
         datastores.to_xml(ds_collection_xml) <<
         vnets.to_xml(vnet_collection_xml)    <<
         obj_template->to_xml(template_xml)   <<
+        "<TEMPLATE_SHA256>" << template_sha256() << "</TEMPLATE_SHA256>" <<
+        "<ONE_DRS_CHECKED_CAPABILITIES><VERSION>3</VERSION>"
+        "<MIGRATION>RUNNING_UNPINNED_NO_PCI_NO_VMGROUP_SAME_DATASTORE_CROSS_HOST</MIGRATION>"
+        "<CAPACITY>ATOMIC</CAPACITY><RECOVERY>PENDING_CANCEL</RECOVERY>"
+        "<ELIGIBILITY>SOURCE_BOUND_CURRENT_OWNER_REQUIREMENTS</ELIGIBILITY>"
+        "<GENERATE>REQUEST_NONCE_POLICY_PLAN_CAS</GENERATE>"
+        "<REJECT>READY_GENERATION_POLICY_PLAN_CAS</REJECT>"
+        "</ONE_DRS_CHECKED_CAPABILITIES>" <<
         plan_xml                             <<
         "</CLUSTER>";
 
@@ -466,6 +477,38 @@ std::string& Cluster::template_xml(std::string& xml) const
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+std::string Cluster::template_sha256() const
+{
+    std::string xml;
+    return one_util::sha256_digest(template_xml(xml));
+}
+
+int Cluster::replace_one_drs(const std::string& text, bool restricted, std::string& error)
+{
+    Template incoming;
+    if (incoming.parse_str_or_xml(text, error) != 0) return -1;
+    size_t count = 0;
+    incoming.each_attribute([&count](const Attribute*) { ++count; });
+    const auto* policy = incoming.get("ONE_DRS");
+    if (count != 1 || policy == nullptr)
+    {
+        error = "Checked update requires exactly one ONE_DRS vector and no other attributes";
+        return -1;
+    }
+    std::string automation = one_util::trim(policy->vector_value("AUTOMATION"));
+    one_util::tolower(automation);
+    if (automation != "manual")
+    {
+        error = "Checked policy update requires manual automation";
+        return -1;
+    }
+    Template replacement(*obj_template);
+    replacement.erase("ONE_DRS");
+    replacement.set(policy->clone());
+    std::string xml;
+    return replace_template(replacement.to_xml(xml), restricted, error);
+}
 
 int Cluster::from_xml(const string& xml)
 {
@@ -540,14 +583,58 @@ void Cluster::set_error_message(const char *mod, const string& name, const strin
 void Cluster::load_plan()
 {
     auto plpool = Nebula::instance().get_planpool();
+    plan_xml.clear();
 
+    std::string eligibility_state = "NOT_READY";
+    std::string eligibility_reason = "No READY native migration recommendation";
     if (auto plan = plpool->get_ro(oid))
     {
-        if (plan->state() != PlanState::NONE)
+        if (plan->state() != PlanState::NONE || plan->has_request())
         {
-            plan_xml = plan->to_xml();
+            plan_xml = plan->to_xml() + "<PLAN_SHA256>" + plan->sha256() + "</PLAN_SHA256>";
+        }
+        if (plan->state() == PlanState::READY && !plan->actions().empty() &&
+            automation() == Cluster::DrsAutomation::MANUAL)
+        {
+            eligibility_state = "ELIGIBLE";
+            eligibility_reason.clear();
+            for (const auto& action : plan->actions())
+            {
+                if (action.operation() != "migrate" || action.state() != PlanState::READY)
+                {
+                    eligibility_state = "UNSUPPORTED";
+                    eligibility_reason = "Native recommendation is outside checked migration scope";
+                    break;
+                }
+                auto vm = Nebula::instance().get_vmpool()->get_ro(action.vm_id());
+                auto host = Nebula::instance().get_hpool()->get_ro(action.host_id());
+                if (!vm || !host)
+                {
+                    eligibility_state = "STALE";
+                    eligibility_reason = "Native recommendation references an unavailable VM or host";
+                    break;
+                }
+                std::unique_ptr<VMGroup> group;
+                if (auto membership = vm->get_template_attribute("VMGROUP"))
+                {
+                    int gid = -1;
+                    if (membership->vector_value("VMGROUP_ID", gid) == 0)
+                        group = Nebula::instance().get_vmgrouppool()->get_ro(gid);
+                }
+                if (!one_drs_eligibility::validate(*vm, *host, *this,
+                        action.eligibility_sha256(), false, eligibility_reason,
+                        &eligibility_state, group.get())) break;
+                if (!vm->checked_migration_supported(action.host_id(), oid, action.ds_id(), eligibility_reason))
+                {
+                    eligibility_state = "UNSUPPORTED";
+                    break;
+                }
+            }
         }
     }
+    plan_xml += "<ONE_DRS_PLAN_ELIGIBILITY><STATE>" + eligibility_state +
+        "</STATE><REASON>" + one_util::escape_xml(eligibility_reason) +
+        "</REASON><SCOPE>" + one_drs_eligibility::SCOPE + "</SCOPE></ONE_DRS_PLAN_ELIGIBILITY>";
 }
 
 /* -------------------------------------------------------------------------- */
