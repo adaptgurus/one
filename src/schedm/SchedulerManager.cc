@@ -370,6 +370,12 @@ void SchedulerManager::_place(std::unique_ptr<scheduler_msg_t> msg)
         return;
     }
 
+    Plan response;
+    if (response.from_xml(msg->payload()) != 0 || response.cid() != -1)
+    {
+        NebulaLog::error("SCM", "Discarding scheduler response with invalid native resource identity");
+        return;
+    }
     auto planm = Nebula::instance().get_planm();
     planm->add_plan(msg->payload());
 }
@@ -390,6 +396,12 @@ void SchedulerManager::_optimize(std::unique_ptr<scheduler_msg_t> msg)
         return;
     }
 
+    Plan response;
+    if (response.from_xml(msg->payload()) != 0 || response.cid() != msg->oid())
+    {
+        NebulaLog::error("SCM", "Discarding scheduler response with invalid native resource identity");
+        return;
+    }
     auto planm = Nebula::instance().get_planm();
     planm->add_plan(msg->payload());
 }

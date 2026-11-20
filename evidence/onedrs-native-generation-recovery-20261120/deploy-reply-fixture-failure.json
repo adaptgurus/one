@@ -1,0 +1,107 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T06:04:55.155220+00:00",
+  "binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary-orphan-migrate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ordinary_orphan_migrate_failed_vm_publication_is_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary_orphan_migrate_unreferenced_history_has_no_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary-orphan-restart-migrate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ordinary_orphan_migrate_native_retry_reuses_unreferenced_sequence",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary_orphan_migrate_one_dispatch_no_sequence_growth",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary-orphan-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ordinary_orphan_deploy_failed_vm_publication_is_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary_orphan_deploy_unreferenced_history_has_no_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary-orphan-restart-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ordinary_orphan_deploy_native_retry_reuses_unreferenced_sequence",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "origin-orphan",
+  "status": "FAIL",
+  "error": "timeout: <lambda>",
+  "finished_at": "2026-11-20T06:06:02.361571+00:00"
+}

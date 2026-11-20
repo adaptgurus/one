@@ -1,0 +1,64 @@
+[
+  {
+    "name": "repeat-initial-cancel-red",
+    "status": "FAIL",
+    "checks": 51,
+    "binary_sha256": "9aa12718a84e856c001ee9e61c0179fe3ee20e607924e60d3733cacda2725c3d",
+    "classification": "native defect: a second initial deployment API-to-LCM gap could not be canceled",
+    "receipt_sha256": "dd511195d065a5253125da5fe2e16c9217d0ebd30c033439e44ff3eed5769bea"
+  },
+  {
+    "name": "enforced-orphan-retry-red",
+    "status": "FAIL",
+    "checks": 9,
+    "binary_sha256": "b30da9e7989459e08e150f90c2d561e5cfe218b6cc05745369f54f642a1feba1",
+    "classification": "native defect: unreferenced history after failed VM publication blocked enforced retry",
+    "receipt_sha256": "841cce41d1c8898e37f83524a31be070a1b6214c229877eda77f78dd3f77c475"
+  },
+  {
+    "name": "reserved-ledger-recovery",
+    "status": "PASS",
+    "checks": 30,
+    "binary_sha256": "b30da9e7989459e08e150f90c2d561e5cfe218b6cc05745369f54f642a1feba1",
+    "classification": "actual native transaction capture/restart and ledger failure retries",
+    "receipt_sha256": "863373227b7804f0dd424c3a35dd3605e0bf7476f36eb59f6e11c89450f50f78"
+  },
+  {
+    "name": "enforced-orphan-retry-green",
+    "status": "PASS",
+    "checks": 17,
+    "binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+    "classification": "both enforced migration and initial deployment retry after restart",
+    "receipt_sha256": "1ef45ed551f7c4dcacbd90041efe6d6e9b09dc37cf5b7fead1b98a4a94c6fbdc"
+  },
+  {
+    "name": "cold-live-fixture-failure",
+    "status": "FAIL",
+    "checks": 379,
+    "binary_sha256": "b30da9e7989459e08e150f90c2d561e5cfe218b6cc05745369f54f642a1feba1",
+    "classification": "harness setup: preceding cold suite left LIVE_RESCHEDS=0; expected held MIGRATE was a correct cold sequence",
+    "receipt_sha256": "0e14033b13a773580ecf9ca29a9272923c0c8f474337bac5c0643847122ff436"
+  },
+  {
+    "name": "deploy-reply-fixture-failure",
+    "status": "FAIL",
+    "checks": 16,
+    "binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+    "classification": "harness protocol: held DEPLOY SUCCESS omitted mandatory deploy ID; native correctly refused",
+    "receipt_sha256": "233d2d717075b388f91fb814aa19e1632d806a4744b1df2874a3a9300ff0aeaa"
+  },
+  {
+    "name": "generation-log-path-fixture-failure",
+    "status": "FAIL",
+    "checks": 27,
+    "classification": "harness inspected global native log at the wrong private-prefix path",
+    "receipt_sha256": "327694a9854b80d8bfa9c194a2db41282bc67c82d8fcb17705b556bbee77d4cf"
+  },
+  {
+    "name": "callback-log-path-fixture-failure",
+    "status": "FAIL",
+    "checks": 34,
+    "classification": "harness inspected global log for a diagnostic that native correctly wrote to the VM log",
+    "receipt_sha256": "ffec302a61c3d930e8c143a757e19b9e18e7d7a9162561c55cb4c0d84fb287cf"
+  }
+]

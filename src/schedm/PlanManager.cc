@@ -428,6 +428,7 @@ bool PlanManager::start_action(Plan& plan, PlanAction& action)
                          PoolObjectSQL::VM);
 
     ra.set_auth_op(vm_action);
+    ra.plan_action = {plan_id, action.id(), plan.generation()};
     if (plan.checked_execution())
     {
         ra.checked_plan_id = plan_id;
@@ -437,18 +438,15 @@ bool PlanManager::start_action(Plan& plan, PlanAction& action)
         ra.checked_plan_term = Nebula::instance().get_raftm()->get_term();
     }
 
-    if (plan.checked_execution())
+    // Every native scheduler action owns a durable generation before any
+    // asynchronous VM or driver dispatch can begin.
+    action.timestamp(time(nullptr));
+    action.state(PlanState::APPLYING);
+    if (plan_pool->update(&plan) != 0)
     {
-        // Once native VM admission can begin, the plan action must already be
-        // durable. A crash must not turn an accepted action back into READY.
-        action.timestamp(time(nullptr));
-        action.state(PlanState::APPLYING);
-        if (plan_pool->update(&plan) != 0)
-        {
-            action.state(PlanState::ERROR);
-            NebulaLog::error("PLM", "Cannot persist checked action admission");
-            return false;
-        }
+        action.state(PlanState::ERROR);
+        NebulaLog::error("PLM", "Cannot persist native plan action admission");
+        return false;
     }
 
     Request request("internal action");
@@ -479,7 +477,7 @@ bool PlanManager::start_action(Plan& plan, PlanAction& action)
         rc = api.migrate(action.vm_id(),
                          action.host_id(),
                          live_resched,
-                         plan.checked_execution(),
+                         true,
                          action.ds_id(),
                          cold_migrate_mode,
                          ra);
@@ -493,6 +491,15 @@ bool PlanManager::start_action(Plan& plan, PlanAction& action)
 
     if (rc != Request::SUCCESS)
     {
+        if (ra.group_placement_busy)
+        {
+            // This flag is set only before API admission writes. A queued LCM
+            // failure must never return to READY or replay a guest operation.
+            action.timestamp(0);
+            action.state(PlanState::READY);
+            if (plan_pool->update(&plan) != 0) action.state(PlanState::ERROR);
+            return false;
+        }
         action.state(PlanState::ERROR);
 
         auto error_msg = Request::failure_message(rc, ra, aname, ra.resp_obj);
@@ -507,15 +514,6 @@ bool PlanManager::start_action(Plan& plan, PlanAction& action)
         }
 
         return false;
-    }
-
-    if (!plan.checked_execution())
-    if (auto vm = vm_pool->get(action.vm_id()))
-    {
-        vm->plan_id(plan_id);
-        vm->action_id(action.id());
-
-        vm_pool->update_history(vm.get());
     }
 
     action.state(PlanState::APPLYING);
@@ -536,10 +534,9 @@ void PlanManager::action_finished(int plan_id, int action_id, PlanState state,
         return;
     }
 
-    if ((plan->checked_execution() && generation.empty()) ||
-        (!generation.empty() && plan->generation() != generation))
+    if (plan->generation() != generation)
     {
-        NebulaLog::info("PLM", "Ignoring completion for a superseded checked plan generation");
+        NebulaLog::info("PLM", "Ignoring completion for a superseded native plan generation");
         return;
     }
 
@@ -595,6 +592,10 @@ void PlanManager::execute_plan(Plan& plan)
         {
             host_actions[action->host_id()]++;
             cluster_actions++;
+        }
+        else if (action->state() == PlanState::READY)
+        {
+            break; // Explicit nonmutating group-busy deferral.
         }
     }
 

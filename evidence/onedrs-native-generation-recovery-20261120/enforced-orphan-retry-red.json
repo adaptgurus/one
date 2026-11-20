@@ -1,0 +1,69 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T05:58:06.777879+00:00",
+  "binary_sha256": "b30da9e7989459e08e150f90c2d561e5cfe218b6cc05745369f54f642a1feba1",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary-orphan-migrate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "ordinary_orphan_migrate_failed_vm_publication_is_refused",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary_orphan_migrate_unreferenced_history_has_no_dispatch",
+      "result": "PASS"
+    },
+    {
+      "name": "ordinary-orphan-restart-migrate_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "origin-orphan",
+  "status": "FAIL",
+  "error": "ordinary_orphan_migrate_native_retry_reuses_unreferenced_sequence",
+  "finished_at": "2026-11-20T05:58:43.593724+00:00"
+}

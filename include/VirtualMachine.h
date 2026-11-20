@@ -929,6 +929,18 @@ public:
         return history->action_id;
     }
 
+    const std::string& plan_action_generation() const
+    {
+        // Histories created by the first checked API version predate this field.
+        return history->plan_action_generation.empty() ?
+               history->checked_plan_generation : history->plan_action_generation;
+    }
+
+    void plan_action_generation(const std::string& generation)
+    {
+        history->plan_action_generation = generation;
+    }
+
     const std::string& checked_plan_generation() const
     {
         return history->checked_plan_generation;
@@ -970,6 +982,47 @@ public:
 
     bool capacity_enforced() const { return history && history->enforce_capacity; }
     void capacity_enforced(bool value) { if (history) history->enforce_capacity = value; }
+
+    int history_sequence() const { return history ? history->seq : -1; }
+    int enforced_admission_state() const { return history ? history->enforced_admission_state : -1; }
+    int enforced_admission_lcm_state() const { return history ? history->enforced_admission_lcm_state : -1; }
+    void enforced_admission_origin(int state, int lcm)
+    {
+        if (history)
+        {
+            history->enforced_admission_state = state;
+            history->enforced_admission_lcm_state = lcm;
+        }
+    }
+    bool enforced_admission_canceling() const
+    {
+        return history && history->enforced_admission_canceling;
+    }
+    void enforced_admission_canceling(bool value)
+    {
+        if (history) history->enforced_admission_canceling = value;
+    }
+    bool previous_is_canceled_initial_admission() const
+    {
+        return previous_history && previous_history->enforce_capacity &&
+            (previous_history->enforced_admission_state == HOLD ||
+             previous_history->enforced_admission_state == PENDING) &&
+            previous_history->enforced_admission_lcm_state == LCM_INIT &&
+            previous_history->etime > 0 && previous_history->prolog_stime == 0 &&
+            !previous_history->checked_capacity_pending &&
+            !previous_history->enforced_admission_canceling;
+    }
+    bool capacity_admission_pending() const
+    {
+        if (!history) return false;
+        if (history->checked_capacity_pending || history->enforced_admission_canceling) return true;
+        const bool stable = (get_state() == ACTIVE && get_lcm_state() == RUNNING) ||
+                             ((get_state() == POWEROFF || get_state() == SUSPENDED) &&
+                              get_lcm_state() == LCM_INIT);
+        return history->enforce_capacity &&
+            ((history->stime == 0 && history->etime == 0) ||
+             (stable && is_previous_history_open()));
+    }
 
     // States whose next successful/retried driver step requires target capacity.
     bool capacity_admission_state() const;

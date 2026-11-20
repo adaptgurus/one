@@ -1,0 +1,48 @@
+{
+  "started_utc": "2026-11-20T05:55:22.218396+00:00",
+  "source_head": "626d734501e6b5c20f2caa6bec2395e99042873a",
+  "source_uncommitted": true,
+  "suites": [
+    {
+      "name": "scheduler",
+      "optimized": false,
+      "exit_code": 0,
+      "log": "/root/ls-onedrs-r17-native-evidence-20261120/scheduler-normal-r17.log",
+      "summary": [
+        "Ran 131 tests in 0.232s",
+        "OK"
+      ]
+    },
+    {
+      "name": "scheduler",
+      "optimized": true,
+      "exit_code": 0,
+      "log": "/root/ls-onedrs-r17-native-evidence-20261120/scheduler-optimized-r17.log",
+      "summary": [
+        "Ran 131 tests in 0.221s",
+        "OK"
+      ]
+    },
+    {
+      "name": "qualification",
+      "optimized": false,
+      "exit_code": 0,
+      "log": "/root/ls-onedrs-r17-native-evidence-20261120/qualification-normal-r17.log",
+      "summary": [
+        "Ran 92 tests in 1.729s",
+        "OK"
+      ]
+    },
+    {
+      "name": "qualification",
+      "optimized": true,
+      "exit_code": 0,
+      "log": "/root/ls-onedrs-r17-native-evidence-20261120/qualification-optimized-r17.log",
+      "summary": [
+        "Ran 92 tests in 1.716s",
+        "OK"
+      ]
+    }
+  ],
+  "status": "PASS"
+}

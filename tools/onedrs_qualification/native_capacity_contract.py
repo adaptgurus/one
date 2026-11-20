@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 import xmlrpc.client
 D=Path(sys.argv[1]).resolve()
 SUITE=sys.argv[2] if len(sys.argv)>2 else "all"
-if SUITE not in ["all","live","cold","api-history","enforce","recovery","downgrade","legacy-red"]:raise SystemExit("unknown suite")
+if SUITE not in ["all","live","cold","api-history","enforce","recovery","downgrade","generation","origin","origin-ledger","origin-orphan","legacy-red"]:raise SystemExit("unknown suite")
 if D.parent!=Path("/root") or not D.name.startswith("ls-onedrs-checked-api-runtime-"):
     raise SystemExit("dedicated private runtime required")
 P=D/"prefix";OUT=D/"evidence";DB=P/"var/one.db";F=P/"var/capacity-fixture"
@@ -117,21 +117,52 @@ def native_driver_events():
 def pending_calls(operation="MIGRATE"):
     return [e for e in native_driver_events() if e["mode"]=="vmm" and e["operation"]==operation]
 def policy():return 'ONE_DRS=[AUTOMATION="manual",POLICY="balance",ENABLED="yes"]'
-def emit(actions):
-    before=cluster().findtext("PLAN/GENERATION")
-    p=ET.Element("PLAN");ET.SubElement(p,"ID").text=str(cid)
-    ET.SubElement(p,"TEMPLATE_SHA256").text=cluster().findtext("TEMPLATE_SHA256")
-    for ident,(vid,hid,dsid) in enumerate(actions):
-        a=ET.SubElement(p,"ACTION")
-        for tag,val in [("ID",ident),("VM_ID",vid),("STATE",0),("OPERATION","migrate"),("HOST_ID",hid),("DS_ID",dsid),("TIMESTAMP",0)]:
-            ET.SubElement(a,tag).text=str(val)
+def capture_input():
     queue=P/"var/checked-api-fixture"
-    dest=queue/(secrets.token_hex(8)+".json")
-    tmp=dest.with_suffix(".tmp");tmp.write_text(json.dumps({"cid":cid,"xml":ET.tostring(p,encoding="unicode")}));tmp.replace(dest)
+    existing={p.name for p in queue.glob("*.input.xml")}
+    ok("one.cluster.optimize",cid)
+    path=waitfor(lambda: next((p for p in queue.glob("*.input.xml") if p.name not in existing),None))
+    data=path.read_bytes();root=ET.fromstring(data)
+    candidates={}
+    for node in root.findall("ONE_DRS_ELIGIBILITY/CANDIDATE"):
+        key=(int(node.findtext("VM_ID")),int(node.findtext("HOST_ID")))
+        digest=node.findtext("SHA256","")
+        if key in candidates or not re.fullmatch("[0-9a-f]{64}",digest):raise AssertionError("invalid native input identity")
+        candidates[key]=digest
+    clusters=[x for x in root.findall("CLUSTER_POOL/CLUSTER") if x.findtext("ID")==str(cid)]
+    if len(clusters)!=1:raise AssertionError("native input cluster missing")
+    request={"candidates":candidates,"template_sha256":clusters[0].findtext("TEMPLATE_SHA256"),"input_sha256":hashlib.sha256(data).hexdigest()}
+    check("captured_native_scheduler_input_"+path.stem,bool(candidates),input_sha256=request["input_sha256"])
+    return request
+
+def emit(actions, captured=None, allow_missing=False, operations=None):
+    captured = captured or capture_input()
+    before = cluster().findtext("PLAN/GENERATION")
+    p = ET.Element("PLAN")
+    ET.SubElement(p, "ID").text = str(cid)
+    ET.SubElement(p, "TEMPLATE_SHA256").text = captured["template_sha256"]
+    for ident, (vid, hid, dsid) in enumerate(actions):
+        operation = operations[ident] if operations else "migrate"
+        a = ET.SubElement(p, "ACTION")
+        for tag, val in [("ID", ident), ("VM_ID", vid), ("STATE", 0), ("OPERATION", operation),
+                         ("HOST_ID", hid), ("DS_ID", dsid), ("TIMESTAMP", 0)]:
+            ET.SubElement(a, tag).text = str(val)
+        if operation == "migrate":
+            token = captured["candidates"].get((vid, hid))
+            if token is None and not allow_missing:
+                raise AssertionError("controlled plan target is absent from actual native optimizer input")
+            if token is not None:
+                ET.SubElement(a, "ELIGIBILITY_SHA256").text = token
+    queue = P / "var/checked-api-fixture"
+    dest = queue / (secrets.token_hex(8) + ".json")
+    tmp = dest.with_suffix(".tmp")
+    tmp.write_text(json.dumps({"cid": cid, "xml": ET.tostring(p, encoding="unicode")}))
+    tmp.replace(dest)
     def accepted():
-        c=cluster()
-        return c if c.findtext("PLAN/GENERATION") not in [None,"",before] else None
+        c = cluster()
+        return c if c.findtext("PLAN/GENERATION") not in [None, "", before] else None
     return waitfor(accepted)
+
 def apply():
     c=cluster()
     return rpc("one.cluster.planexecutechecked",cid,c.findtext("PLAN_SHA256"),c.findtext("TEMPLATE_SHA256"))
@@ -227,7 +258,7 @@ def native_suite():
         start("shape-"+label)
         actions=[(vms[0],target,ds),(vms[1],source if label=="same-host" else target,ds+1 if label=="different-datastore" else ds)]
         if label=="duplicate":actions[1]=actions[0]
-        emit(actions)
+        emit(actions, allow_missing=True)
         reply=apply()
         check("mixed_plan_"+label+"_rejected_before_applying",reply[0] is False and cluster().findtext("PLAN/STATE")=="0")
         check("mixed_plan_"+label+"_no_partial_history",hist(vm(vms[0])).findtext("SEQ")=="0" and not pending_calls())
@@ -747,7 +778,7 @@ try:
     cid=int(ok("one.cluster.allocate","capacity-disposable"))
     ok("one.cluster.update",cid,policy(),1)
     caps=cluster().find("ONE_DRS_CHECKED_CAPABILITIES")
-    check("native_capability_v2_scope",caps is not None and caps.findtext("VERSION")=="2" and caps.findtext("CAPACITY")=="ATOMIC" and caps.findtext("MIGRATION")=="RUNNING_UNPINNED_NO_PCI_SAME_DATASTORE_CROSS_HOST")
+    check("native_capability_v3_scope",caps is not None and caps.findtext("VERSION")=="3" and caps.findtext("CAPACITY")=="ATOMIC" and caps.findtext("MIGRATION")=="RUNNING_UNPINNED_NO_PCI_NO_VMGROUP_SAME_DATASTORE_CROSS_HOST" and caps.findtext("ELIGIBILITY")=="SOURCE_BOUND_CURRENT_OWNER_REQUIREMENTS")
     source=int(ok("one.host.allocate","capacity-source","capacity","capacity",cid))
     target=int(ok("one.host.allocate","capacity-target","capacity","capacity",cid))
     ds=int(ok("one.datastore.allocate",'NAME="capacity-system" TYPE="SYSTEM_DS" TM_MAD="dummy" DISK_TYPE="FILE"',cid))
@@ -777,6 +808,9 @@ try:
     if SUITE in ["all","enforce"]:enforced_admission_suite()
     if SUITE in ["all","recovery"]:enforced_recovery_suite()
     if SUITE in ["all","downgrade"]:downgrade_gap_suite()
+    if SUITE in ["all","generation","origin","origin-ledger","origin-orphan"]:
+        import native_generation_contract
+        native_generation_contract.run(globals())
     if SUITE=="legacy-red":legacy_enforce_reproduction()
     RESULT["status"]="REPRODUCED" if SUITE=="legacy-red" else "PASS"
 except Exception as exc:

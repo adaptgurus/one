@@ -55,15 +55,15 @@ void DispatchManager::trigger_suspend_success(int vid)
 
             vm->set_running_etime(the_time);
 
-            vmpool->update_history(vm.get());
-
-            vmpool->update(vm.get());
+            const bool durable = vm->capacity_enforced() || !vm->plan_action_generation().empty();
+            if (vmpool->update_history(vm.get()) != 0 && durable) return;
+            if (vmpool->update(vm.get()) != 0 && durable) return;
 
             int uid = vm->get_uid();
             int gid = vm->get_gid();
             int plan_id   = vm->plan_id();
             int action_id = vm->action_id();
-        const auto generation = vm->checked_plan_generation();
+            const auto generation = vm->plan_action_generation();
 
             vm.reset();
 
@@ -240,15 +240,15 @@ void DispatchManager::trigger_poweroff_success(int vid)
 
             vm->set_running_etime(the_time);
 
-            vmpool->update_history(vm.get());
-
-            vmpool->update(vm.get());
+            const bool durable = vm->capacity_enforced() || !vm->plan_action_generation().empty();
+            if (vmpool->update_history(vm.get()) != 0 && durable) return;
+            if (vmpool->update(vm.get()) != 0 && durable) return;
 
             int uid = vm->get_uid();
             int gid = vm->get_gid();
             int plan_id   = vm->plan_id();
             int action_id = vm->action_id();
-        const auto generation = vm->checked_plan_generation();
+            const auto generation = vm->plan_action_generation();
 
             vm.reset();
 
