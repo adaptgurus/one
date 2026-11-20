@@ -1,0 +1,719 @@
+{
+  "files": [
+    {
+      "git_blob": "ead032b75c82848759c54709878f245f0357e8d3",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/acct.xsd",
+      "sha256": "1f364ceefba2d3e9fa14859e469cea14c3f0cc0578a6806a39cb92aee228a5a9",
+      "source": "share/doc/xsd/acct.xsd",
+      "source_sha256": "1f364ceefba2d3e9fa14859e469cea14c3f0cc0578a6806a39cb92aee228a5a9"
+    },
+    {
+      "git_blob": "10dafb33e7303af9d80e7c9994dd84f9197bde33",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/acl_pool.xsd",
+      "sha256": "84a3f2e04d7778eea4b0ebb2bcc327dcadfa8c41d909bd8d12042ee8b04ed65a",
+      "source": "share/doc/xsd/acl_pool.xsd",
+      "source_sha256": "84a3f2e04d7778eea4b0ebb2bcc327dcadfa8c41d909bd8d12042ee8b04ed65a"
+    },
+    {
+      "git_blob": "b96e5c181c6dedbb70b9173de7c3b7b65e014b41",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/api_info.xsd",
+      "sha256": "ff3e2d81878d3ff975ddca69c727e3cba1d422cd65d35e93a81412d35ba151e3",
+      "source": "share/doc/xsd/api_info.xsd",
+      "source_sha256": "ff3e2d81878d3ff975ddca69c727e3cba1d422cd65d35e93a81412d35ba151e3"
+    },
+    {
+      "git_blob": "4e669e4d64abe1594325d4030bee375521495862",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/backupjob.xsd",
+      "sha256": "5f54d90f9a26587c1238eedc2a9d232f24eb12b12f6513233a6ceb20705d67ff",
+      "source": "share/doc/xsd/backupjob.xsd",
+      "source_sha256": "5f54d90f9a26587c1238eedc2a9d232f24eb12b12f6513233a6ceb20705d67ff"
+    },
+    {
+      "git_blob": "d01ac35ea2590e75b12dc6c288f98eb3c14dfa31",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/backupjob_pool.xsd",
+      "sha256": "737caf1a7833a93bf33aed87377801f2be027972826b21fe675ea630eea2a97c",
+      "source": "share/doc/xsd/backupjob_pool.xsd",
+      "source_sha256": "737caf1a7833a93bf33aed87377801f2be027972826b21fe675ea630eea2a97c"
+    },
+    {
+      "git_blob": "1a6cda3b4d2981b7a2f0bd652221a8780a23167f",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/cluster.xsd",
+      "sha256": "57ec23d861c9780bca35d629fd1584c12e88c932f88e6a2cc72d8af82c89ee96",
+      "source": "share/doc/xsd/cluster.xsd",
+      "source_sha256": "57ec23d861c9780bca35d629fd1584c12e88c932f88e6a2cc72d8af82c89ee96"
+    },
+    {
+      "git_blob": "54738815e6b7eb7edcd8b978bc18590005f4f840",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/cluster_pool.xsd",
+      "sha256": "8616f047f9a8c95e454ea4464ceac5dd83d48f6df8ee432ef19f155e3cec0ceb",
+      "source": "share/doc/xsd/cluster_pool.xsd",
+      "source_sha256": "8616f047f9a8c95e454ea4464ceac5dd83d48f6df8ee432ef19f155e3cec0ceb"
+    },
+    {
+      "git_blob": "01067a4ae95e3187caa258828ba1ce404be6c89e",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/datastore.xsd",
+      "sha256": "8c9db1206d4c9c00c59c9f60f664e027f15bf9a0c251147cacbb7c7522e2a371",
+      "source": "share/doc/xsd/datastore.xsd",
+      "source_sha256": "8c9db1206d4c9c00c59c9f60f664e027f15bf9a0c251147cacbb7c7522e2a371"
+    },
+    {
+      "git_blob": "655d4589f42d00fabddb9a2977aa520c9838f74e",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/datastore_pool.xsd",
+      "sha256": "b16b4744c57c6c4de993d8b8cf8237569ba08f691cebf40fe586d4c9d6a331df",
+      "source": "share/doc/xsd/datastore_pool.xsd",
+      "source_sha256": "b16b4744c57c6c4de993d8b8cf8237569ba08f691cebf40fe586d4c9d6a331df"
+    },
+    {
+      "git_blob": "b784ede9b209251cf15dafd9b57742b021aceaf7",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/document.xsd",
+      "sha256": "e1e64811e62e9ab683604036482f488e223ca4a88b025e2b0057426511481fd2",
+      "source": "share/doc/xsd/document.xsd",
+      "source_sha256": "e1e64811e62e9ab683604036482f488e223ca4a88b025e2b0057426511481fd2"
+    },
+    {
+      "git_blob": "ee93968e68c43b4e328f069658d03a2725cbde12",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/document_pool.xsd",
+      "sha256": "ff8f1dce624ea1c1e0c6438ac9c334c107b972c679d4f085e0076f5d65f940f2",
+      "source": "share/doc/xsd/document_pool.xsd",
+      "source_sha256": "ff8f1dce624ea1c1e0c6438ac9c334c107b972c679d4f085e0076f5d65f940f2"
+    },
+    {
+      "git_blob": "7505867a8abda21f58e62c614e0f1123e762762f",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/group.xsd",
+      "sha256": "753c6d77d0c5ea1cf807314d84e93aaf71f8eff89ff12bd6069a52f02141f02e",
+      "source": "share/doc/xsd/group.xsd",
+      "source_sha256": "753c6d77d0c5ea1cf807314d84e93aaf71f8eff89ff12bd6069a52f02141f02e"
+    },
+    {
+      "git_blob": "46311b24a911737d5c9806bd86088d8271492ac5",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/group_pool.xsd",
+      "sha256": "4c16b30501195ef2d77bc7498a269c1fa2939ca1244ff7ec8a07e6711008e5f2",
+      "source": "share/doc/xsd/group_pool.xsd",
+      "source_sha256": "4c16b30501195ef2d77bc7498a269c1fa2939ca1244ff7ec8a07e6711008e5f2"
+    },
+    {
+      "git_blob": "261901ed3c3d2ec3401cea9b3e855228594dbb4b",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/hook.xsd",
+      "sha256": "9b3a727f7527d944e87147783259526c54d319d26fa6a9dba87c64bfe6b20718",
+      "source": "share/doc/xsd/hook.xsd",
+      "source_sha256": "9b3a727f7527d944e87147783259526c54d319d26fa6a9dba87c64bfe6b20718"
+    },
+    {
+      "git_blob": "644862c49f36531579870c72f5831b68c70b8e67",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/hook_message_api.xsd",
+      "sha256": "c76d0b4958f701ac09be5b95625be7cf9aef013cf873577599b4285ab3e4a71e",
+      "source": "share/doc/xsd/hook_message_api.xsd",
+      "source_sha256": "c76d0b4958f701ac09be5b95625be7cf9aef013cf873577599b4285ab3e4a71e"
+    },
+    {
+      "git_blob": "1d3479ed5d0857c8ce8dea91e8ed54692aae8d46",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/hook_message_retry.xsd",
+      "sha256": "04e139aa19835b3089f7032ffc13c0b62592ed6f24e840e7803cf78e76e2a7b6",
+      "source": "share/doc/xsd/hook_message_retry.xsd",
+      "source_sha256": "04e139aa19835b3089f7032ffc13c0b62592ed6f24e840e7803cf78e76e2a7b6"
+    },
+    {
+      "git_blob": "cfc1630475fce21c4b380bba12b9dcc444399bb1",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/hook_message_state.xsd",
+      "sha256": "4c929d847e23956acfc8272dcce699b0b6c50152d6fa30f4d66e742487c56b73",
+      "source": "share/doc/xsd/hook_message_state.xsd",
+      "source_sha256": "4c929d847e23956acfc8272dcce699b0b6c50152d6fa30f4d66e742487c56b73"
+    },
+    {
+      "git_blob": "1761f8ca572bce53ede30f2beddbb0380bd5a2ef",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/hook_pool.xsd",
+      "sha256": "df5acdd2606b362fdf5c4c5df0c7a1487b9fb2672ebbf013ab6e2fa7907a55e7",
+      "source": "share/doc/xsd/hook_pool.xsd",
+      "source_sha256": "df5acdd2606b362fdf5c4c5df0c7a1487b9fb2672ebbf013ab6e2fa7907a55e7"
+    },
+    {
+      "git_blob": "8421716820fce97f2cfc2ec8d22dea8c9f766042",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/host.xsd",
+      "sha256": "503ac2a15c289c8f132b5f554b17510e07a794bd828e70c9665560898e687ac8",
+      "source": "share/doc/xsd/host.xsd",
+      "source_sha256": "503ac2a15c289c8f132b5f554b17510e07a794bd828e70c9665560898e687ac8"
+    },
+    {
+      "git_blob": "5d797d3cbb543340fb76f3ce43c4a27aae485bfc",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/host_pool.xsd",
+      "sha256": "370b899606123f3c32fe657c369f505c9a9cba2338a957f56f6cd9370b00278f",
+      "source": "share/doc/xsd/host_pool.xsd",
+      "source_sha256": "370b899606123f3c32fe657c369f505c9a9cba2338a957f56f6cd9370b00278f"
+    },
+    {
+      "git_blob": "d424eda92bfe198de0feb4ab6854419086720283",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/image.xsd",
+      "sha256": "a450a8198f458392fdf96f854e11c1f0832ae1113ff22f33a167e4116fd25e88",
+      "source": "share/doc/xsd/image.xsd",
+      "source_sha256": "a450a8198f458392fdf96f854e11c1f0832ae1113ff22f33a167e4116fd25e88"
+    },
+    {
+      "git_blob": "6e39f45267c2b7d3e91306e212c7e6569a09011a",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/image_pool.xsd",
+      "sha256": "eec547bdceefc325929ea5fd3172ee7e67f0f0dfc4b4eb9197999b36bda1ab34",
+      "source": "share/doc/xsd/image_pool.xsd",
+      "source_sha256": "eec547bdceefc325929ea5fd3172ee7e67f0f0dfc4b4eb9197999b36bda1ab34"
+    },
+    {
+      "git_blob": "1fdcfd974c94f7ffa31a6392ce045e6c593783ef",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/index.xsd",
+      "sha256": "0940e3cd9b1c7a47233ee80e2c5ce8fa1cfbf41eff2633c5af26544df8a237f8",
+      "source": "share/doc/xsd/index.xsd",
+      "source_sha256": "0940e3cd9b1c7a47233ee80e2c5ce8fa1cfbf41eff2633c5af26544df8a237f8"
+    },
+    {
+      "git_blob": "f5b4e0863004d995662a6369f1fec2767981dd27",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/marketplace.xsd",
+      "sha256": "b5667c394175e19ca76e7097439b4806c3eb0c7514c94405aa1e98850f8447ea",
+      "source": "share/doc/xsd/marketplace.xsd",
+      "source_sha256": "b5667c394175e19ca76e7097439b4806c3eb0c7514c94405aa1e98850f8447ea"
+    },
+    {
+      "git_blob": "fb9c7fe85e3e94cd59ec5b643bc62289784857ca",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/marketplace_pool.xsd",
+      "sha256": "230f8a07c0d946b391a546b2c017ba991352de93f66402c788c064fa7b5fbb87",
+      "source": "share/doc/xsd/marketplace_pool.xsd",
+      "source_sha256": "230f8a07c0d946b391a546b2c017ba991352de93f66402c788c064fa7b5fbb87"
+    },
+    {
+      "git_blob": "dc6a88c3a333c4af454831dfe47778c8a81826a0",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/marketplaceapp.xsd",
+      "sha256": "032766e58bcdc44586c1d4d4220327f6f92a8dc90e782c5bcfda828340970570",
+      "source": "share/doc/xsd/marketplaceapp.xsd",
+      "source_sha256": "032766e58bcdc44586c1d4d4220327f6f92a8dc90e782c5bcfda828340970570"
+    },
+    {
+      "git_blob": "f200eb0b14c0146b4712eb51cde9d2f2dc588eb1",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/marketplaceapp_pool.xsd",
+      "sha256": "c35a52806a35bd4c669233716ab9e348c80aeb940ee1248a758bfd278a9442df",
+      "source": "share/doc/xsd/marketplaceapp_pool.xsd",
+      "source_sha256": "c35a52806a35bd4c669233716ab9e348c80aeb940ee1248a758bfd278a9442df"
+    },
+    {
+      "git_blob": "b3a44055d1576019a0fe6014316627952d0b88c5",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/monitoring_data.xsd",
+      "sha256": "205310b675e011f84cd6b725fac739845387343340270546e57f111b23eba40c",
+      "source": "share/doc/xsd/monitoring_data.xsd",
+      "source_sha256": "205310b675e011f84cd6b725fac739845387343340270546e57f111b23eba40c"
+    },
+    {
+      "git_blob": "8dfa6f2c378b4eedd96f720a7abee0ea0e60209f",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/opennebula_configuration.xsd",
+      "sha256": "8802e16387c413e51680480f454ed4b503b5f6deaace57a427a4380b39cac05b",
+      "source": "share/doc/xsd/opennebula_configuration.xsd",
+      "source_sha256": "8802e16387c413e51680480f454ed4b503b5f6deaace57a427a4380b39cac05b"
+    },
+    {
+      "git_blob": "b577974495af035b1e0d5d2c519d6b4f5c794bc4",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/plan.xsd",
+      "sha256": "c6981253c41ef5d41487f637f43ad9f3457497bd5641d574e0e07e53c0ba12ea",
+      "source": "share/doc/xsd/plan.xsd",
+      "source_sha256": "c6981253c41ef5d41487f637f43ad9f3457497bd5641d574e0e07e53c0ba12ea"
+    },
+    {
+      "git_blob": "219d2baaf86306630861990b6cf1924bc2c96ced",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/raftstatus.xsd",
+      "sha256": "19c80036fb96bf4e59b7abcbc43a32def887f217b46825a24626fb8eb1c98624",
+      "source": "share/doc/xsd/raftstatus.xsd",
+      "source_sha256": "19c80036fb96bf4e59b7abcbc43a32def887f217b46825a24626fb8eb1c98624"
+    },
+    {
+      "git_blob": "9df7e2fd1153b0916a0b5601ec24983ed425529c",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/requirements.xsd",
+      "sha256": "08f84dca718dfed0e11423ef918ef04cd5f1f815b88e073ee77528eb504cba29",
+      "source": "share/doc/xsd/requirements.xsd",
+      "source_sha256": "08f84dca718dfed0e11423ef918ef04cd5f1f815b88e073ee77528eb504cba29"
+    },
+    {
+      "git_blob": "0bd2c2f6892aefc4cffdc5e9cf9100188c3a0b34",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/scheduler_driver_action.xsd",
+      "sha256": "964ae8bbc04ecf7a92bb7c01bc38539dab9ebdbb4a5eb261276d9ff981a9498a",
+      "source": "share/doc/xsd/scheduler_driver_action.xsd",
+      "source_sha256": "964ae8bbc04ecf7a92bb7c01bc38539dab9ebdbb4a5eb261276d9ff981a9498a"
+    },
+    {
+      "git_blob": "6b23ae90a754c440aaf114f1ffee3192b24dc070",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/security_group.xsd",
+      "sha256": "8d2cf89e9368b0d42f338ca4c3dd948b6bf2485665fbe4100cf30811ee435de7",
+      "source": "share/doc/xsd/security_group.xsd",
+      "source_sha256": "8d2cf89e9368b0d42f338ca4c3dd948b6bf2485665fbe4100cf30811ee435de7"
+    },
+    {
+      "git_blob": "73bb62a53a36bbe0c23210f6de86a9e7626dc608",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/security_group_pool.xsd",
+      "sha256": "ad4c6c6b3dc8c104c2aafd031bb08296f769a4bfd42938a944547cdd27c24027",
+      "source": "share/doc/xsd/security_group_pool.xsd",
+      "source_sha256": "ad4c6c6b3dc8c104c2aafd031bb08296f769a4bfd42938a944547cdd27c24027"
+    },
+    {
+      "git_blob": "42abb8b3ac25010b4157ff0820a1f7ad4bf71811",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/shared.xsd",
+      "sha256": "b75a5e185ccd5b6c2920b619b00e92d15e3f886965fe2e9c6e924d056eb67073",
+      "source": "share/doc/xsd/shared.xsd",
+      "source_sha256": "b75a5e185ccd5b6c2920b619b00e92d15e3f886965fe2e9c6e924d056eb67073"
+    },
+    {
+      "git_blob": "bb100fcc5123f36f7e5acc0c1df6de79ec873153",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/showback.xsd",
+      "sha256": "05ce8396d3fd03e45006313241c5942b753b020707623aacd0a6134b0e7051f3",
+      "source": "share/doc/xsd/showback.xsd",
+      "source_sha256": "05ce8396d3fd03e45006313241c5942b753b020707623aacd0a6134b0e7051f3"
+    },
+    {
+      "git_blob": "c4cc6f72b886317c0b760516467fed2b4bbfe6c8",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/user.xsd",
+      "sha256": "229d8957a7218da3992697af2c8a0ca8e63817eecc7ef9ce1584999f5a7a4e5d",
+      "source": "share/doc/xsd/user.xsd",
+      "source_sha256": "229d8957a7218da3992697af2c8a0ca8e63817eecc7ef9ce1584999f5a7a4e5d"
+    },
+    {
+      "git_blob": "5e8238ef4ce23da1c75de8413e4130ee0ed1c192",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/user_pool.xsd",
+      "sha256": "db4cf16e45ec1f697b39db83f2a040bdd31b851c4f10d374c00749e8ba5efd4d",
+      "source": "share/doc/xsd/user_pool.xsd",
+      "source_sha256": "db4cf16e45ec1f697b39db83f2a040bdd31b851c4f10d374c00749e8ba5efd4d"
+    },
+    {
+      "git_blob": "7df71b940e772cdf80d502892bf51018e24ff6ea",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vdc.xsd",
+      "sha256": "c3a4a5b78ac5624032cab03db154812d9613c898bd7e8aa973379f81664fe954",
+      "source": "share/doc/xsd/vdc.xsd",
+      "source_sha256": "c3a4a5b78ac5624032cab03db154812d9613c898bd7e8aa973379f81664fe954"
+    },
+    {
+      "git_blob": "42e2e4ef58f4159d1c3c94a61a2f2e9903a90de6",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vdc_pool.xsd",
+      "sha256": "a6294c2e15b760fa199809c746aaf71b73c6fab2edb6b6d4969896357709aa31",
+      "source": "share/doc/xsd/vdc_pool.xsd",
+      "source_sha256": "a6294c2e15b760fa199809c746aaf71b73c6fab2edb6b6d4969896357709aa31"
+    },
+    {
+      "git_blob": "395b56a25d0ea0798f3a4c79492c874eed338e7c",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vm.xsd",
+      "sha256": "0348c7472a094a4f4afa554d537465d3e3120ea14d4c73ecc36859f1c8cfc28b",
+      "source": "share/doc/xsd/vm.xsd",
+      "source_sha256": "0348c7472a094a4f4afa554d537465d3e3120ea14d4c73ecc36859f1c8cfc28b"
+    },
+    {
+      "git_blob": "b7d1b5981463df18fa05f8ea563b83206f8c925a",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vm_group.xsd",
+      "sha256": "535035bcfff98803c9388eff8b22571bcfd6cc2187250d5f4b3aa6236ca5afdf",
+      "source": "share/doc/xsd/vm_group.xsd",
+      "source_sha256": "535035bcfff98803c9388eff8b22571bcfd6cc2187250d5f4b3aa6236ca5afdf"
+    },
+    {
+      "git_blob": "cc3f514520492976ca16e2ba8d631ce16f149756",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vm_group_pool.xsd",
+      "sha256": "ae4cc97cc63f6d35042fae2ff9d96cd201c7091a4049b558f2ee28af79bb65c7",
+      "source": "share/doc/xsd/vm_group_pool.xsd",
+      "source_sha256": "ae4cc97cc63f6d35042fae2ff9d96cd201c7091a4049b558f2ee28af79bb65c7"
+    },
+    {
+      "git_blob": "e6a5cb98385bb52910b79e40bcc37546bf110c3e",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vm_pool.xsd",
+      "sha256": "d5f29649888b698744fe2094131f6585a43c651acef1c2e7a946afc8a7c60660",
+      "source": "share/doc/xsd/vm_pool.xsd",
+      "source_sha256": "d5f29649888b698744fe2094131f6585a43c651acef1c2e7a946afc8a7c60660"
+    },
+    {
+      "git_blob": "c187ce04c7d9be33092439f40c129a9a935436e7",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vm_pool_extended.xsd",
+      "sha256": "079d9d6cb376eb05e4ceb4ce3719ec3441f2b90029ae01c3804dda29427d49bf",
+      "source": "share/doc/xsd/vm_pool_extended.xsd",
+      "source_sha256": "079d9d6cb376eb05e4ceb4ce3719ec3441f2b90029ae01c3804dda29427d49bf"
+    },
+    {
+      "git_blob": "f2b6a96e7e575b6d0e3055e3a8c3c9b1fd6679af",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vmtemplate.xsd",
+      "sha256": "3e5863464a7e85bf83d8806a7c0f9db2c56a6d7dd8a0127818d8a2a6ab96d3cf",
+      "source": "share/doc/xsd/vmtemplate.xsd",
+      "source_sha256": "3e5863464a7e85bf83d8806a7c0f9db2c56a6d7dd8a0127818d8a2a6ab96d3cf"
+    },
+    {
+      "git_blob": "fbc1167eeab3d2bd2d3b2857593e67ac9de2c278",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vmtemplate_pool.xsd",
+      "sha256": "691db74fa6ba64852afbe49756bade6aadeafff0160919457fad2bf1fde8b0d4",
+      "source": "share/doc/xsd/vmtemplate_pool.xsd",
+      "source_sha256": "691db74fa6ba64852afbe49756bade6aadeafff0160919457fad2bf1fde8b0d4"
+    },
+    {
+      "git_blob": "b69bc0f5008d4b164eed7e9b2557ce36bcaee854",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vnet.xsd",
+      "sha256": "1adce252b7522d2c4ca191df53a65f7a19fc369e269339cc5c2984ec5766c6bf",
+      "source": "share/doc/xsd/vnet.xsd",
+      "source_sha256": "1adce252b7522d2c4ca191df53a65f7a19fc369e269339cc5c2984ec5766c6bf"
+    },
+    {
+      "git_blob": "40456b65d6feaaad86573366ef02ea09994a3f0e",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vnet_pool.xsd",
+      "sha256": "5880a2631bb802b375fe076354cca7c568ed331a1fd99bfd97d0b8737ee7e365",
+      "source": "share/doc/xsd/vnet_pool.xsd",
+      "source_sha256": "5880a2631bb802b375fe076354cca7c568ed331a1fd99bfd97d0b8737ee7e365"
+    },
+    {
+      "git_blob": "d67a0b33e3e5a53b0a6355020341504c3c2ad6b9",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vnet_pool_extended.xsd",
+      "sha256": "7a4f2f614a9ab0f8e4fe88760b95ac8baab032132993d1db65f76f1ab67ffdbf",
+      "source": "share/doc/xsd/vnet_pool_extended.xsd",
+      "source_sha256": "7a4f2f614a9ab0f8e4fe88760b95ac8baab032132993d1db65f76f1ab67ffdbf"
+    },
+    {
+      "git_blob": "d605aa7abb74d716bf2981a728de9d7af9be2d7c",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vntemplate.xsd",
+      "sha256": "829e1bab31668a1c6d2ee9920cf4d485c65a7874c752406097b4b66f23a5f43e",
+      "source": "share/doc/xsd/vntemplate.xsd",
+      "source_sha256": "829e1bab31668a1c6d2ee9920cf4d485c65a7874c752406097b4b66f23a5f43e"
+    },
+    {
+      "git_blob": "437c65f54200772f73b31e2b02d114ca1b85f4a0",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vntemplate_pool.xsd",
+      "sha256": "b7ba2e8d06123244ef27026e27970a9a93d3cec8fd56bd372b9f4d423d94f421",
+      "source": "share/doc/xsd/vntemplate_pool.xsd",
+      "source_sha256": "b7ba2e8d06123244ef27026e27970a9a93d3cec8fd56bd372b9f4d423d94f421"
+    },
+    {
+      "git_blob": "bb596e06e18dc6c30e07c0f1a5443e199614f917",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vrouter.xsd",
+      "sha256": "c12007e35d4b5a7dfd478bc9d8763ec1060d0eb90d04b6b70abd3497786bf3bf",
+      "source": "share/doc/xsd/vrouter.xsd",
+      "source_sha256": "c12007e35d4b5a7dfd478bc9d8763ec1060d0eb90d04b6b70abd3497786bf3bf"
+    },
+    {
+      "git_blob": "698effc452faef4480e50cc6a1d71858ee249e75",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/vrouter_pool.xsd",
+      "sha256": "8b3051e3bdad9cd8658657b5e514fee53a8e7e0d908ad344c6d7a240b073dd6c",
+      "source": "share/doc/xsd/vrouter_pool.xsd",
+      "source_sha256": "8b3051e3bdad9cd8658657b5e514fee53a8e7e0d908ad344c6d7a240b073dd6c"
+    },
+    {
+      "git_blob": "25b205cd930e799ee5f1ffb91138915ee27f5f5d",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/zone.xsd",
+      "sha256": "b2b37ac031c784bcddd03ba1487772efb9a084a1927bb4349f55dc0f96a23f47",
+      "source": "share/doc/xsd/zone.xsd",
+      "source_sha256": "b2b37ac031c784bcddd03ba1487772efb9a084a1927bb4349f55dc0f96a23f47"
+    },
+    {
+      "git_blob": "900c04dbe0e1a559848a8e91733f680463be117e",
+      "packaging_transform": null,
+      "path": "usr/share/one/schemas/xsd/zone_pool.xsd",
+      "sha256": "eaae1818f496cea2c80eb1df77f2ef2cad795c62548dd63de2e42ca2392b4b5c",
+      "source": "share/doc/xsd/zone_pool.xsd",
+      "source_sha256": "eaae1818f496cea2c80eb1df77f2ef2cad795c62548dd63de2e42ca2392b4b5c"
+    },
+    {
+      "git_blob": "064f6a6bf9989623809e2cb540e362e2a879282f",
+      "packaging_transform": null,
+      "path": "etc/one/schedulers/one_drs.conf",
+      "sha256": "3a304168dd0f9503344ca2e69ec98a8758ecc172d80fbf5b1f6d7d1a7d79adf3",
+      "source": "src/schedm_mad/remotes/one_drs/etc/one_drs.conf",
+      "source_sha256": "3a304168dd0f9503344ca2e69ec98a8758ecc172d80fbf5b1f6d7d1a7d79adf3"
+    },
+    {
+      "git_blob": "c64f4c413e982439a60672e1e9c4291098f968db",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/__init__.py",
+      "sha256": "a0f63f94ff3d3fa1cd2bdd7472f770ab546ffc697ec0034a70bd5563273cb9fb",
+      "source": "src/schedm_mad/remotes/one_drs/lib/__init__.py",
+      "source_sha256": "a0f63f94ff3d3fa1cd2bdd7472f770ab546ffc697ec0034a70bd5563273cb9fb"
+    },
+    {
+      "git_blob": "fc64969b9ee28ccedd617db0f2c4a73b45a7c82e",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/checked_request.py",
+      "sha256": "6dcc0763653adb519b8d3fc802d103dbcdcd7d5534d334f0bccdda5ecf1f5305",
+      "source": "src/schedm_mad/remotes/one_drs/lib/checked_request.py",
+      "source_sha256": "6dcc0763653adb519b8d3fc802d103dbcdcd7d5534d334f0bccdda5ecf1f5305"
+    },
+    {
+      "git_blob": "97b0fa7d758810b28c3d946161bfe7f28b198c3c",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/mapper/__init__.py",
+      "sha256": "fec3682d7c6ccb583335ddfd438cc48ab46dd79f9b446118c6148486d5b35d0b",
+      "source": "src/schedm_mad/remotes/one_drs/lib/mapper/__init__.py",
+      "source_sha256": "fec3682d7c6ccb583335ddfd438cc48ab46dd79f9b446118c6148486d5b35d0b"
+    },
+    {
+      "git_blob": "825226adb879ec4f3c5ae0fac4c38981c2777fb0",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/mapper/ilp_optimizer.py",
+      "sha256": "fb85214ec59de92c9fab1a8e45bbaf596c737c02c4c73e8355d13fb5aae4a0bd",
+      "source": "src/schedm_mad/remotes/one_drs/lib/mapper/ilp_optimizer.py",
+      "source_sha256": "fb85214ec59de92c9fab1a8e45bbaf596c737c02c4c73e8355d13fb5aae4a0bd"
+    },
+    {
+      "git_blob": "9db0274c1bde1d8265bdd821c961054f0105a945",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/mapper/mapper.py",
+      "sha256": "dd77cfef7c5de528bcfb0c648c98daab8c440be6ee5480a07378dde2521b6c7a",
+      "source": "src/schedm_mad/remotes/one_drs/lib/mapper/mapper.py",
+      "source_sha256": "dd77cfef7c5de528bcfb0c648c98daab8c440be6ee5480a07378dde2521b6c7a"
+    },
+    {
+      "git_blob": "8aafff69265822e9776d820c70b76fe69caa51ea",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/mapper/model.py",
+      "sha256": "6150fadd6437063f1d60ce8c32edb76ce83d497d7cdf4e0ef8df460434e3b091",
+      "source": "src/schedm_mad/remotes/one_drs/lib/mapper/model.py",
+      "source_sha256": "6150fadd6437063f1d60ce8c32edb76ce83d497d7cdf4e0ef8df460434e3b091"
+    },
+    {
+      "git_blob": "a07a442d0b9376ebdf73a71494a568a047dde620",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/__init__.py",
+      "sha256": "bd8380ea6c63c1985926d1c1f8644081f540fb5f924f2d94ce37144525cb91b8",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/__init__.py",
+      "source_sha256": "bd8380ea6c63c1985926d1c1f8644081f540fb5f924f2d94ce37144525cb91b8"
+    },
+    {
+      "git_blob": "542848786929e78becf75a61ad6a200aac992ffe",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/cluster.py",
+      "sha256": "4d0f88d9aa8497a2a8de2a9ebc9c5dd00f7b3527d2df8dbe09776789f9de064b",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/cluster.py",
+      "source_sha256": "4d0f88d9aa8497a2a8de2a9ebc9c5dd00f7b3527d2df8dbe09776789f9de064b"
+    },
+    {
+      "git_blob": "acdea75e49b3448c313314bce5ed969f65014c73",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/cluster_pool.py",
+      "sha256": "a1ecd026633dda35fdfe464f6e8252b2b73c85c4c180141c57ecf5177d1a90c1",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/cluster_pool.py",
+      "source_sha256": "a1ecd026633dda35fdfe464f6e8252b2b73c85c4c180141c57ecf5177d1a90c1"
+    },
+    {
+      "git_blob": "e8b22c427c0492c1c102d10ff8a621499127d776",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/datastore.py",
+      "sha256": "8539057e2cef955a851e9ab590b702c90bc1bf52d3afa493e019936fd7fe40ff",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/datastore.py",
+      "source_sha256": "8539057e2cef955a851e9ab590b702c90bc1bf52d3afa493e019936fd7fe40ff"
+    },
+    {
+      "git_blob": "85779e66c9fd11f8a2a280f3169a7c4d2f925dd1",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/datastore_pool.py",
+      "sha256": "49fb9c4bc85d22d856157c8827df9ab7ffa83535337b86ec43c03dc65cc8ca6a",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/datastore_pool.py",
+      "source_sha256": "49fb9c4bc85d22d856157c8827df9ab7ffa83535337b86ec43c03dc65cc8ca6a"
+    },
+    {
+      "git_blob": "4ae7f7f0b52912469c016d63ddcfe66b1cdecfee",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/host.py",
+      "sha256": "623255c23ad3e94a341f9f11a70168bb6fd0ede50f9598567b3cd5b902875d89",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/host.py",
+      "source_sha256": "623255c23ad3e94a341f9f11a70168bb6fd0ede50f9598567b3cd5b902875d89"
+    },
+    {
+      "git_blob": "3a41f199014671d2666bd66d924382bd751377be",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/host_pool.py",
+      "sha256": "f093b31f6629a64e9e04eaf605fcd48875380441c10839bd7d1377830ce0c270",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/host_pool.py",
+      "source_sha256": "f093b31f6629a64e9e04eaf605fcd48875380441c10839bd7d1377830ce0c270"
+    },
+    {
+      "git_blob": "b6a942b222431ff319d8379a47e2602039833e7b",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/native_eligibility.py",
+      "sha256": "7d23205f87173e890ff30197723cf665ccc2cbef09ad4f9a4ad0337fa82d4831",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/native_eligibility.py",
+      "source_sha256": "7d23205f87173e890ff30197723cf665ccc2cbef09ad4f9a4ad0337fa82d4831"
+    },
+    {
+      "git_blob": "8c05bf9a0de1a4e147c9090875528b25e7f51b1a",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/plan.py",
+      "sha256": "da8d8955d380f14b03a21a1bc5c530211098fbee376a9abecd3ca57ee8f97c00",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/plan.py",
+      "source_sha256": "da8d8955d380f14b03a21a1bc5c530211098fbee376a9abecd3ca57ee8f97c00"
+    },
+    {
+      "git_blob": "514b5603c8bc31b97debbf5e1f7e1899bb2fba55",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/requirements.py",
+      "sha256": "00ef7cfb0f1fc47437801f86ef13b1d5097eb29639efa6c1fc10997f9468bedd",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/requirements.py",
+      "source_sha256": "00ef7cfb0f1fc47437801f86ef13b1d5097eb29639efa6c1fc10997f9468bedd"
+    },
+    {
+      "git_blob": "74699531dacc58b85a1e77bc21e4c563a201ec72",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/scheduler_driver_action.py",
+      "sha256": "f264c3ad37b2da9f1c3070cba177cb534e800a0add496b903054ada9efb0b822",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/scheduler_driver_action.py",
+      "source_sha256": "f264c3ad37b2da9f1c3070cba177cb534e800a0add496b903054ada9efb0b822"
+    },
+    {
+      "git_blob": "cde0d04426677446320a50fe327c1952c9c4ad68",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/shared.py",
+      "sha256": "8fcb917b46b15fdc3f2e40b2b96513dc6bbf519623e123e5ce289c24f0a0cb96",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/shared.py",
+      "source_sha256": "8fcb917b46b15fdc3f2e40b2b96513dc6bbf519623e123e5ce289c24f0a0cb96"
+    },
+    {
+      "git_blob": "dad8de478d12ff725e054eabcf6deefef94ca29c",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/vm.py",
+      "sha256": "52d5b3b6029c94b6ba26960f8b7b3abdafaa4fe71052bb29645e412d5b6f8026",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/vm.py",
+      "source_sha256": "52d5b3b6029c94b6ba26960f8b7b3abdafaa4fe71052bb29645e412d5b6f8026"
+    },
+    {
+      "git_blob": "a71fcc36fa3db252189ab32058ac82a044c478c1",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/vm_group.py",
+      "sha256": "b621df281eb706386ffecd821914b17cdf3482776cccb9c1c6deb38ca6b7ca13",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/vm_group.py",
+      "source_sha256": "b621df281eb706386ffecd821914b17cdf3482776cccb9c1c6deb38ca6b7ca13"
+    },
+    {
+      "git_blob": "73f4d1ac6c1832f1793cb288d5055f18bb6de00c",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/vm_group_pool.py",
+      "sha256": "a35e458e3a79f7aa13dcae58574d2eb9cc10ee9bd9090e8eca40b421758b3118",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/vm_group_pool.py",
+      "source_sha256": "a35e458e3a79f7aa13dcae58574d2eb9cc10ee9bd9090e8eca40b421758b3118"
+    },
+    {
+      "git_blob": "fba1cefad7424dc2d75779c904d049af3382c082",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/vm_pool_extended.py",
+      "sha256": "ea55d9d7d9be90d7ee91fd308d05b67d778ecb9dcf744e1f673e1679211255a2",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/vm_pool_extended.py",
+      "source_sha256": "ea55d9d7d9be90d7ee91fd308d05b67d778ecb9dcf744e1f673e1679211255a2"
+    },
+    {
+      "git_blob": "ea0b49bf88d0c566890f4b77ad7538fb1fe42f41",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/vnet.py",
+      "sha256": "38b9797303b636889a0b4c2b501cea281c9d8cbd61b63a275530d4604c80cea2",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/vnet.py",
+      "source_sha256": "38b9797303b636889a0b4c2b501cea281c9d8cbd61b63a275530d4604c80cea2"
+    },
+    {
+      "git_blob": "1c82659cbebde4c48451a9dab31939369fddf75c",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/models/vnet_pool_extended.py",
+      "sha256": "5178d4954b628596737b70e862de84c88c8ea14804ecc29c6d5875e19e123b25",
+      "source": "src/schedm_mad/remotes/one_drs/lib/models/vnet_pool_extended.py",
+      "source_sha256": "5178d4954b628596737b70e862de84c88c8ea14804ecc29c6d5875e19e123b25"
+    },
+    {
+      "git_blob": "6303b42b63d93c6599fb0023931a9162eb0cf5e9",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/optimizer_parser.py",
+      "sha256": "86f0da16164195e82ced7403b27ca64b1e47d0ec82d0debd492925b05c15f3f2",
+      "source": "src/schedm_mad/remotes/one_drs/lib/optimizer_parser.py",
+      "source_sha256": "86f0da16164195e82ced7403b27ca64b1e47d0ec82d0debd492925b05c15f3f2"
+    },
+    {
+      "git_blob": "3bb0a93967d00870462bee1ae90416fa903f1dd4",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/optimizer_serializer.py",
+      "sha256": "a0c2b52e387ca1c5fc28f2fe3e5bd7dd6a87f7a51b9d5abd540cb7329fcd0d32",
+      "source": "src/schedm_mad/remotes/one_drs/lib/optimizer_serializer.py",
+      "source_sha256": "a0c2b52e387ca1c5fc28f2fe3e5bd7dd6a87f7a51b9d5abd540cb7329fcd0d32"
+    },
+    {
+      "git_blob": "f1e1265546be1f27baa19177ec499ce9e76f8157",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/recovery_fit.py",
+      "sha256": "9bb5b0b19fbe26cad92cacf5f3c032582a985a516c0e7ac8822b455335f255c1",
+      "source": "src/schedm_mad/remotes/one_drs/lib/recovery_fit.py",
+      "source_sha256": "9bb5b0b19fbe26cad92cacf5f3c032582a985a516c0e7ac8822b455335f255c1"
+    },
+    {
+      "git_blob": "e171d5dbf29124e98d9bb98fd416e74f9b5d5a83",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/resilience.py",
+      "sha256": "9f776e86fa6ff38275e08c0c4970cfeeef7a16494a64e491f7f5566302785065",
+      "source": "src/schedm_mad/remotes/one_drs/lib/resilience.py",
+      "source_sha256": "9f776e86fa6ff38275e08c0c4970cfeeef7a16494a64e491f7f5566302785065"
+    },
+    {
+      "git_blob": "c0c87d9607621867e5e634ea41237b8c4c56b876",
+      "packaging_transform": null,
+      "path": "var/lib/one/remotes/scheduler/one_drs/lib/xsd_parser.sh",
+      "sha256": "f0c977b8a4c59efa9784cedc39bcc9a028afc30d760ee02cbe0d1c9a73f46289",
+      "source": "src/schedm_mad/remotes/one_drs/lib/xsd_parser.sh",
+      "source_sha256": "f0c977b8a4c59efa9784cedc39bcc9a028afc30d760ee02cbe0d1c9a73f46289"
+    },
+    {
+      "git_blob": "42be2034450c6d6efd18694b60ac5f1698453ec4",
+      "packaging_transform": "explicit packaged /usr/bin/python3.12 shebang",
+      "path": "var/lib/one/remotes/scheduler/one_drs/optimize",
+      "sha256": "9539f8888f55fe3190330ffeb08451787f8d743b7051b9984397132c57f9aad5",
+      "source": "src/schedm_mad/remotes/one_drs/optimize",
+      "source_sha256": "9511f9ef2eb9ea6d352fe3b575978e3f77806e9c596bcd187349b489022d8c63"
+    },
+    {
+      "git_blob": "9c04916960bf63783ae31b6d13e4f62369550054",
+      "packaging_transform": "explicit packaged /usr/bin/python3.12 shebang",
+      "path": "var/lib/one/remotes/scheduler/one_drs/place",
+      "sha256": "aa46310283812a5a13a0dd608948789be6752caef8529b34f49fd7eb384f8542",
+      "source": "src/schedm_mad/remotes/one_drs/place",
+      "source_sha256": "3f85127a35f5cc2b983107d63e0824f2d75779c6501c4cb9b31720ee0d1f9852"
+    }
+  ],
+  "schema": "onedrs.native-runtime-payload/v1",
+  "scope": "Frozen source payload custody; not runtime or release qualification",
+  "source_commit": "fc08f507a3fb3b27e69896f9a4aad16a9e173d39"
+}

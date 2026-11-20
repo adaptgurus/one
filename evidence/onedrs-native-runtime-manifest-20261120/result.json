@@ -1,0 +1,39 @@
+{
+  "started_utc": "2026-11-20T06:12:53.091774+00:00",
+  "source_commit": "fc08f507a3fb3b27e69896f9a4aad16a9e173d39",
+  "tool_sha256": "83778ba2fa6a7f22c2f22d60a25c379c21581fdd371acdb71bbb61b54732c3b5",
+  "checks": [
+    {
+      "name": "normal",
+      "exit": 0,
+      "expected_exit": 0,
+      "log_sha256": "b71162d125dfb50f56b4ddd62465f794c4d09159708dc6242896b381d3d424fa"
+    },
+    {
+      "name": "optimized",
+      "exit": 0,
+      "expected_exit": 0,
+      "log_sha256": "b71162d125dfb50f56b4ddd62465f794c4d09159708dc6242896b381d3d424fa"
+    },
+    {
+      "name": "stage",
+      "exit": 0,
+      "expected_exit": 0,
+      "log_sha256": "623f462457be775fb093a1ddafb66f38877d8188195745d29460bf52c3d07748"
+    },
+    {
+      "name": "verify-new-overlay",
+      "exit": 0,
+      "expected_exit": 0,
+      "log_sha256": "84334924c76b8619b6b1239938def80face74611b84a700da587eee4589bc74f"
+    },
+    {
+      "name": "reject-stale-r14",
+      "exit": 2,
+      "expected_exit": 2,
+      "log_sha256": "5748d6a06c9d96954fcd3a1541788704cdc1d49ae53ae397780f66991bac66d6"
+    }
+  ],
+  "state": "PASS",
+  "finished_utc": "2026-11-20T06:12:53.742240+00:00"
+}
