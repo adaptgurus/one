@@ -144,6 +144,65 @@ bool Plan::action_finished(int id, PlanState state)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+std::string OneDRSPlanRequest::to_xml() const
+{
+    if (!present()) return "";
+    std::ostringstream out;
+    out << "<REQUEST><NONCE>" << nonce << "</NONCE>"
+        << "<ACTION>" << action << "</ACTION><STATE>" << state << "</STATE>"
+        << "<TEMPLATE_SHA256>" << template_sha256 << "</TEMPLATE_SHA256>"
+        << "<BASE_PLAN_SHA256>" << base_plan_sha256 << "</BASE_PLAN_SHA256>"
+        << "<PLAN_GENERATION>" << plan_generation << "</PLAN_GENERATION>"
+        << "<ERROR>" << one_util::escape_xml(error) << "</ERROR>"
+        << "<INSTANCE>" << instance << "</INSTANCE><STARTED_AT>" << started_at
+        << "</STARTED_AT></REQUEST>";
+    return out.str();
+}
+
+void Plan::begin_generate(const std::string& nonce, const std::string& policy,
+                         const std::string& base, const std::string& instance)
+{
+    clear();
+    _generation.clear();
+    _template_sha256 = policy;
+    _request = {nonce, "GENERATE", "GENERATING", policy, base, "", "", instance,
+                static_cast<long long>(time(nullptr))};
+}
+
+bool Plan::accept_generated(const Plan& response)
+{
+    if (!generating() || response.response_nonce() != _request.nonce ||
+        response.template_sha256() != _request.template_sha256) return false;
+    if (!renew_generation()) return false;
+    _actions = response._actions;
+    _state = _actions.empty() ? PlanState::NONE : PlanState::READY;
+    _request.state = _actions.empty() ? "NOOP" : "READY";
+    _request.plan_generation = _generation;
+    _request.error.clear();
+    return true;
+}
+
+void Plan::generation_error(const std::string& reason)
+{
+    if (!generating()) return;
+    _actions.clear();
+    _state = PlanState::NONE;
+    _checked_execution = false;
+    _generation.clear();
+    _request.state = "ERROR";
+    _request.error = reason.substr(0, 512);
+    _request.plan_generation.clear();
+}
+
+void Plan::reject_ready(const std::string& nonce, const std::string& policy,
+                       const std::string& base, const std::string& instance)
+{
+    const auto rejected = _generation;
+    clear();
+    _request = {nonce, "REJECT", "REJECTED", policy, base, rejected, "", instance,
+                static_cast<long long>(time(nullptr))};
+}
+
 string Plan::to_xml() const
 {
     ostringstream oss;
@@ -160,7 +219,7 @@ string Plan::to_xml() const
         oss << action.to_xml();
     }
 
-    oss << "</PLAN>";
+    oss << _request.to_xml() << "</PLAN>";
 
     return oss.str();
 }
@@ -185,6 +244,11 @@ bool Plan::renew_generation()
 
 int Plan::validate_checked(const std::string& expected_sha256, std::string& error) const
 {
+    if (generating())
+    {
+        error = "Native recommendation generation is in progress";
+        return -1;
+    }
     if (_state != PlanState::READY)
     {
         error = "Approved plan is no longer READY";
@@ -324,6 +388,63 @@ int Plan::rebuild_attributes()
     {
         return -1;
     }
+
+    const auto valid_digest = [](const std::string& value)
+    {
+        return value.size() == 64 && std::all_of(value.begin(), value.end(),
+            [](unsigned char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
+    };
+    const auto scalar = [this](const std::string& path, std::string& value, bool required)
+    {
+        std::vector<xmlNodePtr> nodes;
+        get_nodes(path, nodes);
+        const bool good = nodes.size() == (required ? 1U : 0U) || (!required && nodes.size() == 1);
+        ObjectXML::free_nodes(nodes);
+        if (!good) return false;
+        xpath(value, path.c_str(), "");
+        return true;
+    };
+    _request = {};
+    std::vector<xmlNodePtr> requests;
+    get_nodes("/PLAN/REQUEST", requests);
+    const auto request_count = requests.size();
+    ObjectXML::free_nodes(requests);
+    if (request_count > 1) return -1;
+    if (request_count == 1)
+    {
+        for (const auto& pair : std::vector<std::pair<const char*, std::string*>>
+            {{"NONCE", &_request.nonce}, {"ACTION", &_request.action},
+             {"STATE", &_request.state}, {"TEMPLATE_SHA256", &_request.template_sha256},
+             {"BASE_PLAN_SHA256", &_request.base_plan_sha256},
+             {"PLAN_GENERATION", &_request.plan_generation}, {"ERROR", &_request.error},
+             {"INSTANCE", &_request.instance}})
+        {
+            if (!scalar(std::string("/PLAN/REQUEST/") + pair.first, *pair.second, true)) return -1;
+        }
+        std::string started;
+        if (!scalar("/PLAN/REQUEST/STARTED_AT", started, true) || started.empty() ||
+            started.find_first_not_of("0123456789") != std::string::npos) return -1;
+        try { _request.started_at = std::stoll(started); } catch (...) { return -1; }
+        if (!valid_digest(_request.nonce) || !valid_digest(_request.template_sha256) ||
+            !valid_digest(_request.instance) || _request.started_at <= 0 ||
+            (!_request.base_plan_sha256.empty() && !valid_digest(_request.base_plan_sha256)) ||
+            (!_request.plan_generation.empty() && !valid_digest(_request.plan_generation)) ||
+            _request.error.size() > 512) return -1;
+        if (_request.action == "GENERATE")
+        {
+            if (_request.state != "GENERATING" && _request.state != "READY" &&
+                _request.state != "NOOP" && _request.state != "ERROR") return -1;
+        }
+        else if (_request.action == "REJECT")
+        {
+            if (_request.state != "REJECTED" && _request.state != "ERROR") return -1;
+        }
+        else return -1;
+    }
+    if (!scalar("/PLAN/REQUEST_NONCE", _response_nonce, false) ||
+        !scalar("/PLAN/REQUEST_ERROR", _response_error, false) ||
+        (!_response_nonce.empty() && !valid_digest(_response_nonce)) ||
+        _response_error.size() > 512 || (!_response_error.empty() && _response_nonce.empty())) return -1;
 
     vector<xmlNodePtr> action_nodes;
 

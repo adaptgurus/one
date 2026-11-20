@@ -77,3 +77,13 @@ class SchedulerDriverAction:
         default=None,
         metadata={"name": "ONE_DRS_ELIGIBILITY", "type": "Element"},
     )
+
+    one_drs_request: Optional["SchedulerDriverAction.OneDrsRequest"] = field(
+        default=None, metadata={"name": "ONE_DRS_REQUEST", "type": "Element"},
+    )
+
+    @dataclass
+    class OneDrsRequest:
+        nonce: Optional[str] = field(default=None, metadata={"name": "NONCE", "type": "Element"})
+        cluster_id: Optional[int] = field(default=None, metadata={"name": "CLUSTER_ID", "type": "Element"})
+        template_sha256: Optional[str] = field(default=None, metadata={"name": "TEMPLATE_SHA256", "type": "Element"})

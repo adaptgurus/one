@@ -28,44 +28,53 @@ import time
 from lib import OptimizerParser, OptimizerSerializer
 
 
-def main():
-    # Read from standard input
-    stdin_data = sys.stdin.read()
-    decoded_data = base64.b64decode(stdin_data)
-
-    # Parse XML input and build Optimizer
-    parser = OptimizerParser(stdin_data=decoded_data, mode="optimize")
-    optimizer = parser.build_optimizer()
-
-    # Execute Optimizer
-    start_time = time.time()
-    optimizer.map()
-    elapsed = time.time() - start_time
-    placement = optimizer._opt_placement
-
-    # Serialize Optimizer response
-    serializer = OptimizerSerializer(parser.plan_id, parser.plan_template_sha256, parser.plan_eligibility)
-    scheduler_output, logs = serializer.build_optimizer_output(
-        curr_placement=optimizer._curr_placement,
-        opt_placement=placement
-    )
-    xml_output = serializer.render(scheduler_output)
+def run(decoded_data: bytes) -> int:
+    from lib.checked_request import request_binding, error_result
+    binding = request_binding(decoded_data)
+    parser = None
+    try:
+        parser = OptimizerParser(stdin_data=decoded_data, mode="optimize")
+        optimizer = parser.build_optimizer()
+        if binding is not None and (parser.plan_id != binding.cluster_id or
+                                    parser.plan_template_sha256 != binding.template_sha256):
+            raise ValueError("Native request does not match the optimizer cluster")
+        start_time = time.time()
+        optimizer.map()
+        elapsed = time.time() - start_time
+        status = optimizer.report().splitlines()[1].strip().upper()
+        if status in {"ERROR", "INFEASIBLE"}:
+            raise ValueError("Unable to find optimal solution")
+        serializer = OptimizerSerializer(
+            parser.plan_id, parser.plan_template_sha256, parser.plan_eligibility,
+            binding.nonce if binding else None,
+        )
+        output, logs = serializer.build_optimizer_output(
+            curr_placement=optimizer._curr_placement,
+            opt_placement=optimizer._opt_placement,
+        )
+        xml_output = serializer.render(output)
+    except Exception:
+        if binding is None:
+            raise
+        # A transport-success response carries an explicit native request ERROR.
+        # The original nonce/policy identify it; an empty action set is not success.
+        sys.stdout.write(error_result(binding))
+        if parser is not None:
+            parser.log_general("ERROR", "Native checked optimizer failed")
+        return 0
+    # Once emitted, a result must never be followed by a second XML document if
+    # an unrelated log operation fails. Native response correlation stays exact.
     sys.stdout.write(xml_output)
-
-    # VM log messages
     for vm_id, level, message in logs:
         parser.log_vm(level, vm_id, message)
+    parser.log_general("INFO", f"Optimization problem solved in {int(elapsed)}s")
+    return 0
 
-    # General log message
-    status = optimizer.report().splitlines()[1].strip().upper()
-    if status == "ERROR" or status == "INFEASIBLE":
-        parser.log_general("ERROR", "Unable to find optimal solution")
-        sys.exit(1)
-    else:
-        parser.log_general("INFO", f"Optimization problem solved in {int(elapsed)}s")
 
-    sys.exit(0)
+def main():
+    decoded_data = base64.b64decode(sys.stdin.read(), validate=True)
+    return run(decoded_data)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

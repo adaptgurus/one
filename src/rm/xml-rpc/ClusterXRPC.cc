@@ -232,6 +232,34 @@ void ClusterUpdateDrsCheckedXRPC::request_execute(xmlrpc_c::paramList const& par
     response(ec, oid, att);
 }
 
+void ClusterOptimizeCheckedXRPC::request_execute(xmlrpc_c::paramList const& paramList,
+                                                   RequestAttributesXRPC& att)
+{
+    if (paramList.size() != 5)
+    {
+        att.resp_msg = "Expected session, cluster ID, template SHA-256, base plan SHA-256 and request nonce";
+        response(Request::RPC_API, -1, att); return;
+    }
+    const int oid = paramList.getInt(1);
+    auto ec = OptimizeChecked(oid, paramList.getString(2), paramList.getString(3),
+                              paramList.getString(4), att);
+    response(ec, oid, att);
+}
+
+void ClusterPlanRejectCheckedXRPC::request_execute(xmlrpc_c::paramList const& paramList,
+                                                     RequestAttributesXRPC& att)
+{
+    if (paramList.size() != 5)
+    {
+        att.resp_msg = "Expected session, cluster ID, plan SHA-256, template SHA-256 and request nonce";
+        response(Request::RPC_API, -1, att); return;
+    }
+    const int oid = paramList.getInt(1);
+    auto ec = PlanRejectChecked(oid, paramList.getString(2), paramList.getString(3),
+                                paramList.getString(4), att);
+    response(ec, oid, att);
+}
+
 void ClusterPlanDeleteXRPC::request_execute(xmlrpc_c::paramList const& paramList,
                                             RequestAttributesXRPC& att)
 {

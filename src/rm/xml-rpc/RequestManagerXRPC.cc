@@ -369,6 +369,8 @@ void RequestManagerXRPC::register_xml_methods()
     xmlrpc_c::methodPtr cluster_plandelete(new ClusterPlanDeleteXRPC());
     xmlrpc_c::methodPtr cluster_planexecutechecked(new ClusterPlanExecuteCheckedXRPC());
     xmlrpc_c::methodPtr cluster_updatedrschecked(new ClusterUpdateDrsCheckedXRPC());
+    xmlrpc_c::methodPtr cluster_optimizechecked(new ClusterOptimizeCheckedXRPC());
+    xmlrpc_c::methodPtr cluster_planrejectchecked(new ClusterPlanRejectCheckedXRPC());
     xmlrpc_c::methodPtr clusterpool_info(new ClusterPoolInfoXRPC());
 
     RequestManagerRegistry.addMethod("one.cluster.allocate", cluster_allocate);
@@ -389,6 +391,8 @@ void RequestManagerXRPC::register_xml_methods()
     RequestManagerRegistry.addMethod("one.cluster.plandelete", cluster_plandelete);
     RequestManagerRegistry.addMethod("one.cluster.planexecutechecked", cluster_planexecutechecked);
     RequestManagerRegistry.addMethod("one.cluster.updatedrschecked", cluster_updatedrschecked);
+    RequestManagerRegistry.addMethod("one.cluster.optimizechecked", cluster_optimizechecked);
+    RequestManagerRegistry.addMethod("one.cluster.planrejectchecked", cluster_planrejectchecked);
 
     RequestManagerRegistry.addMethod("one.clusterpool.info", clusterpool_info);
 

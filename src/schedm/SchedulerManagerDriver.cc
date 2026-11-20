@@ -17,6 +17,8 @@
 #include "SchedulerManagerDriver.h"
 #include "SchedulerHostContext.h"
 #include "OneDRSEligibility.h"
+#include "PlanManager.h"
+#include "PlanPool.h"
 #include "SchedulerManagerMatch.h"
 
 #include "AclManager.h"
@@ -68,29 +70,63 @@ void SchedulerManagerDriver::place() const
     place(oss);
 }
 
-void SchedulerManagerDriver::optimize(int cluster_id) const
+void SchedulerManagerDriver::optimize(int cluster_id, const std::string& request_nonce,
+                                       const std::string& expected_template) const
 {
-    SchedRequest sr(vmpool, hpool, dspool, vnpool, upool, clpool);
-
-    if ( setup_optimize_pools(cluster_id, sr) == -1 )
+    const bool checked = !request_nonce.empty();
+    auto planm = Nebula::instance().get_planm();
+    const auto complete = [&](bool noop, const std::string& error)
     {
+        if (checked) planm->finish_generate(cluster_id, request_nonce, noop, error);
+    };
+    if (checked)
+    {
+        auto plan = Nebula::instance().get_planpool()->get_ro(cluster_id);
+        if (!plan || !plan->generating() || plan->request().nonce != request_nonce ||
+            plan->request().template_sha256 != expected_template) return;
+    }
+    SchedRequest sr(vmpool, hpool, dspool, vnpool, upool, clpool);
+    const int setup = setup_optimize_pools(cluster_id, sr);
+    if (setup != 0)
+    {
+        complete(setup == 1, "Native optimizer could not load the approved cluster resources");
         return;
     }
-
     match(sr, "Optimize: ");
-
     if (sr.match.vms.empty())
     {
+        complete(true, "");
         return;
     }
-
     std::ostringstream oss;
-
     if (scheduler_message(sr, oss) != 0)
     {
+        complete(false, "Native scheduler could not construct an authoritative optimizer input");
         return;
     }
-
+    if (checked)
+    {
+        auto cluster = sr.clpool.get(cluster_id);
+        if (!cluster || cluster->template_sha256() != expected_template)
+        {
+            complete(false, "Native cluster policy changed before optimizer dispatch");
+            return;
+        }
+        // This nonce came from the durable checked request, never a late readback.
+        auto message = oss.str();
+        const std::string close = "</SCHEDULER_DRIVER_ACTION>";
+        const auto pos = message.rfind(close);
+        if (pos == std::string::npos)
+        {
+            complete(false, "Native optimizer input is malformed");
+            return;
+        }
+        message.insert(pos, "<ONE_DRS_REQUEST><NONCE>" + request_nonce +
+            "</NONCE><CLUSTER_ID>" + std::to_string(cluster_id) +
+            "</CLUSTER_ID><TEMPLATE_SHA256>" + expected_template +
+            "</TEMPLATE_SHA256></ONE_DRS_REQUEST>");
+        oss.str(""); oss.clear(); oss << message;
+    }
     optimize(cluster_id, oss);
 }
 
@@ -297,11 +333,8 @@ int SchedulerManagerDriver::setup_optimize_pools(int cluster_id, SchedRequest& s
     // -------------------------------------------------------------------------
     // Setup VM pool with pending VMs
     // -------------------------------------------------------------------------
-    if ( vmpool->get_cluster_vms(-1, -1, cluster_id, sr.vmpool.ids) != 0 ||
-            sr.vmpool.ids.empty() )
-    {
-        return -1;
-    }
+    if (vmpool->get_cluster_vms(-1, -1, cluster_id, sr.vmpool.ids) != 0) return -1;
+    if (sr.vmpool.ids.empty()) return 1; // authoritative empty workload set
 
     // -------------------------------------------------------------------------
     // Host matching

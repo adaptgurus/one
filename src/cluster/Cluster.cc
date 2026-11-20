@@ -447,6 +447,8 @@ string& Cluster::to_xml(string& xml) const
         "<MIGRATION>RUNNING_UNPINNED_NO_PCI_NO_VMGROUP_SAME_DATASTORE_CROSS_HOST</MIGRATION>"
         "<CAPACITY>ATOMIC</CAPACITY><RECOVERY>PENDING_CANCEL</RECOVERY>"
         "<ELIGIBILITY>SOURCE_BOUND_CURRENT_OWNER_REQUIREMENTS</ELIGIBILITY>"
+        "<GENERATE>REQUEST_NONCE_POLICY_PLAN_CAS</GENERATE>"
+        "<REJECT>READY_GENERATION_POLICY_PLAN_CAS</REJECT>"
         "</ONE_DRS_CHECKED_CAPABILITIES>" <<
         plan_xml                             <<
         "</CLUSTER>";
@@ -586,7 +588,7 @@ void Cluster::load_plan()
     std::string eligibility_reason = "No READY native migration recommendation";
     if (auto plan = plpool->get_ro(oid))
     {
-        if (plan->state() != PlanState::NONE)
+        if (plan->state() != PlanState::NONE || plan->has_request())
         {
             plan_xml = plan->to_xml() + "<PLAN_SHA256>" + plan->sha256() + "</PLAN_SHA256>";
         }

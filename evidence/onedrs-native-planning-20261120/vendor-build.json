@@ -1,0 +1,46 @@
+{
+  "status": "PASS",
+  "exit_code": 0,
+  "elapsed_seconds": 264.849,
+  "patch_sha256": "157309af44046cad6673191253346194f06cd895a183965a65c6369da1b01cd6",
+  "command": [
+    "scons",
+    "-Q",
+    "-j4",
+    "mysql=yes",
+    "grpc=yes",
+    "systemd=yes",
+    "sqlite=yes",
+    "xmlrpc_pkgconf=yes",
+    "parsers=no",
+    "gitversion=10dda22e-planning-wip-ls7.4.1-backport",
+    "src/nebula/oned",
+    "src/monitor/src/monitor/onemonitord"
+  ],
+  "compiler_flags": {
+    "CFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "CXXFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "LDFLAGS": "-Wl,-z,relro -Wl,--as-needed  -Wl,-z,now -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -flto=12"
+  },
+  "source": "/root/ls-onedrs-planning-vendor-build-20261120",
+  "changed_native_files": [
+    "include/Plan.h",
+    "include/PlanManager.h",
+    "include/SchedulerManager.h",
+    "include/SchedulerManagerDriver.h",
+    "src/cluster/Cluster.cc",
+    "src/rm/api/ClusterAPI.cc",
+    "src/rm/api/ClusterAPI.h",
+    "src/rm/xml-rpc/ClusterXRPC.cc",
+    "src/rm/xml-rpc/ClusterXRPC.h",
+    "src/rm/xml-rpc/RequestManagerXRPC.cc",
+    "src/schedm/Plan.cc",
+    "src/schedm/PlanManager.cc",
+    "src/schedm/SchedulerManager.cc",
+    "src/schedm/SchedulerManagerDriver.cc"
+  ],
+  "artifacts": {
+    "src/nebula/oned": "36c1edb8e3bacc7f736d322a0f34990f79d66112820134be5358cb37f5c16cc9",
+    "src/monitor/src/monitor/onemonitord": "0e26b41c8a432aebc6d028bad28ef21b4cc3aed895bbc7d9bb9e74b113334d97"
+  }
+}

@@ -19,6 +19,12 @@ class Plan:
         default=None,
         metadata={"name": "TEMPLATE_SHA256", "type": "Element"},
     )
+    request_nonce: Optional[str] = field(
+        default=None, metadata={"name": "REQUEST_NONCE", "type": "Element"},
+    )
+    request_error: Optional[str] = field(
+        default=None, metadata={"name": "REQUEST_ERROR", "type": "Element"},
+    )
     action: list["Plan.Action"] = field(
         default_factory=list,
         metadata={

@@ -29,6 +29,13 @@
             </xs:element>
           </xs:sequence></xs:complexType>
         </xs:element>
+        <xs:element name="ONE_DRS_REQUEST" minOccurs="0">
+          <xs:complexType><xs:sequence>
+            <xs:element name="NONCE" type="xs:string"/>
+            <xs:element name="CLUSTER_ID" type="xs:integer"/>
+            <xs:element name="TEMPLATE_SHA256" type="xs:string"/>
+          </xs:sequence></xs:complexType>
+        </xs:element>
       </xs:sequence>
     </xs:complexType>
   </xs:element>

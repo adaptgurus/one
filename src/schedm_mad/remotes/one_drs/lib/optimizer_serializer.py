@@ -48,15 +48,20 @@ def _get_operations(
 
 
 class OptimizerSerializer:
-    __slots__ = ("xml_serializer", "plan_id", "template_sha256", "eligibility")
+    __slots__ = ("xml_serializer", "plan_id", "template_sha256", "eligibility", "request_nonce")
 
-    def __init__(self, plan_id, template_sha256=None, eligibility=None):
+    def __init__(self, plan_id, template_sha256=None, eligibility=None, request_nonce=None):
         xml_config = SerializerConfig(indent="  ", xml_declaration=False)
         xml_context = XmlContext()
         self.xml_serializer = XmlSerializer(context=xml_context, config=xml_config)
         self.plan_id = plan_id
         self.template_sha256 = template_sha256
         self.eligibility = eligibility
+        if request_nonce is not None:
+            import re
+            if not re.fullmatch(r"[0-9a-f]{64}", request_nonce):
+                raise ValueError("Invalid native request nonce")
+        self.request_nonce = request_nonce
 
     def render(self, output: Union[Plan, SchedulerDriverAction]) -> str:
         return self.xml_serializer.render(output)
@@ -119,5 +124,6 @@ class OptimizerSerializer:
                 msg = f"Placing VM in host '{alloc.host_id}' {dstore_info}"
                 logs.append((alloc.vm_id, "INFO", msg))
 
-        plan = Plan(id=self.plan_id, template_sha256=self.template_sha256, action=actions)
+        plan = Plan(id=self.plan_id, template_sha256=self.template_sha256,
+                    request_nonce=self.request_nonce, action=actions)
         return plan, logs

@@ -1,0 +1,410 @@
+{
+  "scope": "PRIVATE_NATIVE_CHECKED_PLANNING_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T04:57:12.424500+00:00",
+  "binary_sha256": "36c1edb8e3bacc7f736d322a0f34990f79d66112820134be5358cb37f5c16cc9",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_eligibility_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "native_checked_planning_capabilities",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "planning-ready-reject_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "generate_accepted_817d1f36",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_817d1f36",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_817d1f36",
+      "result": "PASS"
+    },
+    {
+      "name": "generating_blocks_generate",
+      "result": "PASS"
+    },
+    {
+      "name": "generating_blocks_reject",
+      "result": "PASS"
+    },
+    {
+      "name": "generating_blocks_apply",
+      "result": "PASS"
+    },
+    {
+      "name": "generating_blocks_configure",
+      "result": "PASS"
+    },
+    {
+      "name": "generating_blocks_legacy_generate",
+      "result": "PASS"
+    },
+    {
+      "name": "generating_blocks_legacy_apply",
+      "result": "PASS"
+    },
+    {
+      "name": "generating_blocks_legacy_delete",
+      "result": "PASS"
+    },
+    {
+      "name": "generating_busy_rejections_do_not_change_identity",
+      "result": "PASS"
+    },
+    {
+      "name": "ready_result_correlates_native_generation",
+      "result": "PASS"
+    },
+    {
+      "name": "generate_does_not_execute_recommendations",
+      "result": "PASS"
+    },
+    {
+      "name": "checked_ready_cannot_bypass_apply_contract",
+      "result": "PASS"
+    },
+    {
+      "name": "reject_stale_plan_fails",
+      "result": "PASS"
+    },
+    {
+      "name": "reject_stale_policy_fails",
+      "result": "PASS"
+    },
+    {
+      "name": "reject_exact_ready_plan_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "reject_retains_exact_generation_and_base",
+      "result": "PASS"
+    },
+    {
+      "name": "reject_replay_fails",
+      "result": "PASS"
+    },
+    {
+      "name": "late_ready_cannot_revive_rejected_plan",
+      "result": "PASS"
+    },
+    {
+      "name": "generate_accepted_79068705",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_79068705",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_79068705",
+      "result": "PASS"
+    },
+    {
+      "name": "unbound_legacy_response_cannot_replace_checked_request",
+      "result": "PASS"
+    },
+    {
+      "name": "superseded_request_response_is_discarded",
+      "result": "PASS"
+    },
+    {
+      "name": "empty_native_result_is_explicit_noop",
+      "result": "PASS"
+    },
+    {
+      "name": "generate_accepted_61bc8668",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_61bc8668",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_61bc8668",
+      "result": "PASS"
+    },
+    {
+      "name": "native_optimizer_error_is_not_noop",
+      "result": "PASS"
+    },
+    {
+      "name": "planning-policy-drift_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "generate_accepted_b4d9f883",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_b4d9f883",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_b4d9f883",
+      "result": "PASS"
+    },
+    {
+      "name": "policy_drift_prevents_ready",
+      "result": "PASS"
+    },
+    {
+      "name": "planning-request-write_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "request_write_failure_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "no_optimizer_dispatch_before_durable_request",
+      "result": "PASS"
+    },
+    {
+      "name": "generate_accepted_8d625105",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_8d625105",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_8d625105",
+      "result": "PASS"
+    },
+    {
+      "name": "failed_result_write_stays_generating",
+      "result": "PASS"
+    },
+    {
+      "name": "same_bound_optimizer_result_can_commit_after_write_recovery",
+      "result": "PASS"
+    },
+    {
+      "name": "planning-restart_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "generate_accepted_db9d6a38",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_db9d6a38",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_db9d6a38",
+      "result": "PASS"
+    },
+    {
+      "name": "planning-after-restart_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "restart_records_correlated_error_without_optimizer_replay",
+      "result": "PASS"
+    },
+    {
+      "name": "pre_restart_response_cannot_revive_request",
+      "result": "PASS"
+    },
+    {
+      "name": "planning-timeout_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "generate_accepted_726c8205",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_726c8205",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_726c8205",
+      "result": "PASS"
+    },
+    {
+      "name": "optimizer_timeout_is_durable_error",
+      "result": "PASS"
+    },
+    {
+      "name": "planning-concurrent_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "concurrent_generate_has_exactly_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_2b92b348",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_2b92b348",
+      "result": "PASS"
+    },
+    {
+      "name": "apply_and_reject_compare_and_swap_one_winner",
+      "result": "PASS"
+    },
+    {
+      "name": "reject_winner_never_dispatches_migration",
+      "result": "PASS"
+    },
+    {
+      "name": "planning-group-review_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "generate_accepted_b99cd5e9",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_b99cd5e9",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_b99cd5e9",
+      "result": "PASS"
+    },
+    {
+      "name": "group_recommendations_remain_reviewable",
+      "result": "PASS"
+    },
+    {
+      "name": "unqualified_group_apply_remains_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "planning-auth-and-empty_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_unauthorized_generate_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "native_unauthorized_reject_rejected",
+      "result": "PASS"
+    },
+    {
+      "name": "exact_scoped_cluster_admin_can_generate",
+      "result": "PASS"
+    },
+    {
+      "name": "request_nonce_reaches_native_input_13eff7fa",
+      "result": "PASS"
+    },
+    {
+      "name": "durable_request_precedes_optimizer_response_13eff7fa",
+      "result": "PASS"
+    },
+    {
+      "name": "invalid_request_nonce_rejected_0_",
+      "result": "PASS"
+    },
+    {
+      "name": "invalid_request_nonce_rejected_63_a",
+      "result": "PASS"
+    },
+    {
+      "name": "invalid_request_nonce_rejected_64_A",
+      "result": "PASS"
+    },
+    {
+      "name": "invalid_request_nonce_rejected_64_z",
+      "result": "PASS"
+    },
+    {
+      "name": "empty_cluster_generate_accepted",
+      "result": "PASS"
+    },
+    {
+      "name": "empty_cluster_noop_is_native_without_driver_request",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "status": "PASS",
+  "finished_at": "2026-11-20T04:58:56.865399+00:00"
+}

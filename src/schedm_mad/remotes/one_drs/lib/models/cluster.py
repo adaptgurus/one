@@ -84,6 +84,8 @@ class Cluster:
         capacity: Optional[str] = field(default=None, metadata={"name": "CAPACITY", "type": "Element"})
         recovery: Optional[str] = field(default=None, metadata={"name": "RECOVERY", "type": "Element"})
         eligibility: Optional[str] = field(default=None, metadata={"name": "ELIGIBILITY", "type": "Element"})
+        generate: Optional[str] = field(default=None, metadata={"name": "GENERATE", "type": "Element"})
+        reject: Optional[str] = field(default=None, metadata={"name": "REJECT", "type": "Element"})
 
     @dataclass
     class OneDrsPlanEligibility:
@@ -151,6 +153,8 @@ class Cluster:
             default=None,
             metadata={"name": "TEMPLATE_SHA256", "type": "Element"},
         )
+        request: Optional["Cluster.Plan.Request"] = field(default=None, metadata={"name": "REQUEST", "type": "Element"})
+
         action: Optional["Cluster.Plan.Action"] = field(
             default=None,
             metadata={
@@ -159,6 +163,18 @@ class Cluster:
                 "required": True,
             },
         )
+
+        @dataclass
+        class Request:
+            nonce: Optional[str] = field(default=None, metadata={"name": "NONCE", "type": "Element"})
+            action: Optional[str] = field(default=None, metadata={"name": "ACTION", "type": "Element"})
+            state: Optional[str] = field(default=None, metadata={"name": "STATE", "type": "Element"})
+            template_sha256: Optional[str] = field(default=None, metadata={"name": "TEMPLATE_SHA256", "type": "Element"})
+            base_plan_sha256: Optional[str] = field(default=None, metadata={"name": "BASE_PLAN_SHA256", "type": "Element"})
+            plan_generation: Optional[str] = field(default=None, metadata={"name": "PLAN_GENERATION", "type": "Element"})
+            error: Optional[str] = field(default=None, metadata={"name": "ERROR", "type": "Element"})
+            instance: Optional[str] = field(default=None, metadata={"name": "INSTANCE", "type": "Element"})
+            started_at: Optional[int] = field(default=None, metadata={"name": "STARTED_AT", "type": "Element"})
 
         @dataclass
         class Action:

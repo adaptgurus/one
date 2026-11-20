@@ -19,6 +19,8 @@
             <xs:element name="CAPACITY" type="xs:string"/>
             <xs:element name="RECOVERY" type="xs:string"/>
             <xs:element name="ELIGIBILITY" type="xs:string" minOccurs="0"/>
+            <xs:element name="GENERATE" type="xs:string" minOccurs="0"/>
+            <xs:element name="REJECT" type="xs:string" minOccurs="0"/>
           </xs:sequence></xs:complexType>
         </xs:element>
         <xs:element name="PLAN" minOccurs="0" maxOccurs="1">
@@ -29,7 +31,7 @@
                   <xs:element name="CHECKED_EXECUTION" type="xs:int" minOccurs="0"/>
                   <xs:element name="GENERATION" type="xs:string" minOccurs="0"/>
                   <xs:element name="TEMPLATE_SHA256" type="xs:string" minOccurs="0"/>
-                  <xs:element name="ACTION">
+                  <xs:element name="ACTION" minOccurs="0" maxOccurs="unbounded">
                     <xs:complexType>
                       <xs:sequence>
                         <xs:element name="ID" type="xs:integer"/>
@@ -42,6 +44,19 @@
                         <xs:element name="TIMESTAMP" type="xs:integer"/>
                       </xs:sequence>
                     </xs:complexType>
+                  </xs:element>
+                  <xs:element name="REQUEST" minOccurs="0">
+                    <xs:complexType><xs:sequence>
+                      <xs:element name="NONCE" type="xs:string"/>
+                      <xs:element name="ACTION" type="xs:string"/>
+                      <xs:element name="STATE" type="xs:string"/>
+                      <xs:element name="TEMPLATE_SHA256" type="xs:string"/>
+                      <xs:element name="BASE_PLAN_SHA256" type="xs:string"/>
+                      <xs:element name="PLAN_GENERATION" type="xs:string"/>
+                      <xs:element name="ERROR" type="xs:string"/>
+                      <xs:element name="INSTANCE" type="xs:string"/>
+                      <xs:element name="STARTED_AT" type="xs:long"/>
+                    </xs:sequence></xs:complexType>
                   </xs:element>
                 </xs:sequence>
               </xs:complexType>

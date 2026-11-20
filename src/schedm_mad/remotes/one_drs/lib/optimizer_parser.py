@@ -105,6 +105,7 @@ class OptimizerParser:
     }
 
     __slots__ = (
+        "_checked_request",
         "parser",
         "scheduler_driver_action",
         "config",
@@ -120,6 +121,10 @@ class OptimizerParser:
     )
 
     def __init__(self, stdin_data: bytes, mode: str):
+        from lib.checked_request import request_binding
+        self._checked_request = request_binding(stdin_data)
+        if self._checked_request is not None and mode.lower() != "optimize":
+            raise ValueError("Checked request is only valid for native optimization")
         self.parser = XmlParser()
         self.parser.config.fail_on_unknown_properties = False
         self.scheduler_driver_action: SchedulerDriverAction = self.parser.parse(
@@ -199,6 +204,10 @@ class OptimizerParser:
         self._curr_alloc = curr_alloc
         self._used_local_dstores = used_local_dstores
         self._used_shared_dstores = used_shared_dstores
+
+    @property
+    def checked_request(self):
+        return self._checked_request
 
     @property
     def plan_id(self) -> int:
