@@ -277,6 +277,11 @@ Request::ErrorCode ClusterAPI::DelVNet(int oid,
 Request::ErrorCode ClusterAPI::Optimize(int oid,
                                         RequestAttributes& att)
 {
+    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS)
+    {
+        return ec;
+    }
+
     if ( clpool->exist(oid) == -1 )
     {
         att.resp_obj = PoolObjectSQL::CLUSTER;
@@ -314,6 +319,11 @@ Request::ErrorCode ClusterAPI::Optimize(int oid,
 Request::ErrorCode ClusterAPI::PlanExecute(int oid,
                                            RequestAttributes& att)
 {
+    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS)
+    {
+        return ec;
+    }
+
     string error_msg;
 
     if ( clpool->exist(oid) == -1 )
@@ -342,6 +352,11 @@ Request::ErrorCode ClusterAPI::PlanExecute(int oid,
 Request::ErrorCode ClusterAPI::PlanDelete(int oid,
                                           RequestAttributes& att)
 {
+    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS)
+    {
+        return ec;
+    }
+
     auto cluster = clpool->get(oid);
 
     if (!cluster)
