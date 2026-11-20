@@ -1,0 +1,20 @@
+{
+  "state": "CUSTODY_DIFFERENCE_REQUIRES_RECONCILIATION",
+  "at_utc": "2026-11-20T04:34:24.612317+00:00",
+  "libvirtd_before": "2024",
+  "libvirtd_after": "2024",
+  "selinux": "Enforcing",
+  "before_time": "2026-11-20T04:22:50.170772+00:00",
+  "after_time": "2026-11-20T04:34:03.017821+00:00",
+  "differences": {
+    "one-54": {
+      "before": null,
+      "after": {
+        "uuid": "435b9756-4713-47ca-83fb-c519d0eaeaf4",
+        "pid": 3119863,
+        "start_ticks": "240770400",
+        "inactive_xml_sha256": "72dd96e1f8432d6d7db55500dca8afadf6070e3afa3a8978fca389eed709b1c1"
+      }
+    }
+  }
+}

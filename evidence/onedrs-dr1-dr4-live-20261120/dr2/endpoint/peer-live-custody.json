@@ -1,0 +1,9 @@
+{
+  "at_utc": "2026-11-20T04:34:06.894627+00:00",
+  "state": "PASS_FOUR_HOST_NATIVE_LIVE_CUSTODY",
+  "dmi": "7a8de079-0a04-4bc6-8c53-e3439d7ce94d",
+  "protected_qemu_guests": 7,
+  "existing_processes_and_configurations_preserved": true,
+  "owned_guest": null,
+  "selinux": "Enforcing"
+}

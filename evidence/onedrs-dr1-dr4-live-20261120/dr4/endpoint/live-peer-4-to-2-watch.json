@@ -1,0 +1,38 @@
+{
+  "started_utc": "2026-11-20T04:26:46.696274+00:00",
+  "state": "PASS_NATIVE_QEMU_SOCKET",
+  "dmi": "87cee185-4cab-4384-afde-19a5cd3a2239",
+  "helper_sha256": "e2006979aef27d1d32db5c856b2840398ae23b1b06ada272009b838a37b6768f",
+  "source_qemu_pid": 2295788,
+  "prepared": {
+    "profile_sha256": "ca06facdbfe20f901433d6b5f2b10d8a00f922dd2cded8b345609d376294e795",
+    "role": "live_migration",
+    "site": "dr",
+    "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+    "generation": "onedrs-dr4-migration-20261120-v1",
+    "source_address": "10.201.20.6",
+    "interface": "ls-migration",
+    "target_host": "dr3",
+    "target_address": "10.201.20.4",
+    "migration_uri": "tcp://10.201.20.4",
+    "listen_address": "10.201.20.4",
+    "state": "HOST_ROLE_PREPARED_NOT_MIGRATION_OR_SOCKET_PROOF"
+  },
+  "watch_pid": 2299671,
+  "exit": 0,
+  "stderr": "",
+  "socket": {
+    "role": "live_migration",
+    "site": "dr",
+    "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+    "generation": "onedrs-dr4-migration-20261120-v1",
+    "interface": "ls-migration",
+    "local": "10.201.20.6:42732",
+    "remote": "10.201.20.4:49152",
+    "vm_uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b",
+    "process_id": 2295788,
+    "state": "NATIVE_QEMU_MIGRATION_SOCKET_READBACK_NOT_COMPLETION",
+    "observed_at": "2026-11-20T04:26:55.984295648Z"
+  },
+  "ended_utc": "2026-11-20T04:26:55.986102+00:00"
+}

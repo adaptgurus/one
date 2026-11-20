@@ -1,0 +1,75 @@
+{
+  "started_utc": "2026-11-20T04:24:53.982412+00:00",
+  "result": "PASS_LIVE_MIGRATION_GUEST_CONTINUITY",
+  "scope": "Native live migration of 256 MiB synthetic VM; no production SLA or physical-failure claim",
+  "declared_completion_bound_seconds": 180,
+  "declared_payload_loss_bytes": 0,
+  "before": {
+    "state": 3,
+    "lcm": 3,
+    "host": 1,
+    "ds": 104,
+    "seq": 6,
+    "uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b"
+  },
+  "guest_before": {
+    "boot_count": 4,
+    "boot_id": "d041ba65-70f1-42b0-9a01-0e72164d8396\n",
+    "heartbeat": 1019,
+    "initialized": false,
+    "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+    "state": "READY",
+    "uptime_ms": 2036739
+  },
+  "from_host": 1,
+  "to_host": 4,
+  "native_vm_id": 53,
+  "other_vm_count": 32,
+  "transitions": [
+    {
+      "state": 3,
+      "lcm": 3,
+      "host": 4,
+      "ds": 104,
+      "seq": 7,
+      "uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b"
+    },
+    {
+      "state": 3,
+      "lcm": 4,
+      "host": 4,
+      "ds": 104,
+      "seq": 7,
+      "uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b"
+    },
+    {
+      "state": 3,
+      "lcm": 3,
+      "host": 4,
+      "ds": 104,
+      "seq": 7,
+      "uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b"
+    }
+  ],
+  "native_request_accepted": true,
+  "after": {
+    "state": 3,
+    "lcm": 3,
+    "host": 4,
+    "ds": 104,
+    "seq": 7,
+    "uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b"
+  },
+  "guest_after": {
+    "boot_count": 4,
+    "boot_id": "d041ba65-70f1-42b0-9a01-0e72164d8396\n",
+    "heartbeat": 1021,
+    "initialized": false,
+    "sha256": "5271a1941cbcf81a8090844178842924e66017757abd05bf6b2e037de085474a",
+    "state": "READY",
+    "uptime_ms": 2040742
+  },
+  "elapsed_seconds": 3.811,
+  "other_vm_custody_preserved": true,
+  "ended_utc": "2026-11-20T04:24:57.795818+00:00"
+}

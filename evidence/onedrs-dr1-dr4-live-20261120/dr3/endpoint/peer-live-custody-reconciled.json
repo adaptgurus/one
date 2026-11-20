@@ -1,0 +1,19 @@
+{
+  "at_utc": "2026-11-20T04:35:51.113775+00:00",
+  "state": "BASELINE_GUESTS_PRESERVED_ADDITIONAL_VM_OBSERVED",
+  "baseline_guest_count": 7,
+  "baseline_guests_unchanged": true,
+  "libvirtd_unchanged": true,
+  "canary_departed": true,
+  "additional_vm": {
+    "uuid": "435b9756-4713-47ca-83fb-c519d0eaeaf4",
+    "pid": 3119863,
+    "start_ticks": "240770400",
+    "inactive_xml_sha256": "72dd96e1f8432d6d7db55500dca8afadf6070e3afa3a8978fca389eed709b1c1"
+  },
+  "additional_qemu_started_utc": "2026-11-20T04:25:34+00:00",
+  "additional_vm_name": "lsrv2-secure-readiness-20261120-bfddd603-dr",
+  "native_lifecycle_calls_by_this_qualification_targeted_only_vm": 53,
+  "aggregate_no_other_change_claim": false,
+  "note": "VM54 appeared between cohort snapshots; initial strict custody failure retained. No action was taken against VM54."
+}

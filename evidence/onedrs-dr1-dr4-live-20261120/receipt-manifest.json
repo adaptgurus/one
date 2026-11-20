@@ -1,0 +1,190 @@
+{
+  "collected_utc": "2026-11-20T04:38:13.919458+00:00",
+  "state": "COLLECTED_AND_VALIDATED",
+  "files": [
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/live-mesh-witness.py",
+      "path": "dr1/endpoint/live-mesh-witness.py",
+      "size": 2944,
+      "sha256": "b82eeb40ccef47232f74170620562d1fe8ab83aa30236adf20deef968feed6f8"
+    },
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/before-peer-live-snapshot.json",
+      "path": "dr1/endpoint/before-peer-live-snapshot.json",
+      "size": 1706,
+      "sha256": "e8fa3448f4f882ed52e916de1d25d18076c9a4848023bdf166ead577dd81b241"
+    },
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/after-peer-live-snapshot.json",
+      "path": "dr1/endpoint/after-peer-live-snapshot.json",
+      "size": 1706,
+      "sha256": "c5d958ceea6b17d86a0643c22d1f2e4d5a8adc4c05eaf452999dd253a07cc64f"
+    },
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/live-peer-0-to-1-watch.json",
+      "path": "dr1/endpoint/live-peer-0-to-1-watch.json",
+      "size": 1572,
+      "sha256": "d59aa6cd7dfc0004c9bc4ddb8f50dd7594c12ecd4df6ea4fa2f5a35a177edd2b"
+    },
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/peer-live-custody.json",
+      "path": "dr1/endpoint/peer-live-custody.json",
+      "size": 486,
+      "sha256": "d96993a80fc39fdaf39d37a855225dbf21a06a69851862b926eb7d5b60fb8b05"
+    },
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-dr4-native-canary-20261120/live-mesh-canary.py",
+      "path": "dr1/canary/live-mesh-canary.py",
+      "size": 5536,
+      "sha256": "4b14dc0bd193277be157bc23a43f831c46bffc9d93d78b53f4a511aa827a7636"
+    },
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-dr4-native-canary-20261120/live-mesh-0-to-1.json",
+      "path": "dr1/canary/live-mesh-0-to-1.json",
+      "size": 1844,
+      "sha256": "264ed60b1c581a27df7311da4aebc163dd683deeaa0307590c7eb9d5f1683ffd"
+    },
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-dr4-native-canary-20261120/live-mesh-1-to-4.json",
+      "path": "dr1/canary/live-mesh-1-to-4.json",
+      "size": 1846,
+      "sha256": "3f354c3e3e6f04fc2b8d0049276a9ee971caa68c720c30823a5a688f4526f21b"
+    },
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-dr4-native-canary-20261120/live-mesh-4-to-2.json",
+      "path": "dr1/canary/live-mesh-4-to-2.json",
+      "size": 1846,
+      "sha256": "56f6d8fd58ab127a2f63e104feb011fe4b7f56dbeb42d1e451c05a505c344295"
+    },
+    {
+      "host": "dr1",
+      "source": "/root/ls-onedrs-dr4-native-canary-20261120/live-mesh-2-to-0.json",
+      "path": "dr1/canary/live-mesh-2-to-0.json",
+      "size": 1846,
+      "sha256": "f37a2b1b9f78d0606559a0057c6fef8caf26450b6e00cd127eaae94f143c7f90"
+    },
+    {
+      "host": "dr2",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/live-mesh-witness.py",
+      "path": "dr2/endpoint/live-mesh-witness.py",
+      "size": 2944,
+      "sha256": "b82eeb40ccef47232f74170620562d1fe8ab83aa30236adf20deef968feed6f8"
+    },
+    {
+      "host": "dr2",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/before-peer-live-snapshot.json",
+      "path": "dr2/endpoint/before-peer-live-snapshot.json",
+      "size": 1965,
+      "sha256": "38ad0030e50983bb5a03091f53d0859e8772679fdf1eeaf22a4c14c886f42d33"
+    },
+    {
+      "host": "dr2",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/after-peer-live-snapshot.json",
+      "path": "dr2/endpoint/after-peer-live-snapshot.json",
+      "size": 1965,
+      "sha256": "fed3025f4c504acacec5bea31b276f9d3b4d552af95d927dddbfea2fc3aca4f1"
+    },
+    {
+      "host": "dr2",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/live-peer-1-to-4-watch.json",
+      "path": "dr2/endpoint/live-peer-1-to-4-watch.json",
+      "size": 1573,
+      "sha256": "a716ef017bdf7c8aa252642212475826426c38496e706778b4355006445d11e5"
+    },
+    {
+      "host": "dr2",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/peer-live-custody.json",
+      "path": "dr2/endpoint/peer-live-custody.json",
+      "size": 287,
+      "sha256": "3c749595b452ff997909b167b34ed097d841ff30ecda0e8af90aa1c42e3a0a1e"
+    },
+    {
+      "host": "dr3",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/live-mesh-witness.py",
+      "path": "dr3/endpoint/live-mesh-witness.py",
+      "size": 2944,
+      "sha256": "b82eeb40ccef47232f74170620562d1fe8ab83aa30236adf20deef968feed6f8"
+    },
+    {
+      "host": "dr3",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/before-peer-live-snapshot.json",
+      "path": "dr3/endpoint/before-peer-live-snapshot.json",
+      "size": 1966,
+      "sha256": "399db8e49bfbe4dcbb73af7ba5d7743f13733590840bba71f3cf2e360b288615"
+    },
+    {
+      "host": "dr3",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/after-peer-live-snapshot.json",
+      "path": "dr3/endpoint/after-peer-live-snapshot.json",
+      "size": 2195,
+      "sha256": "cdba4dcdec3ad19814ccc9ce296df473e48b85ffb55291d56fb3d60a34991e55"
+    },
+    {
+      "host": "dr3",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/live-peer-2-to-0-watch.json",
+      "path": "dr3/endpoint/live-peer-2-to-0-watch.json",
+      "size": 1573,
+      "sha256": "3dce4d03b776487f62165bffd1dba657b462772949a6123c6d66b1d4c6a00759"
+    },
+    {
+      "host": "dr3",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/peer-live-custody-difference.json",
+      "path": "dr3/endpoint/peer-live-custody-difference.json",
+      "size": 603,
+      "sha256": "afbcc6ca5e2230dadb808f2acd905486ddcd1be054449ecfd703d3f0f8389dcb"
+    },
+    {
+      "host": "dr3",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/peer-live-custody-reconciled.json",
+      "path": "dr3/endpoint/peer-live-custody-reconciled.json",
+      "size": 837,
+      "sha256": "8e23fa5e9cfd4f112e9a270a88bd34119d8521377ab0d58c926f1fe12938dc3a"
+    },
+    {
+      "host": "dr4",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/live-mesh-witness.py",
+      "path": "dr4/endpoint/live-mesh-witness.py",
+      "size": 2944,
+      "sha256": "b82eeb40ccef47232f74170620562d1fe8ab83aa30236adf20deef968feed6f8"
+    },
+    {
+      "host": "dr4",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/before-peer-live-snapshot.json",
+      "path": "dr4/endpoint/before-peer-live-snapshot.json",
+      "size": 2375,
+      "sha256": "a72fcd94436a265393ac27113bf8bc33886c23d58bcadec4fd7a22807765b06c"
+    },
+    {
+      "host": "dr4",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/after-peer-live-snapshot.json",
+      "path": "dr4/endpoint/after-peer-live-snapshot.json",
+      "size": 2375,
+      "sha256": "d6e70cce9396309f1e11e680bf53fce2e595630d7ef4a96ea1edaea5cc48fe1c"
+    },
+    {
+      "host": "dr4",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/live-peer-4-to-2-watch.json",
+      "path": "dr4/endpoint/live-peer-4-to-2-watch.json",
+      "size": 1393,
+      "sha256": "8f280c8e849a4bc9eeb9a27b3d4cc56866e180ef5c25d4d4490d684f137bc09f"
+    },
+    {
+      "host": "dr4",
+      "source": "/root/ls-onedrs-migration-endpoint-20261120/peer-live-custody.json",
+      "path": "dr4/endpoint/peer-live-custody.json",
+      "size": 287,
+      "sha256": "f5e4a7239bf74e0377a75f7d2e943b7cde2d85b98fe41610a954ace74d1c10e0"
+    }
+  ],
+  "file_count": 26,
+  "total_bytes": 49558
+}
