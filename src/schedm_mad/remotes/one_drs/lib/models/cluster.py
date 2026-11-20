@@ -54,6 +54,14 @@ class Cluster:
             "type": "Element",
         },
     )
+    template_sha256: Optional[str] = field(
+        default=None,
+        metadata={"name": "TEMPLATE_SHA256", "type": "Element"},
+    )
+    plan_sha256: Optional[str] = field(
+        default=None,
+        metadata={"name": "PLAN_SHA256", "type": "Element"},
+    )
     plan: Optional["Cluster.Plan"] = field(
         default=None,
         metadata={
@@ -109,6 +117,14 @@ class Cluster:
                 "type": "Element",
                 "required": True,
             },
+        )
+        generation: Optional[str] = field(
+            default=None,
+            metadata={"name": "GENERATION", "type": "Element"},
+        )
+        template_sha256: Optional[str] = field(
+            default=None,
+            metadata={"name": "TEMPLATE_SHA256", "type": "Element"},
         )
         action: Optional["Cluster.Plan.Action"] = field(
             default=None,

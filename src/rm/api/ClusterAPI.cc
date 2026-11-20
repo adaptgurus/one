@@ -26,6 +26,7 @@
 #include "AclManager.h"
 #include "PlanManager.h"
 #include "SchedulerManager.h"
+#include <algorithm>
 
 using namespace std;
 
@@ -348,6 +349,78 @@ Request::ErrorCode ClusterAPI::PlanExecute(int oid,
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+static bool valid_checked_sha256(const std::string& value)
+{
+    return value.size() == 64 && std::all_of(value.begin(), value.end(), [](unsigned char c)
+    { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
+}
+
+Request::ErrorCode ClusterAPI::PlanExecuteChecked(int oid,
+                                                  const std::string& expected_plan_sha256,
+                                                  const std::string& expected_template_sha256,
+                                                  RequestAttributes& att)
+{
+    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS) return ec;
+    if (!valid_checked_sha256(expected_plan_sha256) ||
+        !valid_checked_sha256(expected_template_sha256))
+    {
+        att.resp_msg = "Expected plan and template identities must be lowercase SHA-256 digests";
+        return Request::RPC_API;
+    }
+    if (Nebula::instance().get_planm()->start_plan_checked(
+            oid, expected_plan_sha256, expected_template_sha256, att.resp_msg) != 0)
+    {
+        return Request::ACTION;
+    }
+    return Request::SUCCESS;
+}
+
+Request::ErrorCode ClusterAPI::UpdateDrsChecked(int oid,
+                                                const std::string& policy,
+                                                const std::string& expected_template_sha256,
+                                                RequestAttributes& att)
+{
+    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS) return ec;
+    if (!valid_checked_sha256(expected_template_sha256))
+    {
+        att.resp_msg = "Expected template identity must be a lowercase SHA-256 digest";
+        return Request::RPC_API;
+    }
+    auto cluster = clpool->get(oid);
+    if (!cluster)
+    {
+        att.resp_obj = PoolObjectSQL::CLUSTER;
+        att.resp_id = oid;
+        return Request::NO_EXISTS;
+    }
+    if (cluster->template_sha256() != expected_template_sha256)
+    {
+        att.resp_msg = "Cluster template changed; refresh and approve the current policy";
+        return Request::ACTION;
+    }
+    auto plan = Nebula::instance().get_planpool()->get(oid);
+    if (!plan)
+    {
+        att.resp_msg = "Cannot find plan for existing cluster";
+        return Request::INTERNAL;
+    }
+    if (plan->state() == PlanState::APPLYING)
+    {
+        att.resp_msg = "Cannot change checked policy while a plan is applying";
+        return Request::ACTION;
+    }
+    if (cluster->replace_one_drs(policy, !att.is_admin(), att.resp_msg) != 0)
+    {
+        return Request::RPC_API;
+    }
+    if (clpool->update(cluster.get()) != 0)
+    {
+        att.resp_msg = "Unable to persist checked OneDRS policy";
+        return Request::INTERNAL;
+    }
+    return Request::SUCCESS;
+}
 
 Request::ErrorCode ClusterAPI::PlanDelete(int oid,
                                           RequestAttributes& att)

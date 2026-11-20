@@ -17,6 +17,9 @@
 #include "Plan.h"
 #include "NebulaLog.h"
 #include "OneDB.h"
+#include "NebulaUtil.h"
+#include <openssl/rand.h>
+#include <algorithm>
 
 using namespace std;
 
@@ -141,7 +144,9 @@ string Plan::to_xml() const
 
     oss << "<PLAN>"
         << "<ID>"    << _cid << "</ID>"
-        << "<STATE>" << _state << "</STATE>";
+        << "<STATE>" << _state << "</STATE>"
+        << "<GENERATION>" << _generation << "</GENERATION>"
+        << "<TEMPLATE_SHA256>" << _template_sha256 << "</TEMPLATE_SHA256>";
 
     for (const auto& action : _actions)
     {
@@ -155,6 +160,48 @@ string Plan::to_xml() const
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+std::string Plan::sha256() const
+{
+    return one_util::sha256_digest(to_xml());
+}
+
+bool Plan::renew_generation()
+{
+    unsigned char nonce[32];
+    if (RAND_bytes(nonce, sizeof(nonce)) != 1) return false;
+    _generation = one_util::sha256_digest(std::string(
+        reinterpret_cast<const char*>(nonce), sizeof(nonce)));
+    return true;
+}
+
+int Plan::start_checked(const std::string& expected_sha256, std::string& error)
+{
+    if (_state != PlanState::READY)
+    {
+        error = "Approved plan is no longer READY";
+        return -1;
+    }
+    if (_generation.empty())
+    {
+        error = "Plan predates checked execution; generate a new plan";
+        return -1;
+    }
+    if (_actions.empty() || std::any_of(_actions.begin(), _actions.end(), [](const PlanAction& action)
+        { return action.operation() != "migrate" || action.state() != PlanState::READY ||
+                 action.vm_id() < 0 || action.host_id() < 0; }))
+    {
+        error = "Checked OneDRS execution requires only READY migration actions";
+        return -1;
+    }
+    if (expected_sha256 != sha256())
+    {
+        error = "Plan identity changed; refresh and approve the current plan";
+        return -1;
+    }
+    _state = PlanState::APPLYING;
+    return 0;
+}
 
 int Plan::from_xml(const std::string& xml)
 {
@@ -244,6 +291,20 @@ int Plan::rebuild_attributes()
     xpath(tmp_int, "/PLAN/STATE", -1); // State can be empty
 
     _state = static_cast<PlanState>(tmp_int);
+    xpath(_generation, "/PLAN/GENERATION", "");
+    xpath(_template_sha256, "/PLAN/TEMPLATE_SHA256", "");
+    if (!_template_sha256.empty() && (_template_sha256.size() != 64 ||
+        !std::all_of(_template_sha256.begin(), _template_sha256.end(), [](unsigned char c)
+        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); })))
+    {
+        return -1;
+    }
+    if (!_generation.empty() && (_generation.size() != 64 ||
+        !std::all_of(_generation.begin(), _generation.end(), [](unsigned char c)
+        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); })))
+    {
+        return -1;
+    }
 
     vector<xmlNodePtr> action_nodes;
 

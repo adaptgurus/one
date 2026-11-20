@@ -106,55 +106,44 @@ void PlanManager::add_plan(const string& xml)
         return;
     }
 
-    if (auto cplan = plan_pool->get(plan.cid()))
     {
-        if (plan.cid() == -1)
-        {
-            NebulaLog::info("PLM", "Adding new placement plan");
-
-            if (cplan->state() == PlanState::APPLYING)
-            {
-                NebulaLog::info("PLM", "Cannot add plan. A placement plan is already in progress.");
-                return;
-            }
-
-            cplan->from_xml(xml);
-
-            cplan->state(PlanState::APPLYING);
-        }
-        else if (auto cluster = cluster_pool->get_ro(plan.cid()))
-        {
-            NebulaLog::info("PLM", "Adding new plan for cluster " + to_string(plan.cid()));
-
-            if (cplan->state() == PlanState::APPLYING)
-            {
-                NebulaLog::info("PLM", "Cannot add cluster optimization plan. A plan is already in progress.");
-                return;
-            }
-
-            cplan->from_xml(xml);
-
-            if (cluster->automation() == Cluster::DrsAutomation::FULL)
-            {
-                cplan->state(PlanState::APPLYING);
-            }
-            else
-            {
-                cplan->state(PlanState::READY);
-            }
-        }
-        else
+        // Cluster -> plan is the common order used by checked execution and deletion.
+        // Hold both through policy validation and persistence of a computed plan.
+        auto cluster = plan.cid() >= 0 ? cluster_pool->get(plan.cid()) : nullptr;
+        if (plan.cid() >= 0 && !cluster)
         {
             NebulaLog::error("PLM", "Optimization plan for non-existent cluster " + to_string(plan.cid()));
             return;
         }
-
-        plan_pool->update(cplan.get());
-    }
-    else
-    {
-        NebulaLog::error("PLM", "Plan not found, unable to update plan for cluster " + to_string(plan.cid()));
-        return;
+        if (cluster && !plan.template_sha256().empty() &&
+            plan.template_sha256() != cluster->template_sha256())
+        {
+            NebulaLog::error("PLM", "Discarding optimization plan computed against a stale cluster template");
+            return;
+        }
+        auto cplan = plan_pool->get(plan.cid());
+        if (!cplan)
+        {
+            NebulaLog::error("PLM", "Plan not found, unable to update plan for cluster " + to_string(plan.cid()));
+            return;
+        }
+        if (cplan->state() == PlanState::APPLYING)
+        {
+            NebulaLog::info("PLM", "Cannot add plan. A plan is already in progress.");
+            return;
+        }
+        if (cplan->from_xml(xml) != 0 || !cplan->renew_generation())
+        {
+            NebulaLog::error("PLM", "Unable to initialize generated plan identity");
+            return;
+        }
+        cplan->state(plan.cid() == -1 || cluster->automation() == Cluster::DrsAutomation::FULL
+                     ? PlanState::APPLYING : PlanState::READY);
+        if (plan_pool->update(cplan.get()) != 0)
+        {
+            NebulaLog::error("PLM", "Unable to persist new plan");
+            return;
+        }
     }
 
     // Clear previous scheduling messages for all VM actions
@@ -233,6 +222,51 @@ int PlanManager::start_plan(int cid, std::string& error)
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+int PlanManager::start_plan_checked(int cid, const std::string& expected_plan_sha256,
+                                    const std::string& expected_template_sha256,
+                                    std::string& error)
+{
+    {
+        // Match PlanDelete's lock order. The cluster stays locked through the
+        // durable READY -> APPLYING transition, so policy and plan checks are atomic.
+        auto cluster = cluster_pool->get(cid);
+        if (!cluster)
+        {
+            error = "Cluster not found";
+            return -1;
+        }
+        if (cluster->template_sha256() != expected_template_sha256)
+        {
+            error = "Cluster template changed; refresh and approve the current policy";
+            return -1;
+        }
+        if (cluster->automation() != Cluster::DrsAutomation::MANUAL)
+        {
+            error = "Checked plan execution requires manual automation";
+            return -1;
+        }
+        auto plan = plan_pool->get(cid);
+        if (!plan)
+        {
+            error = "Plan not found";
+            return -1;
+        }
+        if (plan->template_sha256() != expected_template_sha256)
+        {
+            error = "Plan was not computed against the approved cluster template";
+            return -1;
+        }
+        if (plan->start_checked(expected_plan_sha256, error) != 0) return -1;
+        if (plan_pool->update(plan.get()) != 0)
+        {
+            error = "Unable to persist approved plan execution";
+            return -1;
+        }
+    }
+    execute_plans();
+    return 0;
+}
 
 void PlanManager::timer_action()
 {

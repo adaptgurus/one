@@ -440,6 +440,7 @@ string& Cluster::to_xml(string& xml) const
         datastores.to_xml(ds_collection_xml) <<
         vnets.to_xml(vnet_collection_xml)    <<
         obj_template->to_xml(template_xml)   <<
+        "<TEMPLATE_SHA256>" << template_sha256() << "</TEMPLATE_SHA256>" <<
         plan_xml                             <<
         "</CLUSTER>";
 
@@ -466,6 +467,38 @@ std::string& Cluster::template_xml(std::string& xml) const
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+std::string Cluster::template_sha256() const
+{
+    std::string xml;
+    return one_util::sha256_digest(template_xml(xml));
+}
+
+int Cluster::replace_one_drs(const std::string& text, bool restricted, std::string& error)
+{
+    Template incoming;
+    if (incoming.parse_str_or_xml(text, error) != 0) return -1;
+    size_t count = 0;
+    incoming.each_attribute([&count](const Attribute*) { ++count; });
+    const auto* policy = incoming.get("ONE_DRS");
+    if (count != 1 || policy == nullptr)
+    {
+        error = "Checked update requires exactly one ONE_DRS vector and no other attributes";
+        return -1;
+    }
+    std::string automation = one_util::trim(policy->vector_value("AUTOMATION"));
+    one_util::tolower(automation);
+    if (automation != "manual")
+    {
+        error = "Checked policy update requires manual automation";
+        return -1;
+    }
+    Template replacement(*obj_template);
+    replacement.erase("ONE_DRS");
+    replacement.set(policy->clone());
+    std::string xml;
+    return replace_template(replacement.to_xml(xml), restricted, error);
+}
 
 int Cluster::from_xml(const string& xml)
 {
@@ -540,12 +573,13 @@ void Cluster::set_error_message(const char *mod, const string& name, const strin
 void Cluster::load_plan()
 {
     auto plpool = Nebula::instance().get_planpool();
+    plan_xml.clear();
 
     if (auto plan = plpool->get_ro(oid))
     {
         if (plan->state() != PlanState::NONE)
         {
-            plan_xml = plan->to_xml();
+            plan_xml = plan->to_xml() + "<PLAN_SHA256>" + plan->sha256() + "</PLAN_SHA256>";
         }
     }
 }

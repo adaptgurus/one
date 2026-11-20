@@ -53,6 +53,9 @@ public:
      * @return 0 on success, -1 otherwise
      */
     int start_plan(int cid, std::string& error);
+    int start_plan_checked(int cid, const std::string& expected_plan_sha256,
+                           const std::string& expected_template_sha256,
+                           std::string& error);
 
     void action_success(int plan_id, int action_id)
     {

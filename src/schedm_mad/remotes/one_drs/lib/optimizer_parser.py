@@ -204,6 +204,21 @@ class OptimizerParser:
     def plan_id(self) -> int:
         return self._plan_id
 
+    @property
+    def plan_template_sha256(self) -> str | None:
+        """Echo the native request's template identity without recomputing XML."""
+        if self._plan_id < 0:
+            return None
+        clusters = self.scheduler_driver_action.cluster_pool.cluster
+        matches = [cluster for cluster in clusters if int(cluster.id) == self._plan_id]
+        if len(matches) != 1:
+            raise ValueError("Optimization request must identify exactly one cluster")
+        digest = getattr(matches[0], "template_sha256", None)
+        if digest is not None and (len(digest) != 64 or any(
+                c not in "0123456789abcdef" for c in digest)):
+            raise ValueError("Invalid native cluster template SHA-256")
+        return digest
+
     @classmethod
     def _resolve_solver_path(cls, path: str) -> str:
         machine = platform.machine().lower()

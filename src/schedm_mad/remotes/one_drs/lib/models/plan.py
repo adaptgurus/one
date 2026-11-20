@@ -15,6 +15,10 @@ class Plan:
             "required": True,
         },
     )
+    template_sha256: Optional[str] = field(
+        default=None,
+        metadata={"name": "TEMPLATE_SHA256", "type": "Element"},
+    )
     action: list["Plan.Action"] = field(
         default_factory=list,
         metadata={

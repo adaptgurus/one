@@ -48,13 +48,14 @@ def _get_operations(
 
 
 class OptimizerSerializer:
-    __slots__ = ("xml_serializer", "plan_id")
+    __slots__ = ("xml_serializer", "plan_id", "template_sha256")
 
-    def __init__(self, plan_id):
+    def __init__(self, plan_id, template_sha256=None):
         xml_config = SerializerConfig(indent="  ", xml_declaration=False)
         xml_context = XmlContext()
         self.xml_serializer = XmlSerializer(context=xml_context, config=xml_config)
         self.plan_id = plan_id
+        self.template_sha256 = template_sha256
 
     def render(self, output: Union[Plan, SchedulerDriverAction]) -> str:
         return self.xml_serializer.render(output)
@@ -110,5 +111,5 @@ class OptimizerSerializer:
                 msg = f"Placing VM in host '{alloc.host_id}' {dstore_info}"
                 logs.append((alloc.vm_id, "INFO", msg))
 
-        plan = Plan(id=self.plan_id, action=actions)
+        plan = Plan(id=self.plan_id, template_sha256=self.template_sha256, action=actions)
         return plan, logs

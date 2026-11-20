@@ -69,6 +69,16 @@ protected:
     Request::ErrorCode PlanExecute(int oid,
                                    RequestAttributes& att);
 
+    Request::ErrorCode PlanExecuteChecked(int oid,
+                                          const std::string& expected_plan_sha256,
+                                          const std::string& expected_template_sha256,
+                                          RequestAttributes& att);
+
+    Request::ErrorCode UpdateDrsChecked(int oid,
+                                        const std::string& policy,
+                                        const std::string& expected_template_sha256,
+                                        RequestAttributes& att);
+
     Request::ErrorCode PlanDelete(int oid,
                                   RequestAttributes& att);
 

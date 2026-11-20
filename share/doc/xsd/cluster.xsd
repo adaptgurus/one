@@ -11,11 +11,14 @@
         <xs:element name="DATASTORES" type="IDS"/>
         <xs:element name="VNETS" type="IDS"/>
         <xs:element name="TEMPLATE" type="xs:anyType"/>
+        <xs:element name="TEMPLATE_SHA256" type="xs:string" minOccurs="0"/>
         <xs:element name="PLAN" minOccurs="0" maxOccurs="1">
               <xs:complexType>
                 <xs:sequence>
                   <xs:element name="ID" type="xs:integer"/>
                   <xs:element name="STATE" type="xs:integer"/>
+                  <xs:element name="GENERATION" type="xs:string" minOccurs="0"/>
+                  <xs:element name="TEMPLATE_SHA256" type="xs:string" minOccurs="0"/>
                   <xs:element name="ACTION">
                     <xs:complexType>
                       <xs:sequence>
@@ -32,6 +35,7 @@
                 </xs:sequence>
               </xs:complexType>
         </xs:element>
+        <xs:element name="PLAN_SHA256" type="xs:string" minOccurs="0"/>
       </xs:sequence>
     </xs:complexType>
   </xs:element>

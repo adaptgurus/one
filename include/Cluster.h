@@ -117,6 +117,10 @@ public:
     std::string& to_xml(std::string& xml) const override;
 
     std::string& template_xml(std::string& xml) const;
+    std::string template_sha256() const;
+
+    /** Replace only ONE_DRS, retaining all other attributes. Caller holds the cluster lock. */
+    int replace_one_drs(const std::string& text, bool restricted, std::string& error);
 
     /**
      *  Rebuilds the object from an xml formatted string

@@ -5,6 +5,7 @@
     <xs:complexType>
       <xs:sequence>
         <xs:element name="ID" type="xs:integer" minOccurs="1" maxOccurs="1"/>
+        <xs:element name="TEMPLATE_SHA256" type="xs:string" minOccurs="0"/>
         <xs:element name="ACTION" minOccurs="1" maxOccurs="unbounded">
           <xs:complexType>
             <xs:sequence>

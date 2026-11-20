@@ -1,0 +1,11 @@
+{
+  "native_runtime_result_sha256": "a20d6a87027321476a170eb266d8956413a910fe9b2354d741ec7a5595bfa19b",
+  "native_xml_fixture_sha256": "b32d5e1fb078e38308aea7eeb0fbcc9868e6b10caa4e47fa455bb9585ec63355",
+  "source_contract_binary_version": "7.5.80",
+  "deployable_vendor_package": false,
+  "raw_runtime_root": "/root/ls-onedrs-checked-api-runtime-roundtrip-r2-20261120",
+  "scheduler_logs": {
+    "scheduler-normal.log": "b97833f6c477abc6e42ecae64330f76f24efb698c4df8063e00b031099ae1c12",
+    "scheduler-optimized.log": "39a345a4e9e72135546b05fee4a294f57b6a6250ef5c43b5f0b9cd78fb8a2f45"
+  }
+}

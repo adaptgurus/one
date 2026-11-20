@@ -134,6 +134,15 @@ public:
      */
     std::string to_xml() const;
 
+    /** Native content identity and per-generated-plan lifecycle identity. */
+    std::string sha256() const;
+    const std::string& generation() const { return _generation; }
+    const std::string& template_sha256() const { return _template_sha256; }
+    bool renew_generation();
+
+    /** Validate an approved READY plan before changing its state. Caller holds the plan lock. */
+    int start_checked(const std::string& expected_sha256, std::string& error);
+
     /**
      *  Rebuilds the object from an xml formatted string
      *    @param xml_str The xml-formatted string
@@ -213,6 +222,9 @@ private:
      *  Plan state
      */
     PlanState _state = PlanState::NONE;
+
+    std::string _generation;
+    std::string _template_sha256;
 
     /**
      * List of actions which should be exectuted
