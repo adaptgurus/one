@@ -1,0 +1,14 @@
+{
+  "status": "FAIL",
+  "scope": "OWNED_FRESH_BRIDGE_VXLAN_ONLY_NO_NATIVE_GUEST_ACCEPTANCE",
+  "at": "2026-11-20T06:58:47.756825+00:00",
+  "results": [
+    {
+      "status": "FAIL",
+      "node": "ls-onedrs-rc-01",
+      "error": "Traceback (most recent call last):\n  File \"<string>\", line 14, in <module>\nAssertionError\n",
+      "firewall_rollback": "90s timer left armed; no automatic retry"
+    }
+  ],
+  "free_host_bytes": 28667670528
+}

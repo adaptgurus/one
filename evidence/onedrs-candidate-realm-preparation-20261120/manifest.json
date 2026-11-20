@@ -245,6 +245,144 @@
       "path": "receipts/storage-boundary-r2-result.json",
       "sha256": "d602fca9a88a847368c494989cb368b9e539829ffb0ee6cffea369507f224911",
       "source": "/root/ls-onedrs-rc-20261120/storage-boundary-r2-result.json"
+    },
+    {
+      "bytes": 28239,
+      "path": "network/guest-network-preflight-r1.json",
+      "sha256": "94b6f801ead727094aae5524373427282d1918dc4ad5fbc5b16fe110ef59b1ea",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-preflight-r1.json"
+    },
+    {
+      "bytes": 445,
+      "path": "network/guest-network-first-r1.json",
+      "sha256": "2d537ec15c2ead66ff0ee8ad11c00c18f9695efa9973f3731920c6177b554322",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r1.json"
+    },
+    {
+      "bytes": 579,
+      "path": "network/guest-network-first-r1-rca.json",
+      "sha256": "a5aca231799439ec362cf6030742ec3d3b12dc0c6c8e5ebbe7399193171267c3",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r1-rca.json"
+    },
+    {
+      "bytes": 1013,
+      "path": "network/guest-network-first-r2.json",
+      "sha256": "85c96d2f7f905da1702276fb2ecc3c1cac95727f7d623af7edacfe467d0cab8a",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r2.json"
+    },
+    {
+      "bytes": 7166,
+      "path": "network/guest-network-first-r2-diagnostic.json",
+      "sha256": "3dd4b8457db30c6f98f7979dfc69c9d913516b64aeb20d7ceb614f6437af7d0d",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r2-diagnostic.json"
+    },
+    {
+      "bytes": 10518,
+      "path": "network/guest-network-first-r3.json",
+      "sha256": "c02139c2e8c2f80463f66a7cdac965758fd5acb65f48997c88d597e95e8a2d84",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-first-r3.json"
+    },
+    {
+      "bytes": 13211,
+      "path": "network/guest-network-followers-r3.json",
+      "sha256": "bba7e69ce425c5a2bc1a2fbba7c0749cb4277fa106077b14d4badf6bf2539841",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-followers-r3.json"
+    },
+    {
+      "bytes": 60123,
+      "path": "network/guest-network-qualification-r3.json",
+      "sha256": "3baef3708b14c05d9734b32dc756ef256018d4151d845954976d1222a21483ef",
+      "source": "/root/ls-onedrs-rc-20261120/guest-network-qualification-r3.json"
+    },
+    {
+      "bytes": 5181,
+      "path": "network/storage-network-custody-r4.json",
+      "sha256": "b8dc753bd73cf2b919e7b40efb9229e7adc1848a8a599d86378ed2ff9e06000d",
+      "source": "/root/ls-onedrs-rc-20261120/storage-network-custody-r4.json"
+    },
+    {
+      "bytes": 4870,
+      "path": "network/guest_network_node_r3.py",
+      "sha256": "ba6c8cf979bf2a7967848f224729ffa5b6e90d4bde290c82e0607e5c140fa262",
+      "source": "/root/ls-onedrs-rc-20261120/guest_network_node_r3.py"
+    },
+    {
+      "bytes": 9224,
+      "path": "network/prepare_guest_network_r3.py",
+      "sha256": "f0dac7cdac86aeeda600572dbb3d3a9dc230311c5e45df765ec5587a8bb5373c",
+      "source": "/root/ls-onedrs-rc-20261120/prepare_guest_network_r3.py"
+    },
+    {
+      "bytes": 6854,
+      "path": "network/reconcile_guest_network_r3.py",
+      "sha256": "0774162cdb406cd5cc77a6038b72fb2f486e7bb488bebabc26825c9092e68da5",
+      "source": "/root/ls-onedrs-rc-20261120/reconcile_guest_network_r3.py"
+    },
+    {
+      "bytes": 6949,
+      "path": "network/qualify_guest_network_r3.py",
+      "sha256": "d45576d49eaf6aa394e40540ef34be0108f40c58784124716c7c1fc6fc70fa56",
+      "source": "/root/ls-onedrs-rc-20261120/qualify_guest_network_r3.py"
+    },
+    {
+      "bytes": 2410,
+      "path": "bootstrap/realm-allowlist.json",
+      "sha256": "5911487abf74555c790aad971c288b5a741e41caa651a1b0c8d7e425955e0c24",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/realm-allowlist.json"
+    },
+    {
+      "bytes": 1457,
+      "path": "bootstrap/key-custody.json",
+      "sha256": "8860ae081ff3f722f83f371052476ce30b7219c56b5b0dc379a85ea03f6f32d2",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/key-custody.json"
+    },
+    {
+      "bytes": 7086,
+      "path": "bootstrap/native-bootstrap.json",
+      "sha256": "5cc3fc7a608444b37ffa20b071c1486931717f528faa1e67c6c6f0db9ed5a407",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/native-bootstrap.json"
+    },
+    {
+      "bytes": 2846,
+      "path": "bootstrap/onedrs-rc-zone.xml",
+      "sha256": "07b374f7859c9d2df6cae240f171a06fc7fcd67ad675096bab2dd75691a425ab",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/onedrs-rc-zone.xml"
+    },
+    {
+      "bytes": 14481,
+      "path": "bootstrap/FENCING.md",
+      "sha256": "f98e8e41909015f88063d3c05e1fa8424ce3b1adc58d7a7fa9f229c8f23194f6",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/FENCING.md"
+    },
+    {
+      "bytes": 7391,
+      "path": "bootstrap/render_native_configs.py",
+      "sha256": "6398976b85361c7df2a3741fe7a65419ac0f825d48bc62df0c2401c6c285a224",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/render_native_configs.py"
+    },
+    {
+      "bytes": 5053,
+      "path": "bootstrap/test_render_native_configs.py",
+      "sha256": "966d32471400ab247c6693177c6ad13355378310e4493f30343fb0dd5c022b6b",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/test_render_native_configs.py"
+    },
+    {
+      "bytes": 450,
+      "path": "bootstrap/config-render-source-tests-r1.json",
+      "sha256": "ed90d2202f289bf22ca7a380dfe55c67a3effd3c6d52dbb93d2f1678749661e6",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/config-render-source-tests-r1.json"
+    },
+    {
+      "bytes": 743,
+      "path": "bootstrap/config-render-source-tests-r2.json",
+      "sha256": "59c0aabeb531fa6070805e58786a5559d86473008d918e11cdbe4bdc2028b186",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/config-render-source-tests-r2.json"
+    },
+    {
+      "bytes": 1223,
+      "path": "bootstrap/config-render-source-tests-r2.log",
+      "sha256": "4bffb2262b7b6315b72442442f5c0ff85876cbcebe5c3d09e01e12190edc7415",
+      "source": "/root/ls-onedrs-rc-20261120/bootstrap-proposal/config-render-source-tests-r2.log"
     }
   ],
   "scope": "Fresh disposable nested candidate realm preparation; no native candidate installed or qualified"

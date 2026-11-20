@@ -1,0 +1,8 @@
+{
+  "status": "REFUSED_BEFORE_MUTATION",
+  "at": "2026-11-20T06:59:48.706030+00:00",
+  "scope": "FIRST_NETWORK_PREFLIGHT_IDENTITY_GUARD",
+  "reason": "Exact hostname check expected shortname but all five provisioned names are full .candidate-lab.internal names; first assertion failed before package/config/link/timer changes.",
+  "correction": "Match exact trusted provisioned FQDN without renaming node or bypassing UUID/IP checks.",
+  "note": "Original generic failure field about an armed rollback timer was conditional text; this early refusal never reached timer setup."
+}

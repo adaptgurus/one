@@ -1,0 +1,89 @@
+{
+  "allowed_fence_cardinality": 2,
+  "base_sha256": "92c206cc6f790c61583247eefe87890f8828420662c17cacf247cec78ab4eec8",
+  "binding_rule": "Native host IDs are expectations only until exact native ID/name/IP/template UUID are read back; any mismatch stops bootstrap, never auto-remaps.",
+  "configured_host_failure_tolerance": 2,
+  "exclusions": [
+    "all domains not exactly one of five member UUIDs",
+    "storage VM",
+    "outer host",
+    "192.168.246.0/24 R13 realm",
+    "original DR/DC native services",
+    "existing outer NFS exports",
+    "unrelated guests/networks/routes"
+  ],
+  "members": [
+    {
+      "expected_native_host_id": 0,
+      "ip": "192.168.247.11",
+      "mac": "52:54:00:da:27:11",
+      "name": "ls-onedrs-rc-01",
+      "roles": [
+        "voter",
+        "compute"
+      ],
+      "server_id": 0,
+      "uuid": "7f0e6ce9-dd5d-4598-a863-5fac81b27bc1"
+    },
+    {
+      "expected_native_host_id": 1,
+      "ip": "192.168.247.12",
+      "mac": "52:54:00:da:27:12",
+      "name": "ls-onedrs-rc-02",
+      "roles": [
+        "voter",
+        "compute"
+      ],
+      "server_id": 1,
+      "uuid": "3f3f7e61-e460-48af-868a-d806f9c7afb2"
+    },
+    {
+      "expected_native_host_id": 2,
+      "ip": "192.168.247.13",
+      "mac": "52:54:00:da:27:13",
+      "name": "ls-onedrs-rc-03",
+      "roles": [
+        "voter",
+        "compute"
+      ],
+      "server_id": 2,
+      "uuid": "3872092d-4ebd-43cb-a515-74174cd2e2fe"
+    },
+    {
+      "expected_native_host_id": 3,
+      "ip": "192.168.247.14",
+      "mac": "52:54:00:da:27:14",
+      "name": "ls-onedrs-rc-04",
+      "roles": [
+        "voter",
+        "compute"
+      ],
+      "server_id": 3,
+      "uuid": "b9e1a75f-78f8-46da-89c2-5183ab69ada3"
+    },
+    {
+      "expected_native_host_id": 4,
+      "ip": "192.168.247.15",
+      "mac": "52:54:00:da:27:15",
+      "name": "ls-onedrs-rc-05",
+      "roles": [
+        "voter",
+        "compute"
+      ],
+      "server_id": 4,
+      "uuid": "22a9092c-bfc7-4f90-81ea-988d25c37e34"
+    }
+  ],
+  "network": "ls-onedrs-rc-20261120",
+  "network_bridge": "lsdrrc20br0",
+  "network_uuid": "dac45dfe-107a-4e39-97b5-60802ab29421",
+  "production_or_physical_failure_claim": false,
+  "realm": "ls-onedrs-rc-20261120",
+  "schema": 1,
+  "storage": {
+    "fenceable": false,
+    "ip": "192.168.247.16",
+    "name": "ls-onedrs-rc-storage",
+    "uuid": "bf807b1a-a24c-4287-8ef7-145e6af8689c"
+  }
+}

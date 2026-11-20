@@ -1,0 +1,20 @@
+{
+  "created_at": "2026-11-20T06:20:10.283707+00:00",
+  "fence_signature": "Ed25519 over canonical JSON",
+  "native_auth": "Existing fresh frontend-auth/one_auth; complete generated leader .one identity must be captured privately after first native bootstrap and copied to inactive followers.",
+  "native_monitoring_key": "RSA3072 PEM for supported native UDP encryption; not a TLS certificate",
+  "native_rpc_raft_tls": "UNSUPPORTED_BY_REVIEWED_NATIVE_TRANSPORT_NOT_CLAIMED",
+  "private_mode": "0700 directory / 0600 root-owned files",
+  "private_root": "/root/ls-onedrs-rc-20261120/bootstrap-private",
+  "public_sha256": {
+    "fence-signing.pub": "486e95bc87a18731b20f722fb602e5ae4f6274a6cc6e0d5ee57e53e25a253141",
+    "ls-onedrs-rc-01-witness.pub": "bbda59a29a7b37bbe3af3b8106a491ce73dca47b06580f033f3aeab4e2b6e1bb",
+    "ls-onedrs-rc-02-witness.pub": "ccafa4b094e137c28a47226da05a0f375af4d52b3e0fae50dd76785fcef464de",
+    "ls-onedrs-rc-03-witness.pub": "60103bc5ee4d40d55259bdab5162b5cb94ae62f7b73835634b0f269094f2eae8",
+    "ls-onedrs-rc-04-witness.pub": "e24fde25b5d6d76465f774a0a15994f181c63f023823c64ab71286d62e5d56e1",
+    "ls-onedrs-rc-05-witness.pub": "f21f7bfc17cb24c35fbda080d419f757ebef26fde77b1689dca5dc522390ab58",
+    "monitoring.pub": "b59b54ace179a85f0dffa9e4b815ef744fac48d7994019dcb7df896092506ebb"
+  },
+  "status": "STAGED_NOT_INSTALLED",
+  "witness_ssh": "one fresh Ed25519 key per allowed controller, future forced-command only"
+}

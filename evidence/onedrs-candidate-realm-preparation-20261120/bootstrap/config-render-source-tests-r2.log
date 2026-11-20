@@ -1,0 +1,21 @@
+test_binding_requires_complete_frozen_candidate (__main__.RenderSafety) ... ok
+test_duplicate_db_refused (__main__.RenderSafety) ... ok
+test_duplicate_listener_refused (__main__.RenderSafety) ... ok
+test_duplicate_raft_field_refused (__main__.RenderSafety) ... ok
+test_existing_hook_cannot_be_adopted (__main__.RenderSafety) ... ok
+test_five_exact_members_and_unchanged_raft (__main__.RenderSafety) ... ok
+test_foreign_member_or_server_refused (__main__.RenderSafety) ... ok
+test_missing_db_refused (__main__.RenderSafety) ... ok
+test_missing_or_duplicate_monitor_network_refused (__main__.RenderSafety) ... ok
+test_modified_raft_default_refused (__main__.RenderSafety) ... ok
+test_no_secret_in_public_reference_or_proposal (__main__.RenderSafety) ... ok
+test_secret_custody_refuses_symlink_and_public_mode (__main__.RenderSafety) ... ok
+test_secret_injection_refused (__main__.RenderSafety) ... ok
+test_solo_only_first_member (__main__.RenderSafety) ... ok
+test_unrelated_vendor_scheduler_and_constraints_preserved (__main__.RenderSafety) ... ok
+test_vector_lexer_ignores_quotes_and_comments (__main__.RenderSafety) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.070s
+
+OK

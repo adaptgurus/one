@@ -1,0 +1,14 @@
+{
+  "status": "FAIL",
+  "scope": "OWNED_FRESH_BRIDGE_VXLAN_ONLY_NO_NATIVE_GUEST_ACCEPTANCE",
+  "at": "2026-11-20T07:00:15.704459+00:00",
+  "results": [
+    {
+      "status": "FAIL",
+      "node": "ls-onedrs-rc-01",
+      "error": "Traceback (most recent call last):\n  File \"<string>\", line 50, in <module>\n  File \"<string>\", line 12, in run\nRuntimeError: Command failed systemctl: Created symlink /etc/systemd/system/multi-user.target.wants/ls-onedrs-rc-guest-network-20261120.service \u2192 /etc/systemd/system/ls-onedrs-rc-guest-network-20261120.service.\nJob for ls-onedrs-rc-guest-network-20261120.service failed because the control process exited with error code.\nSee \"systemctl status ls-onedrs-rc-guest-network-20261120.service\" and \"journalctl -xeu ls-onedrs-rc-guest-network-20261120.service\" for details.\n\n",
+      "firewall_rollback": "Timer is conditional on passing configuration validation; inspect actual unit state. No automatic retry."
+    }
+  ],
+  "free_host_bytes": 28666056704
+}

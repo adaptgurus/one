@@ -1,0 +1,167 @@
+{
+  "allowlist_sha256": "5911487abf74555c790aad971c288b5a741e41caa651a1b0c8d7e425955e0c24",
+  "bootstrap_order": [
+    "Verify final candidate hashes/signature/dependency closure on all five inactive masked nodes; refuse any unowned native data or existing VM.",
+    "Install final signed candidate and exact staged vendor migration together with normal DNF; retain package/proc/runtime manifest receipts.",
+    "Render native config from exact installed vendor source using protected local DB secret, selected SERVER_ID and unchanged Raft timing/purge.",
+    "Start only rc01 in solo mode to create native schema and server identity; no workloads or automatic recovery hooks.",
+    "Capture full generated .one and native DB privately; do not fabricate independent follower authority. Register rc01 as server0 then transition it to HA configuration.",
+    "Enroll one inactive follower at a time from a consistent leader DB snapshot and full .one; add exact native server membership, configure returned expected ID, start; verify closing-watermark convergence before next enrollment. Never replay uncertain membership writes.",
+    "Verify all five /proc executable digests, Raft reachability/single leader/term and VIP ownership; check private SQL isolation.",
+    "Create/read back exactly five native KVM hosts in cluster0, map expected IDs to exact node UUID/IP, keep hosts disabled until source/monitoring/remotes/SSH/NFS checks pass.",
+    "Configure retained shared native datastores and exact manual OneDRS policy with K2; generated plans/Apply remain approval-driven.",
+    "Install reviewed fence authority/protocol and native host-error hook only after negative verification tests pass; automatic replay remains disabled.",
+    "Admit owned canaries and perform explicit measured fault cases; start the required uninterrupted candidate soak only after successful baseline and fault restoration."
+  ],
+  "candidate": {
+    "core_sha256": null,
+    "gate": "No install/start until all fields are supplied from parent-frozen combined candidate and actual signed RPM closure verifies.",
+    "rpm_sha256": null,
+    "rpm_signature_fingerprint": null,
+    "runtime_manifest_sha256": null,
+    "source_commit": null
+  },
+  "compute": {
+    "existing_guests": 0,
+    "libvirt_transport": "Strict realm SSH, no TCP libvirt listener",
+    "members": 5,
+    "migration_address": "Each own exact .247 address",
+    "migration_tcp_ports": "49152-49215, explicit future qemu.conf values",
+    "nested_kvm_required": true,
+    "oneadmin_uid_gid": 9869
+  },
+  "firewall": {
+    "apply_scope": "new five guests only; no outer/global firewall replacement",
+    "default": "DROP ingress, standard established/related and loopback remain",
+    "interface": "eth0",
+    "not_exposed": [
+      "2634 remote gRPC",
+      "16509/16514 TCP libvirt",
+      "VNC ports",
+      "FireEdge/Sunstone/OneFlow/OneGate"
+    ],
+    "rules": [
+      {
+        "ports": "22",
+        "protocol": "tcp",
+        "purpose": "strict pinned management and native compute SSH",
+        "sources": [
+          "192.168.247.1",
+          "192.168.247.11",
+          "192.168.247.12",
+          "192.168.247.13",
+          "192.168.247.14",
+          "192.168.247.15"
+        ]
+      },
+      {
+        "ports": "2633",
+        "protocol": "tcp",
+        "purpose": "native Raft/XML-RPC exact members/VIP",
+        "sources": [
+          "192.168.247.11",
+          "192.168.247.12",
+          "192.168.247.13",
+          "192.168.247.14",
+          "192.168.247.15"
+        ]
+      },
+      {
+        "ports": "4124",
+        "protocol": "udp",
+        "purpose": "native monitoring to elected VIP",
+        "sources": [
+          "192.168.247.11",
+          "192.168.247.12",
+          "192.168.247.13",
+          "192.168.247.14",
+          "192.168.247.15"
+        ]
+      },
+      {
+        "ports": "49152-49215",
+        "protocol": "tcp",
+        "purpose": "native nested QEMU migration",
+        "sources": [
+          "192.168.247.11",
+          "192.168.247.12",
+          "192.168.247.13",
+          "192.168.247.14",
+          "192.168.247.15"
+        ]
+      }
+    ],
+    "storage_rule": "Existing own storage policy allows TCP2049 only five .247 clientIPs; outer .1 denied.",
+    "zone": "onedrs-rc"
+  },
+  "grpc_listen_address": "127.0.0.1",
+  "grpc_port": 2634,
+  "initial_cluster_id": 0,
+  "interface": "eth0",
+  "listen_address": "0.0.0.0",
+  "mariadb": {
+    "bind_address": "127.0.0.1",
+    "credential_files": "root-owned frontend-auth; no password in public proposal",
+    "independent_per_member": true,
+    "schema": "opennebula",
+    "wsrep_on": false
+  },
+  "monitoring": {
+    "address": "192.168.247.10",
+    "listen": "0.0.0.0",
+    "native_monitoring_interval_preserved": true,
+    "port": 4124,
+    "private_key": "/var/lib/one/.one/onedrs-rc-monitor.key",
+    "private_key_mode": "oneadmin:oneadmin0600, .one0700",
+    "protocol": "udp",
+    "public_key": "/var/lib/one/.one/onedrs-rc-monitor.pub"
+  },
+  "raft": {
+    "BROADCAST_TIMEOUT_MS": 500,
+    "ELECTION_TIMEOUT_MS": 5000,
+    "LIMIT_PURGE": 100000,
+    "LOG_PURGE_TIMEOUT": 60,
+    "LOG_RETENTION": 250000,
+    "XMLRPC_TIMEOUT_MS": 1000
+  },
+  "realm": "ls-onedrs-rc-20261120",
+  "resilience": {
+    "after_two_fences": "DEGRADED: configured N+2 reserve consumed; three healthy voters/compute members may recover only after demonstrable fences. No healthy N+2 claim until measured restoration.",
+    "configured_k": 2,
+    "failure_domain_labels": "Five logical owned-node labels for software tests; no physical independence claim.",
+    "never_lower_k_for_fault_test": true
+  },
+  "rpc_port": 2633,
+  "status": "REVIEW_REQUIRED_NOT_INSTALLED_NOT_STARTED",
+  "storage": {
+    "evidence_sha256": "b72bec9025c257994c580754e84d0e2537392fda6fb627cc0efb36904680422c",
+    "exports": {
+      "fences": "/var/lib/one/onedrs_fences",
+      "files": "/var/lib/one/datastores/2",
+      "images": "/var/lib/one/datastores/1",
+      "system": "/var/lib/one/datastores/0"
+    },
+    "failure_domain": "Single storage VM and same physical outer host: disposable software-fault evidence only.",
+    "fences_export": "root-owned read-only, no private keys",
+    "flags": [
+      "hard",
+      "vers=4.2",
+      "proto=tcp",
+      "nosuid",
+      "nodev",
+      "noexec"
+    ],
+    "protocol": "NFSv4.2 TCP2049",
+    "retained_disks": "Never copy or erase native guest disks during a fence/recovery; authoritative same datastore remains mounted on all survivors.",
+    "server": "192.168.247.16"
+  },
+  "transport": "Native XML-RPC/Raft HTTP within exact .247 realm; operator access via strict SSH forward where possible. No native TLS claim.",
+  "vip": "192.168.247.10/24",
+  "vip_hooks": {
+    "follower": "raft/vip.sh follower eth0 192.168.247.10/24",
+    "leader": "raft/vip.sh leader eth0 192.168.247.10/24",
+    "readback": "Exactly one assigned VIP matching current native leader; direct per-member Raft closing-watermark convergence.",
+    "script": "Exact candidate packaged hook, no fabricated leader election"
+  },
+  "zone_id": 0
+}

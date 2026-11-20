@@ -1,0 +1,883 @@
+{
+  "status": "PASS",
+  "scope": "READ_ONLY_FRESH_FIVE_NODE_GUEST_NETWORK_PREFLIGHT",
+  "at": "2026-11-20T06:49:28.337898+00:00",
+  "results": [
+    {
+      "status": "PASS",
+      "hostname": "ls-onedrs-rc-01.candidate-lab.internal",
+      "eth0_addresses": [
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:11",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ],
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "192.168.247.11",
+              "prefixlen": 24,
+              "broadcast": "192.168.247.255",
+              "scope": "global",
+              "noprefixroute": true,
+              "label": "eth0",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::5054:ff:feda:2711",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ],
+      "routes": [
+        {
+          "dst": "default",
+          "gateway": "192.168.247.1",
+          "dev": "eth0",
+          "protocol": "static",
+          "metric": 100,
+          "flags": []
+        },
+        {
+          "dst": "192.168.247.0/24",
+          "dev": "eth0",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "192.168.247.11",
+          "metric": 100,
+          "flags": []
+        }
+      ],
+      "links": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 0,
+          "max_mtu": 0,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 524280,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536
+        },
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:11",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 68,
+          "max_mtu": 65535,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 65536,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536,
+          "parentbus": "virtio",
+          "parentdev": "virtio0",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ]
+        }
+      ],
+      "nfs_mounts": [
+        {
+          "target": "/var/lib/one/datastores/0",
+          "source": "192.168.247.16:/system",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.11,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/1",
+          "source": "192.168.247.16:/images",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.11,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/2",
+          "source": "192.168.247.16:/files",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.11,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/onedrs_fences",
+          "source": "192.168.247.16:/fences",
+          "fstype": "nfs4",
+          "options": "ro,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.11,local_lock=none,addr=192.168.247.16"
+        }
+      ],
+      "management_profile_uuid": "5fb06bd0-0bb0-7ffb-45f1-d6edd65f3e03",
+      "management_profile_sha256": "b7bc1e9c24fc520e371e6b86776eec15c4acaa9e33b246979f0e29bf1f2e0b43",
+      "firewalld_state": "inactive",
+      "native_candidate_absent": true,
+      "native_nested_domains": 0,
+      "selinux": "Enforcing",
+      "node": "ls-onedrs-rc-01",
+      "ip": "192.168.247.11"
+    },
+    {
+      "status": "PASS",
+      "hostname": "ls-onedrs-rc-02.candidate-lab.internal",
+      "eth0_addresses": [
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:12",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ],
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "192.168.247.12",
+              "prefixlen": 24,
+              "broadcast": "192.168.247.255",
+              "scope": "global",
+              "noprefixroute": true,
+              "label": "eth0",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::5054:ff:feda:2712",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ],
+      "routes": [
+        {
+          "dst": "default",
+          "gateway": "192.168.247.1",
+          "dev": "eth0",
+          "protocol": "static",
+          "metric": 100,
+          "flags": []
+        },
+        {
+          "dst": "192.168.247.0/24",
+          "dev": "eth0",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "192.168.247.12",
+          "metric": 100,
+          "flags": []
+        }
+      ],
+      "links": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 0,
+          "max_mtu": 0,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 524280,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536
+        },
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:12",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 68,
+          "max_mtu": 65535,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 65536,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536,
+          "parentbus": "virtio",
+          "parentdev": "virtio0",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ]
+        }
+      ],
+      "nfs_mounts": [
+        {
+          "target": "/var/lib/one/datastores/0",
+          "source": "192.168.247.16:/system",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.12,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/1",
+          "source": "192.168.247.16:/images",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.12,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/2",
+          "source": "192.168.247.16:/files",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.12,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/onedrs_fences",
+          "source": "192.168.247.16:/fences",
+          "fstype": "nfs4",
+          "options": "ro,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.12,local_lock=none,addr=192.168.247.16"
+        }
+      ],
+      "management_profile_uuid": "5fb06bd0-0bb0-7ffb-45f1-d6edd65f3e03",
+      "management_profile_sha256": "66adae7a7f4d5dcddae33d530ca15c65b6e18a9bec4c231f1f460002f165c1ab",
+      "firewalld_state": "inactive",
+      "native_candidate_absent": true,
+      "native_nested_domains": 0,
+      "selinux": "Enforcing",
+      "node": "ls-onedrs-rc-02",
+      "ip": "192.168.247.12"
+    },
+    {
+      "status": "PASS",
+      "hostname": "ls-onedrs-rc-03.candidate-lab.internal",
+      "eth0_addresses": [
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:13",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ],
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "192.168.247.13",
+              "prefixlen": 24,
+              "broadcast": "192.168.247.255",
+              "scope": "global",
+              "noprefixroute": true,
+              "label": "eth0",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::5054:ff:feda:2713",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ],
+      "routes": [
+        {
+          "dst": "default",
+          "gateway": "192.168.247.1",
+          "dev": "eth0",
+          "protocol": "static",
+          "metric": 100,
+          "flags": []
+        },
+        {
+          "dst": "192.168.247.0/24",
+          "dev": "eth0",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "192.168.247.13",
+          "metric": 100,
+          "flags": []
+        }
+      ],
+      "links": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 0,
+          "max_mtu": 0,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 524280,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536
+        },
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:13",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 68,
+          "max_mtu": 65535,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 65536,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536,
+          "parentbus": "virtio",
+          "parentdev": "virtio0",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ]
+        }
+      ],
+      "nfs_mounts": [
+        {
+          "target": "/var/lib/one/datastores/0",
+          "source": "192.168.247.16:/system",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.13,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/1",
+          "source": "192.168.247.16:/images",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.13,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/2",
+          "source": "192.168.247.16:/files",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.13,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/onedrs_fences",
+          "source": "192.168.247.16:/fences",
+          "fstype": "nfs4",
+          "options": "ro,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.13,local_lock=none,addr=192.168.247.16"
+        }
+      ],
+      "management_profile_uuid": "5fb06bd0-0bb0-7ffb-45f1-d6edd65f3e03",
+      "management_profile_sha256": "6d2578ccc7f9882a916820877d072b7078bc744412d963be661be4ff7e6f2dce",
+      "firewalld_state": "inactive",
+      "native_candidate_absent": true,
+      "native_nested_domains": 0,
+      "selinux": "Enforcing",
+      "node": "ls-onedrs-rc-03",
+      "ip": "192.168.247.13"
+    },
+    {
+      "status": "PASS",
+      "hostname": "ls-onedrs-rc-04.candidate-lab.internal",
+      "eth0_addresses": [
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:14",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ],
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "192.168.247.14",
+              "prefixlen": 24,
+              "broadcast": "192.168.247.255",
+              "scope": "global",
+              "noprefixroute": true,
+              "label": "eth0",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::5054:ff:feda:2714",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ],
+      "routes": [
+        {
+          "dst": "default",
+          "gateway": "192.168.247.1",
+          "dev": "eth0",
+          "protocol": "static",
+          "metric": 100,
+          "flags": []
+        },
+        {
+          "dst": "192.168.247.0/24",
+          "dev": "eth0",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "192.168.247.14",
+          "metric": 100,
+          "flags": []
+        }
+      ],
+      "links": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 0,
+          "max_mtu": 0,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 524280,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536
+        },
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:14",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 68,
+          "max_mtu": 65535,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 65536,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536,
+          "parentbus": "virtio",
+          "parentdev": "virtio0",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ]
+        }
+      ],
+      "nfs_mounts": [
+        {
+          "target": "/var/lib/one/datastores/0",
+          "source": "192.168.247.16:/system",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.14,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/1",
+          "source": "192.168.247.16:/images",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.14,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/2",
+          "source": "192.168.247.16:/files",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.14,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/onedrs_fences",
+          "source": "192.168.247.16:/fences",
+          "fstype": "nfs4",
+          "options": "ro,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.14,local_lock=none,addr=192.168.247.16"
+        }
+      ],
+      "management_profile_uuid": "5fb06bd0-0bb0-7ffb-45f1-d6edd65f3e03",
+      "management_profile_sha256": "7d205332041eb2a184de79bf961d2269e523c86e14aacdc66457b5a34a30f6ba",
+      "firewalld_state": "inactive",
+      "native_candidate_absent": true,
+      "native_nested_domains": 0,
+      "selinux": "Enforcing",
+      "node": "ls-onedrs-rc-04",
+      "ip": "192.168.247.14"
+    },
+    {
+      "status": "PASS",
+      "hostname": "ls-onedrs-rc-05.candidate-lab.internal",
+      "eth0_addresses": [
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:15",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ],
+          "addr_info": [
+            {
+              "family": "inet",
+              "local": "192.168.247.15",
+              "prefixlen": 24,
+              "broadcast": "192.168.247.255",
+              "scope": "global",
+              "noprefixroute": true,
+              "label": "eth0",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            },
+            {
+              "family": "inet6",
+              "local": "fe80::5054:ff:feda:2715",
+              "prefixlen": 64,
+              "scope": "link",
+              "valid_life_time": 4294967295,
+              "preferred_life_time": 4294967295
+            }
+          ]
+        }
+      ],
+      "routes": [
+        {
+          "dst": "default",
+          "gateway": "192.168.247.1",
+          "dev": "eth0",
+          "protocol": "static",
+          "metric": 100,
+          "flags": []
+        },
+        {
+          "dst": "192.168.247.0/24",
+          "dev": "eth0",
+          "protocol": "kernel",
+          "scope": "link",
+          "prefsrc": "192.168.247.15",
+          "metric": 100,
+          "flags": []
+        }
+      ],
+      "links": [
+        {
+          "ifindex": 1,
+          "ifname": "lo",
+          "flags": [
+            "LOOPBACK",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 65536,
+          "qdisc": "noqueue",
+          "operstate": "UNKNOWN",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "loopback",
+          "address": "00:00:00:00:00:00",
+          "broadcast": "00:00:00:00:00:00",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 0,
+          "max_mtu": 0,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 524280,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536
+        },
+        {
+          "ifindex": 2,
+          "ifname": "eth0",
+          "flags": [
+            "BROADCAST",
+            "MULTICAST",
+            "UP",
+            "LOWER_UP"
+          ],
+          "mtu": 1500,
+          "qdisc": "fq_codel",
+          "operstate": "UP",
+          "linkmode": "DEFAULT",
+          "group": "default",
+          "txqlen": 1000,
+          "link_type": "ether",
+          "address": "52:54:00:da:27:15",
+          "broadcast": "ff:ff:ff:ff:ff:ff",
+          "promiscuity": 0,
+          "allmulti": 0,
+          "min_mtu": 68,
+          "max_mtu": 65535,
+          "inet6_addr_gen_mode": "eui64",
+          "num_tx_queues": 1,
+          "num_rx_queues": 1,
+          "gso_max_size": 65536,
+          "gso_max_segs": 65535,
+          "tso_max_size": 65536,
+          "tso_max_segs": 65535,
+          "gro_max_size": 65536,
+          "gso_ipv4_max_size": 65536,
+          "gro_ipv4_max_size": 65536,
+          "parentbus": "virtio",
+          "parentdev": "virtio0",
+          "altnames": [
+            "enp0s3",
+            "ens3"
+          ]
+        }
+      ],
+      "nfs_mounts": [
+        {
+          "target": "/var/lib/one/datastores/0",
+          "source": "192.168.247.16:/system",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.15,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/1",
+          "source": "192.168.247.16:/images",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.15,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/datastores/2",
+          "source": "192.168.247.16:/files",
+          "fstype": "nfs4",
+          "options": "rw,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.15,local_lock=none,addr=192.168.247.16"
+        },
+        {
+          "target": "/var/lib/one/onedrs_fences",
+          "source": "192.168.247.16:/fences",
+          "fstype": "nfs4",
+          "options": "ro,nosuid,nodev,noexec,relatime,vers=4.2,rsize=262144,wsize=262144,namlen=255,hard,proto=tcp,timeo=600,retrans=2,sec=sys,clientaddr=192.168.247.15,local_lock=none,addr=192.168.247.16"
+        }
+      ],
+      "management_profile_uuid": "5fb06bd0-0bb0-7ffb-45f1-d6edd65f3e03",
+      "management_profile_sha256": "e17e8b4205aa59397829205048c284904caabbd627b169fc83bdb663837a617b",
+      "firewalld_state": "inactive",
+      "native_candidate_absent": true,
+      "native_nested_domains": 0,
+      "selinux": "Enforcing",
+      "node": "ls-onedrs-rc-05",
+      "ip": "192.168.247.15"
+    }
+  ],
+  "free_host_bytes": 28689682432
+}
