@@ -1,0 +1,11 @@
+{
+  "cluster": 100,
+  "source": 0,
+  "target": 1,
+  "datastore": 100,
+  "vms": [
+    0,
+    1,
+    2
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "started_utc": "2026-11-20T03:47:41.367750+00:00",
+  "source_base_commit": "83149072ff0bbcfcfb4e1259e0cd76596515104f",
+  "private_build": "/root/ls-onedrs-r15-vendor-build-20261120",
+  "base_vendor_build": "/root/ls-onedrs-r14-vendor-build-20261120",
+  "patch_sha256": "b2cafca1520be38f24b755ae2f2980deb4a102659639108b541ceecc3612c665",
+  "changed_native_files": [
+    "include/History.h",
+    "include/HostPool.h",
+    "include/LifeCycleManager.h",
+    "include/Plan.h",
+    "include/PlanManager.h",
+    "include/RequestAttributes.h",
+    "include/VirtualMachine.h",
+    "include/VirtualMachinePool.h",
+    "src/cluster/Cluster.cc",
+    "src/dm/DispatchManagerActions.cc",
+    "src/dm/DispatchManagerStates.cc",
+    "src/lcm/LifeCycleActions.cc",
+    "src/lcm/LifeCycleStates.cc",
+    "src/nebula/Nebula.cc",
+    "src/rm/api/VirtualMachineAPI.cc",
+    "src/schedm/Plan.cc",
+    "src/schedm/PlanManager.cc",
+    "src/vm/History.cc",
+    "src/vm/VirtualMachine.cc"
+  ],
+  "command": [
+    "scons",
+    "-Q",
+    "-j8",
+    "mysql=yes",
+    "grpc=yes",
+    "systemd=yes",
+    "sqlite=yes",
+    "xmlrpc_pkgconf=yes",
+    "parsers=no",
+    "gitversion=83149072-capacity-wip-ls7.4.1-backport",
+    "src/nebula/oned",
+    "src/monitor/src/monitor/onemonitord"
+  ],
+  "compiler_flags": {
+    "CFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "CXXFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "LDFLAGS": "-Wl,-z,relro -Wl,--as-needed  -Wl,-z,now -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -flto=12"
+  },
+  "status": "PASS",
+  "installed_files_changed": false,
+  "revision": 3,
+  "elapsed_seconds": 63.483,
+  "exit_code": 0,
+  "artifacts": {
+    "src/nebula/oned": {
+      "sha256": "8a31919626c19a80739877690fa3ccd68133cd5f6f37ac888235f48c4fb89bf1",
+      "size": 169255600
+    },
+    "src/monitor/src/monitor/onemonitord": {
+      "sha256": "9b4e78c13326cd385aa159510256349a0eaea511c12690f39a2d76f1a37cff2c",
+      "size": 11604632
+    }
+  }
+}

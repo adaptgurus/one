@@ -63,6 +63,7 @@ void DispatchManager::trigger_suspend_success(int vid)
             int gid = vm->get_gid();
             int plan_id   = vm->plan_id();
             int action_id = vm->action_id();
+        const auto generation = vm->checked_plan_generation();
 
             vm.reset();
 
@@ -71,7 +72,7 @@ void DispatchManager::trigger_suspend_success(int vid)
             if (plan_id >= -1)
             {
                 auto planm = Nebula::instance().get_planm();
-                planm->action_success(plan_id, action_id);
+                planm->action_success(plan_id, action_id, generation);
             }
         }
         else
@@ -247,6 +248,7 @@ void DispatchManager::trigger_poweroff_success(int vid)
             int gid = vm->get_gid();
             int plan_id   = vm->plan_id();
             int action_id = vm->action_id();
+        const auto generation = vm->checked_plan_generation();
 
             vm.reset();
 
@@ -258,7 +260,7 @@ void DispatchManager::trigger_poweroff_success(int vid)
             if (plan_id >= -1)
             {
                 auto planm = Nebula::instance().get_planm();
-                planm->action_success(plan_id, action_id);
+                planm->action_success(plan_id, action_id, generation);
             }
         }
         else

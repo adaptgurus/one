@@ -145,6 +145,7 @@ string Plan::to_xml() const
     oss << "<PLAN>"
         << "<ID>"    << _cid << "</ID>"
         << "<STATE>" << _state << "</STATE>"
+        << "<CHECKED_EXECUTION>" << _checked_execution << "</CHECKED_EXECUTION>"
         << "<GENERATION>" << _generation << "</GENERATION>"
         << "<TEMPLATE_SHA256>" << _template_sha256 << "</TEMPLATE_SHA256>";
 
@@ -170,12 +171,13 @@ bool Plan::renew_generation()
 {
     unsigned char nonce[32];
     if (RAND_bytes(nonce, sizeof(nonce)) != 1) return false;
+    _checked_execution = false;
     _generation = one_util::sha256_digest(std::string(
         reinterpret_cast<const char*>(nonce), sizeof(nonce)));
     return true;
 }
 
-int Plan::start_checked(const std::string& expected_sha256, std::string& error)
+int Plan::validate_checked(const std::string& expected_sha256, std::string& error) const
 {
     if (_state != PlanState::READY)
     {
@@ -199,6 +201,13 @@ int Plan::start_checked(const std::string& expected_sha256, std::string& error)
         error = "Plan identity changed; refresh and approve the current plan";
         return -1;
     }
+    return 0;
+}
+
+int Plan::start_checked(const std::string& expected_sha256, std::string& error)
+{
+    if (validate_checked(expected_sha256, error) != 0) return -1;
+    _checked_execution = true;
     _state = PlanState::APPLYING;
     return 0;
 }
@@ -291,6 +300,10 @@ int Plan::rebuild_attributes()
     xpath(tmp_int, "/PLAN/STATE", -1); // State can be empty
 
     _state = static_cast<PlanState>(tmp_int);
+    int checked = 0;
+    xpath(checked, "/PLAN/CHECKED_EXECUTION", 0);
+    if (checked != 0 && checked != 1) return -1;
+    _checked_execution = checked == 1;
     xpath(_generation, "/PLAN/GENERATION", "");
     xpath(_template_sha256, "/PLAN/TEMPLATE_SHA256", "");
     if (!_template_sha256.empty() && (_template_sha256.size() != 64 ||

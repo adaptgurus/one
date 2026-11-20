@@ -27,6 +27,9 @@
         <xs:element name="DS_ID" type="xs:integer"/>
         <xs:element name="PLAN_ID" type="xs:integer"/>
         <xs:element name="ACTION_ID" type="xs:integer"/>
+        <xs:element name="CHECKED_PLAN_GENERATION" type="xs:string" minOccurs="0"/>
+        <xs:element name="CHECKED_PLAN_TERM" type="xs:unsignedInt" minOccurs="0"/>
+        <xs:element name="CHECKED_CAPACITY_PENDING" type="xs:boolean" minOccurs="0"/>
         <xs:element name="PSTIME" type="xs:integer"/>
         <xs:element name="PETIME" type="xs:integer"/>
         <xs:element name="RSTIME" type="xs:integer"/>

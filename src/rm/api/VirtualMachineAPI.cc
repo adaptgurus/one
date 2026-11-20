@@ -951,6 +951,16 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
         return Request::NO_EXISTS;
     }
 
+    if (!att.checked_plan_generation.empty())
+    {
+        if (att.checked_action_id < 0 || cluster_id != att.checked_plan_id ||
+            !vm->checked_migration_supported(hid, cluster_id, ds_id, att.resp_msg))
+        {
+            if (att.resp_msg.empty()) att.resp_msg = "Checked migration cluster/action identity changed";
+            return Request::ACTION;
+        }
+    }
+
     if (vm->is_previous_history_open() ||
         (vm->get_state() != VirtualMachine::POWEROFF &&
          vm->get_state() != VirtualMachine::SUSPENDED &&
@@ -1006,6 +1016,18 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
         att.resp_msg = "Cannot live migrate host and datastore at the same time.";
 
         return Request::ACTION;
+    }
+
+    if (!att.checked_plan_generation.empty() && c_hid != hid)
+    {
+        // This VM lock remains held until its non-RUNNING pending state is durable.
+        // No target membership may predate that native pending history.
+        auto target = nd.get_hpool()->get(hid);
+        if (!target || target->get_vm_ids().count(vid) != 0)
+        {
+            att.resp_msg = "Checked migration target already accounts for this VM";
+            return Request::ACTION;
+        }
     }
 
     // Check the host has enough capacity
@@ -1179,6 +1201,13 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
 
     set_volatile_disk_info(vm.get(), ds_id);
 
+    if (!att.checked_plan_generation.empty())
+    {
+        att.checked_migrate_action = live ? VMActions::LIVE_MIGRATE_ACTION :
+            poweroff == 1 ? VMActions::POFF_MIGRATE_ACTION :
+            poweroff == 2 ? VMActions::POFF_HARD_MIGRATE_ACTION : VMActions::MIGRATE_ACTION;
+    }
+
     //add_history call will also update the vm
     if (add_history(vm.get(),
                     hid,
@@ -1207,7 +1236,8 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
     // ------------------------------------------------------------------------
     DispatchManager* dm = nd.get_dm();
 
-    if (live && vm->get_lcm_state() == VirtualMachine::RUNNING )
+    if (live && (vm->get_lcm_state() == VirtualMachine::RUNNING ||
+                 vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING))
     {
         rc = dm->live_migrate(vm.get(), att);
     }
@@ -3269,6 +3299,13 @@ Request::ErrorCode VirtualMachineAPI::recover(int vid,
         return Request::NO_EXISTS;
     }
 
+    if (vm->checked_capacity_pending() ||
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
+    {
+        att.resp_msg = "Checked migration admission is pending; native recovery must restore it first";
+        return Request::ACTION;
+    }
+
     auto dm = Nebula::instance().get_dm();
 
     switch (op)
@@ -4458,7 +4495,20 @@ int VirtualMachineAPI::add_history(VirtualMachine * vm,
 {
     vm->add_history(hid, cid, hostname, vmm_mad, tm_mad, ds_id);
 
-    if ( vmpool->insert_history(vm) != 0 )
+    if (!att.checked_plan_generation.empty())
+    {
+        vm->plan_id(att.checked_plan_id);
+        vm->action_id(att.checked_action_id);
+        vm->checked_plan_generation(att.checked_plan_generation);
+        vm->checked_plan_term(att.checked_plan_term);
+        vm->checked_capacity_pending(true);
+        vm->set_action(att.checked_migrate_action, att.uid, att.gid, att.req_id);
+        vm->set_stime(time(nullptr));
+        vm->set_state(VirtualMachine::CHECKED_MIGRATE_PENDING);
+    }
+
+    if ((!att.checked_plan_generation.empty() ? vmpool->upsert_checked_history(vm) :
+         vmpool->insert_history(vm)) != 0)
     {
         att.resp_msg = "Cannot update virtual machine history";
 

@@ -17,6 +17,7 @@
 #ifndef HOST_POOL_H_
 #define HOST_POOL_H_
 
+#include <functional>
 #include "PoolSQL.h"
 #include "Host.h"
 #include "HostMonitoringTemplate.h"
@@ -148,6 +149,60 @@ public:
      *
      *   @return 0 on success -1 in case of failure
      */
+    int add_checked_capacity(int oid, int expected_cluster, HostShareCapacity& sr,
+                             std::string& error, const std::function<int()>& persist_request,
+                             bool already_on_host = false)
+    {
+        auto host = get(oid);
+        if (!host)
+        {
+            error = "Checked migration target host is unavailable";
+            return -2;
+        }
+        if (host->get_cluster_id() != expected_cluster || host->get_state() != Host::MONITORED)
+        {
+            error = "Checked migration target is no longer an enabled monitored host in the approved cluster";
+            return -1;
+        }
+        const bool accounted = host->get_vm_ids().count(sr.vmid) != 0;
+        if (already_on_host)
+        {
+            if (accounted) return 0;
+            error = "Checked migration source host no longer accounts for the VM";
+            return -1;
+        }
+        // The caller holds the VM in durable checked pending state. The API
+        // rejected prior target membership before writing that history, and all
+        // other native lifecycle/capacity mutations reject this state. Membership
+        // here is therefore an idempotent replay of this pending reservation.
+        if (accounted) return 0;
+        if (!host->test_capacity(sr, error, true)) return -1;
+        host->add_capacity(sr);
+        // PCI/NUMA allocation can update the VM template through capacity
+        // pointers. Its pending record must be durable before the host ledger,
+        // so restart can release/reuse the exact committed allocation.
+        if (persist_request() != 0)
+        {
+            error = "Unable to persist checked migration allocation metadata";
+            return -2;
+        }
+        if (update(host.get()) != 0)
+        {
+            error = "Unable to persist checked migration capacity reservation";
+            return -2;
+        }
+        return 0;
+    }
+
+    int del_checked_capacity(int oid, HostShareCapacity& sr)
+    {
+        auto host = get(oid);
+        if (!host) return -1;
+        if (host->get_vm_ids().count(sr.vmid) == 0) return 0;
+        host->del_capacity(sr);
+        return update(host.get());
+    }
+
     int add_capacity(int oid, HostShareCapacity &sr)
     {
         int rc = 0;

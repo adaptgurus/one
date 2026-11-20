@@ -454,6 +454,10 @@ int VirtualMachine::lcm_state_from_str(string& st, LcmState& state)
     {
         state = RESTORE;
     }
+    else if ( st == "CHECKED_MIGRATE_PENDING" )
+    {
+        state = CHECKED_MIGRATE_PENDING;
+    }
     else
     {
         return -1;
@@ -604,6 +608,8 @@ string& VirtualMachine::lcm_state_to_str(string& st, LcmState state)
             st = "BACKUP_POWEROFF"; break;
         case RESTORE:
             st = "RESTORE"; break;
+        case CHECKED_MIGRATE_PENDING:
+            st = "CHECKED_MIGRATE_PENDING"; break;
     }
 
     return st;
@@ -2120,6 +2126,10 @@ void VirtualMachine::cp_history()
                        history->action_id,
                        vm_xml);
 
+    htmp->checked_plan_generation = history->checked_plan_generation;
+    htmp->checked_plan_term = history->checked_plan_term;
+    htmp->checked_capacity_pending = history->checked_capacity_pending;
+
     previous_history = move(history);
     history          = move(htmp);
 }
@@ -2150,8 +2160,39 @@ void VirtualMachine::cp_previous_history()
                        previous_history->action_id,
                        vm_xml);
 
+    htmp->checked_plan_generation = previous_history->checked_plan_generation;
+    htmp->checked_plan_term = previous_history->checked_plan_term;
+    htmp->checked_capacity_pending = previous_history->checked_capacity_pending;
+
     previous_history = move(history);
     history          = move(htmp);
+}
+
+/* -------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+bool VirtualMachine::checked_migration_supported(int target_hid, int target_cid,
+                                                 int target_ds, std::string& error) const
+{
+    if (!hasHistory() || get_state() != ACTIVE || get_lcm_state() != RUNNING ||
+        is_previous_history_open() || get_cid() != target_cid)
+    {
+        error = "Checked migration requires a stable RUNNING VM in the approved cluster";
+        return false;
+    }
+    if (get_hid() == target_hid || (target_ds != -1 && target_ds != get_ds_id()))
+    {
+        error = "Checked migration supports only cross-host moves within the same datastore";
+        return false;
+    }
+    HostShareCapacity capacity;
+    get_capacity(capacity);
+    if (is_pinned() || !capacity.nodes.empty() || !capacity.pci.empty())
+    {
+        error = "Checked migration does not support pinned/NUMA or PCI VMs";
+        return false;
+    }
+    return true;
 }
 
 /* -------------------------------------------------------------------------- */

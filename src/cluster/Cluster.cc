@@ -441,6 +441,10 @@ string& Cluster::to_xml(string& xml) const
         vnets.to_xml(vnet_collection_xml)    <<
         obj_template->to_xml(template_xml)   <<
         "<TEMPLATE_SHA256>" << template_sha256() << "</TEMPLATE_SHA256>" <<
+        "<ONE_DRS_CHECKED_CAPABILITIES><VERSION>2</VERSION>"
+        "<MIGRATION>RUNNING_UNPINNED_NO_PCI_SAME_DATASTORE_CROSS_HOST</MIGRATION>"
+        "<CAPACITY>ATOMIC</CAPACITY><RECOVERY>PENDING_CANCEL</RECOVERY>"
+        "</ONE_DRS_CHECKED_CAPABILITIES>" <<
         plan_xml                             <<
         "</CLUSTER>";
 

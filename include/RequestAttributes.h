@@ -135,6 +135,13 @@ public:
 
     uint64_t replication_idx;
 
+    // Internal native plan context; never populated from RPC/user templates.
+    int checked_plan_id = -2;
+    int checked_action_id = -1;
+    std::string checked_plan_generation;
+    unsigned int checked_plan_term = 0;
+    VMActions::Action checked_migrate_action = VMActions::NONE_ACTION;
+
     AuthRequest::Operation auth_op;  /**< Auth operation for the request */
 
     bool success; /**< True if the call was successfull false otherwise */

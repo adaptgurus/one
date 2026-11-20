@@ -38,6 +38,13 @@ using namespace std;
 void LifeCycleManager::start_prolog_migrate(VirtualMachine* vm)
 {
     HostShareCapacity sr;
+    const bool checked = !vm->checked_plan_generation().empty();
+    const auto persisted = [vm, checked](int rc, const char* step)
+    {
+        if (rc == 0 || !checked) return true;
+        vm->log("LCM", Log::ERROR, std::string("Checked cold migration persistence failed: ") + step);
+        return false;
+    };
 
     time_t the_time = time(0);
 
@@ -51,23 +58,29 @@ void LifeCycleManager::start_prolog_migrate(VirtualMachine* vm)
 
     vm->set_previous_running_etime(the_time);
 
-    vmpool->update_previous_history(vm);
+    if (!persisted(vmpool->update_previous_history(vm), "source history")) return;
 
     vm->set_prolog_stime(the_time);
 
-    vmpool->update_history(vm);
+    if (!persisted(vmpool->update_history(vm), "target history")) return;
 
     if ( vm->get_hid() != vm->get_previous_hid() )
     {
         Template tmpl;
-        vm->get_previous_capacity(sr, tmpl);
+        if (checked) vm->get_capacity(sr);
+        else vm->get_previous_capacity(sr, tmpl);
 
-        hpool->del_capacity(vm->get_previous_hid(), sr);
+        if (checked)
+        {
+            if (!persisted(hpool->del_checked_capacity(vm->get_previous_hid(), sr),
+                           "source capacity release")) return;
+        }
+        else hpool->del_capacity(vm->get_previous_hid(), sr);
 
         vm->release_previous_vnc_port();
     }
 
-    vmpool->update(vm);
+    if (!persisted(vmpool->update(vm), "VM state")) return;
 
     //----------------------------------------------------
 
@@ -77,15 +90,22 @@ void LifeCycleManager::start_prolog_migrate(VirtualMachine* vm)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::revert_migrate_after_failure(VirtualMachine* vm, bool live)
+bool LifeCycleManager::revert_migrate_after_failure(VirtualMachine* vm, bool live)
 {
     time_t the_time = time(0);
+    const bool checked = !vm->checked_plan_generation().empty();
+    const auto persisted = [vm, checked](int rc, const char* step)
+    {
+        if (rc == 0 || !checked) return true;
+        vm->log("LCM", Log::ERROR, std::string("Checked migration recovery is unresolved: ") + step);
+        return false;
+    };
 
     vm->set_state(VirtualMachine::RUNNING);
 
     vm->set_etime(the_time);
 
-    vmpool->update_history(vm);
+    if (!persisted(vmpool->update_history(vm), "target history")) return false;
 
     if ( vm->get_hid() != vm->get_previous_hid() )
     {
@@ -93,7 +113,12 @@ void LifeCycleManager::revert_migrate_after_failure(VirtualMachine* vm, bool liv
 
         vm->get_capacity(sr);
 
-        hpool->del_capacity(vm->get_hid(), sr);
+        if (checked)
+        {
+            if (!persisted(hpool->del_checked_capacity(vm->get_hid(), sr),
+                           "target capacity release")) return false;
+        }
+        else hpool->del_capacity(vm->get_hid(), sr);
 
         // Revert PCI assignment. Note: live migration is disabled for VMs with PCI devs
         if (!live && !sr.pci.empty())
@@ -134,7 +159,7 @@ void LifeCycleManager::revert_migrate_after_failure(VirtualMachine* vm, bool liv
 
     vm->set_previous_running_etime(the_time);
 
-    vmpool->update_previous_history(vm);
+    if (!persisted(vmpool->update_previous_history(vm), "source history")) return false;
 
     // --- Add new record by copying the previous one
 
@@ -144,9 +169,10 @@ void LifeCycleManager::revert_migrate_after_failure(VirtualMachine* vm, bool liv
 
     vm->set_running_stime(the_time);
 
-    vmpool->insert_history(vm);
+    if (!persisted(checked ? vmpool->upsert_checked_history(vm) : vmpool->insert_history(vm),
+                   "restored source history")) return false;
 
-    vmpool->update(vm);
+    if (!persisted(vmpool->update(vm), "VM state")) return false;
 
     if (live)
     {
@@ -158,6 +184,7 @@ void LifeCycleManager::revert_migrate_after_failure(VirtualMachine* vm, bool liv
         vm->log("LCM", Log::INFO, "Fail to save VM state while migrating."
             " Assuming that the VM is still RUNNING.");
     }
+    return true;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -175,6 +202,12 @@ void LifeCycleManager::trigger_save_success(int vid)
         {
             return;
         }
+        if (vm->checked_capacity_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Ignoring driver callback before checked migration admission");
+            return;
+        }
+
 
         Template quota_tmpl;
         int uid = vm->get_uid();
@@ -260,10 +293,21 @@ void LifeCycleManager::trigger_save_failure(int vid)
         {
             return;
         }
+        if (vm->checked_capacity_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Ignoring driver callback before checked migration admission");
+            return;
+        }
+
 
         if ( vm->get_lcm_state() == VirtualMachine::SAVE_MIGRATE )
         {
-            revert_migrate_after_failure(vm.get(), false);
+            const int plan_id = vm->plan_id(), action_id = vm->action_id();
+            const auto generation = vm->checked_plan_generation();
+            if (!revert_migrate_after_failure(vm.get(), false) && !generation.empty()) return;
+            vm.reset();
+            if (!generation.empty())
+                Nebula::instance().get_planm()->action_failure(plan_id, action_id, generation);
         }
         else if ( vm->get_lcm_state() == VirtualMachine::SAVE_SUSPEND ||
                   vm->get_lcm_state() == VirtualMachine::SAVE_STOP )
@@ -303,6 +347,12 @@ void LifeCycleManager::trigger_deploy_success(int vid)
         {
             return;
         }
+        if (vm->checked_capacity_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Ignoring driver callback before checked migration admission");
+            return;
+        }
+
 
         Template quota_tmpl;
 
@@ -311,6 +361,7 @@ void LifeCycleManager::trigger_deploy_success(int vid)
 
         int plan_id   = vm->plan_id();
         int action_id = vm->action_id();
+        const auto generation = vm->checked_plan_generation();
 
         //----------------------------------------------------
         //                 RUNNING STATE
@@ -324,19 +375,35 @@ void LifeCycleManager::trigger_deploy_success(int vid)
 
             vm->set_running_stime(the_time);
 
-            vmpool->update_history(vm.get());
+            if (vmpool->update_history(vm.get()) != 0 && !generation.empty())
+            {
+                vm->log("LCM", Log::ERROR, "Cannot persist checked migration completion");
+                return;
+            }
 
             vm->set_previous_etime(the_time);
 
             vm->set_previous_running_etime(the_time);
 
-            vmpool->update_previous_history(vm.get());
+            if (vmpool->update_previous_history(vm.get()) != 0 && !generation.empty())
+            {
+                vm->log("LCM", Log::ERROR, "Cannot persist checked migration completion");
+                return;
+            }
 
             vm->get_capacity(sr);
 
             if ( vm->get_hid() != vm->get_previous_hid() )
             {
-                hpool->del_capacity(vm->get_previous_hid(), sr);
+                if (!generation.empty())
+                {
+                    if (hpool->del_checked_capacity(vm->get_previous_hid(), sr) != 0)
+                    {
+                        vm->log("LCM", Log::ERROR, "Checked migration source capacity release is unresolved");
+                        return;
+                    }
+                }
+                else hpool->del_capacity(vm->get_previous_hid(), sr);
             }
 
             vm->set_state(VirtualMachine::RUNNING);
@@ -348,7 +415,11 @@ void LifeCycleManager::trigger_deploy_success(int vid)
 
             vm->release_previous_vnc_port();
 
-            vmpool->update(vm.get());
+            if (vmpool->update(vm.get()) != 0 && !generation.empty())
+            {
+                vm->log("LCM", Log::ERROR, "Cannot persist checked migration completion");
+                return;
+            }
         }
         else if ( vm->get_lcm_state() == VirtualMachine::BOOT ||
                   vm->get_lcm_state() == VirtualMachine::BOOT_POWEROFF ||
@@ -370,9 +441,17 @@ void LifeCycleManager::trigger_deploy_success(int vid)
 
             vm->set_running_etime(0);
 
-            vmpool->update_history(vm.get());
+            if (vmpool->update_history(vm.get()) != 0 && !generation.empty())
+            {
+                vm->log("LCM", Log::ERROR, "Cannot persist checked migration completion");
+                return;
+            }
 
-            vmpool->update(vm.get());
+            if (vmpool->update(vm.get()) != 0 && !generation.empty())
+            {
+                vm->log("LCM", Log::ERROR, "Cannot persist checked migration completion");
+                return;
+            }
         }
         else if ( vm->get_lcm_state() != VirtualMachine::RUNNING)
         {
@@ -389,7 +468,7 @@ void LifeCycleManager::trigger_deploy_success(int vid)
         if (plan_id >= -1)
         {
             auto planm = Nebula::instance().get_planm();
-            planm->action_success(plan_id, action_id);
+            planm->action_success(plan_id, action_id, generation);
         }
     });
 }
@@ -407,16 +486,25 @@ void LifeCycleManager::trigger_deploy_failure(int vid)
         {
             return;
         }
+        if (vm->checked_capacity_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Ignoring driver callback before checked migration admission");
+            return;
+        }
+
 
         int plan_id   = vm->plan_id();
         int action_id = vm->action_id();
+        const auto generation = vm->checked_plan_generation();
 
         time_t the_time = time(0);
 
         if ( vm->get_lcm_state() == VirtualMachine::MIGRATE )
         {
-            revert_migrate_after_failure(vm.get(), true);
-
+            if (!revert_migrate_after_failure(vm.get(), true) && !generation.empty()) return;
+            vm.reset();
+            if (!generation.empty())
+                Nebula::instance().get_planm()->action_failure(plan_id, action_id, generation);
             return;
         }
         else if (vm->get_lcm_state() == VirtualMachine::BOOT)
@@ -468,10 +556,12 @@ void LifeCycleManager::trigger_deploy_failure(int vid)
 
         vmpool->update(vm.get());
 
+        vm.reset();
+
         if (plan_id >= -1)
         {
             auto planm = Nebula::instance().get_planm();
-            planm->action_failure(plan_id, action_id);
+            planm->action_failure(plan_id, action_id, generation);
         }
     });
 }
@@ -491,6 +581,12 @@ void LifeCycleManager::trigger_shutdown_success(int vid)
         {
             return;
         }
+        if (vm->checked_capacity_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Ignoring driver callback before checked migration admission");
+            return;
+        }
+
 
         Template quota_tmpl;
 
@@ -499,6 +595,7 @@ void LifeCycleManager::trigger_shutdown_success(int vid)
 
         int plan_id   = vm->plan_id();
         int action_id = vm->action_id();
+        const auto generation = vm->checked_plan_generation();
 
         auto state = vm->get_lcm_state();
 
@@ -598,7 +695,7 @@ void LifeCycleManager::trigger_shutdown_success(int vid)
         if (state != VirtualMachine::SAVE_MIGRATE && plan_id >= -1)
         {
             auto planm = Nebula::instance().get_planm();
-            planm->action_success(plan_id, action_id);
+            planm->action_success(plan_id, action_id, generation);
         }
     });
 }
@@ -616,6 +713,16 @@ void LifeCycleManager::trigger_shutdown_failure(int vid)
         {
             return;
         }
+        int plan_id   = vm->plan_id();
+        int action_id = vm->action_id();
+        const auto generation = vm->checked_plan_generation();
+
+        if (vm->checked_capacity_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Ignoring driver callback before checked migration admission");
+            return;
+        }
+
 
         if ( vm->get_lcm_state() == VirtualMachine::SHUTDOWN ||
              vm->get_lcm_state() == VirtualMachine::SHUTDOWN_POWEROFF ||
@@ -638,22 +745,20 @@ void LifeCycleManager::trigger_shutdown_failure(int vid)
         }
         else if (vm->get_lcm_state() == VirtualMachine::SAVE_MIGRATE)
         {
-            revert_migrate_after_failure(vm.get(), false);
+            if (!revert_migrate_after_failure(vm.get(), false) && !generation.empty()) return;
         }
         else
         {
             vm->log("LCM", Log::ERROR, "shutdown_failure_action, VM in a wrong state");
         }
 
-        int plan_id   = vm->plan_id();
-        int action_id = vm->action_id();
 
         vm.reset();
 
         if (plan_id >= -1)
         {
             auto planm = Nebula::instance().get_planm();
-            planm->action_failure(plan_id, action_id);
+            planm->action_failure(plan_id, action_id, generation);
         }
     });
 }
@@ -674,6 +779,12 @@ void LifeCycleManager::trigger_prolog_success(int vid)
         {
             return;
         }
+        if (vm->checked_capacity_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Ignoring driver callback before checked migration admission");
+            return;
+        }
+
 
         Template quota_tmpl;
         int uid = vm->get_uid();
@@ -805,6 +916,16 @@ void LifeCycleManager::trigger_prolog_failure(int vid)
         {
             return;
         }
+        int plan_id   = vm->plan_id();
+        int action_id = vm->action_id();
+        const auto generation = vm->checked_plan_generation();
+
+        if (vm->checked_capacity_pending())
+        {
+            vm->log("LCM", Log::ERROR, "Ignoring driver callback before checked migration admission");
+            return;
+        }
+
 
         switch (vm->get_lcm_state())
         {
@@ -913,15 +1034,14 @@ void LifeCycleManager::trigger_prolog_failure(int vid)
                 break;
         }
 
-        int plan_id   = vm->plan_id();
-        int action_id = vm->action_id();
 
         vm.reset();
 
         if (plan_id >= -1)
         {
             auto planm = Nebula::instance().get_planm();
-            planm->action_success(plan_id, action_id);
+            if (generation.empty()) planm->action_success(plan_id, action_id);
+            else planm->action_failure(plan_id, action_id, generation);
         }
     });
 }

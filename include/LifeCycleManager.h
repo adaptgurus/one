@@ -85,7 +85,11 @@ public:
     // -------------------------------------------------------------------------
     void start_prolog_migrate(VirtualMachine* vm);
 
-    void revert_migrate_after_failure(VirtualMachine* vm, bool live);
+    bool revert_migrate_after_failure(VirtualMachine* vm, bool live);
+    int reserve_checked_migration_capacity(std::unique_ptr<VirtualMachine>& vm, bool live);
+    bool cancel_checked_migration(std::unique_ptr<VirtualMachine>& vm, const std::string& reason);
+    bool recover_checked_migrations(bool new_epoch, unsigned int term);
+    bool persist_checked_migration_admission(VirtualMachine* vm);
 
     void trigger_save_success(int vid);
     void trigger_save_failure(int vid);

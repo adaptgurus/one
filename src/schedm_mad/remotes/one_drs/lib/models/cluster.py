@@ -58,6 +58,10 @@ class Cluster:
         default=None,
         metadata={"name": "TEMPLATE_SHA256", "type": "Element"},
     )
+    one_drs_checked_capabilities: Optional["Cluster.OneDrsCheckedCapabilities"] = field(
+        default=None,
+        metadata={"name": "ONE_DRS_CHECKED_CAPABILITIES", "type": "Element"},
+    )
     plan_sha256: Optional[str] = field(
         default=None,
         metadata={"name": "PLAN_SHA256", "type": "Element"},
@@ -69,6 +73,13 @@ class Cluster:
             "type": "Element",
         },
     )
+
+    @dataclass
+    class OneDrsCheckedCapabilities:
+        version: Optional[int] = field(default=None, metadata={"name": "VERSION", "type": "Element"})
+        migration: Optional[str] = field(default=None, metadata={"name": "MIGRATION", "type": "Element"})
+        capacity: Optional[str] = field(default=None, metadata={"name": "CAPACITY", "type": "Element"})
+        recovery: Optional[str] = field(default=None, metadata={"name": "RECOVERY", "type": "Element"})
 
     @dataclass
     class Hosts:
@@ -117,6 +128,10 @@ class Cluster:
                 "type": "Element",
                 "required": True,
             },
+        )
+        checked_execution: Optional[int] = field(
+            default=None,
+            metadata={"name": "CHECKED_EXECUTION", "type": "Element"},
         )
         generation: Optional[str] = field(
             default=None,

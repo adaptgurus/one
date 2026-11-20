@@ -373,7 +373,9 @@ class OptimizerParser:
         def apply_host_constraints(requirements, host_affined, host_anti_affined):
             for vm_req in self.scheduler_driver_action.requirements.vm:
                 if vm_req.id in host_affined:
-                    new_host_ids = host_affined[vm_req.id]
+                    # VMGroup host policy only narrows the native authorization
+                    # and SCHED_REQUIREMENTS result; it cannot restore a denied host.
+                    new_host_ids = requirements[vm_req.id].host_ids & host_affined[vm_req.id]
                 elif vm_req.id in host_anti_affined:
                     current_ids = requirements[vm_req.id].host_ids
                     new_host_ids = current_ids - host_anti_affined[vm_req.id]

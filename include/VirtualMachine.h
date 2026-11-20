@@ -144,7 +144,8 @@ public:
         HOTPLUG_SAVEAS_STOPPED    = 68,
         BACKUP            = 69,
         BACKUP_POWEROFF   = 70,
-        RESTORE           = 71
+        RESTORE           = 71,
+        CHECKED_MIGRATE_PENDING = 72
     };
 
     static const int MAX_VNC_PASSWD_LENGTH = 8;
@@ -928,6 +929,37 @@ public:
         return history->action_id;
     }
 
+    const std::string& checked_plan_generation() const
+    {
+        return history->checked_plan_generation;
+    }
+
+    void checked_plan_generation(const std::string& generation)
+    {
+        history->checked_plan_generation = generation;
+    }
+
+    unsigned int checked_plan_term() const
+    {
+        return history ? history->checked_plan_term : 0;
+    }
+
+    void checked_plan_term(unsigned int term)
+    {
+        if (history) history->checked_plan_term = term;
+    }
+    bool checked_capacity_pending() const
+    {
+        return history && history->checked_capacity_pending;
+    }
+
+    void checked_capacity_pending(bool value)
+    {
+        if (history) history->checked_capacity_pending = value;
+    }
+
+
+
     /**
      *  Release VNC port
      */
@@ -1076,12 +1108,20 @@ public:
         return stime;
     };
 
+    time_t get_history_stime() const
+    {
+        return history ? history->stime : 0;
+    }
+
     /**
      *  Get the VM physical capacity requirements for the host.
      *    @param sr the HostShareCapacity to store the capacity request. The sr
      *      use pointers to VM template, do not destroy the VM object before sr.
      */
     void get_capacity(HostShareCapacity &sr) const;
+
+    bool checked_migration_supported(int target_hid, int target_cid, int target_ds,
+                                     std::string& error) const;
 
     /**
      *  Get the VM physical capacity from the previous history
