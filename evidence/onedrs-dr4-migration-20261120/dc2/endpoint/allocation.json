@@ -1,0 +1,14 @@
+{
+  "at_utc": "2026-11-20T03:32:27.277155+00:00",
+  "scope": "Operator-assigned test lab DR4 migration source; no IPAM service claim",
+  "allocation": "10.201.20.6/24",
+  "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+  "generation": "onedrs-dr4-migration-20261120-v1",
+  "profile_sha256": "ca06facdbfe20f901433d6b5f2b10d8a00f922dd2cded8b345609d376294e795",
+  "authority": "User explicitly authorized DR1-DR4 test lab completion and administration; coordinator assigned this currently unreferenced source after bounded profiles/address inventory.",
+  "duplicate_probe_required_before_activation": true,
+  "management_bridge_mac": "bc:24:11:3b:38:0f",
+  "native_host_id": 4,
+  "automatic_scheduling": "DISABLED",
+  "existing_workloads": "Eight OVN guests plus owned native synthetic VM53; preserve all processes and identities."
+}

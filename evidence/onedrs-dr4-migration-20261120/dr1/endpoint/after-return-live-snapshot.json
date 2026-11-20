@@ -1,0 +1,47 @@
+{
+  "started_utc": "2026-11-20T04:04:31.533544+00:00",
+  "state": "CAPTURED",
+  "dmi": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+  "helper_sha256": "e2006979aef27d1d32db5c856b2840398ae23b1b06ada272009b838a37b6768f",
+  "owned_guest": {
+    "uuid": "1c133f56-0d0c-4d0e-aefd-1a990f71489b",
+    "pid": 1928187,
+    "start_ticks": "240639400",
+    "inactive_xml_sha256": "fd3cdbd128c722d0452cb1ec90e08a396a14cd53d5e592a8d1178d0f3257f4fd"
+  },
+  "other_guests": {
+    "one-16": {
+      "uuid": "1b386a19-5648-4421-b3c4-008e06604f6b",
+      "pid": 198702,
+      "start_ticks": "133922855",
+      "inactive_xml_sha256": "1bdf69020b70ca34282a78fbc174d2a0241c250e903df39c687f51e4ba8ba47e"
+    },
+    "one-21": {
+      "uuid": "5c265b8c-4255-413a-9c1c-43b83a5861c0",
+      "pid": 643011,
+      "start_ticks": "134708881",
+      "inactive_xml_sha256": "a56901851a96e0aa3e6875747c31800d3f2b9b7226802124a97132122627cc89"
+    },
+    "one-24": {
+      "uuid": "25e92acb-56c0-4a25-a7ff-23f408a20851",
+      "pid": 670135,
+      "start_ticks": "134749601",
+      "inactive_xml_sha256": "288dde75efe7a4fd973db9ba72f3eccf7a9d746fe6e4797bf36169a8d7f2aba2"
+    },
+    "one-34": {
+      "uuid": "61426ff1-2850-4471-9cec-428161d81cfa",
+      "pid": 1029059,
+      "start_ticks": "155966156",
+      "inactive_xml_sha256": "ee66bdcb166606ca922a1f580fd80431e8c021de50f33b0e72f3909bc6c1cb49"
+    },
+    "one-51": {
+      "uuid": "291f36bd-0afd-4f74-9fbd-45c47ec11bbd",
+      "pid": 3007468,
+      "start_ticks": "236744498",
+      "inactive_xml_sha256": "9868fb01d3f223376f887172318aca8f56338a0b11baa7b03f078a710e8989c2"
+    }
+  },
+  "selinux": "Enforcing",
+  "libvirtd_pid": "2126",
+  "ended_utc": "2026-11-20T04:04:31.816531+00:00"
+}

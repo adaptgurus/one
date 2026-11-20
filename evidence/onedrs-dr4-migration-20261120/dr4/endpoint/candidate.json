@@ -1,0 +1,8 @@
+{
+  "source_commit": "2eaffdc8462b01fa74f2610bfa02fb4b5d4ba52e",
+  "toolchain": "go1.26.11 linux/amd64",
+  "helper_sha256": "e2006979aef27d1d32db5c856b2840398ae23b1b06ada272009b838a37b6768f",
+  "unit_sha256": "79e79c2e84e8891d69c62937f06e6d3f70f93301f81e5c912745ce248a888cf6",
+  "scope": "LAB_ONLY reviewed source-pinned helper qualification; not a production RPM release",
+  "active_removal_supported": false
+}

@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "site": "dr",
+  "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+  "generation": "onedrs-dr4-migration-20261120-v1",
+  "workload_cidrs": [
+    "10.200.40.0/24",
+    "10.201.40.0/24",
+    "192.168.122.0/24"
+  ],
+  "roles": {
+    "management": {
+      "owner": "layersentry-host-network-roles-v1",
+      "role": "management",
+      "site": "dr",
+      "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+      "generation": "onedrs-dr4-migration-20261120-v1",
+      "interface": "br-mgmt",
+      "source_cidr": "172.17.60.64/26",
+      "source_address": "172.17.60.88",
+      "peers": [
+        {
+          "hostname": "dr1",
+          "site": "dr",
+          "host_uuid": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+          "address": "172.17.60.80"
+        },
+        {
+          "hostname": "dr2",
+          "site": "dr",
+          "host_uuid": "7a8de079-0a04-4bc6-8c53-e3439d7ce94d",
+          "address": "172.17.60.81"
+        },
+        {
+          "hostname": "dr3",
+          "site": "dr",
+          "host_uuid": "3a521acf-c116-4c5e-a6ce-920527f45d45",
+          "address": "172.17.60.82"
+        }
+      ],
+      "mtu": 1500
+    },
+    "live_migration": {
+      "owner": "layersentry-host-network-roles-v1",
+      "role": "live_migration",
+      "site": "dr",
+      "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+      "generation": "onedrs-dr4-migration-20261120-v1",
+      "interface": "ls-migration",
+      "source_cidr": "10.201.20.0/24",
+      "source_address": "10.201.20.6",
+      "peers": [
+        {
+          "hostname": "dr1",
+          "site": "dr",
+          "host_uuid": "96ffe8b4-4125-4626-8677-6c4fa6cff44e",
+          "address": "10.201.20.2"
+        },
+        {
+          "hostname": "dr2",
+          "site": "dr",
+          "host_uuid": "7a8de079-0a04-4bc6-8c53-e3439d7ce94d",
+          "address": "10.201.20.3"
+        },
+        {
+          "hostname": "dr3",
+          "site": "dr",
+          "host_uuid": "3a521acf-c116-4c5e-a6ce-920527f45d45",
+          "address": "10.201.20.4"
+        }
+      ],
+      "mtu": 1500
+    }
+  }
+}

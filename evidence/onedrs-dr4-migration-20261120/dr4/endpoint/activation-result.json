@@ -1,0 +1,161 @@
+{
+  "started_utc": "2026-11-20T03:43:20.279728+00:00",
+  "scope": "Owned DR4 migration endpoint only; no QEMU/native policy change",
+  "state": "PASS_ENDPOINT_AND_PERSISTENCE_REPLAY",
+  "actions": [
+    {
+      "argv": [
+        "/usr/sbin/arping",
+        "-D",
+        "-I",
+        "br-mgmt",
+        "-c",
+        "3",
+        "-w",
+        "4",
+        "10.201.20.6"
+      ],
+      "exit": 0,
+      "stdout": "ARPING 10.201.20.6 from 0.0.0.0 br-mgmt\nSent 3 probes (3 broadcast(s))\nReceived 0 response(s)\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "systemctl",
+        "daemon-reload"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/libexec/layersentry-host-network-role",
+        "migration-bridge-install"
+      ],
+      "exit": 0,
+      "stdout": "{\"version\":3,\"origin\":\"FRESH_INSTALL\",\"ever_configured\":true,\"host_uuid\":\"87cee185-4cab-4384-afde-19a5cd3a2239\",\"generation\":\"onedrs-dr4-migration-20261120-v1\",\"profile_sha256\":\"ca06facdbfe20f901433d6b5f2b10d8a00f922dd2cded8b345609d376294e795\",\"interface\":\"ls-migration\",\"bridge\":\"br-mgmt\",\"peer_interface\":\"ls-mig-peer\",\"mac\":\"02:79:87:03:65:9a\",\"bridge_mac\":\"bc:24:11:3b:38:0f\",\"peer_mac\":\"fe:ff:3b:4a:6d:c9\",\"state\":\"CONFIGURED\",\"updated_at\":\"2026-11-20T03:43:27.132917388Z\"}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/libexec/layersentry-host-network-role",
+        "migration-prepare",
+        "dr1"
+      ],
+      "exit": 0,
+      "stdout": "{\"profile_sha256\":\"ca06facdbfe20f901433d6b5f2b10d8a00f922dd2cded8b345609d376294e795\",\"role\":\"live_migration\",\"site\":\"dr\",\"host_uuid\":\"87cee185-4cab-4384-afde-19a5cd3a2239\",\"generation\":\"onedrs-dr4-migration-20261120-v1\",\"source_address\":\"10.201.20.6\",\"interface\":\"ls-migration\",\"target_host\":\"dr1\",\"target_address\":\"10.201.20.2\",\"migration_uri\":\"tcp://10.201.20.2\",\"listen_address\":\"10.201.20.2\",\"state\":\"HOST_ROLE_PREPARED_NOT_MIGRATION_OR_SOCKET_PROOF\"}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/libexec/layersentry-host-network-role",
+        "migration-prepare",
+        "dr2"
+      ],
+      "exit": 0,
+      "stdout": "{\"profile_sha256\":\"ca06facdbfe20f901433d6b5f2b10d8a00f922dd2cded8b345609d376294e795\",\"role\":\"live_migration\",\"site\":\"dr\",\"host_uuid\":\"87cee185-4cab-4384-afde-19a5cd3a2239\",\"generation\":\"onedrs-dr4-migration-20261120-v1\",\"source_address\":\"10.201.20.6\",\"interface\":\"ls-migration\",\"target_host\":\"dr2\",\"target_address\":\"10.201.20.3\",\"migration_uri\":\"tcp://10.201.20.3\",\"listen_address\":\"10.201.20.3\",\"state\":\"HOST_ROLE_PREPARED_NOT_MIGRATION_OR_SOCKET_PROOF\"}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/libexec/layersentry-host-network-role",
+        "migration-prepare",
+        "dr3"
+      ],
+      "exit": 0,
+      "stdout": "{\"profile_sha256\":\"ca06facdbfe20f901433d6b5f2b10d8a00f922dd2cded8b345609d376294e795\",\"role\":\"live_migration\",\"site\":\"dr\",\"host_uuid\":\"87cee185-4cab-4384-afde-19a5cd3a2239\",\"generation\":\"onedrs-dr4-migration-20261120-v1\",\"source_address\":\"10.201.20.6\",\"interface\":\"ls-migration\",\"target_host\":\"dr3\",\"target_address\":\"10.201.20.4\",\"migration_uri\":\"tcp://10.201.20.4\",\"listen_address\":\"10.201.20.4\",\"state\":\"HOST_ROLE_PREPARED_NOT_MIGRATION_OR_SOCKET_PROOF\"}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "/usr/libexec/layersentry-host-network-role",
+        "migration-enable-persistence"
+      ],
+      "exit": 0,
+      "stdout": "{\"configuration\":{\"version\":3,\"origin\":\"FRESH_INSTALL\",\"ever_configured\":true,\"host_uuid\":\"87cee185-4cab-4384-afde-19a5cd3a2239\",\"generation\":\"onedrs-dr4-migration-20261120-v1\",\"profile_sha256\":\"ca06facdbfe20f901433d6b5f2b10d8a00f922dd2cded8b345609d376294e795\",\"interface\":\"ls-migration\",\"bridge\":\"br-mgmt\",\"peer_interface\":\"ls-mig-peer\",\"mac\":\"02:79:87:03:65:9a\",\"bridge_mac\":\"bc:24:11:3b:38:0f\",\"peer_mac\":\"fe:ff:3b:4a:6d:c9\",\"state\":\"CONFIGURED\",\"updated_at\":\"2026-11-20T03:43:27.285302354Z\"},\"enabled\":true,\"unit\":\"layersentry-host-migration-role.service\",\"state\":\"PERSISTENCE_ENABLED_NOT_BOOT_OR_MIGRATION_QUALIFICATION\",\"observed_at\":\"2026-11-20T03:43:27.777726325Z\"}\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "systemctl",
+        "start",
+        "layersentry-host-migration-role.service"
+      ],
+      "exit": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "systemctl",
+        "is-enabled",
+        "layersentry-host-migration-role.service"
+      ],
+      "exit": 0,
+      "stdout": "enabled\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "systemctl",
+        "is-active",
+        "layersentry-host-migration-role.service"
+      ],
+      "exit": 0,
+      "stdout": "active\n",
+      "stderr": ""
+    },
+    {
+      "argv": [
+        "getenforce"
+      ],
+      "exit": 0,
+      "stdout": "Enforcing\n",
+      "stderr": ""
+    }
+  ],
+  "endpoint": {
+    "version": 3,
+    "origin": "FRESH_INSTALL",
+    "ever_configured": true,
+    "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+    "generation": "onedrs-dr4-migration-20261120-v1",
+    "profile_sha256": "ca06facdbfe20f901433d6b5f2b10d8a00f922dd2cded8b345609d376294e795",
+    "interface": "ls-migration",
+    "bridge": "br-mgmt",
+    "peer_interface": "ls-mig-peer",
+    "mac": "02:79:87:03:65:9a",
+    "bridge_mac": "bc:24:11:3b:38:0f",
+    "peer_mac": "fe:ff:3b:4a:6d:c9",
+    "state": "CONFIGURED",
+    "updated_at": "2026-11-20T03:43:27.132917388Z"
+  },
+  "persistence": {
+    "configuration": {
+      "version": 3,
+      "origin": "FRESH_INSTALL",
+      "ever_configured": true,
+      "host_uuid": "87cee185-4cab-4384-afde-19a5cd3a2239",
+      "generation": "onedrs-dr4-migration-20261120-v1",
+      "profile_sha256": "ca06facdbfe20f901433d6b5f2b10d8a00f922dd2cded8b345609d376294e795",
+      "interface": "ls-migration",
+      "bridge": "br-mgmt",
+      "peer_interface": "ls-mig-peer",
+      "mac": "02:79:87:03:65:9a",
+      "bridge_mac": "bc:24:11:3b:38:0f",
+      "peer_mac": "fe:ff:3b:4a:6d:c9",
+      "state": "CONFIGURED",
+      "updated_at": "2026-11-20T03:43:27.285302354Z"
+    },
+    "enabled": true,
+    "unit": "layersentry-host-migration-role.service",
+    "state": "PERSISTENCE_ENABLED_NOT_BOOT_OR_MIGRATION_QUALIFICATION",
+    "observed_at": "2026-11-20T03:43:27.777726325Z"
+  },
+  "guest_count": 9,
+  "guest_processes_and_configurations_preserved": true,
+  "host_reboot_performed": false,
+  "live_migration_qualified": false,
+  "ended_utc": "2026-11-20T03:43:28.318722+00:00"
+}

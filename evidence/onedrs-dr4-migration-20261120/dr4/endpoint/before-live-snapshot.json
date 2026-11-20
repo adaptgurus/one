@@ -1,0 +1,60 @@
+{
+  "started_utc": "2026-11-20T04:00:31.537931+00:00",
+  "state": "CAPTURED",
+  "dmi": "87cee185-4cab-4384-afde-19a5cd3a2239",
+  "helper_sha256": "e2006979aef27d1d32db5c856b2840398ae23b1b06ada272009b838a37b6768f",
+  "owned_guest": null,
+  "other_guests": {
+    "ls-ovn26-canary-a-20261109": {
+      "uuid": "3038a4fa-2b3f-4c16-b937-205eec35ed92",
+      "pid": 457419,
+      "start_ticks": "148228097",
+      "inactive_xml_sha256": "d663af074930880e7f87399ca3dd355553fe2754662ce743bbdd4b166bec011f"
+    },
+    "ls-ovn26-canary-b-20261109": {
+      "uuid": "3a03a0a6-0420-4f2e-979e-eacf05f528bc",
+      "pid": 459097,
+      "start_ticks": "148311713",
+      "inactive_xml_sha256": "466c33485333197108ef5498a57da76b8bc7b0188f06aeef446cc14fefacdf84"
+    },
+    "ls-ovn26-canary-c-20261109": {
+      "uuid": "f0717247-baa7-4234-b458-2dbed68f13ba",
+      "pid": 461154,
+      "start_ticks": "148509039",
+      "inactive_xml_sha256": "30017eef01075c43af76475ce649ec8b67365b3218fd3ee916c9e049bc4b156d"
+    },
+    "ls-ovn26-canary-d-20261109": {
+      "uuid": "48019990-719b-4296-9a19-f3d4b78d3855",
+      "pid": 465156,
+      "start_ticks": "149215704",
+      "inactive_xml_sha256": "f304580152726eb6eeb482a8d67d81e64650f5cc045b664ab45178c5da89d5b2"
+    },
+    "ls-ovn26-rpmbuilder-20261110": {
+      "uuid": "3701e57a-373a-40fe-9256-2e80c3c61b72",
+      "pid": 489234,
+      "start_ticks": "153880277",
+      "inactive_xml_sha256": "b34a6da02586fa5e341019918ee3b3725764d6191dad5d9d860cb2a35b588af9"
+    },
+    "ls-ovn26-gen106-signed-rpm-qa-20261112": {
+      "uuid": "6cd30cd6-be6c-41ce-827a-4a07531a23d1",
+      "pid": 616049,
+      "start_ticks": "176603466",
+      "inactive_xml_sha256": "d5fe2769e8542ebad5e3abbb889fb3085fa56a20ba7dc8465b05b86aae9f711c"
+    },
+    "ls-ovn26-gen109-native-20261113": {
+      "uuid": "b8fcfcf4-163d-4367-b592-15035f530936",
+      "pid": 641943,
+      "start_ticks": "179163704",
+      "inactive_xml_sha256": "1117305ac65f9ba1644d95d7f3e19f9ad0d10d836b94189e55e9c3b44fd3b749"
+    },
+    "ls-ovn26-ipv6-feature-20261113": {
+      "uuid": "67817482-0c5f-4a15-ab48-f3e678660f69",
+      "pid": 658834,
+      "start_ticks": "179999025",
+      "inactive_xml_sha256": "24e9480a346937dadec5508e99ca8dd734ae6fecce26aab2020cf26ff0f08d12"
+    }
+  },
+  "selinux": "Enforcing",
+  "libvirtd_pid": "2215655",
+  "ended_utc": "2026-11-20T04:00:31.889396+00:00"
+}
