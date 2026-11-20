@@ -110,7 +110,8 @@ bool prepare(VirtualMachine* vm, VirtualMachinePool* pool,
         if (!vm->driver_request_pending() &&
             (operation == "TRANSFER" ||
              (operation == "CLEANUP" &&
-              vm->get_lcm_state() == VirtualMachine::CLEANUP_DELETE))) return true;
+              (vm->get_lcm_state() == VirtualMachine::CLEANUP_DELETE ||
+               vm->get_state() == VirtualMachine::DONE)))) return true;
         vm->log("VMM", Log::ERROR, "Refusing driver dispatch outside its native lifecycle state");
         return false;
     }
@@ -195,6 +196,17 @@ bool consume(VirtualMachine* vm, VirtualMachinePool* pool,
         vm->log("LCM", Log::WARNING, "Ignoring stale, duplicate, or wrong-state native driver reply");
         return false;
     }
+    std::string deploy_id;
+    if (reply.operation == "DEPLOY" && reply.status == "SUCCESS")
+    {
+        std::istringstream input(reply.payload);
+        input >> deploy_id;
+        if (deploy_id.empty() || deploy_id == "-")
+        {
+            vm->log("LCM", Log::WARNING, "Ignoring malformed native deployment acknowledgement");
+            return false;
+        }
+    }
     auto request = vm->driver_request();
     request.pending = false;
     vm->driver_request(request);
@@ -211,10 +223,6 @@ bool consume(VirtualMachine* vm, VirtualMachinePool* pool,
     bool changed = false;
     if (reply.operation == "DEPLOY" && reply.status == "SUCCESS")
     {
-        std::istringstream input(reply.payload);
-        std::string deploy_id;
-        input >> deploy_id;
-        if (deploy_id.empty() || deploy_id == "-") return false;
         vm->set_deploy_id(deploy_id);
         changed = true;
     }

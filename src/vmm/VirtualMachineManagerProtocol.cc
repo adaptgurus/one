@@ -132,7 +132,8 @@ void VirtualMachineManager::_deploy(unique_ptr<vm_msg_t> msg)
     auto vm = vmpool->get_ro(msg->oid());
     if (!one_drs_driver::matches(vm.get(), reply))
     {
-        NebulaLog::warn("VMM", "Ignoring unbound, stale, or wrong-state native driver reply");
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
     vm.reset();
@@ -143,8 +144,8 @@ void VirtualMachineManager::_deploy(unique_ptr<vm_msg_t> msg)
         input >> deploy_id;
         if (deploy_id.empty() || deploy_id == "-")
         {
-            reply.status = "FAILURE";
-            reply.payload = "Empty deploy ID for virtual machine";
+            NebulaLog::warn("VMM", "Ignoring malformed native deployment acknowledgement");
+            return;
         }
     }
     auto lcm = Nebula::instance().get_lcm();
@@ -161,7 +162,8 @@ void VirtualMachineManager::_shutdown(unique_ptr<vm_msg_t> msg)
     auto vm = vmpool->get_ro(msg->oid());
     if (!one_drs_driver::matches(vm.get(), reply))
     {
-        NebulaLog::warn("VMM", "Ignoring unbound, stale, or wrong-state native driver reply");
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
     vm.reset();
@@ -233,7 +235,8 @@ void VirtualMachineManager::_cancel(unique_ptr<vm_msg_t> msg)
     auto vm = vmpool->get_ro(msg->oid());
     if (!one_drs_driver::matches(vm.get(), reply))
     {
-        NebulaLog::warn("VMM", "Ignoring unbound, stale, or wrong-state native driver reply");
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
     vm.reset();
@@ -251,7 +254,8 @@ void VirtualMachineManager::_cleanup(unique_ptr<vm_msg_t> msg)
     auto vm = vmpool->get_ro(msg->oid());
     if (!one_drs_driver::matches(vm.get(), reply))
     {
-        NebulaLog::warn("VMM", "Ignoring unbound, stale, or wrong-state native driver reply");
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
     vm.reset();
@@ -275,7 +279,8 @@ void VirtualMachineManager::_save(unique_ptr<vm_msg_t> msg)
     auto vm = vmpool->get_ro(msg->oid());
     if (!one_drs_driver::matches(vm.get(), reply))
     {
-        NebulaLog::warn("VMM", "Ignoring unbound, stale, or wrong-state native driver reply");
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
     vm.reset();
@@ -293,7 +298,8 @@ void VirtualMachineManager::_restore(unique_ptr<vm_msg_t> msg)
     auto vm = vmpool->get_ro(msg->oid());
     if (!one_drs_driver::matches(vm.get(), reply))
     {
-        NebulaLog::warn("VMM", "Ignoring unbound, stale, or wrong-state native driver reply");
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
     vm.reset();
@@ -311,7 +317,8 @@ void VirtualMachineManager::_migrate(unique_ptr<vm_msg_t> msg)
     auto vm = vmpool->get_ro(msg->oid());
     if (!one_drs_driver::matches(vm.get(), reply))
     {
-        NebulaLog::warn("VMM", "Ignoring unbound, stale, or wrong-state native driver reply");
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
     vm.reset();
