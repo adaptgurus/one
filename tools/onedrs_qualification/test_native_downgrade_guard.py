@@ -51,6 +51,24 @@ class NativeDowngradeGuardTests(unittest.TestCase):
         self.previous()
         self.assertFalse(self.ready())
 
+    def test_pending_driver_request_blocks_even_in_stable_vm_state(self):
+        self.vm()
+        body = self.db.execute("SELECT body FROM history WHERE vid=7 AND seq=0").fetchone()[0]
+        ticket = ("<DRIVER_REQUEST_TOKEN>" + "a" * 64 + "</DRIVER_REQUEST_TOKEN>" +
+                  "<DRIVER_REQUEST_OWNER>" + "b" * 64 + "</DRIVER_REQUEST_OWNER>" +
+                  "<DRIVER_REQUEST_PENDING>1</DRIVER_REQUEST_PENDING>")
+        self.db.execute("UPDATE history SET body=? WHERE vid=7 AND seq=0", (body.replace("</HISTORY>", ticket + "</HISTORY>"),))
+        self.assertFalse(self.ready())
+
+    def test_consumed_driver_tombstone_does_not_block_stable_drain(self):
+        self.vm()
+        body = self.db.execute("SELECT body FROM history WHERE vid=7 AND seq=0").fetchone()[0]
+        ticket = ("<DRIVER_REQUEST_TOKEN>" + "a" * 64 + "</DRIVER_REQUEST_TOKEN>" +
+                  "<DRIVER_REQUEST_OWNER>" + "b" * 64 + "</DRIVER_REQUEST_OWNER>" +
+                  "<DRIVER_REQUEST_PENDING>0</DRIVER_REQUEST_PENDING>")
+        self.db.execute("UPDATE history SET body=? WHERE vid=7 AND seq=0", (body.replace("</HISTORY>", ticket + "</HISTORY>"),))
+        self.assertTrue(self.ready())
+
     def test_enforced_offline_api_to_lcm_gap_is_blocked(self):
         for state in (5, 8):
             with self.subTest(state=state):
