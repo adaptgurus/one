@@ -1,0 +1,86 @@
+{
+  "README.md": {
+    "bytes": 8704,
+    "sha256": "2cb6715f03c9e5760557d9d2ca0a816a7cc12b85baaf2b9daa54d9c3a3cfb99c"
+  },
+  "RPM-GPG-KEY-R14-LAB-ONLY": {
+    "bytes": 1363,
+    "sha256": "d5b637bbbe4ecf904ec6a2813912768bdc2bb70919b7950352e929e31ca5e158"
+  },
+  "ambient-all-acl-audit.json": {
+    "bytes": 546,
+    "sha256": "7c4a9fbe51837cd96758a60a69de1da266f4bbf000f3bff80ad4f179fc0d7893"
+  },
+  "build-r14-lab-package.py": {
+    "bytes": 10561,
+    "sha256": "e1c34a943b16cd1acdb0b9f953687d71f2ae8412e0a4d7d81b564b9124b084c1"
+  },
+  "discarded-acl-fixture-encoding-result.json": {
+    "bytes": 2756,
+    "sha256": "b8724cc5401f63983c2f5967ab0d63a64cebd324ef1b4ca8462bf136117e053a"
+  },
+  "native-baseline-contracts.json": {
+    "bytes": 1553,
+    "sha256": "76401e8bdc204a933537772b9851d5cf45ac2689fd063039a16dd3d08c9d914d"
+  },
+  "native-build-input.json": {
+    "bytes": 1634,
+    "sha256": "2fcdd04ca664893b456806605cdd4e12603d56d3cc8e5fecc22a92cd6d8694aa"
+  },
+  "native-build-result.json": {
+    "bytes": 2114,
+    "sha256": "5196b472cb38f71755aab6ec98a4a522ce772709625a5a0e300d6d857f2430c3"
+  },
+  "native-cluster-ready.xml": {
+    "bytes": 1058,
+    "sha256": "eaed01a5312d3130e12a47628ce2756da10e682b07ce18e9119292bbe2c6aded"
+  },
+  "native-contract-result.json": {
+    "bytes": 4735,
+    "sha256": "fc48f458b59a1ebc988c086667709b5539eeb7d7cb9ee5ecf70712626af89cac"
+  },
+  "native-overlay-manifest.json": {
+    "bytes": 3472,
+    "sha256": "9887e18664ebfb45bfcd6c690e1fbcb0404d5420f6d5851127d8bdf71cc3d285"
+  },
+  "native-reviewed.patch": {
+    "bytes": 22851,
+    "sha256": "07d6fa20200bf0fdbea78f2971a2f4682997967dd07237568f479f8662503faf"
+  },
+  "native-scoped-acl-incomplete-group-inventory-result.json": {
+    "bytes": 5450,
+    "sha256": "9c1bb94d6640f40bfee814c709a28bae059dfb202c2f74b6b5f62fa7772c0d78"
+  },
+  "native-scoped-acl-result.json": {
+    "bytes": 5780,
+    "sha256": "82e800d5aacdf91a1f4095fde590ba1951b182b3203dfce43842e65bb65ee6c4"
+  },
+  "native-source-custody.json": {
+    "bytes": 234,
+    "sha256": "50511eb263c4500af822565ad1b9cf4290ac688b847e08a6e7c00aa8a327d09e"
+  },
+  "native-source-manifest.json": {
+    "bytes": 126003,
+    "sha256": "c3d4ca91c43581499890ef5c0db8510cdbc79cee0e280a4191f824dd93200f5c"
+  },
+  "native-upgrade-rollback-result.json": {
+    "bytes": 3295,
+    "sha256": "4a26533d0d3cd8ec8e1cbcd9e530a20911615f84a213da4ce5e4e599c3f2c5aa"
+  },
+  "package-receipt.json": {
+    "bytes": 4918,
+    "sha256": "1af197eaa83610b40892dd7ac17a95641c3ee2ee0e01f378a9b188aaa4d47e9c"
+  },
+  "private-rpm-transaction-result.json": {
+    "bytes": 2386,
+    "sha256": "b0362cb9b9ea6c08fbb84e5e21a840a7ab0e86ef9fa8fb55b898b7346a7920da"
+  },
+  "sign-and-test-r14.py": {
+    "bytes": 8374,
+    "sha256": "8d8d24d07b5f30997ee00e8ee6407048372847c68ae6b212f72c31573c14a5d2"
+  },
+  "native-build-raw-log": {
+    "path": "/root/ls-onedrs-r14-native-evidence-20261120/build.log",
+    "sha256": "fdb6f2ee3cb2e1cadc98f8a1aa9b99906515a017165bedaf27aaf94da5b6f2e1"
+  }
+}

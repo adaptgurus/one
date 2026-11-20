@@ -55,6 +55,8 @@ RESULT = {"scope": "PRIVATE_NATIVE_XMLRPC_CAS_AND_AUTHORIZATION_NO_HOSTS_OR_VMS"
 proc = None
 cid = None
 uid = None
+gid = None
+acl_id = None
 
 def rpc(method, *args, session=None):
     with xmlrpc.client.ServerProxy("http://127.0.0.1:2633/RPC2", allow_none=True) as api:
@@ -88,6 +90,10 @@ def digest():
 
 def plan_sha():
     return cluster().findtext("PLAN_SHA256")
+
+def subject_acls(subject):
+    return [node for node in ET.fromstring(ok("one.acl.info")).findall("ACL")
+            if int(node.findtext("USER", "0"), 16) == subject]
 
 def empty_fleet():
     hosts = ET.fromstring(ok("one.hostpool.info"))
@@ -155,11 +161,11 @@ def emit_plan(template_hash, operation="migrate", host=999999, expect_new=True):
         time.sleep(0.05)
     raise AssertionError("Native scheduler fixture response was not accepted")
 
-def parallel_calls(method, args_list):
+def parallel_calls(method, args_list, session=None):
     barrier = threading.Barrier(len(args_list))
     def invoke(args):
         barrier.wait(timeout=5)
-        return rpc(method, *args)
+        return rpc(method, *args, session=session)
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(args_list)) as pool:
         return list(pool.map(invoke, args_list))
 
@@ -169,7 +175,20 @@ try:
     start("first-start")
     cid = int(ok("one.cluster.allocate", "checked-api-disposable"))
     ok("one.cluster.update", cid, 'UNRELATED_SENTINEL="preserve-me"\n' + POLICY_BALANCE, 1)
-    uid = int(ok("one.user.allocate", "onedrs-denied", DENIED_PASSWORD, "core", [1]))
+    gid = int(ok("one.group.allocate", "onedrs-private-scoped-group"))
+    # Native group allocation creates default HOST/NET/DATASTORE ACLs.
+    # Remove only rules owned by this freshly allocated disposable group.
+    group_subject = 0x200000000 | gid
+    default_group_acls = subject_acls(group_subject)
+    for rule in default_group_acls:
+        ok("one.acl.delrule", int(rule.findtext("ID")))
+    check("isolated_group_automatic_acl_grants_removed", not subject_acls(group_subject),
+          removed_rule_count=len(default_group_acls))
+    uid = int(ok("one.user.allocate", "onedrs-denied", DENIED_PASSWORD, "core", [gid]))
+    user_info = ET.fromstring(ok("one.user.info", uid))
+    check("service_user_has_only_isolated_non_admin_group",
+          user_info.findtext("GID") == str(gid) and gid not in (0, 1) and
+          [node.text for node in user_info.findall("GROUPS/ID")] == [str(gid)])
     initial = cluster()
     h0 = initial.findtext("TEMPLATE_SHA256")
     check("native_template_identity_available", bool(re.fullmatch("[0-9a-f]{64}", h0 or "")))
@@ -193,7 +212,24 @@ try:
     rejected("checked_policy_cannot_enable_automatic_execution", "one.cluster.updatedrschecked",
              cid, 'ONE_DRS=[AUTOMATION="full",POLICY="balance"]', h0, code=0x1000)
     check("invalid_updates_preserve_template", digest() == h0)
-    ok("one.cluster.updatedrschecked", cid, POLICY_PACK, h0)
+    # Native ACL RPC uses hexadecimal bit fields; these encode #uid CLUSTER/#cid USE+ADMIN #0.
+    acl_id = int(ok("one.acl.addrule", format(0x100000000 | uid, "x"),
+                    format(0x200000000000 | 0x100000000 | cid, "x"), "5", "100000000"))
+    service_rules = subject_acls(0x100000000 | uid)
+    check("service_has_exact_uid_cluster_acl_and_no_group_acl",
+          len(service_rules) == 1 and not subject_acls(group_subject) and
+          int(service_rules[0].findtext("RESOURCE"), 16) == (0x200000000000 | 0x100000000 | cid) and
+          int(service_rules[0].findtext("RIGHTS"), 16) == 5 and
+          int(service_rules[0].findtext("ZONE"), 16) == 0x100000000)
+    service_cluster = ET.fromstring(ok("one.cluster.info", cid, False, session=DENIED_AUTH))
+    check("scoped_service_cluster_readback", service_cluster.findtext("ID") == str(cid))
+    check("scoped_service_system_version", bool(ok("one.system.version", session=DENIED_AUTH)))
+    rejected("scoped_service_cannot_update_other_cluster", "one.cluster.updatedrschecked",
+             0, POLICY_PACK, h0, session=DENIED_AUTH, code=0x200)
+    rejected("scoped_service_cannot_execute_other_cluster", "one.cluster.planexecutechecked",
+             0, "a" * 64, h0, session=DENIED_AUTH, code=0x200)
+    ok("one.cluster.updatedrschecked", cid, POLICY_PACK, h0, session=DENIED_AUTH)
+    check("scoped_service_checked_policy_update", True)
     h1 = digest()
     check("checked_policy_update_preserves_unrelated_attributes",
           h1 != h0 and cluster().findtext("TEMPLATE/UNRELATED_SENTINEL") == "preserve-me")
@@ -249,7 +285,7 @@ try:
     p3 = current.findtext("PLAN_SHA256")
     g3 = current.findtext("PLAN/GENERATION")
     replies = parallel_calls("one.cluster.planexecutechecked",
-                             [(cid, p3, hnew), (cid, p3, hnew)])
+                             [(cid, p3, hnew), (cid, p3, hnew)], session=DENIED_AUTH)
     check("concurrent_plan_execution_has_one_winner", sum(bool(x[0]) for x in replies) == 1)
     rejected("completed_or_active_plan_cannot_replay", "one.cluster.planexecutechecked",
              cid, p3, hnew)
@@ -269,9 +305,15 @@ try:
     start("restart")
     check("native_generation_persists_across_restart", cluster().findtext("PLAN/GENERATION") == persisted)
     check("all_contracts_left_zero_hosts_and_vms", empty_fleet())
+    ok("one.acl.delrule", acl_id)
+    check("service_acl_inventory_empty_after_revocation",
+          not subject_acls(0x100000000 | uid) and not subject_acls(group_subject))
+    rejected("revoked_scoped_service_write_denied", "one.cluster.updatedrschecked",
+             cid, POLICY_PACK, digest(), session=DENIED_AUTH, code=0x200)
     ok("one.cluster.delete", cid)
     ok("one.user.delete", uid)
-    cid = uid = None
+    ok("one.group.delete", gid)
+    cid = uid = gid = acl_id = None
     RESULT["result"] = "PASS"
 except BaseException as exc:
     RESULT["result"] = "FAIL"

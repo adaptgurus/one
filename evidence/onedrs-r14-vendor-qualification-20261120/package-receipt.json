@@ -1,0 +1,86 @@
+{
+  "utc": "2026-11-20T02:32:17.987873+00:00",
+  "source_sha": "5995c42b8a0fb17ad959e5eb6af2d9e6da0f4037",
+  "source_composition": "Exact R13 vendor7.4.1 source manifest plus reviewed native authorization/CAS API and Python policy identity delta",
+  "native_build_receipt_sha256": "5196b472cb38f71755aab6ec98a4a522ce772709625a5a0e300d6d857f2430c3",
+  "native_source_manifest_sha256": "c3d4ca91c43581499890ef5c0db8510cdbc79cee0e280a4191f824dd93200f5c",
+  "source_custody_receipt_sha256": "50511eb263c4500af822565ad1b9cf4290ac688b847e08a6e7c00aa8a327d09e",
+  "r13_baseline_sha256": "e4b80a7146a53e8c11101dd6341118070c36f782dd3579eba78f4e655a8abcce",
+  "verified_baseline_files": 1225,
+  "payload_changes": [
+    {
+      "path": "/usr/bin/oned",
+      "baseline_sha256": "006c90bc98ab63336b0df24b58da44e95cced3b7cf0be6eb5282de8150a3272e",
+      "rebuilt_sha256": "54964060a4c477fb19920315dd745ddab9e12cf32697a285017c15703783ba7b",
+      "old_build_id": "bc5fcbd24b5535d5fd3dc15144e257fbb5ddb72c",
+      "new_build_id": "edbf280608b9a235bda76f6d35215c61bfdcd390"
+    },
+    {
+      "path": "/usr/lib/one/mads/onemonitord",
+      "baseline_sha256": "7db8929252d6fd2036a36c8308ccb3a1f0839ff7d0280bcb3b3a44f0b19b758b",
+      "rebuilt_sha256": "79f13abf3ac6ed04ab70f3c5e18af1f7ad1dd57978fc44e096af23bf5581b405",
+      "old_build_id": "5877d033356e98236aa06c3c1bf4b0f3d74e0f50",
+      "new_build_id": "6c21f353af0c54d3ff69389b1c3170ca46fdc7a5"
+    },
+    {
+      "path": "/var/lib/one/remotes/scheduler/one_drs/optimize",
+      "baseline_sha256": "32b31069aedc225914a1f68f6b5c643e14b4ba0448f5442602d3de04cc64a19e",
+      "rebuilt_sha256": "2679fcf8a796f273eece8af7d6569d3165c20da4349c2fd4bcbd79e271e1e634",
+      "source_sha256": "274d4c70bf3ecb1b96de9d2e2533414506247390a8b517b6fbeb1104c19747ac",
+      "packaging_transform": "preserved R13 explicit packaged /usr/bin/python3.12 shebang"
+    },
+    {
+      "path": "/var/lib/one/remotes/scheduler/one_drs/lib/optimizer_parser.py",
+      "baseline_sha256": "11f1d25383d110e4b64221af2124828e74b4f727e86a1dd7c386230d8b7b4a79",
+      "rebuilt_sha256": "1d0db20e8bd77f2cb4ea423eaf238fe865fd3c5517ac391c72ff2006eef6439a",
+      "source_sha256": "1d0db20e8bd77f2cb4ea423eaf238fe865fd3c5517ac391c72ff2006eef6439a",
+      "packaging_transform": null
+    },
+    {
+      "path": "/var/lib/one/remotes/scheduler/one_drs/lib/optimizer_serializer.py",
+      "baseline_sha256": "a5eac870bcf465fa9a6c459744afe2f48e2d80e5e6f17b9fd1961b6da9d25035",
+      "rebuilt_sha256": "e5127e729bf89cd12ec6d927dc9ba6fc4e62abf1c3ef56816832e291a18bdf89",
+      "source_sha256": "e5127e729bf89cd12ec6d927dc9ba6fc4e62abf1c3ef56816832e291a18bdf89",
+      "packaging_transform": null
+    },
+    {
+      "path": "/var/lib/one/remotes/scheduler/one_drs/lib/models/cluster.py",
+      "baseline_sha256": "4cb3676447613a366a888f7f4f91176652d959a690322a41800551421fa25e58",
+      "rebuilt_sha256": "c1b5c14949951d6a8d5383ecb610f87c677efa1c770edb07f4b8ff1e749dfeca",
+      "source_sha256": "c1b5c14949951d6a8d5383ecb610f87c677efa1c770edb07f4b8ff1e749dfeca",
+      "packaging_transform": null
+    },
+    {
+      "path": "/var/lib/one/remotes/scheduler/one_drs/lib/models/plan.py",
+      "baseline_sha256": "0178303f11e19272df448215f2fa8316beebb74f8c757175e139f3574b76180c",
+      "rebuilt_sha256": "1b0c2e8dc18e7bcb8a6aaa78a963cb4ad1d56201f26a76fe6e9ca3749600d194",
+      "source_sha256": "1b0c2e8dc18e7bcb8a6aaa78a963cb4ad1d56201f26a76fe6e9ca3749600d194",
+      "packaging_transform": null
+    },
+    {
+      "path": "/usr/share/one/schemas/xsd/cluster.xsd",
+      "baseline_sha256": "61f8a765000fc2c06c714c34f46887f3882adbad1da3360616fa043c0c74e840",
+      "rebuilt_sha256": "bec40a0601193d89ab444b7ef2936deb71afb1857869094ec79644393034120a",
+      "source_sha256": "bec40a0601193d89ab444b7ef2936deb71afb1857869094ec79644393034120a"
+    },
+    {
+      "path": "/usr/share/one/schemas/xsd/plan.xsd",
+      "baseline_sha256": "ade96d1b2adb275c17d67abd2affc7d47161e3bdab473d99f4afc0a0d8918250",
+      "rebuilt_sha256": "eb057d19f84f14a07157cd3c2106254b586ec1797b9b2173c6aeeb0eba0e5f9f",
+      "source_sha256": "eb057d19f84f14a07157cd3c2106254b586ec1797b9b2173c6aeeb0eba0e5f9f"
+    }
+  ],
+  "security_deploy_driver_sha256": "3cc0513112d22968859fb822fc4605347c8067fc7a5b169933775ae340584e9b",
+  "signature": "NONE",
+  "production_certified": false,
+  "verdict": "PASS_R14_VENDOR_CHECKED_API_PACKAGE_INTEGRITY",
+  "build_exit": 0,
+  "rpm": "/root/ls-onedrs-source5995c42b-r14-package-20261120/rpmbuild/RPMS/x86_64/opennebula-7.4.1-14.ls.onedrs.5995c42b.lab.el9.x86_64.rpm",
+  "rpm_sha256": "3e2f14229ee5a1687eb8bc6948cf8fbeb92d6dc446279a1fb9ffb0b26eecefbe",
+  "rpm_bytes": 78855236,
+  "nevra": "opennebula-7.4.1-14.ls.onedrs.5995c42b.lab.el9.x86_64",
+  "all_changed_payload_digests_verified": true,
+  "original_scriptlets_retained": true,
+  "dependency_contract_retained": true,
+  "retained_file_metadata_unchanged": true
+}

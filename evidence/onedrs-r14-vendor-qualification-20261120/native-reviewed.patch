@@ -1,0 +1,604 @@
+diff --git a/include/Cluster.h b/include/Cluster.h
+index 0580c4c495..1447b078ce 100644
+--- a/include/Cluster.h
++++ b/include/Cluster.h
+@@ -117,6 +117,10 @@ public:
+     std::string& to_xml(std::string& xml) const override;
+ 
+     std::string& template_xml(std::string& xml) const;
++    std::string template_sha256() const;
++
++    /** Replace only ONE_DRS, retaining all other attributes. Caller holds the cluster lock. */
++    int replace_one_drs(const std::string& text, bool restricted, std::string& error);
+ 
+     /**
+      *  Rebuilds the object from an xml formatted string
+diff --git a/include/Plan.h b/include/Plan.h
+index d6449b1690..586451f6f3 100644
+--- a/include/Plan.h
++++ b/include/Plan.h
+@@ -134,6 +134,15 @@ public:
+      */
+     std::string to_xml() const;
+ 
++    /** Native content identity and per-generated-plan lifecycle identity. */
++    std::string sha256() const;
++    const std::string& generation() const { return _generation; }
++    const std::string& template_sha256() const { return _template_sha256; }
++    bool renew_generation();
++
++    /** Validate an approved READY plan before changing its state. Caller holds the plan lock. */
++    int start_checked(const std::string& expected_sha256, std::string& error);
++
+     /**
+      *  Rebuilds the object from an xml formatted string
+      *    @param xml_str The xml-formatted string
+@@ -214,6 +223,9 @@ private:
+      */
+     PlanState _state = PlanState::NONE;
+ 
++    std::string _generation;
++    std::string _template_sha256;
++
+     /**
+      * List of actions which should be exectuted
+     */
+diff --git a/include/PlanManager.h b/include/PlanManager.h
+index 18fad2782a..9206a64a9e 100644
+--- a/include/PlanManager.h
++++ b/include/PlanManager.h
+@@ -53,6 +53,9 @@ public:
+      * @return 0 on success, -1 otherwise
+      */
+     int start_plan(int cid, std::string& error);
++    int start_plan_checked(int cid, const std::string& expected_plan_sha256,
++                           const std::string& expected_template_sha256,
++                           std::string& error);
+ 
+     void action_success(int plan_id, int action_id)
+     {
+diff --git a/src/cluster/Cluster.cc b/src/cluster/Cluster.cc
+index b87f3fce6c..85f8cae137 100644
+--- a/src/cluster/Cluster.cc
++++ b/src/cluster/Cluster.cc
+@@ -440,6 +440,7 @@ string& Cluster::to_xml(string& xml) const
+         datastores.to_xml(ds_collection_xml) <<
+         vnets.to_xml(vnet_collection_xml)    <<
+         obj_template->to_xml(template_xml)   <<
++        "<TEMPLATE_SHA256>" << template_sha256() << "</TEMPLATE_SHA256>" <<
+         plan_xml                             <<
+         "</CLUSTER>";
+ 
+@@ -467,6 +468,38 @@ std::string& Cluster::template_xml(std::string& xml) const
+ /* -------------------------------------------------------------------------- */
+ /* -------------------------------------------------------------------------- */
+ 
++std::string Cluster::template_sha256() const
++{
++    std::string xml;
++    return one_util::sha256_digest(template_xml(xml));
++}
++
++int Cluster::replace_one_drs(const std::string& text, bool restricted, std::string& error)
++{
++    Template incoming;
++    if (incoming.parse_str_or_xml(text, error) != 0) return -1;
++    size_t count = 0;
++    incoming.each_attribute([&count](const Attribute*) { ++count; });
++    const auto* policy = incoming.get("ONE_DRS");
++    if (count != 1 || policy == nullptr)
++    {
++        error = "Checked update requires exactly one ONE_DRS vector and no other attributes";
++        return -1;
++    }
++    std::string automation = one_util::trim(policy->vector_value("AUTOMATION"));
++    one_util::tolower(automation);
++    if (automation != "manual")
++    {
++        error = "Checked policy update requires manual automation";
++        return -1;
++    }
++    Template replacement(*obj_template);
++    replacement.erase("ONE_DRS");
++    replacement.set(policy->clone());
++    std::string xml;
++    return replace_template(replacement.to_xml(xml), restricted, error);
++}
++
+ int Cluster::from_xml(const string& xml)
+ {
+     int rc = 0;
+@@ -540,12 +573,13 @@ void Cluster::set_error_message(const char *mod, const string& name, const strin
+ void Cluster::load_plan()
+ {
+     auto plpool = Nebula::instance().get_planpool();
++    plan_xml.clear();
+ 
+     if (auto plan = plpool->get_ro(oid))
+     {
+         if (plan->state() != PlanState::NONE)
+         {
+-            plan_xml = plan->to_xml();
++            plan_xml = plan->to_xml() + "<PLAN_SHA256>" + plan->sha256() + "</PLAN_SHA256>";
+         }
+     }
+ }
+diff --git a/src/rm/api/ClusterAPI.cc b/src/rm/api/ClusterAPI.cc
+index cb25c7e55e..6eaaca369c 100644
+--- a/src/rm/api/ClusterAPI.cc
++++ b/src/rm/api/ClusterAPI.cc
+@@ -26,6 +26,7 @@
+ #include "AclManager.h"
+ #include "PlanManager.h"
+ #include "SchedulerManager.h"
++#include <algorithm>
+ 
+ using namespace std;
+ 
+@@ -277,6 +278,11 @@ Request::ErrorCode ClusterAPI::DelVNet(int oid,
+ Request::ErrorCode ClusterAPI::Optimize(int oid,
+                                         RequestAttributes& att)
+ {
++    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS)
++    {
++        return ec;
++    }
++
+     if ( clpool->exist(oid) == -1 )
+     {
+         att.resp_obj = PoolObjectSQL::CLUSTER;
+@@ -314,6 +320,11 @@ Request::ErrorCode ClusterAPI::Optimize(int oid,
+ Request::ErrorCode ClusterAPI::PlanExecute(int oid,
+                                            RequestAttributes& att)
+ {
++    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS)
++    {
++        return ec;
++    }
++
+     string error_msg;
+ 
+     if ( clpool->exist(oid) == -1 )
+@@ -339,9 +350,86 @@ Request::ErrorCode ClusterAPI::PlanExecute(int oid,
+ /* -------------------------------------------------------------------------- */
+ /* -------------------------------------------------------------------------- */
+ 
++static bool valid_checked_sha256(const std::string& value)
++{
++    return value.size() == 64 && std::all_of(value.begin(), value.end(), [](unsigned char c)
++    { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
++}
++
++Request::ErrorCode ClusterAPI::PlanExecuteChecked(int oid,
++                                                  const std::string& expected_plan_sha256,
++                                                  const std::string& expected_template_sha256,
++                                                  RequestAttributes& att)
++{
++    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS) return ec;
++    if (!valid_checked_sha256(expected_plan_sha256) ||
++        !valid_checked_sha256(expected_template_sha256))
++    {
++        att.resp_msg = "Expected plan and template identities must be lowercase SHA-256 digests";
++        return Request::RPC_API;
++    }
++    if (Nebula::instance().get_planm()->start_plan_checked(
++            oid, expected_plan_sha256, expected_template_sha256, att.resp_msg) != 0)
++    {
++        return Request::ACTION;
++    }
++    return Request::SUCCESS;
++}
++
++Request::ErrorCode ClusterAPI::UpdateDrsChecked(int oid,
++                                                const std::string& policy,
++                                                const std::string& expected_template_sha256,
++                                                RequestAttributes& att)
++{
++    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS) return ec;
++    if (!valid_checked_sha256(expected_template_sha256))
++    {
++        att.resp_msg = "Expected template identity must be a lowercase SHA-256 digest";
++        return Request::RPC_API;
++    }
++    auto cluster = clpool->get(oid);
++    if (!cluster)
++    {
++        att.resp_obj = PoolObjectSQL::CLUSTER;
++        att.resp_id = oid;
++        return Request::NO_EXISTS;
++    }
++    if (cluster->template_sha256() != expected_template_sha256)
++    {
++        att.resp_msg = "Cluster template changed; refresh and approve the current policy";
++        return Request::ACTION;
++    }
++    auto plan = Nebula::instance().get_planpool()->get(oid);
++    if (!plan)
++    {
++        att.resp_msg = "Cannot find plan for existing cluster";
++        return Request::INTERNAL;
++    }
++    if (plan->state() == PlanState::APPLYING)
++    {
++        att.resp_msg = "Cannot change checked policy while a plan is applying";
++        return Request::ACTION;
++    }
++    if (cluster->replace_one_drs(policy, !att.is_admin(), att.resp_msg) != 0)
++    {
++        return Request::RPC_API;
++    }
++    if (clpool->update(cluster.get()) != 0)
++    {
++        att.resp_msg = "Unable to persist checked OneDRS policy";
++        return Request::INTERNAL;
++    }
++    return Request::SUCCESS;
++}
++
+ Request::ErrorCode ClusterAPI::PlanDelete(int oid,
+                                           RequestAttributes& att)
+ {
++    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS)
++    {
++        return ec;
++    }
++
+     auto cluster = clpool->get(oid);
+ 
+     if (!cluster)
+diff --git a/src/rm/api/ClusterAPI.h b/src/rm/api/ClusterAPI.h
+index 5bf64e3f05..f599fa1b45 100644
+--- a/src/rm/api/ClusterAPI.h
++++ b/src/rm/api/ClusterAPI.h
+@@ -69,6 +69,16 @@ protected:
+     Request::ErrorCode PlanExecute(int oid,
+                                    RequestAttributes& att);
+ 
++    Request::ErrorCode PlanExecuteChecked(int oid,
++                                          const std::string& expected_plan_sha256,
++                                          const std::string& expected_template_sha256,
++                                          RequestAttributes& att);
++
++    Request::ErrorCode UpdateDrsChecked(int oid,
++                                        const std::string& policy,
++                                        const std::string& expected_template_sha256,
++                                        RequestAttributes& att);
++
+     Request::ErrorCode PlanDelete(int oid,
+                                   RequestAttributes& att);
+ 
+diff --git a/src/rm/xml-rpc/ClusterXRPC.cc b/src/rm/xml-rpc/ClusterXRPC.cc
+index b38982ec1c..a16b64bd03 100644
+--- a/src/rm/xml-rpc/ClusterXRPC.cc
++++ b/src/rm/xml-rpc/ClusterXRPC.cc
+@@ -204,6 +204,34 @@ void ClusterPlanExecuteXRPC::request_execute(xmlrpc_c::paramList const& paramLis
+ 
+ /* -------------------------------------------------------------------------- */
+ 
++void ClusterPlanExecuteCheckedXRPC::request_execute(xmlrpc_c::paramList const& paramList,
++                                                    RequestAttributesXRPC& att)
++{
++    if (paramList.size() != 4)
++    {
++        att.resp_msg = "Expected session, cluster ID, plan SHA-256 and template SHA-256";
++        response(Request::RPC_API, -1, att);
++        return;
++    }
++    int oid = paramList.getInt(1);
++    auto ec = PlanExecuteChecked(oid, paramList.getString(2), paramList.getString(3), att);
++    response(ec, oid, att);
++}
++
++void ClusterUpdateDrsCheckedXRPC::request_execute(xmlrpc_c::paramList const& paramList,
++                                                 RequestAttributesXRPC& att)
++{
++    if (paramList.size() != 4)
++    {
++        att.resp_msg = "Expected session, cluster ID, ONE_DRS vector and template SHA-256";
++        response(Request::RPC_API, -1, att);
++        return;
++    }
++    int oid = paramList.getInt(1);
++    auto ec = UpdateDrsChecked(oid, paramList.getString(2), paramList.getString(3), att);
++    response(ec, oid, att);
++}
++
+ void ClusterPlanDeleteXRPC::request_execute(xmlrpc_c::paramList const& paramList,
+                                             RequestAttributesXRPC& att)
+ {
+diff --git a/src/rm/xml-rpc/ClusterXRPC.h b/src/rm/xml-rpc/ClusterXRPC.h
+index dabde967c2..161b14e452 100644
+--- a/src/rm/xml-rpc/ClusterXRPC.h
++++ b/src/rm/xml-rpc/ClusterXRPC.h
+@@ -255,6 +255,32 @@ public:
+ /* ------------------------------------------------------------------------- */
+ /* ------------------------------------------------------------------------- */
+ 
++class ClusterPlanExecuteCheckedXRPC : public RequestXRPC, public ClusterAPI
++{
++public:
++    ClusterPlanExecuteCheckedXRPC()
++        : RequestXRPC("one.cluster.planexecutechecked",
++                      "Execute the approved plan only if plan and cluster identities still match",
++                      "A:siss")
++        , ClusterAPI(static_cast<Request&>(*this)) {}
++
++    void request_execute(xmlrpc_c::paramList const& paramList,
++                         RequestAttributesXRPC& att) override;
++};
++
++class ClusterUpdateDrsCheckedXRPC : public RequestXRPC, public ClusterAPI
++{
++public:
++    ClusterUpdateDrsCheckedXRPC()
++        : RequestXRPC("one.cluster.updatedrschecked",
++                      "Replace only ONE_DRS if the approved cluster template still matches",
++                      "A:siss")
++        , ClusterAPI(static_cast<Request&>(*this)) {}
++
++    void request_execute(xmlrpc_c::paramList const& paramList,
++                         RequestAttributesXRPC& att) override;
++};
++
+ class ClusterPlanDeleteXRPC : public RequestXRPC, public ClusterAPI
+ {
+ public:
+diff --git a/src/rm/xml-rpc/RequestManagerXRPC.cc b/src/rm/xml-rpc/RequestManagerXRPC.cc
+index 762f86df0c..36c0fd12f4 100644
+--- a/src/rm/xml-rpc/RequestManagerXRPC.cc
++++ b/src/rm/xml-rpc/RequestManagerXRPC.cc
+@@ -367,6 +367,8 @@ void RequestManagerXRPC::register_xml_methods()
+     xmlrpc_c::methodPtr cluster_optimize(new ClusterOptimizeXRPC());
+     xmlrpc_c::methodPtr cluster_planexecute(new ClusterPlanExecuteXRPC());
+     xmlrpc_c::methodPtr cluster_plandelete(new ClusterPlanDeleteXRPC());
++    xmlrpc_c::methodPtr cluster_planexecutechecked(new ClusterPlanExecuteCheckedXRPC());
++    xmlrpc_c::methodPtr cluster_updatedrschecked(new ClusterUpdateDrsCheckedXRPC());
+     xmlrpc_c::methodPtr clusterpool_info(new ClusterPoolInfoXRPC());
+ 
+     RequestManagerRegistry.addMethod("one.cluster.allocate", cluster_allocate);
+@@ -385,6 +387,8 @@ void RequestManagerXRPC::register_xml_methods()
+     RequestManagerRegistry.addMethod("one.cluster.optimize", cluster_optimize);
+     RequestManagerRegistry.addMethod("one.cluster.planexecute", cluster_planexecute);
+     RequestManagerRegistry.addMethod("one.cluster.plandelete", cluster_plandelete);
++    RequestManagerRegistry.addMethod("one.cluster.planexecutechecked", cluster_planexecutechecked);
++    RequestManagerRegistry.addMethod("one.cluster.updatedrschecked", cluster_updatedrschecked);
+ 
+     RequestManagerRegistry.addMethod("one.clusterpool.info", clusterpool_info);
+ 
+diff --git a/src/schedm/Plan.cc b/src/schedm/Plan.cc
+index adaca6c4db..6c3a2e088a 100644
+--- a/src/schedm/Plan.cc
++++ b/src/schedm/Plan.cc
+@@ -17,6 +17,9 @@
+ #include "Plan.h"
+ #include "NebulaLog.h"
+ #include "OneDB.h"
++#include "NebulaUtil.h"
++#include <openssl/rand.h>
++#include <algorithm>
+ 
+ using namespace std;
+ 
+@@ -141,7 +144,9 @@ string Plan::to_xml() const
+ 
+     oss << "<PLAN>"
+         << "<ID>"    << _cid << "</ID>"
+-        << "<STATE>" << _state << "</STATE>";
++        << "<STATE>" << _state << "</STATE>"
++        << "<GENERATION>" << _generation << "</GENERATION>"
++        << "<TEMPLATE_SHA256>" << _template_sha256 << "</TEMPLATE_SHA256>";
+ 
+     for (const auto& action : _actions)
+     {
+@@ -156,6 +161,48 @@ string Plan::to_xml() const
+ /* -------------------------------------------------------------------------- */
+ /* -------------------------------------------------------------------------- */
+ 
++std::string Plan::sha256() const
++{
++    return one_util::sha256_digest(to_xml());
++}
++
++bool Plan::renew_generation()
++{
++    unsigned char nonce[32];
++    if (RAND_bytes(nonce, sizeof(nonce)) != 1) return false;
++    _generation = one_util::sha256_digest(std::string(
++        reinterpret_cast<const char*>(nonce), sizeof(nonce)));
++    return true;
++}
++
++int Plan::start_checked(const std::string& expected_sha256, std::string& error)
++{
++    if (_state != PlanState::READY)
++    {
++        error = "Approved plan is no longer READY";
++        return -1;
++    }
++    if (_generation.empty())
++    {
++        error = "Plan predates checked execution; generate a new plan";
++        return -1;
++    }
++    if (_actions.empty() || std::any_of(_actions.begin(), _actions.end(), [](const PlanAction& action)
++        { return action.operation() != "migrate" || action.state() != PlanState::READY ||
++                 action.vm_id() < 0 || action.host_id() < 0; }))
++    {
++        error = "Checked OneDRS execution requires only READY migration actions";
++        return -1;
++    }
++    if (expected_sha256 != sha256())
++    {
++        error = "Plan identity changed; refresh and approve the current plan";
++        return -1;
++    }
++    _state = PlanState::APPLYING;
++    return 0;
++}
++
+ int Plan::from_xml(const std::string& xml)
+ {
+     if (update_from_str(xml) != 0)
+@@ -244,6 +291,20 @@ int Plan::rebuild_attributes()
+     xpath(tmp_int, "/PLAN/STATE", -1); // State can be empty
+ 
+     _state = static_cast<PlanState>(tmp_int);
++    xpath(_generation, "/PLAN/GENERATION", "");
++    xpath(_template_sha256, "/PLAN/TEMPLATE_SHA256", "");
++    if (!_template_sha256.empty() && (_template_sha256.size() != 64 ||
++        !std::all_of(_template_sha256.begin(), _template_sha256.end(), [](unsigned char c)
++        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); })))
++    {
++        return -1;
++    }
++    if (!_generation.empty() && (_generation.size() != 64 ||
++        !std::all_of(_generation.begin(), _generation.end(), [](unsigned char c)
++        { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); })))
++    {
++        return -1;
++    }
+ 
+     vector<xmlNodePtr> action_nodes;
+ 
+diff --git a/src/schedm/PlanManager.cc b/src/schedm/PlanManager.cc
+index 0d44df8a6f..996f5cf018 100644
+--- a/src/schedm/PlanManager.cc
++++ b/src/schedm/PlanManager.cc
+@@ -106,55 +106,44 @@ void PlanManager::add_plan(const string& xml)
+         return;
+     }
+ 
+-    if (auto cplan = plan_pool->get(plan.cid()))
+     {
+-        if (plan.cid() == -1)
++        // Cluster -> plan is the common order used by checked execution and deletion.
++        // Hold both through policy validation and persistence of a computed plan.
++        auto cluster = plan.cid() >= 0 ? cluster_pool->get(plan.cid()) : nullptr;
++        if (plan.cid() >= 0 && !cluster)
+         {
+-            NebulaLog::info("PLM", "Adding new placement plan");
+-
+-            if (cplan->state() == PlanState::APPLYING)
+-            {
+-                NebulaLog::info("PLM", "Cannot add plan. A placement plan is already in progress.");
+-                return;
+-            }
+-
+-            cplan->from_xml(xml);
+-
+-            cplan->state(PlanState::APPLYING);
++            NebulaLog::error("PLM", "Optimization plan for non-existent cluster " + to_string(plan.cid()));
++            return;
+         }
+-        else if (auto cluster = cluster_pool->get_ro(plan.cid()))
++        if (cluster && !plan.template_sha256().empty() &&
++            plan.template_sha256() != cluster->template_sha256())
+         {
+-            NebulaLog::info("PLM", "Adding new plan for cluster " + to_string(plan.cid()));
+-
+-            if (cplan->state() == PlanState::APPLYING)
+-            {
+-                NebulaLog::info("PLM", "Cannot add cluster optimization plan. A plan is already in progress.");
+-                return;
+-            }
+-
+-            cplan->from_xml(xml);
+-
+-            if (cluster->automation() == Cluster::DrsAutomation::FULL)
+-            {
+-                cplan->state(PlanState::APPLYING);
+-            }
+-            else
+-            {
+-                cplan->state(PlanState::READY);
+-            }
++            NebulaLog::error("PLM", "Discarding optimization plan computed against a stale cluster template");
++            return;
+         }
+-        else
++        auto cplan = plan_pool->get(plan.cid());
++        if (!cplan)
+         {
+-            NebulaLog::error("PLM", "Optimization plan for non-existent cluster " + to_string(plan.cid()));
++            NebulaLog::error("PLM", "Plan not found, unable to update plan for cluster " + to_string(plan.cid()));
++            return;
++        }
++        if (cplan->state() == PlanState::APPLYING)
++        {
++            NebulaLog::info("PLM", "Cannot add plan. A plan is already in progress.");
++            return;
++        }
++        if (cplan->from_xml(xml) != 0 || !cplan->renew_generation())
++        {
++            NebulaLog::error("PLM", "Unable to initialize generated plan identity");
++            return;
++        }
++        cplan->state(plan.cid() == -1 || cluster->automation() == Cluster::DrsAutomation::FULL
++                     ? PlanState::APPLYING : PlanState::READY);
++        if (plan_pool->update(cplan.get()) != 0)
++        {
++            NebulaLog::error("PLM", "Unable to persist new plan");
+             return;
+         }
+-
+-        plan_pool->update(cplan.get());
+-    }
+-    else
+-    {
+-        NebulaLog::error("PLM", "Plan not found, unable to update plan for cluster " + to_string(plan.cid()));
+-        return;
+     }
+ 
+     // Clear previous scheduling messages for all VM actions
+@@ -234,6 +223,51 @@ int PlanManager::start_plan(int cid, std::string& error)
+ /* -------------------------------------------------------------------------- */
+ /* -------------------------------------------------------------------------- */
+ 
++int PlanManager::start_plan_checked(int cid, const std::string& expected_plan_sha256,
++                                    const std::string& expected_template_sha256,
++                                    std::string& error)
++{
++    {
++        // Match PlanDelete's lock order. The cluster stays locked through the
++        // durable READY -> APPLYING transition, so policy and plan checks are atomic.
++        auto cluster = cluster_pool->get(cid);
++        if (!cluster)
++        {
++            error = "Cluster not found";
++            return -1;
++        }
++        if (cluster->template_sha256() != expected_template_sha256)
++        {
++            error = "Cluster template changed; refresh and approve the current policy";
++            return -1;
++        }
++        if (cluster->automation() != Cluster::DrsAutomation::MANUAL)
++        {
++            error = "Checked plan execution requires manual automation";
++            return -1;
++        }
++        auto plan = plan_pool->get(cid);
++        if (!plan)
++        {
++            error = "Plan not found";
++            return -1;
++        }
++        if (plan->template_sha256() != expected_template_sha256)
++        {
++            error = "Plan was not computed against the approved cluster template";
++            return -1;
++        }
++        if (plan->start_checked(expected_plan_sha256, error) != 0) return -1;
++        if (plan_pool->update(plan.get()) != 0)
++        {
++            error = "Unable to persist approved plan execution";
++            return -1;
++        }
++    }
++    execute_plans();
++    return 0;
++}
++
+ void PlanManager::timer_action()
+ {
+     auto& nd = Nebula::instance();

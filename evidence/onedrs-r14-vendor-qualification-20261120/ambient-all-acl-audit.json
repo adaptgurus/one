@@ -1,0 +1,22 @@
+{
+  "scope": "FINAL_PRIVATE_DATABASE_ALL_SUBJECT_ACL_AUDIT_AFTER_NATIVE_TEST_CLEANUP",
+  "database_sha256": "a3553b493f5d405ae188b7ce5850a32068b2d1a3a4eae7ff98fed6433435d969",
+  "all_subject_rules": [
+    {
+      "id": 1,
+      "subject": 17179869184,
+      "resource": 140754668224512,
+      "rights": 1,
+      "zone": 17179869184
+    },
+    {
+      "id": 2,
+      "subject": 17179869184,
+      "resource": 6755416620924928,
+      "rights": 1,
+      "zone": 17179869184
+    }
+  ],
+  "all_ambient_grants_are_use_only": true,
+  "result": "PASS"
+}
