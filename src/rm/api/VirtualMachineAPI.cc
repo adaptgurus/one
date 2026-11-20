@@ -279,6 +279,12 @@ Request::ErrorCode VirtualMachineAPI::update(int oid,
         return Request::NO_EXISTS;
     }
 
+    if (vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native capacity admission is pending; recover-failure before changing this VM";
+        return Request::ACTION;
+    }
+
     // Apply generic quota deltas
     auto new_tmpl = make_unique<VirtualMachineTemplate>(false, '=', "USER_TEMPLATE");
 
@@ -591,6 +597,12 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
         att.resp_id = vid;
 
         return Request::NO_EXISTS;
+    }
+
+    if (vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native capacity admission is pending; recover-failure before changing this VM";
+        return Request::ACTION;
     }
 
     if ( vm->get_state() != VirtualMachine::PENDING &&
@@ -962,6 +974,12 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
         att.resp_id = vid;
 
         return Request::NO_EXISTS;
+    }
+
+    if (vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native capacity admission is pending; recover-failure before changing this VM";
+        return Request::ACTION;
     }
 
     if (!att.checked_plan_generation.empty())
@@ -3070,6 +3088,12 @@ Request::ErrorCode VirtualMachineAPI::resize(int vid,
     /* ---------------------------------------------------------------------- */
     if ( auto vm = vmpool->get_ro(vid) )
     {
+        if (vm->capacity_admission_pending())
+        {
+            att.resp_msg = "Native capacity admission is pending; recover-failure before resizing";
+            return Request::ACTION;
+        }
+
         vm->get_permissions(vm_perms);
 
         vm->get_template_attribute("MEMORY", omemory);
@@ -3199,6 +3223,12 @@ Request::ErrorCode VirtualMachineAPI::update_conf(int vid,
         att.resp_id = vid;
 
         return Request::NO_EXISTS;
+    }
+
+    if (vm->capacity_admission_pending())
+    {
+        att.resp_msg = "Native capacity admission is pending; recover-failure before changing this VM";
+        return Request::ACTION;
     }
 
     if ( !att.is_admin() )

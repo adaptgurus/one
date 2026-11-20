@@ -1,0 +1,49 @@
+[
+  {
+    "name": "callback-red",
+    "status": "FAIL",
+    "checks": 10,
+    "binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+    "receipt_sha256": "1a71603c29c7a80554bd0805f371f918a2ab1948f78c3349ea58b4650ca9a750",
+    "error": "pending_deploy_response_does_not_mutate_canonical_deploy_id"
+  },
+  {
+    "name": "callback-green",
+    "status": "PASS",
+    "checks": 12,
+    "binary_sha256": "00e1e892ecb3a3326b0c1ec0c8bc0cc6654d7c476eecd80a88d83b3331cd9c10",
+    "receipt_sha256": "68850091bf54298198e2643c410f9bcd96ac722cb2c0360d372d639e9a676b56",
+    "error": null
+  },
+  {
+    "name": "pending-api-red",
+    "status": "FAIL",
+    "checks": 41,
+    "binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+    "receipt_sha256": "439ab6e1a10d089b4489d3a0688fabd32615f435e29b2b7d58cb7ea15f286dec",
+    "error": "all_pending_entry_paths_refuse_without_mutation"
+  },
+  {
+    "name": "pending-api-green",
+    "status": "PASS",
+    "checks": 42,
+    "binary_sha256": "00e1e892ecb3a3326b0c1ec0c8bc0cc6654d7c476eecd80a88d83b3331cd9c10",
+    "receipt_sha256": "ca1ffb7737f2c3693de38a4def6e07ff4a48b91c844d568539611672033756c0",
+    "error": null
+  },
+  {
+    "name": "unresolved-same-vm-callback",
+    "status": "FAIL",
+    "checks": 12,
+    "binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+    "receipt_sha256": "c25b814e02f95adbea564733b932af719cb973675c48ddf09c7d90bc95eee6ba",
+    "error": "legacy_same_vm_late_reply_is_correlated_to_its_original_request"
+  },
+  {
+    "name": "retained-initial-sequence-expectation-failure",
+    "status": "FAIL",
+    "checks": 40,
+    "receipt_sha256": "4901c23574ff1a8d9e834c9f8fad2dd3730d62d093c6c05761aaba0ba25a9a4b",
+    "classification": "Test initially assumed a fixed next sequence after resize; corrected to canonical current sequence plus one. Earlier observations still captured actual pending-entry violations."
+  }
+]

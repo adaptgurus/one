@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 import xmlrpc.client
 D=Path(sys.argv[1]).resolve()
 SUITE=sys.argv[2] if len(sys.argv)>2 else "all"
-if SUITE not in ["all","live","cold","api-history","enforce","recovery","downgrade","generation","origin","origin-ledger","origin-orphan","legacy-red"]:raise SystemExit("unknown suite")
+if SUITE not in ["all","live","cold","api-history","enforce","recovery","downgrade","generation","origin","origin-ledger","origin-orphan","legacy-red","callback-guard","pending-api","legacy-callback-boundary"]:raise SystemExit("unknown suite")
 if D.parent!=Path("/root") or not D.name.startswith("ls-onedrs-checked-api-runtime-"):
     raise SystemExit("dedicated private runtime required")
 P=D/"prefix";OUT=D/"evidence";DB=P/"var/one.db";F=P/"var/capacity-fixture"
@@ -811,6 +811,9 @@ try:
     if SUITE in ["all","generation","origin","origin-ledger","origin-orphan"]:
         import native_generation_contract
         native_generation_contract.run(globals())
+    if SUITE in ["all","callback-guard","pending-api","legacy-callback-boundary"]:
+        import native_pending_entry_contract
+        native_pending_entry_contract.run(globals())
     if SUITE=="legacy-red":legacy_enforce_reproduction()
     RESULT["status"]="REPRODUCED" if SUITE=="legacy-red" else "PASS"
 except Exception as exc:

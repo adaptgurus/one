@@ -2836,6 +2836,12 @@ int DispatchManager::resize(int vid, float cpu, int vcpu, long memory, bool enfo
         return -1;
     }
 
+    if (vm->capacity_admission_pending())
+    {
+        error_str = "Native capacity admission is pending; recover-failure before resizing";
+        return -1;
+    }
+
     int rc;
     bool update_history = true;
 

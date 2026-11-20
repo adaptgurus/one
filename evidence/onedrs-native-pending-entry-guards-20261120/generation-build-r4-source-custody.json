@@ -1,0 +1,8 @@
+{
+  "source_head": "dc7c988ec1f29a5020738f79b7f5646fafbd202e",
+  "source_has_uncommitted_native_changes": true,
+  "native_manifest_matches_worktree": true,
+  "build_result_sha256": "47830d5049a0af1fa3a4a1e838a78c0af4a8b46d630331f75289dfac54ad4a5d",
+  "inherited_settings_source_head": "626d734501e6b5c20f2caa6bec2395e99042873a",
+  "note": "The compiler settings receipt retained its earlier source_head field; this sidecar records the actual source commit plus the exact current delta manifest used by r4."
+}
