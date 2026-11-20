@@ -31,6 +31,16 @@ enum PlanState
     TIMEOUT  = 4
 };
 
+struct OneDRSPlanRequest
+{
+    std::string nonce, action, state, template_sha256, base_plan_sha256;
+    std::string plan_generation, error, instance;
+    long long started_at = 0;
+    bool present() const { return !nonce.empty(); }
+    bool generating() const { return present() && state == "GENERATING"; }
+    std::string to_xml() const;
+};
+
 class PlanAction
 {
 public:
@@ -63,6 +73,8 @@ public:
         return _host_id;
     }
 
+    const std::string& eligibility_sha256() const { return _eligibility_sha256; }
+
     int ds_id() const
     {
         return _ds_id;
@@ -90,6 +102,7 @@ public:
 
 private:
     std::string _operation;
+    std::string _eligibility_sha256;
 
     PlanState _state = PlanState::READY;
 
@@ -139,6 +152,19 @@ public:
     const std::string& generation() const { return _generation; }
     const std::string& template_sha256() const { return _template_sha256; }
     bool renew_generation();
+    const OneDRSPlanRequest& request() const { return _request; }
+    bool has_request() const { return _request.present(); }
+    bool generating() const { return _request.generating(); }
+    std::string visible_sha256() const
+    { return _state != PlanState::NONE || has_request() ? sha256() : ""; }
+    const std::string& response_nonce() const { return _response_nonce; }
+    const std::string& response_error() const { return _response_error; }
+    void begin_generate(const std::string& nonce, const std::string& policy,
+                        const std::string& base, const std::string& instance);
+    bool accept_generated(const Plan& response);
+    void generation_error(const std::string& reason);
+    void reject_ready(const std::string& nonce, const std::string& policy,
+                      const std::string& base, const std::string& instance);
 
     /** Validate an approved READY plan before changing its state. Caller holds the plan lock. */
     int validate_checked(const std::string& expected_sha256, std::string& error) const;
@@ -174,6 +200,9 @@ public:
         _checked_execution = false;
         _state = PlanState::NONE;
         _actions.clear();
+        _request = {};
+        _response_nonce.clear();
+        _response_error.clear();
     }
 
     /**
@@ -230,6 +259,9 @@ private:
     std::string _generation;
     std::string _template_sha256;
     bool _checked_execution = false;
+    OneDRSPlanRequest _request;
+    // Driver response bindings are never written into durable plan identity.
+    std::string _response_nonce, _response_error;
 
     /**
      * List of actions which should be exectuted

@@ -281,6 +281,30 @@ public:
                          RequestAttributesXRPC& att) override;
 };
 
+class ClusterOptimizeCheckedXRPC : public RequestXRPC, public ClusterAPI
+{
+public:
+    ClusterOptimizeCheckedXRPC()
+        : RequestXRPC("one.cluster.optimizechecked",
+                      "Generate recommendations for an approved native policy and base plan",
+                      "A:sisss")
+        , ClusterAPI(static_cast<Request&>(*this)) {}
+    void request_execute(xmlrpc_c::paramList const& paramList,
+                         RequestAttributesXRPC& att) override;
+};
+
+class ClusterPlanRejectCheckedXRPC : public RequestXRPC, public ClusterAPI
+{
+public:
+    ClusterPlanRejectCheckedXRPC()
+        : RequestXRPC("one.cluster.planrejectchecked",
+                      "Reject an approved READY recommendation with durable request readback",
+                      "A:sisss")
+        , ClusterAPI(static_cast<Request&>(*this)) {}
+    void request_execute(xmlrpc_c::paramList const& paramList,
+                         RequestAttributesXRPC& att) override;
+};
+
 class ClusterPlanDeleteXRPC : public RequestXRPC, public ClusterAPI
 {
 public:

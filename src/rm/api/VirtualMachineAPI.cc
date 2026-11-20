@@ -20,6 +20,7 @@
 #include "ClusterPool.h"
 #include "DatastorePool.h"
 #include "HostPool.h"
+#include "OneDRSEligibility.h"
 #include "ImagePool.h"
 #include "ScheduledActionPool.h"
 #include "VirtualNetworkPool.h"
@@ -1027,6 +1028,13 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
         if (!target || target->get_vm_ids().count(vid) != 0)
         {
             att.resp_msg = "Checked migration target already accounts for this VM";
+            return Request::ACTION;
+        }
+        auto cluster = nd.get_clpool()->get_ro(cluster_id);
+        if (!cluster || !one_drs_eligibility::validate(*vm, *target, *cluster,
+                att.checked_eligibility_sha256, false, att.resp_msg))
+        {
+            if (att.resp_msg.empty()) att.resp_msg = "Checked migration cluster eligibility is unavailable";
             return Request::ACTION;
         }
     }
@@ -4423,6 +4431,13 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_add(int vid,
         return Request::NO_EXISTS;
     }
 
+    if (vm->checked_capacity_pending() ||
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
+    {
+        att.resp_msg = "VMGroup membership cannot change during checked migration admission";
+        return Request::ACTION;
+    }
+
     // Check the VM is not a member of VM Group
     if ( vm->get_template_attribute("VMGROUP") != nullptr )
     {
@@ -4484,6 +4499,13 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_del(int vid,
         return Request::NO_EXISTS;
     }
 
+    if (vm->checked_capacity_pending() ||
+        vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
+    {
+        att.resp_msg = "VMGroup membership cannot change during checked migration admission";
+        return Request::ACTION;
+    }
+
     vm->release_vmgroup();
 
     vm->remove_template_attribute("VMGROUP");
@@ -4514,6 +4536,7 @@ int VirtualMachineAPI::add_history(VirtualMachine * vm,
         vm->plan_id(att.checked_plan_id);
         vm->action_id(att.checked_action_id);
         vm->checked_plan_generation(att.checked_plan_generation);
+        vm->checked_eligibility_sha256(att.checked_eligibility_sha256);
         vm->checked_plan_term(att.checked_plan_term);
         vm->checked_capacity_pending(true);
         vm->set_action(att.checked_migrate_action, att.uid, att.gid, att.req_id);

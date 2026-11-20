@@ -1,0 +1,33 @@
+test_applying_plan_blocks_even_if_no_vm_is_yet_dispatched (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_authoritative_history_wins_over_stale_embedded_pending_bit (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_backend_independent_rows_match_sqlite_policy (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_closed_predecessor_and_started_current_can_be_stable (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_enforced_api_to_lcm_running_gap_is_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_enforced_in_progress_state_is_blocked_without_checked_generation (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_enforced_offline_api_to_lcm_gap_is_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_file_reader_does_not_mutate_database (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_final_marker_cleared_but_migration_in_progress_is_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_generating_request_cannot_be_resumed_by_old_binary (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_generic_plan_identity_uses_the_same_inflight_gate (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_initial_enforced_deploy_before_lcm_is_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_legacy_stable_state_is_compatible (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_malformed_flag_and_index_disagreement_fail_closed (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_missing_canonical_history_fails_closed (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_missing_canonical_predecessor_fails_closed (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_new_pending_enum_is_always_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_open_predecessor_blocks_even_when_target_has_started (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_pending_history_is_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_protected_mysql_snapshot_uses_identical_policy_without_xml_output (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_row_loader_rejects_duplicate_or_malformed_identities (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_snapshot_missing_tables_or_transaction_provenance_fails_closed (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_stable_checked_history_does_not_permanently_forbid_rollback (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_stable_poweroff_reservation_is_compatible (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_terminal_request_metadata_is_retained_without_error_text (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_unknown_request_and_inconsistent_plan_state_fail_closed (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_unreferenced_failed_insert_is_not_an_active_pending_vm (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+test_unreferenced_pending_after_stable_enforced_history_is_ignored (test_native_downgrade_guard.NativeDowngradeGuardTests) ... ok
+
+----------------------------------------------------------------------
+Ran 28 tests in 0.017s
+
+OK

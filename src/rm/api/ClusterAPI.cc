@@ -295,6 +295,11 @@ Request::ErrorCode ClusterAPI::Optimize(int oid,
 
     if (auto plan = plpool->get_ro(oid))
     {
+        if (plan->has_request())
+        {
+            att.resp_msg = "Checked recommendation lifecycle requires optimizechecked";
+            return Request::ACTION;
+        }
         if (plan->state() == PlanState::APPLYING)
         {
             att.resp_msg = "Can't optimize cluster. A previous plan is currently being applied.";
@@ -405,9 +410,9 @@ Request::ErrorCode ClusterAPI::UpdateDrsChecked(int oid,
         att.resp_msg = "Cannot find plan for existing cluster";
         return Request::INTERNAL;
     }
-    if (plan->state() == PlanState::APPLYING)
+    if (plan->state() == PlanState::APPLYING || plan->generating())
     {
-        att.resp_msg = "Cannot change checked policy while a plan is applying";
+        att.resp_msg = "Cannot change checked policy while a plan is applying or generating";
         return Request::ACTION;
     }
     if (cluster->replace_one_drs(policy, !att.is_admin(), att.resp_msg) != 0)
@@ -417,6 +422,109 @@ Request::ErrorCode ClusterAPI::UpdateDrsChecked(int oid,
     if (clpool->update(cluster.get()) != 0)
     {
         att.resp_msg = "Unable to persist checked OneDRS policy";
+        return Request::INTERNAL;
+    }
+    return Request::SUCCESS;
+}
+
+Request::ErrorCode ClusterAPI::OptimizeChecked(int oid,
+                                                const std::string& expected_template_sha256,
+                                                const std::string& expected_plan_sha256,
+                                                const std::string& request_nonce,
+                                                RequestAttributes& att)
+{
+    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS) return ec;
+    if (!valid_checked_sha256(expected_template_sha256) ||
+        (!expected_plan_sha256.empty() && !valid_checked_sha256(expected_plan_sha256)) ||
+        !valid_checked_sha256(request_nonce))
+    {
+        att.resp_msg = "Expected template, optional plan and request nonce must be lowercase SHA-256 identities";
+        return Request::RPC_API;
+    }
+    auto planm = Nebula::instance().get_planm();
+    if (!valid_checked_sha256(planm->request_instance()))
+    {
+        att.resp_msg = "Native request identity source is unavailable";
+        return Request::INTERNAL;
+    }
+    {
+        auto cluster = clpool->get(oid);
+        if (!cluster)
+        {
+            att.resp_obj = PoolObjectSQL::CLUSTER; att.resp_id = oid;
+            return Request::NO_EXISTS;
+        }
+        if (cluster->automation() != Cluster::DrsAutomation::MANUAL ||
+            cluster->template_sha256() != expected_template_sha256)
+        {
+            att.resp_msg = "Checked generation requires the approved current manual policy";
+            return Request::ACTION;
+        }
+        auto pool = Nebula::instance().get_planpool();
+        auto plan = pool->get(oid);
+        if (!plan) return Request::INTERNAL;
+        if (plan->generating() || plan->state() == PlanState::APPLYING ||
+            plan->visible_sha256() != expected_plan_sha256 ||
+            (plan->has_request() && plan->request().nonce == request_nonce))
+        {
+            att.resp_msg = "Native plan/request changed or is busy; refresh before generating";
+            return Request::ACTION;
+        }
+        plan->begin_generate(request_nonce, expected_template_sha256,
+                             expected_plan_sha256, planm->request_instance());
+        if (pool->update(plan.get()) != 0)
+        {
+            att.resp_msg = "Unable to persist native generation request";
+            return Request::INTERNAL;
+        }
+    }
+    // Durable request identity exists before any asynchronous optimizer input.
+    Nebula::instance().get_sm()->trigger_optimize(oid, request_nonce, expected_template_sha256);
+    return Request::SUCCESS;
+}
+
+Request::ErrorCode ClusterAPI::PlanRejectChecked(int oid,
+                                                  const std::string& expected_plan_sha256,
+                                                  const std::string& expected_template_sha256,
+                                                  const std::string& request_nonce,
+                                                  RequestAttributes& att)
+{
+    if (auto ec = basic_authorization(oid, att); ec != Request::SUCCESS) return ec;
+    if (!valid_checked_sha256(expected_template_sha256) ||
+        !valid_checked_sha256(expected_plan_sha256) || !valid_checked_sha256(request_nonce))
+    {
+        att.resp_msg = "Expected plan, template and request nonce must be lowercase SHA-256 identities";
+        return Request::RPC_API;
+    }
+    auto planm = Nebula::instance().get_planm();
+    if (!valid_checked_sha256(planm->request_instance())) return Request::INTERNAL;
+    auto cluster = clpool->get(oid);
+    if (!cluster)
+    {
+        att.resp_obj = PoolObjectSQL::CLUSTER; att.resp_id = oid;
+        return Request::NO_EXISTS;
+    }
+    if (cluster->automation() != Cluster::DrsAutomation::MANUAL ||
+        cluster->template_sha256() != expected_template_sha256)
+    {
+        att.resp_msg = "Checked rejection requires the approved current manual policy";
+        return Request::ACTION;
+    }
+    auto pool = Nebula::instance().get_planpool();
+    auto plan = pool->get(oid);
+    if (!plan) return Request::INTERNAL;
+    if (plan->generating() || plan->state() != PlanState::READY ||
+        !valid_checked_sha256(plan->generation()) || plan->sha256() != expected_plan_sha256 ||
+        (plan->has_request() && plan->request().nonce == request_nonce))
+    {
+        att.resp_msg = "Approved READY plan changed; refresh before rejecting";
+        return Request::ACTION;
+    }
+    plan->reject_ready(request_nonce, expected_template_sha256,
+                       expected_plan_sha256, planm->request_instance());
+    if (pool->update(plan.get()) != 0)
+    {
+        att.resp_msg = "Unable to persist checked recommendation rejection";
         return Request::INTERNAL;
     }
     return Request::SUCCESS;
@@ -443,6 +551,12 @@ Request::ErrorCode ClusterAPI::PlanDelete(int oid,
     auto plpool = Nebula::instance().get_planpool();
     auto plan = plpool->get(oid);
 
+    if (plan && (plan->generating() ||
+        (plan->checked_execution() && plan->state() == PlanState::APPLYING)))
+    {
+        att.resp_msg = "Cannot delete an in-flight checked recommendation lifecycle";
+        return Request::ACTION;
+    }
     if (!plan || plan->state() == PlanState::NONE)
     {
         att.resp_msg = "Plan for cluster " + to_string(oid) + " does not exist";

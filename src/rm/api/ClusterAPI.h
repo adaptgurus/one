@@ -79,6 +79,17 @@ protected:
                                         const std::string& expected_template_sha256,
                                         RequestAttributes& att);
 
+    Request::ErrorCode OptimizeChecked(int oid,
+                                       const std::string& expected_template_sha256,
+                                       const std::string& expected_plan_sha256,
+                                       const std::string& request_nonce,
+                                       RequestAttributes& att);
+    Request::ErrorCode PlanRejectChecked(int oid,
+                                         const std::string& expected_plan_sha256,
+                                         const std::string& expected_template_sha256,
+                                         const std::string& request_nonce,
+                                         RequestAttributes& att);
+
     Request::ErrorCode PlanDelete(int oid,
                                   RequestAttributes& att);
 

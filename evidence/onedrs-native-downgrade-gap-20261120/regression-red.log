@@ -1,0 +1,61 @@
+...F....FF...F.F.......
+======================================================================
+FAIL: test_enforced_api_to_lcm_running_gap_is_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/ls-onedrs-ci-portable-20261120/tools/onedrs_qualification/test_native_downgrade_guard.py", line 52, in test_enforced_api_to_lcm_running_gap_is_blocked
+    self.assertFalse(self.ready())
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_enforced_offline_api_to_lcm_gap_is_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests) (state=5)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/ls-onedrs-ci-portable-20261120/tools/onedrs_qualification/test_native_downgrade_guard.py", line 59, in test_enforced_offline_api_to_lcm_gap_is_blocked
+    self.assertFalse(self.ready())
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_enforced_offline_api_to_lcm_gap_is_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests) (state=8)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/ls-onedrs-ci-portable-20261120/tools/onedrs_qualification/test_native_downgrade_guard.py", line 59, in test_enforced_offline_api_to_lcm_gap_is_blocked
+    self.assertFalse(self.ready())
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_generic_plan_identity_uses_the_same_inflight_gate (test_native_downgrade_guard.NativeDowngradeGuardTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/ls-onedrs-ci-portable-20261120/tools/onedrs_qualification/test_native_downgrade_guard.py", line 82, in test_generic_plan_identity_uses_the_same_inflight_gate
+    self.assertFalse(self.ready())
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_initial_enforced_deploy_before_lcm_is_blocked (test_native_downgrade_guard.NativeDowngradeGuardTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/ls-onedrs-ci-portable-20261120/tools/onedrs_qualification/test_native_downgrade_guard.py", line 63, in test_initial_enforced_deploy_before_lcm_is_blocked
+    self.assertFalse(self.ready())
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_missing_canonical_predecessor_fails_closed (test_native_downgrade_guard.NativeDowngradeGuardTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/ls-onedrs-ci-portable-20261120/tools/onedrs_qualification/test_native_downgrade_guard.py", line 77, in test_missing_canonical_predecessor_fails_closed
+    self.assertFalse(self.ready())
+AssertionError: True is not false
+
+======================================================================
+FAIL: test_open_predecessor_blocks_even_when_target_has_started (test_native_downgrade_guard.NativeDowngradeGuardTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/root/ls-onedrs-ci-portable-20261120/tools/onedrs_qualification/test_native_downgrade_guard.py", line 73, in test_open_predecessor_blocks_even_when_target_has_started
+    self.assertFalse(self.ready())
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 24 tests in 0.013s
+
+FAILED (failures=7)

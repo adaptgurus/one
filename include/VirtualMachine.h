@@ -939,6 +939,16 @@ public:
         history->checked_plan_generation = generation;
     }
 
+    const std::string& checked_eligibility_sha256() const
+    {
+        return history->checked_eligibility_sha256;
+    }
+
+    void checked_eligibility_sha256(const std::string& value)
+    {
+        history->checked_eligibility_sha256 = value;
+    }
+
     unsigned int checked_plan_term() const
     {
         return history ? history->checked_plan_term : 0;

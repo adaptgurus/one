@@ -1,0 +1,46 @@
+{
+  "status": "PASS",
+  "exit_code": 0,
+  "elapsed_seconds": 266.568,
+  "patch_sha256": "9c9feef86fe2f5d49dacb694c95d1060f4f20618b6d0f3b52b4a0b3e8d2c4ad3",
+  "command": [
+    "scons",
+    "-Q",
+    "-j4",
+    "mysql=yes",
+    "grpc=yes",
+    "systemd=yes",
+    "sqlite=yes",
+    "xmlrpc_pkgconf=yes",
+    "parsers=no",
+    "gitversion=83149072-eligibility-wip-ls7.4.1-backport",
+    "src/nebula/oned",
+    "src/monitor/src/monitor/onemonitord"
+  ],
+  "compiler_flags": {
+    "CFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "CXXFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "LDFLAGS": "-Wl,-z,relro -Wl,--as-needed  -Wl,-z,now -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -flto=12"
+  },
+  "source": "/root/ls-onedrs-eligibility-vendor-build-20261120",
+  "changed_native_files": [
+    "include/History.h",
+    "include/HostPool.h",
+    "include/OneDRSEligibility.h",
+    "include/Plan.h",
+    "include/RequestAttributes.h",
+    "include/VirtualMachine.h",
+    "src/cluster/Cluster.cc",
+    "src/lcm/LifeCycleActions.cc",
+    "src/rm/api/VirtualMachineAPI.cc",
+    "src/schedm/Plan.cc",
+    "src/schedm/PlanManager.cc",
+    "src/schedm/SchedulerManagerDriver.cc",
+    "src/vm/History.cc",
+    "src/vm/VirtualMachine.cc"
+  ],
+  "artifacts": {
+    "src/nebula/oned": "459d28d6ce40b788cdc1baec6ac86773817b65bef40f70910980f49ebdfc77b2",
+    "src/monitor/src/monitor/onemonitord": "04540cf06ecfe1cba4a6db4a10d9434abdd2706018493a0a6f67567c586be794"
+  }
+}

@@ -27,6 +27,7 @@
 #include "Request.h"
 #include "PlanManager.h"
 #include "RaftManager.h"
+#include "OneDRSEligibility.h"
 
 using namespace std;
 
@@ -399,6 +400,17 @@ int LifeCycleManager::reserve_checked_migration_capacity(
     {
         const int rc = hpool->add_checked_capacity(vm->get_hid(), plan_id, capacity, error,
                                                     [&]() { return vmpool->update(vm.get()); },
+                                                    [&](Host& host, std::string& why)
+                                                    {
+                                                        auto cluster = Nebula::instance().get_clpool()->get_ro(plan_id);
+                                                        if (!cluster)
+                                                        {
+                                                            why = "Checked migration cluster is unavailable";
+                                                            return false;
+                                                        }
+                                                        return one_drs_eligibility::validate(*vm, host, *cluster,
+                                                            vm->checked_eligibility_sha256(), true, why);
+                                                    },
                                                     vm->get_hid() == vm->get_previous_hid());
         if (rc == 0) return 1;
         if (rc == -2)

@@ -98,6 +98,7 @@ private:
     // Native-owned identity, retained through completion and history copies.
     // User VM templates cannot set these fields. The pending phase is an LCM state.
     std::string  checked_plan_generation;
+    std::string  checked_eligibility_sha256;
     unsigned int checked_plan_term = 0;
     bool checked_capacity_pending = false;
 

@@ -48,19 +48,50 @@ def flag(root, path):
     return value == "1"
 
 
-def inspect_connection(connection):
+def inspect_rows(vm_rows, plan_rows, history_rows):
+    """Inspect one consistent native database snapshot, independent of SQL backend.
+
+    Rows are [oid,state,lcm_state,body], [cid,state,body], and [vid,seq,body].
+    The caller must obtain every table in the same read-only consistent snapshot.
+    Raw XML may contain workload secrets and must remain in protected local files.
+    """
+    def normalized(rows, width, key_width):
+        result = []
+        identities = set()
+        for row in rows:
+            if not isinstance(row, (tuple, list)) or len(row) != width:
+                raise InvalidState("invalid native snapshot row shape")
+            if any(type(value) is not int for value in row[:-1]):
+                raise InvalidState("invalid native snapshot indexed integer")
+            if not isinstance(row[-1], str):
+                raise InvalidState("invalid native snapshot XML type")
+            key = tuple(row[:key_width])
+            if key in identities:
+                raise InvalidState("duplicate native snapshot identity")
+            identities.add(key)
+            result.append(row)
+        return result
+
+    vm_rows = normalized(vm_rows, 4, 1)
+    plan_rows = normalized(plan_rows, 3, 1)
+    history_rows = normalized(history_rows, 3, 2)
+    history_by_id = {(vid, seq): body for vid, seq, body in history_rows}
+
+    def canonical_history(vid, sequence):
+        body = history_by_id.get((vid, sequence))
+        if body is None:
+            raise InvalidState("canonical history row is missing")
+        history = xml_document(body, "HISTORY")
+        if integer(history, "SEQ") != sequence or integer(history, "OID") != vid:
+            raise InvalidState("canonical history identity disagrees")
+        return history
+
     blockers = []
     requests = []
-    counts = {"vms": 0, "plans": 0, "canonical_histories": 0}
+    counts = {"vms": 0, "plans": 0, "canonical_histories": 0, "canonical_previous_histories": 0}
 
     def blocked(resource, ident, reason):
         blockers.append({"resource": resource, "id": ident, "reason": reason})
-
-    try:
-        vm_rows = connection.execute("SELECT oid,state,lcm_state,body FROM vm_pool").fetchall()
-        plan_rows = connection.execute("SELECT cid,state,body FROM plan_pool").fetchall()
-    except sqlite3.DatabaseError as exc:
-        raise InvalidState("required native pool schema is unavailable") from exc
 
     for vid, state, lcm_state, body in vm_rows:
         counts["vms"] += 1
@@ -75,23 +106,38 @@ def inspect_connection(connection):
                 continue
             current = max(histories, key=lambda item: integer(item, "SEQ"))
             sequence = integer(current, "SEQ")
-            row = connection.execute("SELECT body FROM history WHERE vid=? AND seq=?", (vid, sequence)).fetchone()
-            if row is None:
-                raise InvalidState("canonical history row is missing")
-            history = xml_document(row[0], "HISTORY")
-            if integer(history, "SEQ") != sequence or integer(history, "OID") != vid:
-                raise InvalidState("canonical history identity disagrees")
+            if sequence < 0:
+                raise InvalidState("invalid canonical history sequence")
+            history = canonical_history(vid, sequence)
             counts["canonical_histories"] += 1
             pending = flag(history, "CHECKED_CAPACITY_PENDING")
             enforced = flag(history, "ENFORCE_CAPACITY")
-            generation = history.findtext("CHECKED_PLAN_GENERATION", "")
-            if generation and (len(generation) != 64 or any(c not in "0123456789abcdef" for c in generation)):
-                raise InvalidState("invalid native checked generation")
+            generations = [history.findtext(key, "") for key in
+                           ("CHECKED_PLAN_GENERATION", "PLAN_ACTION_GENERATION")]
+            for generation in generations:
+                if generation and (len(generation) != 64 or any(c not in "0123456789abcdef" for c in generation)):
+                    raise InvalidState("invalid native plan generation")
+            guarded = enforced or any(generations)
             if pending:
                 blocked("VM", vid, "native checked admission is pending")
-            if state == 3 and lcm_state != 3 and (enforced or generation):
+            if state == 3 and lcm_state != 3 and guarded:
                 blocked("VM", vid, "checked or enforced operation has not reached a stable native state")
-        except (InvalidState, sqlite3.DatabaseError) as exc:
+            if guarded:
+                # Native migrate publishes target history before enqueueing LCM.
+                # At that point the VM can still be RUNNING, POWEROFF, or SUSPENDED.
+                # Only the predecessor of the canonical current history matters:
+                # an unreferenced failed insert must never masquerade as a request.
+                if sequence > 0:
+                    previous = canonical_history(vid, sequence - 1)
+                    counts["canonical_previous_histories"] += 1
+                    if integer(previous, "ETIME") == 0:
+                        blocked("VM", vid, "canonical previous history is still open before final admission or completion")
+                # Initial deploy has no predecessor. Its history is published
+                # before LCM initializes STIME, so a stable VM enum alone is not
+                # proof that the new enforcement semantics have been consumed.
+                if integer(history, "ETIME") == 0 and integer(history, "STIME") == 0:
+                    blocked("VM", vid, "canonical target history is published but native admission has not started")
+        except InvalidState as exc:
             blocked("VM", vid, str(exc))
 
     for cid, state, body in plan_rows:
@@ -124,7 +170,7 @@ def inspect_connection(connection):
             blocked("PLAN", cid, str(exc))
 
     return {
-        "schema": 1,
+        "schema": 2,
         "scope": "READ_ONLY_NATIVE_DATABASE_DOWNGRADE_STATE_GATE",
         "database_ready_for_older_binary": not blockers,
         "required_call_phase": "after placement writers are frozen, replication synchronized, and controller stopped",
@@ -133,6 +179,43 @@ def inspect_connection(connection):
         "request_metadata_to_retain": requests,
         "request_metadata_note": "R8 can discard unknown terminal request metadata when it rewrites a plan; retain this report externally.",
     }
+
+
+def inspect_connection(connection):
+    try:
+        vm_rows = connection.execute("SELECT oid,state,lcm_state,body FROM vm_pool").fetchall()
+        plan_rows = connection.execute("SELECT cid,state,body FROM plan_pool").fetchall()
+        history_rows = connection.execute("SELECT vid,seq,body FROM history").fetchall()
+    except sqlite3.DatabaseError as exc:
+        raise InvalidState("required native pool schema is unavailable") from exc
+    return inspect_rows(vm_rows, plan_rows, history_rows)
+
+
+def inspect_snapshot(path):
+    path = Path(path).resolve(strict=True)
+    raw = path.read_bytes()
+    try:
+        snapshot = json.loads(raw)
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise InvalidState("unreadable native row snapshot") from exc
+    if not isinstance(snapshot, dict) or snapshot.get("schema") != "onedrs.native-db-snapshot/v1":
+        raise InvalidState("unsupported native row snapshot schema")
+    if snapshot.get("backend") not in ("mysql", "mariadb", "sqlite"):
+        raise InvalidState("unsupported native snapshot backend")
+    if any(not isinstance(snapshot.get(key), list) for key in ("vm_rows", "plan_rows", "history_rows")):
+        raise InvalidState("native row snapshot is missing a complete table")
+    transaction = snapshot.get("transaction")
+    if not isinstance(transaction, dict) or transaction.get("read_only") is not True or transaction.get("consistent_snapshot") is not True:
+        raise InvalidState("native row snapshot lacks read-only consistent transaction provenance")
+    result = inspect_rows(snapshot["vm_rows"], snapshot["plan_rows"], snapshot["history_rows"])
+    result["source"] = {
+        "backend": snapshot["backend"],
+        "snapshot_sha256": hashlib.sha256(raw).hexdigest(),
+        "transaction": {key: transaction[key] for key in (
+            "isolation", "read_only", "consistent_snapshot", "server_version",
+            "server_id", "wsrep_status", "started_utc", "ended_utc") if key in transaction},
+    }
+    return result
 
 
 def inspect_database(path):
@@ -146,10 +229,12 @@ def inspect_database(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--database", required=True, help="stopped controller's native SQLite database or immutable snapshot")
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--database", help="stopped controller's native SQLite database or immutable snapshot")
+    source.add_argument("--snapshot", help="protected read-only native row snapshot in onedrs.native-db-snapshot/v1 format")
     args = parser.parse_args()
     try:
-        result = inspect_database(args.database)
+        result = inspect_database(args.database) if args.database else inspect_snapshot(args.snapshot)
     except (OSError, sqlite3.DatabaseError, InvalidState) as exc:
         result = {"database_ready_for_older_binary": False, "error": str(exc)}
     print(json.dumps(result, indent=2, sort_keys=True))

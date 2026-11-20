@@ -1,0 +1,165 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T05:14:24.710258+00:00",
+  "binary_sha256": "e93458d6aeec3eb59e5671e45dfb535338f664efc8b517a7d86b5f834f1ffd8c",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v2_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade-gap-live_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "downgrade_live_captured_native_pre_lcm_state",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_live_captured_canonical_target",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_live_capture_precedes_target_reservation",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_live_guard_refuses_actual_native_gap",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_live_snapshot_loader_matches_row_policy",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade-gap-poweroff_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "offline_fixture_retains_native_source_capacity",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_poweroff_captured_native_pre_lcm_state",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_poweroff_captured_canonical_target",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_poweroff_capture_precedes_target_reservation",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_poweroff_guard_refuses_actual_native_gap",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_poweroff_snapshot_loader_matches_row_policy",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade-gap-deploy_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "downgrade_deploy_captured_native_pre_lcm_state",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_deploy_captured_canonical_target",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_deploy_capture_precedes_target_reservation",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_deploy_guard_refuses_actual_native_gap",
+      "result": "PASS"
+    },
+    {
+      "name": "downgrade_deploy_snapshot_loader_matches_row_policy",
+      "result": "PASS"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "downgrade",
+  "native_api_gap_captures": [
+    {
+      "case": "live",
+      "vm": 0,
+      "state": 3,
+      "lcm_state": 3,
+      "canonical_sequence": 1,
+      "current_stime": "0",
+      "snapshot_sha256": "55af43ceab13639b3d5684a4c9b3c5544f62e46ea58fc55eb3f455f3fed63777",
+      "guard_sha256": "09883bf9a10a010392deeb14ca01a91b796842f04a577d8d41f8068952767352"
+    },
+    {
+      "case": "poweroff",
+      "vm": 0,
+      "state": 8,
+      "lcm_state": 0,
+      "canonical_sequence": 1,
+      "current_stime": "0",
+      "snapshot_sha256": "1590e841a0d0370a08829712ca44c84a184dbfde1fb0eec189a38f5d8f8ef6a2",
+      "guard_sha256": "09883bf9a10a010392deeb14ca01a91b796842f04a577d8d41f8068952767352"
+    },
+    {
+      "case": "deploy",
+      "vm": 3,
+      "state": 2,
+      "lcm_state": 0,
+      "canonical_sequence": 0,
+      "current_stime": "0",
+      "snapshot_sha256": "278e1db2178c553fba8864f7d94c59559f25390bf3dd7ceed86a376b3deb4bae",
+      "guard_sha256": "09883bf9a10a010392deeb14ca01a91b796842f04a577d8d41f8068952767352"
+    }
+  ],
+  "status": "PASS",
+  "finished_at": "2026-11-20T05:15:10.532059+00:00"
+}

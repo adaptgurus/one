@@ -51,6 +51,9 @@ public:
     void activate() { ready.store(true); }
 
     void add_plan(const std::string& xml);
+    const std::string& request_instance() const { return planning_instance; }
+    void finish_generate(int cid, const std::string& nonce, bool noop,
+                         const std::string& error);
 
     /**
      * Start applying plan actions
@@ -84,6 +87,8 @@ private:
      */
     std::atomic<bool> ready{false};
     std::mutex execution_mutex;
+    std::string planning_instance;
+    void recover_generating_requests();
     unsigned int recovered_term = std::numeric_limits<unsigned int>::max();
     Timer timer_thread;
 

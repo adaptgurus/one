@@ -151,6 +151,7 @@ public:
      */
     int add_checked_capacity(int oid, int expected_cluster, HostShareCapacity& sr,
                              std::string& error, const std::function<int()>& persist_request,
+                             const std::function<bool(Host&, std::string&)>& validate_eligibility,
                              bool already_on_host = false)
     {
         auto host = get(oid);
@@ -164,6 +165,9 @@ public:
             error = "Checked migration target is no longer an enabled monitored host in the approved cluster";
             return -1;
         }
+        // Current owner/requirements and source token are checked under this
+        // same target lock before either a new or replayed reservation is accepted.
+        if (!validate_eligibility(*host, error)) return -1;
         const bool accounted = host->get_vm_ids().count(sr.vmid) != 0;
         if (already_on_host)
         {
