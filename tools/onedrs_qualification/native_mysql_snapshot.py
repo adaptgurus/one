@@ -19,17 +19,18 @@ import stat
 import subprocess
 import tempfile
 
-SCHEMA = 'onedrs.native-db-snapshot/v1'
+SCHEMA = 'onedrs.native-db-snapshot/v2'
 SQL = """SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ;
 SET SESSION TRANSACTION READ ONLY;
 START TRANSACTION WITH CONSISTENT SNAPSHOT;
 SELECT 'META',VERSION(),@@hostname,@@server_id,@@tx_isolation,@@tx_read_only;
 SELECT 'WSREP_BEGIN',VARIABLE_NAME,VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME IN ('WSREP_CLUSTER_STATUS','WSREP_LOCAL_STATE_COMMENT','WSREP_CLUSTER_SIZE','WSREP_READY','WSREP_LAST_COMMITTED') ORDER BY VARIABLE_NAME;
-SELECT 'ENGINE',TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('vm_pool','plan_pool','history') ORDER BY TABLE_NAME;
-SELECT 'COUNTS',(SELECT COUNT(*) FROM vm_pool),(SELECT COUNT(*) FROM plan_pool),(SELECT COUNT(*) FROM history);
+SELECT 'ENGINE',TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('vm_pool','plan_pool','history','system_attributes') ORDER BY TABLE_NAME;
+SELECT 'COUNTS',(SELECT COUNT(*) FROM vm_pool),(SELECT COUNT(*) FROM plan_pool),(SELECT COUNT(*) FROM history),(SELECT COUNT(*) FROM system_attributes WHERE BINARY LEFT(name,8)='ONE_DRS_');
 SELECT 'VM',oid,state,lcm_state,HEX(body) FROM vm_pool ORDER BY oid;
 SELECT 'PLAN',cid,state,HEX(body) FROM plan_pool ORDER BY cid;
 SELECT 'HISTORY',vid,seq,HEX(body) FROM history ORDER BY vid,seq;
+SELECT 'SYSTEM',HEX(name),HEX(body) FROM system_attributes WHERE BINARY LEFT(name,8)='ONE_DRS_' ORDER BY BINARY name;
 SELECT 'WSREP_END',VARIABLE_NAME,VARIABLE_VALUE FROM information_schema.GLOBAL_STATUS WHERE VARIABLE_NAME IN ('WSREP_CLUSTER_STATUS','WSREP_LOCAL_STATE_COMMENT','WSREP_CLUSTER_SIZE','WSREP_READY','WSREP_LAST_COMMITTED') ORDER BY VARIABLE_NAME;
 COMMIT;
 SELECT 'COMPLETE',1;
@@ -90,8 +91,8 @@ def option(value):
 
 
 def parse_rows(text):
-    result={'vm_rows':[],'plan_rows':[],'history_rows':[]}
-    metadata=None;counts=None;complete=False;wsrep={'begin':{},'end':{}};engines={}
+    result={'vm_rows':[],'plan_rows':[],'history_rows':[],'system_rows':[]}
+    metadata=None;counts=None;complete=False;wsrep={'begin':{},'end':{}};engines={};system_names=set()
     for line in text.splitlines():
         if complete: raise ValueError('Record follows transaction completion')
         fields=line.split('\t');kind=fields[0]
@@ -102,20 +103,30 @@ def parse_rows(text):
             if fields[1] in where: raise ValueError('Duplicate Galera observation')
             where[fields[1]]=fields[2]
         elif kind=='ENGINE' and len(fields)==3 and fields[1] not in engines: engines[fields[1]]=fields[2]
-        elif kind=='COUNTS' and len(fields)==4 and counts is None: counts=[int(v) for v in fields[1:]]
+        elif kind=='COUNTS' and len(fields)==5 and counts is None: counts=[int(v) for v in fields[1:]]
         elif kind=='VM' and len(fields)==5: result['vm_rows'].append([int(v) for v in fields[1:4]]+[bytes.fromhex(fields[4]).decode('utf-8')])
         elif kind=='PLAN' and len(fields)==4: result['plan_rows'].append([int(v) for v in fields[1:3]]+[bytes.fromhex(fields[3]).decode('utf-8')])
         elif kind=='HISTORY' and len(fields)==4: result['history_rows'].append([int(v) for v in fields[1:3]]+[bytes.fromhex(fields[3]).decode('utf-8')])
+        elif kind=='SYSTEM' and len(fields)==3:
+            name=bytes.fromhex(fields[1]).decode('utf-8')
+            body=bytes.fromhex(fields[2]).decode('utf-8')
+            if not name.startswith('ONE_DRS_') or len(name)<=8 or len(name)>256 or not name.isascii() or any(ord(c)<32 for c in name):
+                raise ValueError('Invalid native authority record name')
+            if name in system_names: raise ValueError('Duplicate native authority record')
+            system_names.add(name)
+            result['system_rows'].append([name,body])
         elif kind=='COMPLETE' and fields==['COMPLETE','1'] and not complete: complete=True
         else: raise ValueError('Unexpected database export record')
     if not complete or metadata is None or counts is None: raise ValueError('Incomplete database transaction export')
     if not metadata['read_only'] or metadata['isolation'].upper()!='REPEATABLE-READ': raise ValueError('Required read-only repeatable-read transaction was not established')
     if 'mariadb' not in metadata['server_version'].lower(): raise ValueError('Only MariaDB has been qualified for this exporter')
-    if engines!={'vm_pool':'InnoDB','plan_pool':'InnoDB','history':'InnoDB'}: raise ValueError('All native pools must support transactional snapshots')
-    actual=[len(result[k]) for k in ('vm_rows','plan_rows','history_rows')]
+    if engines!={'vm_pool':'InnoDB','plan_pool':'InnoDB','history':'InnoDB','system_attributes':'InnoDB'}: raise ValueError('All native pools must support transactional snapshots')
+    actual=[len(result[k]) for k in ('vm_rows','plan_rows','history_rows','system_rows')]
     if counts!=actual: raise ValueError('Database row counts do not match transaction counts')
     metadata['wsrep_status']=wsrep;metadata['consistent_snapshot']=True
     metadata['table_engines']=engines
+    metadata['system_attribute_selector']="BINARY LEFT(name,8)='ONE_DRS_'"
+    metadata['system_attribute_snapshot_complete']=True
     metadata['wsrep_observation_note']='Galera status is observed at transaction boundaries, outside table MVCC'
     result['transaction']=metadata
     return result
@@ -147,7 +158,7 @@ def export(config, destination):
     data=(json.dumps(result,sort_keys=True,separators=(',',':'))+'\n').encode()
     fd=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
     with os.fdopen(fd,'wb') as f:f.write(data);f.flush();os.fsync(f.fileno())
-    return {'schema':SCHEMA,'state':'EXPORTED_READ_ONLY_NOT_ROLLBACK_AUTHORIZATION','path':str(destination),'snapshot_sha256':hashlib.sha256(data).hexdigest(),'counts':{k:len(result[k]) for k in ('vm_rows','plan_rows','history_rows')},'transaction':result['transaction'],'credentials_logged':False,'raw_rows_in_report':False}
+    return {'schema':SCHEMA,'state':'EXPORTED_READ_ONLY_NOT_ROLLBACK_AUTHORIZATION','path':str(destination),'snapshot_sha256':hashlib.sha256(data).hexdigest(),'counts':{k:len(result[k]) for k in ('vm_rows','plan_rows','history_rows','system_rows')},'transaction':result['transaction'],'credentials_logged':False,'raw_rows_in_report':False}
 
 
 def main():
