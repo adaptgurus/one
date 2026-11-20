@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 import xmlrpc.client
 D=Path(sys.argv[1]).resolve()
 SUITE=sys.argv[2] if len(sys.argv)>2 else "all"
-if SUITE not in ["all","live","cold","api-history","enforce","recovery","legacy-red"]:raise SystemExit("unknown suite")
+if SUITE not in ["all","live","cold","api-history","enforce","recovery","downgrade","legacy-red"]:raise SystemExit("unknown suite")
 if D.parent!=Path("/root") or not D.name.startswith("ls-onedrs-checked-api-runtime-"):
     raise SystemExit("dedicated private runtime required")
 P=D/"prefix";OUT=D/"evidence";DB=P/"var/one.db";F=P/"var/capacity-fixture"
@@ -660,6 +660,88 @@ def enforced_recovery_suite():
         waitfor(lambda: cluster().findtext("PLAN/STATE")=="2")
         check("checked_before_restore_"+label+"_retry_completes",len(events("vmm","RESTORE"))==1 and is_running_on(vms[0],target) and ledger(source)["cpu"]==100 and ledger(target)["cpu"]==200)
 
+def downgrade_gap_suite():
+    from native_downgrade_guard import inspect_rows, inspect_snapshot
+    for label in ("live", "poweroff", "deploy"):
+        reset_case("downgrade-gap-" + label)
+        controls(MIGRATE="HOLD", TRANSFER="HOLD", DEPLOY="HOLD")
+        vid = vms[0]
+        state, lcm, sequence = 3, 3, 1
+        if label == "poweroff":
+            poweroff_source()
+            state, lcm = 8, 0
+        elif label == "deploy":
+            vid = int(ok("one.vm.allocate", 'NAME="downgrade-gap-deploy" CPU="1" MEMORY="128" VCPU="1" OS=[ARCH="x86_64"]', True))
+            state, lcm, sequence = 2, 0, 0
+        # This trigger captures the actual API commit while the VM lock is held
+        # and before the LCM event can be enqueued. It observes native rows; it
+        # does not invent a VM state, history, or host reservation.
+        execute_sql("""
+            CREATE TABLE gap_vm AS SELECT oid,state,lcm_state,body FROM vm_pool WHERE 0;
+            CREATE TABLE gap_plan AS SELECT cid,state,body FROM plan_pool WHERE 0;
+            CREATE TABLE gap_history AS SELECT vid,seq,body FROM history WHERE 0;
+            CREATE TABLE gap_host AS SELECT oid,body FROM host_pool WHERE 0;
+            CREATE TRIGGER capture_native_api_gap AFTER UPDATE ON vm_pool
+            WHEN NEW.oid=""" + str(vid) + " AND NEW.state=" + str(state) +
+            " AND NEW.lcm_state=" + str(lcm) +
+            " AND NEW.body LIKE '%<SEQ>" + str(sequence) + "</SEQ>%'" +
+            " AND NEW.body LIKE '%<HID>" + str(target) + "</HID>%'" +
+            """ AND NEW.body LIKE '%<ENFORCE_CAPACITY>1</ENFORCE_CAPACITY>%'
+            AND (SELECT count(*) FROM gap_vm)=0
+            BEGIN
+                INSERT INTO gap_vm SELECT oid,state,lcm_state,body FROM vm_pool;
+                INSERT INTO gap_plan SELECT cid,state,body FROM plan_pool;
+                INSERT INTO gap_history SELECT vid,seq,body FROM history;
+                INSERT INTO gap_host SELECT oid,body FROM host_pool;
+            END;
+        """)
+        if label == "deploy":
+            ok("one.vm.deploy", vid, target, True, ds, "")
+        else:
+            ok("one.vm.migrate", vid, target, label == "live", True, ds, 0)
+        stop()
+        with sqlite3.connect("file:" + str(DB) + "?mode=ro", uri=True) as con:
+            con.execute("PRAGMA query_only=ON")
+            con.execute("BEGIN")
+            vm_rows = con.execute("SELECT oid,state,lcm_state,body FROM gap_vm").fetchall()
+            plan_rows = con.execute("SELECT cid,state,body FROM gap_plan").fetchall()
+            history_rows = con.execute("SELECT vid,seq,body FROM gap_history").fetchall()
+            host_rows = con.execute("SELECT oid,body FROM gap_host").fetchall()
+        selected = next((r for r in vm_rows if r[0] == vid), None)
+        check("downgrade_" + label + "_captured_native_pre_lcm_state",
+              selected is not None and selected[1:3] == (state, lcm))
+        current = next(ET.fromstring(body) for ident, seq, body in history_rows if ident == vid and seq == sequence)
+        check("downgrade_" + label + "_captured_canonical_target",
+              hist(ET.fromstring(selected[3])).findtext("SEQ") == str(sequence) and
+              current.findtext("HID") == str(target) and current.findtext("ENFORCE_CAPACITY") == "1" and
+              current.findtext("STIME") == "0")
+        target_row = next(ET.fromstring(body) for ident, body in host_rows if ident == target)
+        check("downgrade_" + label + "_capture_precedes_target_reservation",
+              target_row.findtext("HOST_SHARE/CPU_USAGE") == "100" and
+              str(vid) not in [n.text for n in target_row.findall("VMS/ID")])
+        report = inspect_rows(vm_rows, plan_rows, history_rows)
+        check("downgrade_" + label + "_guard_refuses_actual_native_gap",
+              not report["database_ready_for_older_binary"] and
+              any(b["resource"] == "VM" and b["id"] == vid for b in report["blockers"]))
+        snapshot = OUT / ("native-api-gap-" + label + ".snapshot.json")
+        snapshot.write_text(json.dumps({
+            "schema": "onedrs.native-db-snapshot/v1", "backend": "sqlite",
+            "transaction": {"isolation": "SERIALIZABLE", "read_only": True,
+                            "consistent_snapshot": True,
+                            "started_utc": datetime.datetime.now(datetime.timezone.utc).isoformat()},
+            "capture": "actual native API VM-body commit, captured inside its transaction",
+            "vm_rows": vm_rows, "plan_rows": plan_rows, "history_rows": history_rows}, indent=2) + "\n")
+        snapshot.chmod(0o600)
+        loaded = inspect_snapshot(snapshot)
+        check("downgrade_" + label + "_snapshot_loader_matches_row_policy",
+              loaded["blockers"] == report["blockers"])
+        (OUT / ("native-api-gap-" + label + "-guard.json")).write_text(json.dumps(loaded, indent=2) + "\n")
+        RESULT.setdefault("native_api_gap_captures", []).append({
+            "case": label, "vm": vid, "state": state, "lcm_state": lcm,
+            "canonical_sequence": sequence, "current_stime": current.findtext("STIME"),
+            "snapshot_sha256": hashlib.sha256(snapshot.read_bytes()).hexdigest(),
+            "guard_sha256": hashlib.sha256((D / "native_downgrade_guard.py").read_bytes()).hexdigest()})
+
 try:
     start("bootstrap")
     cid=int(ok("one.cluster.allocate","capacity-disposable"))
@@ -694,6 +776,7 @@ try:
     if SUITE in ["all","api-history"]:initial_api_history_suite()
     if SUITE in ["all","enforce"]:enforced_admission_suite()
     if SUITE in ["all","recovery"]:enforced_recovery_suite()
+    if SUITE in ["all","downgrade"]:downgrade_gap_suite()
     if SUITE=="legacy-red":legacy_enforce_reproduction()
     RESULT["status"]="REPRODUCED" if SUITE=="legacy-red" else "PASS"
 except Exception as exc:
