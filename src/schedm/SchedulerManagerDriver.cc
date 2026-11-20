@@ -169,6 +169,7 @@ int SchedulerManagerDriver::scheduler_message(SchedRequest& sr, std::ostringstre
     // Cluster policy identities remain bounded by actual matching candidates.
     sr.clpool.ids.assign(matched_cluster_ids.begin(), matched_cluster_ids.end());
 
+    std::map<int, std::unique_ptr<VMGroup>> input_groups;
     if ( sr.match.match_vmgroups.empty() )
     {
         oss << "<VM_GROUP_POOL/>";
@@ -184,7 +185,9 @@ int SchedulerManagerDriver::scheduler_message(SchedRequest& sr, std::ostringstre
                 std::string grp_s;
 
                 oss << grp->to_xml(grp_s);
+                input_groups.emplace(id, std::move(grp));
             }
+            else return -1;
         }
 
         oss << "</VM_GROUP_POOL>";
@@ -206,7 +209,17 @@ int SchedulerManagerDriver::scheduler_message(SchedRequest& sr, std::ostringstre
             auto host = sr.hpool.get(hid);
             auto cluster = host ? sr.clpool.get(host->get_cluster_id()) : nullptr;
             if (!host || !cluster) return -1;
-            const auto digest = one_drs_eligibility::identity(*vm, *host, *cluster);
+            const VMGroup* group = nullptr;
+            if (auto membership = vm->get_template_attribute("VMGROUP"))
+            {
+                int gid = -1;
+                if (membership->vector_value("VMGROUP_ID", gid) != 0) return -1;
+                const auto found = input_groups.find(gid);
+                if (found == input_groups.end()) return -1;
+                group = found->second.get();
+            }
+            const auto digest = one_drs_eligibility::identity(*vm, *host, *cluster, false, group);
+            if (digest.empty()) return -1;
             oss << "<CANDIDATE><VM_ID>" << entry.first << "</VM_ID><HOST_ID>" << hid
                 << "</HOST_ID><SHA256>" << digest << "</SHA256></CANDIDATE>";
         }

@@ -28,6 +28,7 @@
 #include "PlanManager.h"
 #include "RaftManager.h"
 #include "OneDRSEligibility.h"
+#include "VMGroupPool.h"
 
 using namespace std;
 
@@ -94,6 +95,8 @@ void LifeCycleManager::trigger_deploy(int vid, int admission_sequence)
 
         if ( vm->get_state() == VirtualMachine::ACTIVE )
         {
+            std::unique_ptr<VMGroup> placement_group;
+            if (!prepare_group_placement(vm, placement_group, false)) return;
             HostShareCapacity sr;
 
             time_t thetime = time(0);
@@ -148,6 +151,7 @@ void LifeCycleManager::trigger_deploy(int vid, int admission_sequence)
 
             if (vmpool->update(vm.get()) != 0 && vm->capacity_enforced()) return;
 
+            placement_group.reset();
             if (rc != 0)
             {
                 // Missing host or refused enforced admission: no TM/VMM request.
@@ -308,6 +312,29 @@ void LifeCycleManager::trigger_stop(int vid, const RequestAttributes& ra)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
+bool LifeCycleManager::prepare_group_placement(std::unique_ptr<VirtualMachine>& vm,
+        std::unique_ptr<VMGroup>& group, bool migration)
+{
+    auto pool = Nebula::instance().get_vmgrouppool();
+    std::string error;
+    int limit = -1;
+    int rc = 0;
+    if (migration && !vm->plan_action_generation().empty())
+        rc = pool->migration_limit(vm->get_previous_cid(), limit, error);
+    if (rc == 0)
+        rc = pool->placement_guard(*vm, vm->get_hid(), vm->capacity_enforced(),
+                                   group, error, limit);
+    if (rc == 0) return true;
+
+    // An API already published this request. A later group conflict is not a
+    // non-admitted planner deferral: restore the native source or remain pending.
+    group.reset();
+    vm->log("LCM", Log::ERROR, error);
+    if (vm->checked_capacity_pending()) cancel_checked_migration(vm, error);
+    else if (vm->capacity_admission_pending()) cancel_enforced_admission(vm, error);
+    return false;
+}
+
 bool LifeCycleManager::has_enforced_capacity(VirtualMachine* vm)
 {
     if (!vm->capacity_enforced() || !vm->capacity_admission_state()) return true;
@@ -406,6 +433,12 @@ bool LifeCycleManager::cancel_enforced_admission(
           vm->get_lcm_state() == origin_lcm && vm->is_previous_history_open()))
         return refused("driver admission may already have started");
 
+    std::unique_ptr<VMGroup> placement_group;
+    auto group_pool = Nebula::instance().get_vmgrouppool();
+    if (group_pool->placement_guard(*vm, vm->get_hid(), false, placement_group, error) != 0 ||
+        (vm->get_template_attribute("VMGROUP") && !placement_group))
+        return refused("native VMGroup serialization is unavailable");
+
     const int plan_id = vm->plan_id(), action_id = vm->action_id();
     const auto generation = vm->plan_action_generation();
     const auto persisted = [&refused](int rc, const char* step)
@@ -460,6 +493,7 @@ bool LifeCycleManager::cancel_enforced_admission(
         if (!persisted(vmpool->update_history(vm.get()), "completed cancellation")) return false;
     }
 
+    placement_group.reset();
     vm.reset();
     if (plan_id >= -1)
         Nebula::instance().get_planm()->action_failure(plan_id, action_id, generation);
@@ -487,6 +521,15 @@ bool LifeCycleManager::cancel_checked_migration(
         vm->log("LCM", Log::ERROR, "Unsupported checked pending migration; refusing automatic recovery");
         return false;
     }
+    std::unique_ptr<VMGroup> placement_group;
+    std::string group_error;
+    auto group_pool = Nebula::instance().get_vmgrouppool();
+    if (group_pool->placement_guard(*vm, vm->get_hid(), false, placement_group, group_error) != 0 ||
+        (vm->get_template_attribute("VMGROUP") && !placement_group))
+    {
+        vm->log("LCM", Log::ERROR, "Native VMGroup serialization unavailable; keeping request pending");
+        return false;
+    }
     if (vm->get_hid() != vm->get_previous_hid() &&
         hpool->del_checked_capacity(vm->get_hid(), capacity) != 0)
     {
@@ -511,7 +554,8 @@ bool LifeCycleManager::cancel_checked_migration(
     vm->set_state(VirtualMachine::RUNNING);
     if (vmpool->update(vm.get()) != 0) return false;
 
-    vm.reset(); // Never take the plan lock while a VM lock is held.
+    placement_group.reset();
+    vm.reset(); // Never take the plan lock while a VM or group lock is held.
     Nebula::instance().get_planm()->action_failure(plan_id, action_id, generation);
     return true;
 }
@@ -540,7 +584,7 @@ bool LifeCycleManager::recover_checked_migrations(bool new_epoch, unsigned int t
 }
 
 int LifeCycleManager::reserve_checked_migration_capacity(
-        std::unique_ptr<VirtualMachine>& vm, bool live)
+        std::unique_ptr<VirtualMachine>& vm, bool live, std::unique_ptr<VMGroup>& group)
 {
     if (!vm->checked_capacity_pending()) return 0;
     auto raftm = Nebula::instance().get_raftm();
@@ -576,7 +620,7 @@ int LifeCycleManager::reserve_checked_migration_capacity(
                                                             return false;
                                                         }
                                                         return one_drs_eligibility::validate(*vm, host, *cluster,
-                                                            vm->checked_eligibility_sha256(), true, why);
+                                                            vm->checked_eligibility_sha256(), true, why, nullptr, group.get());
                                                     },
                                                     vm->get_hid() == vm->get_previous_hid());
         if (rc == 0) return 1;
@@ -588,6 +632,7 @@ int LifeCycleManager::reserve_checked_migration_capacity(
             return -1;
         }
     }
+    group.reset();
     cancel_checked_migration(vm, error);
     return -1;
 }
@@ -648,7 +693,9 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
             //                SAVE_MIGRATE STATE
             //----------------------------------------------------
 
-            int checked_capacity = reserve_checked_migration_capacity(vm, false);
+            std::unique_ptr<VMGroup> placement_group;
+            if (!prepare_group_placement(vm, placement_group, true)) return;
+            int checked_capacity = reserve_checked_migration_capacity(vm, false, placement_group);
             if (checked_capacity < 0) return;
 
             vm->set_state(VirtualMachine::SAVE_MIGRATE);
@@ -689,6 +736,7 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
                 if (vmpool->update(vm.get()) != 0 && vm->capacity_enforced()) return;
             }
 
+            placement_group.reset();
             if (capacity_rc != 0 && vm->capacity_enforced())
             {
                 // Before a driver request, ordinary same-datastore unpinned
@@ -727,6 +775,8 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
             //----------------------------------------------------------------------
             // Bypass SAVE_MIGRATE & go to PROLOG_MIGRATE_POWEROFF/SUSPENDED/UNKNOWN
             //----------------------------------------------------------------------
+            std::unique_ptr<VMGroup> placement_group;
+            if (!prepare_group_placement(vm, placement_group, true)) return;
             if (vm->get_state() == VirtualMachine::POWEROFF)
             {
                 vm->set_state(VirtualMachine::PROLOG_MIGRATE_POWEROFF);
@@ -760,6 +810,7 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
                     vm->set_prolog_stime(the_time);
                     vm->set_action(VMActions::MIGRATE_ACTION, uid, gid, req_id);
                     if (vmpool->update_history(vm.get()) != 0 || vmpool->update(vm.get()) != 0) return;
+                    placement_group.reset();
                     trigger_prolog_failure(vid);
                     return;
                 }
@@ -813,6 +864,7 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
 
             //----------------------------------------------------
 
+            placement_group.reset();
             tm->trigger_prolog_migr(vm.get());
         }
         else
@@ -866,7 +918,9 @@ void LifeCycleManager::trigger_live_migrate(int vid, const RequestAttributes& ra
             //                   MIGRATE STATE
             //----------------------------------------------------
 
-            int checked_capacity = reserve_checked_migration_capacity(vm, true);
+            std::unique_ptr<VMGroup> placement_group;
+            if (!prepare_group_placement(vm, placement_group, true)) return;
+            int checked_capacity = reserve_checked_migration_capacity(vm, true, placement_group);
             if (checked_capacity < 0) return;
 
             vm->set_state(VirtualMachine::MIGRATE);
@@ -906,6 +960,7 @@ void LifeCycleManager::trigger_live_migrate(int vid, const RequestAttributes& ra
                 if (vmpool->update(vm.get()) != 0 && vm->capacity_enforced()) return;
             }
 
+            placement_group.reset();
             if (capacity_rc != 0 && vm->capacity_enforced())
             {
                 // Before a driver request, ordinary same-datastore unpinned

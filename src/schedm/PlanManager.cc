@@ -29,6 +29,7 @@
 #include "LifeCycleManager.h"
 #include "HostPool.h"
 #include "OneDRSEligibility.h"
+#include "VMGroupPool.h"
 
 using namespace std;
 
@@ -306,9 +307,16 @@ int PlanManager::start_plan_checked(int cid, const std::string& expected_plan_sh
                 error = "Checked migration plan VM/target host is unavailable in the approved cluster";
                 return -1;
             }
+            std::unique_ptr<VMGroup> group;
+            if (auto membership = vm->get_template_attribute("VMGROUP"))
+            {
+                int gid = -1;
+                if (membership->vector_value("VMGROUP_ID", gid) == 0)
+                    group = Nebula::instance().get_vmgrouppool()->get_ro(gid);
+            }
             if (!vm->checked_migration_supported(action.host_id(), cid, action.ds_id(), error) ||
                 !one_drs_eligibility::validate(*vm, *host, *cluster,
-                    action.eligibility_sha256(), false, error))
+                    action.eligibility_sha256(), false, error, nullptr, group.get()))
             {
                 return -1;
             }

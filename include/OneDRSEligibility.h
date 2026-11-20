@@ -10,6 +10,7 @@
 #include "NebulaUtil.h"
 #include "UserPool.h"
 #include "VirtualMachine.h"
+#include "VMGroup.h"
 
 #include <algorithm>
 #include <cstdlib>
@@ -41,7 +42,8 @@ inline void field(std::ostringstream& out, T value)
 }
 
 inline std::string identity(const VirtualMachine& vm, const Host& target,
-                            const Cluster& cluster, bool pending = false)
+                            const Cluster& cluster, bool pending = false,
+                            const VMGroup* group = nullptr)
 {
     if (!vm.hasHistory() || (pending && !vm.hasPreviousHistory())) return "";
     std::string requirements, automatic;
@@ -65,7 +67,17 @@ inline std::string identity(const VirtualMachine& vm, const Host& target,
     field(out, vm.is_pinned() ? 1 : 0);
     field(out, static_cast<int>(capacity.nodes.size()));
     field(out, static_cast<int>(capacity.pci.size()));
-    field(out, vm.get_template_attribute("VMGROUP") != nullptr ? 1 : 0);
+    auto membership = vm.get_template_attribute("VMGROUP");
+    field(out, membership != nullptr ? 1 : 0);
+    if (membership)
+    {
+        int group_id = -1;
+        if (membership->vector_value("VMGROUP_ID", group_id) != 0 ||
+            !group || group->get_oid() != group_id) return "";
+        field(out, group_id);
+        field(out, membership->vector_value("ROLE"));
+        field(out, group->placement_sha256());
+    }
     field(out, requirements);
     field(out, automatic);
     field(out, target.get_oid());
@@ -82,7 +94,8 @@ inline std::string identity(const VirtualMachine& vm, const Host& target,
 // the target test+reserve critical section. No native policy or template is edited.
 inline bool validate(VirtualMachine& vm, Host& target, Cluster& cluster,
                      const std::string& expected, bool pending,
-                     std::string& error, std::string* category = nullptr)
+                     std::string& error, std::string* category = nullptr,
+                      const VMGroup* group = nullptr)
 {
     const auto fail = [&](const char* state, const std::string& reason)
     {
@@ -90,8 +103,8 @@ inline bool validate(VirtualMachine& vm, Host& target, Cluster& cluster,
         error = reason;
         return false;
     };
-    if (vm.get_template_attribute("VMGROUP") != nullptr)
-        return fail("UNSUPPORTED", "VMGroup checked migration requires separate admission qualification");
+    if (vm.get_template_attribute("VMGROUP") != nullptr && !group)
+        return fail("STALE", "Native VMGroup eligibility snapshot is unavailable");
     if (!valid_sha256(expected))
         return fail("STALE", "Native recommendation lacks a valid source eligibility identity");
     if (!vm.hasHistory() || (pending && !vm.hasPreviousHistory()))
@@ -103,7 +116,7 @@ inline bool validate(VirtualMachine& vm, Host& target, Cluster& cluster,
     if (target.get_state() != Host::MONITORED || target.get_cluster_id() != source_cid ||
         cluster.get_oid() != source_cid || target.get_oid() == source_hid)
         return fail("STALE", "Current target is not an enabled cross-host destination in the approved cluster");
-    if (identity(vm, target, cluster, pending) != expected)
+    if (identity(vm, target, cluster, pending, group) != expected)
         return fail("STALE", "Native VM, target or policy eligibility changed since optimization");
     if (pending && (vm.get_hid() != target.get_oid() || vm.get_hostname() != target.get_name() ||
                     vm.get_vmm_mad() != target.get_vmm_mad()))

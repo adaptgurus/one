@@ -33,6 +33,7 @@ class DatastorePool;
 class SecurityGroupPool;
 class VirtualMachinePool;
 class VirtualMachine;
+class VMGroup;
 class VirtualNetworkPool;
 class RequestAttributes;
 
@@ -86,7 +87,10 @@ public:
     void start_prolog_migrate(VirtualMachine* vm);
 
     bool revert_migrate_after_failure(VirtualMachine* vm, bool live);
-    int reserve_checked_migration_capacity(std::unique_ptr<VirtualMachine>& vm, bool live);
+    bool prepare_group_placement(std::unique_ptr<VirtualMachine>& vm,
+                                 std::unique_ptr<VMGroup>& group, bool migration);
+    int reserve_checked_migration_capacity(std::unique_ptr<VirtualMachine>& vm, bool live,
+                                          std::unique_ptr<VMGroup>& group);
     bool cancel_checked_migration(std::unique_ptr<VirtualMachine>& vm, const std::string& reason);
     bool cancel_enforced_admission(std::unique_ptr<VirtualMachine>& vm, std::string& error);
     bool recover_checked_migrations(bool new_epoch, unsigned int term);
