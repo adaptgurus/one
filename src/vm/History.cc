@@ -319,6 +319,12 @@ string& History::to_xml(string& xml, bool database) const
         "<ENFORCED_ADMISSION_STATE>" << enforced_admission_state << "</ENFORCED_ADMISSION_STATE>" <<
         "<ENFORCED_ADMISSION_LCM_STATE>" << enforced_admission_lcm_state << "</ENFORCED_ADMISSION_LCM_STATE>" <<
         "<ENFORCED_ADMISSION_CANCELING>" << enforced_admission_canceling << "</ENFORCED_ADMISSION_CANCELING>" <<
+        "<DRIVER_REQUEST_TOKEN>" << driver_request.token << "</DRIVER_REQUEST_TOKEN>" <<
+        "<DRIVER_REQUEST_OWNER>" << driver_request.owner << "</DRIVER_REQUEST_OWNER>" <<
+        "<DRIVER_REQUEST_OPERATION>" << driver_request.operation << "</DRIVER_REQUEST_OPERATION>" <<
+        "<DRIVER_REQUEST_STATE>" << driver_request.state << "</DRIVER_REQUEST_STATE>" <<
+        "<DRIVER_REQUEST_LCM_STATE>" << driver_request.lcm_state << "</DRIVER_REQUEST_LCM_STATE>" <<
+        "<DRIVER_REQUEST_PENDING>" << driver_request.pending << "</DRIVER_REQUEST_PENDING>" <<
         "<PSTIME>"     << prolog_stime  << "</PSTIME>"<<
         "<PETIME>"     << prolog_etime  << "</PETIME>"<<
         "<RSTIME>"     << running_stime << "</RSTIME>"<<
@@ -454,6 +460,31 @@ int History::rebuild_attributes()
     xpath(canceling, "/HISTORY/ENFORCED_ADMISSION_CANCELING", "");
     if (!canceling.empty() && canceling != "0" && canceling != "1") return -1;
     enforced_admission_canceling = canceling == "1";
+    xpath(driver_request.token, "/HISTORY/DRIVER_REQUEST_TOKEN", "");
+    xpath(driver_request.owner, "/HISTORY/DRIVER_REQUEST_OWNER", "");
+    xpath(driver_request.operation, "/HISTORY/DRIVER_REQUEST_OPERATION", "");
+    xpath(driver_request.state, "/HISTORY/DRIVER_REQUEST_STATE", -1);
+    xpath(driver_request.lcm_state, "/HISTORY/DRIVER_REQUEST_LCM_STATE", -1);
+    std::string driver_pending;
+    xpath(driver_pending, "/HISTORY/DRIVER_REQUEST_PENDING", "");
+    if (!driver_pending.empty() && driver_pending != "0" && driver_pending != "1") return -1;
+    driver_request.pending = driver_pending == "1";
+    if (driver_request.token.empty())
+    {
+        if (!driver_request.owner.empty() || !driver_request.operation.empty() ||
+            driver_request.state != -1 || driver_request.lcm_state != -1 ||
+            driver_request.pending) return -1;
+    }
+    else
+    {
+        const auto& op = driver_request.operation;
+        if (!one_drs_driver::token_valid(driver_request.token) ||
+            !one_drs_driver::token_valid(driver_request.owner) ||
+            driver_request.state < 0 || driver_request.lcm_state < 0 ||
+            (op != "DEPLOY" && op != "RESTORE" && op != "MIGRATE" &&
+             op != "SAVE" && op != "SHUTDOWN" && op != "CANCEL" &&
+             op != "CLEANUP" && op != "TRANSFER")) return -1;
+    }
     if (enforced_admission_canceling &&
         (!enforce_capacity || enforced_admission_state < 0 || enforced_admission_lcm_state < 0)) return -1;
     if (!checked_plan_generation.empty() &&

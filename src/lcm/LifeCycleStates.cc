@@ -190,9 +190,9 @@ bool LifeCycleManager::revert_migrate_after_failure(VirtualMachine* vm, bool liv
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_save_success(int vid)
+void LifeCycleManager::trigger_save_success(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         ostringstream       os;
 
@@ -208,6 +208,7 @@ void LifeCycleManager::trigger_save_success(int vid)
             return;
         }
         if (!has_enforced_capacity(vm.get())) return;
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "SAVE")) return;
 
 
         Template quota_tmpl;
@@ -285,9 +286,9 @@ void LifeCycleManager::trigger_save_success(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_save_failure(int vid)
+void LifeCycleManager::trigger_save_failure(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         auto vm = vmpool->get(vid);
 
@@ -295,6 +296,7 @@ void LifeCycleManager::trigger_save_failure(int vid)
         {
             return;
         }
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "SAVE")) return;
         if (vm->capacity_admission_pending())
         {
             vm->log("LCM", Log::ERROR, "Ignoring driver callback before native capacity admission");
@@ -341,9 +343,9 @@ void LifeCycleManager::trigger_save_failure(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_deploy_success(int vid)
+void LifeCycleManager::trigger_deploy_success(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         auto vm = vmpool->get(vid);
 
@@ -357,6 +359,7 @@ void LifeCycleManager::trigger_deploy_success(int vid)
             return;
         }
         if (!has_enforced_capacity(vm.get())) return;
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "DEPLOY")) return;
 
 
         Template quota_tmpl;
@@ -482,9 +485,9 @@ void LifeCycleManager::trigger_deploy_success(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_deploy_failure(int vid)
+void LifeCycleManager::trigger_deploy_failure(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         auto vm = vmpool->get(vid);
 
@@ -492,6 +495,7 @@ void LifeCycleManager::trigger_deploy_failure(int vid)
         {
             return;
         }
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "DEPLOY")) return;
         if (vm->capacity_admission_pending())
         {
             vm->log("LCM", Log::ERROR, "Ignoring driver callback before native capacity admission");
@@ -577,9 +581,9 @@ void LifeCycleManager::trigger_deploy_failure(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_shutdown_success(int vid)
+void LifeCycleManager::trigger_shutdown_success(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         time_t              the_time = time(0);
 
@@ -595,6 +599,7 @@ void LifeCycleManager::trigger_shutdown_success(int vid)
             return;
         }
         if (!has_enforced_capacity(vm.get())) return;
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "SHUTDOWN")) return;
 
 
         Template quota_tmpl;
@@ -714,9 +719,9 @@ void LifeCycleManager::trigger_shutdown_success(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_shutdown_failure(int vid)
+void LifeCycleManager::trigger_shutdown_failure(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         auto vm = vmpool->get(vid);
 
@@ -724,6 +729,7 @@ void LifeCycleManager::trigger_shutdown_failure(int vid)
         {
             return;
         }
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "SHUTDOWN")) return;
         int plan_id   = vm->plan_id();
         int action_id = vm->action_id();
         const auto generation = vm->plan_action_generation();
@@ -779,9 +785,9 @@ void LifeCycleManager::trigger_shutdown_failure(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_prolog_success(int vid)
+void LifeCycleManager::trigger_prolog_success(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         time_t                  the_time = time(0);
         ostringstream           os;
@@ -798,6 +804,7 @@ void LifeCycleManager::trigger_prolog_success(int vid)
             return;
         }
         if (!has_enforced_capacity(vm.get())) return;
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "PROLOG")) return;
         if (!prepare_enforced_prolog_transfer(vm.get())) return;
         const bool enforced = vm->capacity_enforced() || !vm->checked_plan_generation().empty();
         const auto persisted = [&vm, enforced](int rc, const char* step)
@@ -924,9 +931,9 @@ void LifeCycleManager::trigger_prolog_success(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_prolog_failure(int vid)
+void LifeCycleManager::trigger_prolog_failure(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         HostShareCapacity sr;
 
@@ -938,6 +945,7 @@ void LifeCycleManager::trigger_prolog_failure(int vid)
         {
             return;
         }
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "PROLOG")) return;
         int plan_id   = vm->plan_id();
         int action_id = vm->action_id();
         const auto generation = vm->plan_action_generation();
@@ -1103,9 +1111,9 @@ void LifeCycleManager::trigger_prolog_failure(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_epilog_success(int vid)
+void LifeCycleManager::trigger_epilog_success(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         HostShareCapacity sr;
 
@@ -1120,6 +1128,7 @@ void LifeCycleManager::trigger_epilog_success(int vid)
         {
             return;
         }
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "EPILOG")) return;
 
         state = vm->get_lcm_state();
 
@@ -1193,18 +1202,19 @@ void LifeCycleManager::trigger_epilog_success(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_cleanup_callback(int vid)
+void LifeCycleManager::trigger_cleanup_callback(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         VirtualMachine::LcmState state;
 
-        auto vm = vmpool->get_ro(vid);
+        auto vm = vmpool->get(vid);
 
         if ( vm == nullptr )
         {
             return;
         }
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "CLEANUP")) return;
 
         state = vm->get_lcm_state();
 
@@ -1224,9 +1234,9 @@ void LifeCycleManager::trigger_cleanup_callback(int vid)
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
 
-void LifeCycleManager::trigger_epilog_failure(int vid)
+void LifeCycleManager::trigger_epilog_failure(int vid, const NativeDriverReply& reply)
 {
-    trigger([this, vid]
+    trigger([this, vid, reply]
     {
         VirtualMachine::LcmState state;
 
@@ -1236,6 +1246,7 @@ void LifeCycleManager::trigger_epilog_failure(int vid)
         {
             return;
         }
+        if (!one_drs_driver::consume(vm.get(), vmpool, reply, "EPILOG")) return;
 
         state = vm->get_lcm_state();
 
@@ -1282,6 +1293,7 @@ void LifeCycleManager::trigger_monitor_suspend(int vid)
         {
             return;
         }
+        if (vm->driver_request_pending()) return;
 
         Template quota_tmpl;
         int uid = vm->get_uid();
@@ -1343,6 +1355,7 @@ void LifeCycleManager::trigger_monitor_done(int vid)
         {
             return;
         }
+        if (vm->driver_request_pending()) return;
 
         if ( vm->get_lcm_state() == VirtualMachine::RUNNING )
         {
@@ -1375,6 +1388,7 @@ void LifeCycleManager::trigger_monitor_poweroff(int vid)
         {
             return;
         }
+        if (vm->driver_request_pending()) return;
 
         Template quota_tmpl;
         int uid = vm->get_uid();
@@ -1440,6 +1454,7 @@ void LifeCycleManager::trigger_monitor_poweron(int vid)
         {
             return;
         }
+        if (vm->driver_request_pending()) return;
 
         if ( vm->get_state() == VirtualMachine::POWEROFF ||
              vm->get_state() == VirtualMachine::SUSPENDED )

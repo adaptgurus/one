@@ -9,7 +9,7 @@ import xml.etree.ElementTree as ET
 import xmlrpc.client
 D=Path(sys.argv[1]).resolve()
 SUITE=sys.argv[2] if len(sys.argv)>2 else "all"
-if SUITE not in ["all","live","cold","api-history","enforce","recovery","downgrade","generation","origin","origin-ledger","origin-orphan","legacy-red","callback-guard","pending-api","legacy-callback-boundary"]:raise SystemExit("unknown suite")
+if SUITE not in ["all","live","cold","api-history","enforce","recovery","downgrade","generation","origin","origin-ledger","origin-orphan","legacy-red","callback-guard","pending-api","legacy-callback-boundary","driver-correlation"]:raise SystemExit("unknown suite")
 if D.parent!=Path("/root") or not D.name.startswith("ls-onedrs-checked-api-runtime-"):
     raise SystemExit("dedicated private runtime required")
 P=D/"prefix";OUT=D/"evidence";DB=P/"var/one.db";F=P/"var/capacity-fixture"
@@ -815,6 +815,9 @@ try:
         import native_pending_entry_contract
         native_pending_entry_contract.run(globals())
     if SUITE=="legacy-red":legacy_enforce_reproduction()
+    if SUITE == "driver-correlation":
+        import native_driver_correlation_contract
+        native_driver_correlation_contract.run(globals())
     RESULT["status"]="REPRODUCED" if SUITE=="legacy-red" else "PASS"
 except Exception as exc:
     RESULT["status"]="FAIL";RESULT["error"]=str(exc)

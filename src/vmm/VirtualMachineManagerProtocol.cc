@@ -128,57 +128,29 @@ void VirtualMachineManager::_undefined(unique_ptr<vm_msg_t> msg)
 void VirtualMachineManager::_deploy(unique_ptr<vm_msg_t> msg)
 {
     log_message(msg.get());
-
-    int id = msg->oid();
-
-    if (!check_vm_state(id, msg.get()))
+    auto reply = one_drs_driver::parse(msg->type_str(), msg->status(), msg->payload());
+    auto vm = vmpool->get_ro(msg->oid());
+    if (!one_drs_driver::matches(vm.get(), reply))
     {
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
-
-    void (LifeCycleManager::*action)(int) = &LifeCycleManager::trigger_deploy_success;
-
-    if (msg->status() == "SUCCESS")
+    vm.reset();
+    if (reply.status == "SUCCESS")
     {
-        if (auto vm = vmpool->get(id))
+        std::istringstream input(reply.payload);
+        std::string deploy_id;
+        input >> deploy_id;
+        if (deploy_id.empty() || deploy_id == "-")
         {
-            // The preliminary state observation does not hold this VM lock.
-            // Admission may have started before deploy_id would be changed.
-            if (vm->capacity_admission_pending())
-            {
-                vm->log("VMM", Log::WARNING,
-                        "Ignoring driver callback before native capacity admission");
-                return;
-            }
-
-            istringstream is(msg->payload());
-
-            string deploy_id;
-
-            is >> deploy_id;
-
-            if (!deploy_id.empty())
-            {
-                vm->set_deploy_id(deploy_id);
-            }
-            else
-            {
-                action = &LifeCycleManager::trigger_deploy_failure;
-                log_error(vm.get(), msg->payload(), "Empty deploy ID for virtual machine");
-            }
-
-            vmpool->update(vm.get());
+            NebulaLog::warn("VMM", "Ignoring malformed native deployment acknowledgement");
+            return;
         }
     }
-    else
-    {
-        action = &LifeCycleManager::trigger_deploy_failure;
-        log_error(id, msg->payload(), vm_msg_t::type_str(VMManagerMessages::DEPLOY));
-    }
-
-    LifeCycleManager * lcm = Nebula::instance().get_lcm();
-
-    (lcm->*action)(msg->oid());
+    auto lcm = Nebula::instance().get_lcm();
+    if (reply.status == "SUCCESS") lcm->trigger_deploy_success(msg->oid(), reply);
+    else lcm->trigger_deploy_failure(msg->oid(), reply);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -186,25 +158,18 @@ void VirtualMachineManager::_deploy(unique_ptr<vm_msg_t> msg)
 void VirtualMachineManager::_shutdown(unique_ptr<vm_msg_t> msg)
 {
     log_message(msg.get());
-
-    int id = msg->oid();
-    auto lcm = Nebula::instance().get_lcm();
-
-    if (!check_vm_state(id, msg.get()))
+    auto reply = one_drs_driver::parse(msg->type_str(), msg->status(), msg->payload());
+    auto vm = vmpool->get_ro(msg->oid());
+    if (!one_drs_driver::matches(vm.get(), reply))
     {
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
-
-    if (msg->status() == "SUCCESS")
-    {
-        lcm->trigger_shutdown_success(id);
-    }
-    else
-    {
-        log_error(id, msg->payload(), vm_msg_t::type_str(VMManagerMessages::SHUTDOWN));
-
-        lcm->trigger_shutdown_failure(msg->oid());
-    }
+    vm.reset();
+    auto lcm = Nebula::instance().get_lcm();
+    if (reply.status == "SUCCESS") lcm->trigger_shutdown_success(msg->oid(), reply);
+    else lcm->trigger_shutdown_failure(msg->oid(), reply);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -266,26 +231,18 @@ void VirtualMachineManager::_reboot(unique_ptr<vm_msg_t> msg)
 void VirtualMachineManager::_cancel(unique_ptr<vm_msg_t> msg)
 {
     log_message(msg.get());
-
-    int id = msg->oid();
-    auto lcm = Nebula::instance().get_lcm();
-
-    if (!check_vm_state(id, msg.get()))
+    auto reply = one_drs_driver::parse(msg->type_str(), msg->status(), msg->payload());
+    auto vm = vmpool->get_ro(msg->oid());
+    if (!one_drs_driver::matches(vm.get(), reply))
     {
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
-
-    if (msg->status() == "SUCCESS")
-    {
-        lcm->trigger_shutdown_success(id);
-    }
-    else
-    {
-        log_error(msg->oid(), msg->payload(),
-                  vm_msg_t::type_str(VMManagerMessages::CANCEL));
-
-        lcm->trigger_shutdown_failure(id);
-    }
+    vm.reset();
+    auto lcm = Nebula::instance().get_lcm();
+    if (reply.status == "SUCCESS") lcm->trigger_shutdown_success(msg->oid(), reply);
+    else lcm->trigger_shutdown_failure(msg->oid(), reply);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -293,29 +250,17 @@ void VirtualMachineManager::_cancel(unique_ptr<vm_msg_t> msg)
 void VirtualMachineManager::_cleanup(unique_ptr<vm_msg_t> msg)
 {
     log_message(msg.get());
-
-    int id = msg->oid();
-    auto lcm = Nebula::instance().get_lcm();
-
-    if (!check_vm_state(id, msg.get()))
+    auto reply = one_drs_driver::parse(msg->type_str(), msg->status(), msg->payload());
+    auto vm = vmpool->get_ro(msg->oid());
+    if (!one_drs_driver::matches(vm.get(), reply))
     {
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
-
-    if (msg->status() == "SUCCESS")
-    {
-        if ( auto vm = vmpool->get_ro(id) )
-        {
-            vm->log("VMM", Log::INFO, "Host successfully cleaned.");
-        }
-    }
-    else
-    {
-        log_error(id, msg->payload(),
-                  vm_msg_t::type_str(VMManagerMessages::CLEANUP));
-    }
-
-    lcm->trigger_cleanup_callback(id);
+    vm.reset();
+    auto lcm = Nebula::instance().get_lcm();
+    lcm->trigger_cleanup_callback(msg->oid(), reply);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -330,26 +275,18 @@ void VirtualMachineManager::_checkpoint(unique_ptr<vm_msg_t> msg)
 void VirtualMachineManager::_save(unique_ptr<vm_msg_t> msg)
 {
     log_message(msg.get());
-
-    int id = msg->oid();
-    auto lcm = Nebula::instance().get_lcm();
-
-    if (!check_vm_state(id, msg.get()))
+    auto reply = one_drs_driver::parse(msg->type_str(), msg->status(), msg->payload());
+    auto vm = vmpool->get_ro(msg->oid());
+    if (!one_drs_driver::matches(vm.get(), reply))
     {
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
-
-    if (msg->status() == "SUCCESS")
-    {
-        lcm->trigger_save_success(id);
-    }
-    else
-    {
-        log_error(id, msg->payload(),
-                  vm_msg_t::type_str(VMManagerMessages::SAVE));
-
-        lcm->trigger_save_failure(id);
-    }
+    vm.reset();
+    auto lcm = Nebula::instance().get_lcm();
+    if (reply.status == "SUCCESS") lcm->trigger_save_success(msg->oid(), reply);
+    else lcm->trigger_save_failure(msg->oid(), reply);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -357,26 +294,18 @@ void VirtualMachineManager::_save(unique_ptr<vm_msg_t> msg)
 void VirtualMachineManager::_restore(unique_ptr<vm_msg_t> msg)
 {
     log_message(msg.get());
-
-    int id = msg->oid();
-    auto lcm = Nebula::instance().get_lcm();
-
-    if (!check_vm_state(id, msg.get()))
+    auto reply = one_drs_driver::parse(msg->type_str(), msg->status(), msg->payload());
+    auto vm = vmpool->get_ro(msg->oid());
+    if (!one_drs_driver::matches(vm.get(), reply))
     {
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
-
-    if (msg->status() == "SUCCESS")
-    {
-        lcm->trigger_deploy_success(id);
-    }
-    else
-    {
-        log_error(id, msg->payload(),
-                  vm_msg_t::type_str(VMManagerMessages::RESTORE));
-
-        lcm->trigger_deploy_failure(id);
-    }
+    vm.reset();
+    auto lcm = Nebula::instance().get_lcm();
+    if (reply.status == "SUCCESS") lcm->trigger_deploy_success(msg->oid(), reply);
+    else lcm->trigger_deploy_failure(msg->oid(), reply);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -384,26 +313,18 @@ void VirtualMachineManager::_restore(unique_ptr<vm_msg_t> msg)
 void VirtualMachineManager::_migrate(unique_ptr<vm_msg_t> msg)
 {
     log_message(msg.get());
-
-    int id = msg->oid();
-    auto lcm = Nebula::instance().get_lcm();
-
-    if (!check_vm_state(id, msg.get()))
+    auto reply = one_drs_driver::parse(msg->type_str(), msg->status(), msg->payload());
+    auto vm = vmpool->get_ro(msg->oid());
+    if (!one_drs_driver::matches(vm.get(), reply))
     {
+        if (vm) vm->log("VMM", Log::WARNING, "Ignoring unbound, stale, or wrong-state native driver reply");
+        else NebulaLog::warn("VMM", "Ignoring reply for an unknown native VM");
         return;
     }
-
-    if (msg->status() == "SUCCESS")
-    {
-        lcm->trigger_deploy_success(id);
-    }
-    else
-    {
-        log_error(msg->oid(), msg->payload(),
-                  vm_msg_t::type_str(VMManagerMessages::MIGRATE));
-
-        lcm->trigger_deploy_failure(id);
-    }
+    vm.reset();
+    auto lcm = Nebula::instance().get_lcm();
+    if (reply.status == "SUCCESS") lcm->trigger_deploy_success(msg->oid(), reply);
+    else lcm->trigger_deploy_failure(msg->oid(), reply);
 }
 
 /* -------------------------------------------------------------------------- */

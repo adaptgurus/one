@@ -96,6 +96,12 @@ class ActionManager
     # +action_id+ an id to identify the action (to cancel it later)
     # +aargs+ arguments to call the action
     def trigger_action(aname, action_id, *aargs)
+        trigger_action_with_context(aname, action_id, nil, *aargs)
+    end
+
+    # Context belongs to the queued action, never to a map keyed by VM ID.
+    # Old and new requests for one VM can have different worker lifetimes.
+    def trigger_action_with_context(aname, action_id, context, *aargs)
 
         @threads_mutex.synchronize {
             return if @finalize
@@ -129,7 +135,7 @@ class ActionManager
             end
 
             @action_queue << @actions[aname].merge(:args => aargs,
-                    :id => action_id)
+                    :id => action_id, :one_drs_request => context)
 
             if @num_running < @concurrency
                 @threads_cond.signal
@@ -197,7 +203,7 @@ class ActionManager
             if action[:threaded]
                 thread = Thread.new {
                     begin
-                        action[:method].call(*action[:args])
+                        invoke_action(action)
                     ensure
                         @threads_mutex.synchronize {
                             @num_running -= 1
@@ -211,10 +217,20 @@ class ActionManager
                 action[:thread] = thread
                 @action_running[action[:id]] = action
             else
-                action[:method].call(*action[:args])
+                invoke_action(action)
 
                 @num_running -= 1
             end
+        end
+    end
+
+    def invoke_action(action)
+        previous = Thread.current[:one_drs_request]
+        Thread.current[:one_drs_request] = action[:one_drs_request]
+        begin
+            action[:method].call(*action[:args])
+        ensure
+            Thread.current[:one_drs_request] = previous
         end
     end
 end

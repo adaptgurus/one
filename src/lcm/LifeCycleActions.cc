@@ -1495,7 +1495,7 @@ void LifeCycleManager::trigger_delete(int vid, const RequestAttributes& ra)
 
         if ( auto vm = vmpool->get(vid) )
         {
-            if (vm->capacity_admission_pending() ||
+            if (vm->driver_request_pending() || vm->capacity_admission_pending() ||
                 vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
             {
                 vm->log("LCM", Log::ERROR, "Refusing cleanup during checked migration admission");
@@ -1571,7 +1571,7 @@ void LifeCycleManager::trigger_delete_recreate(int vid,
 
         if ( auto vm = vmpool->get(vid) )
         {
-            if (vm->capacity_admission_pending() ||
+            if (vm->driver_request_pending() || vm->capacity_admission_pending() ||
                 vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
             {
                 vm->log("LCM", Log::ERROR, "Refusing cleanup during checked migration admission");
@@ -1944,6 +1944,12 @@ void LifeCycleManager::clean_up_vm(VirtualMachine * vm, bool dispose,
 void LifeCycleManager::recover(VirtualMachine * vm, bool success,
                                const RequestAttributes& ra)
 {
+    if (vm->driver_request_pending())
+    {
+        vm->log("LCM", Log::WARNING, "Recovery cannot supersede an unresolved native driver request");
+        return;
+    }
+
     string action;
     int vim = vm->get_oid();
 
@@ -2241,6 +2247,12 @@ void LifeCycleManager::recover(VirtualMachine * vm, bool success,
 
 void LifeCycleManager::retry(VirtualMachine * vm)
 {
+    if (vm->driver_request_pending())
+    {
+        vm->log("LCM", Log::WARNING, "Recovery cannot supersede an unresolved native driver request");
+        return;
+    }
+
     int vid = vm->get_oid();
 
     if ( vm->get_state() != VirtualMachine::ACTIVE )

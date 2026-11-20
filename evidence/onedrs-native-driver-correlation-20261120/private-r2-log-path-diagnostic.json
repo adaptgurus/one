@@ -1,0 +1,9 @@
+{
+  "status": "FIXTURE_OBSERVER_PATH_ERROR",
+  "actual_native_log": "prefix/var/oned.log",
+  "native_malformed_ack_warnings": 1,
+  "vm_state": 3,
+  "vm_lcm_state": 2,
+  "request_pending": "1",
+  "native_source_changed_for_retry": false
+}

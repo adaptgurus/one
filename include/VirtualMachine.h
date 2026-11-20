@@ -1024,6 +1024,22 @@ public:
              (stable && is_previous_history_open()));
     }
 
+    bool driver_request_pending() const
+    {
+        return history && history->driver_request.pending;
+    }
+
+    const NativeDriverRequestState& driver_request() const
+    {
+        static const NativeDriverRequestState empty;
+        return history ? history->driver_request : empty;
+    }
+
+    void driver_request(const NativeDriverRequestState& request)
+    {
+        if (history) history->driver_request = request;
+    }
+
     // States whose next successful/retried driver step requires target capacity.
     bool capacity_admission_state() const;
 

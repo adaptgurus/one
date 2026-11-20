@@ -23,13 +23,18 @@ SCHEMA_SOURCE = "share/doc/xsd/"
 SCHEMA_ROOT = "usr/share/one/schemas/xsd/"
 CONFIG_SOURCE = SOURCE_ROOT + "etc/one_drs.conf"
 CONFIG_TARGET = "etc/one/schedulers/one_drs.conf"
+MAD_RUBY_FILES = {
+    "src/mad/ruby/ActionManager.rb": ("usr/lib/one/ruby/ActionManager.rb", "opennebula-libs"),
+    "src/mad/ruby/OpenNebulaDriver.rb": ("usr/lib/one/ruby/OpenNebulaDriver.rb", "opennebula"),
+    "src/mad/ruby/DriverExecHelper.rb": ("usr/lib/one/ruby/DriverExecHelper.rb", "opennebula"),
+}
 REQUIRED = {
     SOURCE_ROOT + "optimize", SOURCE_ROOT + "place", CONFIG_SOURCE,
     SOURCE_ROOT + "lib/__init__.py",
     SCHEMA_SOURCE + "cluster.xsd", SCHEMA_SOURCE + "plan.xsd",
     SCHEMA_SOURCE + "vm.xsd", SCHEMA_SOURCE + "acct.xsd",
     SCHEMA_SOURCE + "scheduler_driver_action.xsd",
-}
+} | set(MAD_RUBY_FILES)
 SHEBANG = b"#!/usr/bin/env python3\n"
 PACKAGED_SHEBANG = b"#!/usr/bin/python3.12\n"
 
@@ -56,7 +61,7 @@ def source_blobs(repo: Path, commit: str) -> dict[str, tuple[str, bytes]]:
     if resolved != commit:
         raise ValueError("Source commit identity differs")
     tree = git(repo, "ls-tree", "-rz", "--full-tree", commit, "--",
-               SOURCE_ROOT.rstrip("/"), SCHEMA_SOURCE.rstrip("/"))
+               SOURCE_ROOT.rstrip("/"), SCHEMA_SOURCE.rstrip("/"), *MAD_RUBY_FILES)
     entries: list[tuple[str, str]] = []
     for line in tree.split(b"\0"):
         if not line:
@@ -102,6 +107,7 @@ def runtime_files(blobs: dict[str, tuple[str, bytes]]) -> list[dict]:
         if parsed.is_absolute() or ".." in parsed.parts or "\\" in source:
             raise ValueError("Unsafe source path")
         transform = None
+        component = "opennebula"
         content = original
         if source.startswith(SOURCE_ROOT):
             relative = source[len(SOURCE_ROOT):]
@@ -126,12 +132,15 @@ def runtime_files(blobs: dict[str, tuple[str, bytes]]) -> list[dict]:
             if "/" in relative or not relative.endswith(".xsd"):
                 raise ValueError("Unmapped schema source entry: " + source)
             target = SCHEMA_ROOT + relative
+        elif source in MAD_RUBY_FILES:
+            target, component = MAD_RUBY_FILES[source]
         else:
             raise ValueError("Unexpected source root")
         files.append({
             "source": source, "path": target, "git_blob": object_id,
             "source_sha256": sha(original), "sha256": sha(content),
             "packaging_transform": transform, "content": content,
+            "rpm_component": component,
         })
     paths = [item["path"] for item in files]
     if len(paths) != len(set(paths)):

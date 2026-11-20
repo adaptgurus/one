@@ -23,6 +23,7 @@ lib_name='nebula_vm'
 # Sources to generate the library
 source_files=[
     'History.cc',
+    'NativeDriverRequest.cc',
     'VirtualMachine.cc',
     'VirtualMachinePool.cc',
     'VirtualMachineTemplate.cc',

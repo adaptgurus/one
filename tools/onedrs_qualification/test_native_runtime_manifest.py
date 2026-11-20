@@ -51,6 +51,14 @@ class RuntimeManifestTests(unittest.TestCase):
         self.assertEqual("FAIL", result["state"])
         self.assertEqual("MISSING", result["problems"][0]["reason"])
 
+    def test_correlated_mad_requires_the_matching_libs_component(self):
+        entry = next(f for f in self.files if f["path"] == "usr/lib/one/ruby/ActionManager.rb")
+        self.assertEqual("opennebula-libs", entry["rpm_component"])
+        (self.payload / entry["path"]).unlink()
+        result = runtime.verify(self.payload, self.files)
+        self.assertEqual("FAIL", result["state"])
+        self.assertIn({"path": entry["path"], "reason": "MISSING"}, result["problems"])
+
     def test_runtime_content_drift_fails(self):
         (self.payload / runtime.RUNTIME_ROOT / "lib/new_admission.py").write_text("VALUE = 2\n")
         result = runtime.verify(self.payload, self.files)

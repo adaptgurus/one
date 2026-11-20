@@ -1,0 +1,29 @@
+{
+  "state": "FOCUSED_NATIVE_PROTOCOL_PASS",
+  "production_ready": false,
+  "native_source_commit": "e065adf2db79d1a61b5f4dee83915d267b298635",
+  "fixture_source_commit": "921e7d2216250a78878860a2b6fe2b48a0722f62",
+  "native_source_identical_between_build_and_fixture": true,
+  "artifacts": {
+    "src/nebula/oned": {
+      "sha256": "4940c8a1285b0b8cfd58223971068e4ae45d837afc93ad53c511a2614579490e",
+      "size": 171070312
+    },
+    "src/monitor/src/monitor/onemonitord": {
+      "sha256": "ef75e360da6e150fac7fb879fbd244f6672e0bf7de03dea7d47c3f8f979e1d22",
+      "size": 11604632
+    }
+  },
+  "native_private_checks": 35,
+  "ruby_protocol_checks": 16,
+  "python_source_checks": {
+    "normal": 47,
+    "optimized": 47
+  },
+  "original_dr_fleet_changed": false,
+  "combined_reserve_vmgroup_candidate_qualified": false,
+  "required_rpm_components": [
+    "opennebula",
+    "opennebula-libs"
+  ]
+}
