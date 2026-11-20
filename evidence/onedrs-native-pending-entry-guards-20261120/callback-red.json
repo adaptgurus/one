@@ -1,0 +1,86 @@
+{
+  "scope": "PRIVATE_NATIVE_CAPACITY_AND_CRASH_CONTRACTS_WITH_INERT_DRIVERS",
+  "started_at": "2026-11-20T06:27:40.957976+00:00",
+  "binary_sha256": "4ad1946d4d9766270f340de7ca1e9bff894141d9515e2086b82763679f4ed56b",
+  "checks": [
+    {
+      "name": "bootstrap_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_capability_v3_scope",
+      "result": "PASS"
+    },
+    {
+      "name": "capacity-ready_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "native_fixture_vms_running",
+      "result": "PASS"
+    },
+    {
+      "name": "native_initial_host_ledger",
+      "result": "PASS"
+    },
+    {
+      "name": "origin-capture-live_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    },
+    {
+      "name": "captured_native_scheduler_input_1795156083889269352.input",
+      "result": "PASS",
+      "input_sha256": "3ac3d804061bb55a4dfe94a6f0c46a12ebd4f3d705e7e87f8be4c9255cf501fd"
+    },
+    {
+      "name": "origin_live_captures_real_native_api_commit",
+      "result": "PASS"
+    },
+    {
+      "name": "origin_live_durable_origin_matches_actual_state",
+      "result": "PASS"
+    },
+    {
+      "name": "pending-deploy-response_native_api",
+      "result": "PASS",
+      "version": "7.4.1"
+    }
+  ],
+  "shutdowns": [
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    },
+    {
+      "crash": true,
+      "exit_code": -9,
+      "owned_private_stale_lock_removed": true
+    },
+    {
+      "crash": false,
+      "exit_code": 0
+    }
+  ],
+  "suite": "callback-guard",
+  "ordinary_gap_images": [
+    {
+      "case": "live",
+      "vm": 0,
+      "state": 3,
+      "lcm_state": 3,
+      "history_sequence": 1,
+      "sha256": "728d3d3b6e871323ca6182e3d2ed69625bd3463498e68dac6493970873313748",
+      "origin": "native API transaction rows captured before LCM enqueue, restored without fabricated state"
+    }
+  ],
+  "status": "FAIL",
+  "error": "pending_deploy_response_does_not_mutate_canonical_deploy_id",
+  "finished_at": "2026-11-20T06:28:13.148853+00:00"
+}

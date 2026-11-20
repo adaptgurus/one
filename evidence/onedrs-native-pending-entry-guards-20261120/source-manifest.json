@@ -1,0 +1,7 @@
+{
+  "src/dm/DispatchManagerActions.cc": "5c5956f8dcddb9c40ced83f112aed9ffd9a4cd354af47adfbd6ce3b7822f102f",
+  "src/rm/api/VirtualMachineAPI.cc": "5baacaed12c9156f21ddc90802f99765758ef37692e4dc77879f00cd82f684ad",
+  "src/vmm/VirtualMachineManagerProtocol.cc": "74d533be58b1f77bc43ae2aca361311c7a7862322485710063ae721d21f04463",
+  "tools/onedrs_qualification/native_capacity_contract.py": "697e0c77da03c0e18cc8f2b19f062ce355de5e7ee872238f47984ad3c5f99569",
+  "tools/onedrs_qualification/native_pending_entry_contract.py": "8be79b4cd4f5dc5bfc0b9df0fc634f629b1076ceb827b9cfb1f54d0d9b31c1a7"
+}

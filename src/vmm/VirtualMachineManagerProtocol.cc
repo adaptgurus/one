@@ -93,6 +93,13 @@ bool VirtualMachineManager::check_vm_state(int vm_id, vm_msg_t* msg)
         return false;
     }
 
+    if (vm->capacity_admission_pending())
+    {
+        vm->log("VMM", Log::WARNING,
+                "Ignoring driver callback before native capacity admission");
+        return false;
+    }
+
     if (vm->get_lcm_state() == VirtualMachine::LCM_INIT)
     {
         ostringstream oss;
@@ -135,6 +142,15 @@ void VirtualMachineManager::_deploy(unique_ptr<vm_msg_t> msg)
     {
         if (auto vm = vmpool->get(id))
         {
+            // The preliminary state observation does not hold this VM lock.
+            // Admission may have started before deploy_id would be changed.
+            if (vm->capacity_admission_pending())
+            {
+                vm->log("VMM", Log::WARNING,
+                        "Ignoring driver callback before native capacity admission");
+                return;
+            }
+
             istringstream is(msg->payload());
 
             string deploy_id;
