@@ -1,0 +1,22 @@
+{
+  "allocated_bytes": 200704,
+  "at": "2026-11-20T05:47:07.861616+00:00",
+  "base_sha256": "92c206cc6f790c61583247eefe87890f8828420662c17cacf247cec78ab4eec8",
+  "disk": "/var/lib/libvirt/images/ls-onedrs-rc-20261120/ls-onedrs-rc-storage.qcow2",
+  "existing_domains_unchanged": 52,
+  "free_host_bytes": 24014696448,
+  "host_key_pin_preseeded": true,
+  "ip": "192.168.247.16",
+  "mac": "52:54:00:da:27:16",
+  "memory_mib": 2048,
+  "name": "ls-onedrs-rc-storage",
+  "network_definitions_unchanged": true,
+  "outer_nfs_services_exports_unchanged": true,
+  "previous_known_host_entries_preserved": true,
+  "scope": "Disposable storage software domain outside five-voter fault set; not physical independence",
+  "source_sha256": "7eab09d76cc1bc81faa95ef8b0f8fd0964083015b7c304363a3ad88e5a33afaf",
+  "state": "BOOT_REQUESTED_CUSTODY_PRESERVED",
+  "uuid": "bf807b1a-a24c-4287-8ef7-145e6af8689c",
+  "vcpus": 1,
+  "virtual_disk_bytes": 10737418240
+}

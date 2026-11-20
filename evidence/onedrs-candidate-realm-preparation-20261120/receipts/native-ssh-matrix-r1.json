@@ -1,0 +1,192 @@
+{
+  "at": "2026-11-20T05:47:48.133391+00:00",
+  "sources": [
+    {
+      "source": "ls-onedrs-rc-01",
+      "exit": 0,
+      "checks": [
+        {
+          "target": "ls-onedrs-rc-01",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-02",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-03",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-04",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-05",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "source": "ls-onedrs-rc-02",
+      "exit": 0,
+      "checks": [
+        {
+          "target": "ls-onedrs-rc-01",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-02",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-03",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-04",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-05",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "source": "ls-onedrs-rc-03",
+      "exit": 0,
+      "checks": [
+        {
+          "target": "ls-onedrs-rc-01",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-02",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-03",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-04",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-05",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "source": "ls-onedrs-rc-04",
+      "exit": 0,
+      "checks": [
+        {
+          "target": "ls-onedrs-rc-01",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-02",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-03",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-04",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-05",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        }
+      ],
+      "stderr": ""
+    },
+    {
+      "source": "ls-onedrs-rc-05",
+      "exit": 0,
+      "checks": [
+        {
+          "target": "ls-onedrs-rc-01",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-02",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-03",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-04",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        },
+        {
+          "target": "ls-onedrs-rc-05",
+          "exit": 0,
+          "correct_identity": true,
+          "strict_host_key_check": true
+        }
+      ],
+      "stderr": ""
+    }
+  ],
+  "status": "PASS",
+  "scope": "REAL_NATIVE_ONEADMIN_SSH_BETWEEN_FRESH_FIVE_NODES"
+}

@@ -1,0 +1,49 @@
+{
+  "started": "2026-11-20T05:54:38.681903+00:00",
+  "scope": "FRESH_FIVE_NODE_NFS42_MOUNTS_AND_NATIVE_COMPUTE_IDENTITY",
+  "nodes": [
+    {
+      "node": "ls-onedrs-rc-01",
+      "started": "2026-11-20T05:54:38.683344+00:00",
+      "ended": "2026-11-20T05:54:43.364805+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-01-compute-storage-r1.log",
+      "log_sha256": "399b8d9b4dd4955acd1d8170f8025cd64c04ca1cbb6b12ef0ddfe8cc8013f5f1"
+    },
+    {
+      "node": "ls-onedrs-rc-02",
+      "started": "2026-11-20T05:54:38.684040+00:00",
+      "ended": "2026-11-20T05:54:43.417413+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-02-compute-storage-r1.log",
+      "log_sha256": "69af252735511fc9b54e2ef23b438838dee33b0023d77e2774a1fa2de87b94be"
+    },
+    {
+      "node": "ls-onedrs-rc-03",
+      "started": "2026-11-20T05:54:38.684455+00:00",
+      "ended": "2026-11-20T05:54:43.367481+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-03-compute-storage-r1.log",
+      "log_sha256": "88998e6b71c9280b9beab5e684016749ab0da27eb1ffe4ac6e652dcf5d550575"
+    },
+    {
+      "node": "ls-onedrs-rc-04",
+      "started": "2026-11-20T05:54:43.365422+00:00",
+      "ended": "2026-11-20T05:54:47.894538+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-04-compute-storage-r1.log",
+      "log_sha256": "be231cd9f105795abfa6770e5159bfceacb4b8dd5fe6b5587116cb3ae1f47c96"
+    },
+    {
+      "node": "ls-onedrs-rc-05",
+      "started": "2026-11-20T05:54:43.368253+00:00",
+      "ended": "2026-11-20T05:54:47.997578+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-05-compute-storage-r1.log",
+      "log_sha256": "693f65c1c202df1b2c91d74006841840103dc23f79d588bec062af505ad3e7d5"
+    }
+  ],
+  "status": "FAIL",
+  "ended": "2026-11-20T05:54:47.998247+00:00",
+  "free_host_bytes": 23505268736
+}

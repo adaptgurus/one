@@ -1,0 +1,486 @@
+{
+  "at_utc": "2026-11-20T05:02:37.444637+00:00",
+  "domains": {
+    "ls-olvm-qa-engine-20261117": {
+      "inactive_xml_sha256": "956e1c01b35ecd8308e2a5d32a635c6c8f8e07b7b2646b3bc47b14dafb64ab21",
+      "pid": 1315544,
+      "start_ticks": "113575085",
+      "uuid": "59142c45-a551-4e41-b4fb-68ea64b41033"
+    },
+    "ls-olvm-qa-kvm1-20261117": {
+      "inactive_xml_sha256": "9a296ba2645bbebf7c5d5aac02f5c7e8ac5a8e0b977ad3a0dc1b16be88197109",
+      "pid": 3180872,
+      "start_ticks": "111034883",
+      "uuid": "fbf3643c-633b-4dfa-9033-7faee8f9c846"
+    },
+    "ls-olvm-qa-kvm2-20261118": {
+      "inactive_xml_sha256": "89d36bccbe04101f4adab2946e979b954382c6e777989db60fd1f5cdd81c3195",
+      "pid": 2655685,
+      "start_ticks": "112468025",
+      "uuid": "5819e4b7-493e-497f-939e-f465d830ace0"
+    },
+    "ls-onedrs-ha-01": {
+      "inactive_xml_sha256": "7bfe5aa99bf43ed707a1a6632399bed483072a30dbe3028085d59bca376e1e3f",
+      "pid": 413363,
+      "start_ticks": "83811278",
+      "uuid": "705448be-09ac-48ad-81c0-c186e2446d68"
+    },
+    "ls-onedrs-ha-02": {
+      "inactive_xml_sha256": "2355d02054614c10c967f7c9830911bcda92a027cb8390c48bdacc8f299345ad",
+      "pid": 1419680,
+      "start_ticks": "84182153",
+      "uuid": "3d04925d-d7e0-44d0-ab0b-b3fffd2c7a5f"
+    },
+    "ls-onedrs-ha-03": {
+      "inactive_xml_sha256": "dee78d0e575d175b57fe7cba1afb815041197370f29421e2fd9b0b0112de73e7",
+      "pid": 555511,
+      "start_ticks": "87078958",
+      "uuid": "98714937-7416-4c57-84c9-031755db9898"
+    },
+    "ls-onedrs-ha-04": {
+      "inactive_xml_sha256": "339e491f6728fb9201281ec1bfe5d02655e08afa6c059756acdd76f81139ec56",
+      "pid": 555647,
+      "start_ticks": "87079006",
+      "uuid": "4ebefbba-26b9-4a29-a2de-05a9b195abe3"
+    },
+    "ls-onedrs-ha-05": {
+      "inactive_xml_sha256": "4b8283df8771bf380821a9cea07ad692dac98248dda1429897654df05f1e679a",
+      "pid": 1410190,
+      "start_ticks": "84178416",
+      "uuid": "56be4124-aba4-4b66-a312-0898a19d88a5"
+    },
+    "one-0": {
+      "inactive_xml_sha256": "1ba5989bdc37c89ce19aaa932a6c17d6868f04a0b6e9e21db088554be449058b",
+      "pid": 58522,
+      "start_ticks": "14648723",
+      "uuid": "1a503147-6a09-4bed-b31e-777d1abb2e38"
+    },
+    "one-1": {
+      "inactive_xml_sha256": "7b03639f88fef7facb1c0ca077dd0737953cd34092ea860fb7bc8b72ce17a217",
+      "pid": 62290,
+      "start_ticks": "14680155",
+      "uuid": "7f885ce8-5475-43f7-8dee-2875628571b9"
+    },
+    "one-10": {
+      "inactive_xml_sha256": "9ec6edfd77912ff14a463a99288b0847f948efb0f66e553f90b1b26981618745",
+      "pid": 221018,
+      "start_ticks": "15366741",
+      "uuid": "17a616fc-1ce7-4e03-862d-3655566442cd"
+    },
+    "one-101": {
+      "inactive_xml_sha256": "705b5728932f41dc1e7f8c46860725a14d54bc8fd969b07fc6cbfec4d6ab107b",
+      "pid": 2897207,
+      "start_ticks": "73956958",
+      "uuid": "6df37349-64bd-42d0-8ef2-109457475864"
+    },
+    "one-11": {
+      "inactive_xml_sha256": "0cb69b57d509a595c75dc8ac1ccb6b3d0dc3cefa3540a723743aa8b4829ee4d8",
+      "pid": 2671549,
+      "start_ticks": "21060524",
+      "uuid": "68b12bb4-28cc-4fc1-b2f1-74ad29de25f3"
+    },
+    "one-12": {
+      "inactive_xml_sha256": "fa2fcef0c63d65694a33a32e5eb0eec77af9621110f29a25148515dd0a93e25e",
+      "pid": 2672403,
+      "start_ticks": "21061496",
+      "uuid": "7bd84d31-4a4f-4929-b3ba-356c7d2754b3"
+    },
+    "one-126": {
+      "inactive_xml_sha256": "fb0a431acb237be972b641cd2fce8cfaed8d9ceb7cf88117ecd8e867a6a75ce5",
+      "pid": 3138267,
+      "start_ticks": "83263761",
+      "uuid": "04ce44ad-7c94-4e76-8e6a-403501432d2b"
+    },
+    "one-129": {
+      "inactive_xml_sha256": "187644c9d1db5104a0bd901cc124d2674c7ad1a6ff06cf7a63d51597abacd896",
+      "pid": 3148408,
+      "start_ticks": "83267070",
+      "uuid": "06ba282f-2e6d-4f2c-ab20-463f2c655eb1"
+    },
+    "one-130": {
+      "inactive_xml_sha256": "19c58cc365471110208ac9216cba93a97ed6257bd02d63ee6a64bdead01940ad",
+      "pid": 3346053,
+      "start_ticks": "83342831",
+      "uuid": "94f510cd-cf1a-408d-9ebe-a6caf847279f"
+    },
+    "one-134": {
+      "inactive_xml_sha256": "6affa4a017d2d1ce1f674edfbcc7d3bdbeef8c1b150a63a594c34ac05c7cb204",
+      "pid": 3767920,
+      "start_ticks": "83502640",
+      "uuid": "14be3b22-466e-433b-b0ae-59be0f940e3c"
+    },
+    "one-135": {
+      "inactive_xml_sha256": "87c1fa30467baa74643aa2203dd9456734fbcaa96704d5a9d0641fa9416c9646",
+      "pid": 783047,
+      "start_ticks": "83948720",
+      "uuid": "aabadc80-c28b-4895-b50c-65d49d3e0c9b"
+    },
+    "one-136": {
+      "inactive_xml_sha256": "5db3a9931b3e0b7ffb2ca638963d639e423020cfc4e48e8716a1cff69c440f0e",
+      "pid": 4077015,
+      "start_ticks": "83615956",
+      "uuid": "4b731713-1303-489a-a0e1-40fd5fff3526"
+    },
+    "one-137": {
+      "inactive_xml_sha256": "119017aa04cac333a07adad4ee29a5bd8ba36ab8e267a5d5ab147d61e8249197",
+      "pid": 676952,
+      "start_ticks": "83909408",
+      "uuid": "3ccd1360-2292-475a-bd43-10b11ecb62da"
+    },
+    "one-138": {
+      "inactive_xml_sha256": "8f19c93900bdb4b184edc47f31494b797638ed35d7d8a4c238859cd7b7c1cecf",
+      "pid": 63313,
+      "start_ticks": "85269983",
+      "uuid": "28196bec-5ca1-404f-8b4a-377d58400774"
+    },
+    "one-139": {
+      "inactive_xml_sha256": "37126bdbdbea1a842ff8fdec73562a02f3f322ed108af357fd2cb27aba75e6bb",
+      "pid": 1245932,
+      "start_ticks": "85730279",
+      "uuid": "53a1059a-2604-4413-80be-05c237930f52"
+    },
+    "one-140": {
+      "inactive_xml_sha256": "680c505af084ef654f47734bc3409bc1ef98441a92fc41755364b219ccf8e1a3",
+      "pid": 2654218,
+      "start_ticks": "86271636",
+      "uuid": "365f16dc-7122-4f79-9534-214a599e71d8"
+    },
+    "one-2": {
+      "inactive_xml_sha256": "3cc8e1ced082e0a0105a79d4694a4b6ae39c55ada8b70535d3af9bca13ee3f25",
+      "pid": 79787,
+      "start_ticks": "14815263",
+      "uuid": "26c62f9c-21de-4f10-ab5c-416660e83025"
+    },
+    "one-23": {
+      "inactive_xml_sha256": "cb3ed8ac3e65fbc10a05151997fea21a0b0d95f800a801d7944ef4449fc04a6c",
+      "pid": 1448414,
+      "start_ticks": "40906801",
+      "uuid": "2b4c3cd0-709d-45b3-85d5-527d2d344308"
+    },
+    "one-3": {
+      "inactive_xml_sha256": "95a214840555e07e0f4643b007dc7dff4f2ed02e6775eb9d0d7145e1beb23a50",
+      "pid": 86895,
+      "start_ticks": "14854264",
+      "uuid": "493f09c7-001f-4bce-9202-289a04237dc7"
+    },
+    "one-30": {
+      "inactive_xml_sha256": "46c5a1c1d7ebc65785dbdfd239b3528e20b5fb0f7144b869b3fce66771db3ddd",
+      "pid": 1052990,
+      "start_ticks": "53725383",
+      "uuid": "274b2278-5dcf-4cbe-93f0-2c6929486c5c"
+    },
+    "one-31": {
+      "inactive_xml_sha256": "b55fdf3756fd29ba17c83c13a52885c572125254f3cd4dab38a9a7b1b1f46525",
+      "pid": 2884624,
+      "start_ticks": "55068623",
+      "uuid": "154a1ddf-1b1c-4b44-addd-7eb6546939a2"
+    },
+    "one-35": {
+      "inactive_xml_sha256": "78ad7e70274e7a6a96bec63f348f18d31bcea08bd7914e736708890690fce600",
+      "pid": 892585,
+      "start_ticks": "61895091",
+      "uuid": "3549488f-185d-4640-a1e2-705a1c7f14c2"
+    },
+    "one-36": {
+      "inactive_xml_sha256": "7f8db63a14d0d4b58667344e42816ba2a1e5d73ae82eb56d899b726d10ca6e83",
+      "pid": 881690,
+      "start_ticks": "61888604",
+      "uuid": "5862388d-0f70-450a-81e3-4fed7db3633d"
+    },
+    "one-37": {
+      "inactive_xml_sha256": "59be9548f59f2ff3c7ef3a53a601acedd517e2d4b08262e7b142d0098f82edca",
+      "pid": 1244405,
+      "start_ticks": "62110204",
+      "uuid": "1b04559a-6933-4a68-a152-66577f9c676d"
+    },
+    "one-4": {
+      "inactive_xml_sha256": "6061ce7345fd7c300f853458a7951144ce97c7a977b6589c28eacf259ada489e",
+      "pid": 94300,
+      "start_ticks": "14886271",
+      "uuid": "55fd2cdf-3a1f-48e3-ba40-0b3f6d4d0533"
+    },
+    "one-45": {
+      "inactive_xml_sha256": "5094b526f86ba4eb22fcf6dcf0252aff7272e7749b9718d698cf49691e614e88",
+      "pid": 1148247,
+      "start_ticks": "67163995",
+      "uuid": "036c4fe5-5d29-4285-b20c-2c0028d46e55"
+    },
+    "one-5": {
+      "inactive_xml_sha256": "ea1ebe36186040ae200b34727d465280ac5d685ec4d92fd8fa42b6b9b25c4755",
+      "pid": 195743,
+      "start_ticks": "15307602",
+      "uuid": "30e502a8-7a53-410a-8ea2-68db23e80ac9"
+    },
+    "one-6": {
+      "inactive_xml_sha256": "4ae8ab47ec41dac7e114fdf303b253ca4a5210a210e79cd52ab8aa7366296c6b",
+      "pid": 196353,
+      "start_ticks": "15308237",
+      "uuid": "04000d3d-4442-4bfe-9cb8-1e11635e6718"
+    },
+    "one-69": {
+      "inactive_xml_sha256": "a56d758ab41da951bdc04ede5c391c7ad6e384c4973e2ec9c029a3a560a7c1d6",
+      "pid": 1100684,
+      "start_ticks": "69366356",
+      "uuid": "468d6f23-7d83-46ff-adeb-6ca339026447"
+    },
+    "one-7": {
+      "inactive_xml_sha256": "0a5fc8c927851af20f6e55f1ccf97c486c87b29376e0edd6a2b1a2e8372f77b2",
+      "pid": 197201,
+      "start_ticks": "15308869",
+      "uuid": "15466299-2f1b-4ee5-8776-4de77d0c1d7e"
+    },
+    "one-71": {
+      "inactive_xml_sha256": "b9175fd707440a1fa2f7693e1bd1425ca304ac6a6c86844b8c5c3c9bc9236501",
+      "pid": 1445733,
+      "start_ticks": "69529218",
+      "uuid": "62740a27-75cf-466e-b925-201e00085bed"
+    },
+    "one-79": {
+      "inactive_xml_sha256": "806540e46b7c94bc7beb5e030f0826de58d9a320cce442a6a158955abd8e5ce0",
+      "pid": 3185947,
+      "start_ticks": "70338268",
+      "uuid": "51fe16a7-7406-44cf-899a-45e32cd95d5d"
+    },
+    "one-8": {
+      "inactive_xml_sha256": "d56aedeebb46deb797668e662fd9d340b857ad52b641ee09e54b29f23616aee7",
+      "pid": 210260,
+      "start_ticks": "15344611",
+      "uuid": "34ff4b53-0b08-46e2-b7ab-6937562b71e9"
+    },
+    "one-80": {
+      "inactive_xml_sha256": "10dc39ff6e8c8f7c7a3d1021bc49a4a34d94857ad75d488747add0d4d55d3264",
+      "pid": 600341,
+      "start_ticks": "71063417",
+      "uuid": "59c3a2bf-2581-46d6-82d1-5579098abe09"
+    },
+    "one-9": {
+      "inactive_xml_sha256": "3b63f5971a9601bc9a2636aa95167948b297703ef9a8e275bdfcfd4640e065e6",
+      "pid": 219961,
+      "start_ticks": "15366115",
+      "uuid": "69a70e3c-2de0-427a-9ef6-029b48376609"
+    },
+    "one-92": {
+      "inactive_xml_sha256": "f782b95f0317efb936a40ba4c49f224d9ee14ad1bc8bdf33104af2a446dc7d4f",
+      "pid": 1165108,
+      "start_ticks": "71301818",
+      "uuid": "417fab6e-7f9c-43e9-b491-de891aeed41b"
+    },
+    "one-95": {
+      "inactive_xml_sha256": "cab25c23eaa09f86f8b424ff691c78bc8c14b3a8dc6d3b76fe117d401a26b0ae",
+      "pid": 3621287,
+      "start_ticks": "72415811",
+      "uuid": "20916362-0878-402b-83f8-31ea3bd62c87"
+    },
+    "one-99": {
+      "inactive_xml_sha256": "4d605038906a164f425794e158d65b4996de9eb7a9c1aba3caabcdf1bf862e9a",
+      "pid": 2685183,
+      "start_ticks": "73869634",
+      "uuid": "51e95a5f-57c1-4f5b-9b3b-751a5d5f4d87"
+    }
+  },
+  "free_bytes": 59578523648,
+  "networks": {
+    "default": "3e7412fef4a3c513147d6beeaa9fb0722c534034abc1363ccf1d036ae871728f",
+    "ls-agent-ci-20261115": "a78f6c02bcec0d766c4c0fde15eaf3a7233e6af2c931c9971d4dedb12436c608",
+    "ls-capacity-qa-20261114": "f6a3f0b003c9154c763c8b648746fd5cfb69b67437b1e26b04e5ceb37fcc78ff",
+    "ls-olvm-qa-20261117": "e351bbdf5733519f91c3b1f286b1efbeb34a98d06fb1e3ba030c2d435f635cc0",
+    "ls-onedrs-ha-e2e": "4dbe221fc9a1c8b719886acd49e3b65877f995de441db93a0e9e08d15ed8c69b",
+    "ls-onedrs-rc-20261120": "199458c3e01c66a6a40d506fa59f0b25b24570303db55c7ded9778efcecbefc3",
+    "lsagent-guestdisk-20261113": "4242a3ab21dad85d5eb211cf0744d743e1f511191a18876850191f876d19e06e",
+    "lsbkqa-20261113": "423252cdc165c9361197f9132ee1eb7a333f0a50c5529948f6a56961b3196351"
+  },
+  "routes": [
+    {
+      "dev": "enp6s18",
+      "dst": "default",
+      "flags": [],
+      "gateway": "172.17.60.65",
+      "metric": 100,
+      "protocol": "static"
+    },
+    {
+      "dev": "enp6s18",
+      "dst": "172.17.60.64/26",
+      "flags": [],
+      "metric": 100,
+      "prefsrc": "172.17.60.66",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "br-lsbkqa",
+      "dst": "172.29.208.0/24",
+      "flags": [],
+      "prefsrc": "172.29.208.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "enp6s18",
+      "dst": "172.30.89.10",
+      "flags": [],
+      "gateway": "172.17.60.67"
+    },
+    {
+      "dev": "virbr0",
+      "dst": "192.168.122.0/24",
+      "flags": [],
+      "prefsrc": "192.168.122.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsag233br",
+      "dst": "192.168.233.0/24",
+      "flags": [],
+      "prefsrc": "192.168.233.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsolvmqa0",
+      "dst": "192.168.241.0/24",
+      "flags": [],
+      "prefsrc": "192.168.241.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsdrhabr0",
+      "dst": "192.168.246.0/24",
+      "flags": [],
+      "prefsrc": "192.168.246.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsbp47mgmt",
+      "dst": "198.18.84.0/30",
+      "flags": [],
+      "metric": 427,
+      "prefsrc": "198.18.84.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsbpr9mgmt",
+      "dst": "198.18.85.0/30",
+      "flags": [],
+      "metric": 426,
+      "prefsrc": "198.18.85.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsbpdcdrmgmt",
+      "dst": "198.18.86.0/30",
+      "flags": [
+        "linkdown"
+      ],
+      "metric": 428,
+      "prefsrc": "198.18.86.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsagent91br",
+      "dst": "198.18.91.0/30",
+      "flags": [],
+      "prefsrc": "198.18.91.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsagt92br",
+      "dst": "198.18.92.0/30",
+      "flags": [],
+      "prefsrc": "198.18.92.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsagt93br",
+      "dst": "198.18.93.0/30",
+      "flags": [],
+      "prefsrc": "198.18.93.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsagt94br",
+      "dst": "198.18.94.0/30",
+      "flags": [],
+      "prefsrc": "198.18.94.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsagt95br",
+      "dst": "198.18.95.0/30",
+      "flags": [],
+      "prefsrc": "198.18.95.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsagt96br",
+      "dst": "198.18.96.0/30",
+      "flags": [],
+      "prefsrc": "198.18.96.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsbppg0mgmt",
+      "dst": "198.18.120.0/30",
+      "flags": [
+        "linkdown"
+      ],
+      "metric": 429,
+      "prefsrc": "198.18.120.1",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsbppg1mgmt",
+      "dst": "198.18.120.4/30",
+      "flags": [
+        "linkdown"
+      ],
+      "metric": 430,
+      "prefsrc": "198.18.120.5",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsbppg2mgmt",
+      "dst": "198.18.120.8/30",
+      "flags": [
+        "linkdown"
+      ],
+      "metric": 431,
+      "prefsrc": "198.18.120.9",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsbplbmgmt",
+      "dst": "198.18.120.16/29",
+      "flags": [
+        "linkdown"
+      ],
+      "metric": 432,
+      "prefsrc": "198.18.120.17",
+      "protocol": "kernel",
+      "scope": "link"
+    },
+    {
+      "dev": "lsfip140pub",
+      "dst": "198.18.140.0/24",
+      "flags": [],
+      "prefsrc": "198.18.140.254",
+      "protocol": "kernel",
+      "scope": "link"
+    }
+  ]
+}

@@ -1,0 +1,19 @@
+{
+  "scope": "VERIFIED_VENDOR_DEPENDENCIES_ONLY_NO_CANDIDATE_OR_SOAK",
+  "phase": "query",
+  "started": "2026-11-20T05:25:26.411425+00:00",
+  "nodes": [
+    {
+      "name": "ls-onedrs-rc-01",
+      "ip": "192.168.247.11",
+      "started": "2026-11-20T05:25:26.412846+00:00",
+      "ended": "2026-11-20T05:25:33.046489+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-01-vendor-query-r1.log",
+      "sha256": "57f9db567c73b2a3e6f4aa05fb4c30b3c92ea8aa503f6fc5715adb757c32900b"
+    }
+  ],
+  "status": "PASS",
+  "ended": "2026-11-20T05:25:33.047101+00:00",
+  "free_host_bytes": 53187600384
+}

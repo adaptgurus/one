@@ -1,0 +1,55 @@
+{
+  "scope": "VERIFIED_VENDOR_DEPENDENCIES_ONLY_NO_CANDIDATE_OR_SOAK",
+  "phase": "install",
+  "started": "2026-11-20T05:26:29.973693+00:00",
+  "nodes": [
+    {
+      "name": "ls-onedrs-rc-01",
+      "ip": "192.168.247.11",
+      "started": "2026-11-20T05:26:29.975339+00:00",
+      "ended": "2026-11-20T05:26:37.012272+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-01-vendor-install-r1.log",
+      "sha256": "99653ed88a677018af230b83d4e6a8aa3b57b3988e5195bc6787b77562d69e39"
+    },
+    {
+      "name": "ls-onedrs-rc-02",
+      "ip": "192.168.247.12",
+      "started": "2026-11-20T05:26:29.975512+00:00",
+      "ended": "2026-11-20T05:26:42.880104+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-02-vendor-install-r1.log",
+      "sha256": "a9f268bcd63b00c4adf5d31dc802c9d281c7b67006d14682167db8bab6841c49"
+    },
+    {
+      "name": "ls-onedrs-rc-03",
+      "ip": "192.168.247.13",
+      "started": "2026-11-20T05:26:37.013109+00:00",
+      "ended": "2026-11-20T05:26:48.210471+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-03-vendor-install-r1.log",
+      "sha256": "ff1a1082a5ced4a7a718f9cb1882f0e6af514c97d254fc5fac13ea94be12a5df"
+    },
+    {
+      "name": "ls-onedrs-rc-04",
+      "ip": "192.168.247.14",
+      "started": "2026-11-20T05:26:42.880841+00:00",
+      "ended": "2026-11-20T05:26:54.679251+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-04-vendor-install-r1.log",
+      "sha256": "561be70dfde078804cc9ab475fee986bb1b43b0688b5c99d9e232ac4b9f0c1bf"
+    },
+    {
+      "name": "ls-onedrs-rc-05",
+      "ip": "192.168.247.15",
+      "started": "2026-11-20T05:26:48.211410+00:00",
+      "ended": "2026-11-20T05:26:59.610636+00:00",
+      "exit": 1,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-05-vendor-install-r1.log",
+      "sha256": "17b0046f4727e1d060b8bdd17171057e811cb1fac658b64ae8960e52ee32f9ea"
+    }
+  ],
+  "status": "FAIL",
+  "ended": "2026-11-20T05:26:59.611272+00:00",
+  "free_host_bytes": 53187342336
+}

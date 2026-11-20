@@ -1,0 +1,55 @@
+{
+  "scope": "VERIFIED_VENDOR_DEPENDENCIES_ONLY_NO_CANDIDATE_OR_SOAK",
+  "phase": "install",
+  "started": "2026-11-20T05:30:17.941270+00:00",
+  "nodes": [
+    {
+      "name": "ls-onedrs-rc-01",
+      "ip": "192.168.247.11",
+      "started": "2026-11-20T05:30:17.942794+00:00",
+      "ended": "2026-11-20T05:31:30.329069+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-01-vendor-install-r2.log",
+      "sha256": "db5d5794587f2379191f821e868a8d41c72bf524c08e8e21c796896a27003c62"
+    },
+    {
+      "name": "ls-onedrs-rc-02",
+      "ip": "192.168.247.12",
+      "started": "2026-11-20T05:30:17.943153+00:00",
+      "ended": "2026-11-20T05:31:29.540162+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-02-vendor-install-r2.log",
+      "sha256": "443080c3a5a2072b742064769b29a83d2b44f7fdd8a52666b29f06b714682d66"
+    },
+    {
+      "name": "ls-onedrs-rc-03",
+      "ip": "192.168.247.13",
+      "started": "2026-11-20T05:31:29.541090+00:00",
+      "ended": "2026-11-20T05:32:49.283201+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-03-vendor-install-r2.log",
+      "sha256": "f7698469b26b4c0214bc5d430990c661ef3e5112eb648cac01c0d18eb0fe7e52"
+    },
+    {
+      "name": "ls-onedrs-rc-04",
+      "ip": "192.168.247.14",
+      "started": "2026-11-20T05:31:30.329982+00:00",
+      "ended": "2026-11-20T05:32:26.369201+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-04-vendor-install-r2.log",
+      "sha256": "9e40b62407b66228b5757403c201abf0be593420e3d78881ce0dd606a2cda69c"
+    },
+    {
+      "name": "ls-onedrs-rc-05",
+      "ip": "192.168.247.15",
+      "started": "2026-11-20T05:32:26.370237+00:00",
+      "ended": "2026-11-20T05:33:30.619298+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-05-vendor-install-r2.log",
+      "sha256": "3b5deb7050036866adfd5b65bc2ade05091a672e143b39f8e8e5ca3056d10bfe"
+    }
+  ],
+  "status": "PASS",
+  "ended": "2026-11-20T05:33:30.620272+00:00",
+  "free_host_bytes": 24043528192
+}

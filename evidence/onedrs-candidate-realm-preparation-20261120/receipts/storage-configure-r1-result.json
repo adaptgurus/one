@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "exit": 0,
+  "started": "2026-11-20T05:50:00.807414+00:00",
+  "finished": "2026-11-20T05:50:32.111144+00:00",
+  "disk_allocated_bytes": 237641728,
+  "pre_payload_budget_bytes": 2147483648,
+  "free_host_bytes": 23756816384,
+  "log": "/root/ls-onedrs-rc-20261120/storage-configure-r1.log",
+  "log_sha256": "24874fa5af46307b872bad360fbd9ddcbac219b36774d5c6c663e622e7306134"
+}

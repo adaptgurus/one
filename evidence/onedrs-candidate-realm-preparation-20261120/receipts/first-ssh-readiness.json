@@ -1,0 +1,41 @@
+{
+  "at_utc": "2026-11-20T05:05:22.238506+00:00",
+  "checks": [
+    {
+      "name": "ls-onedrs-rc-01",
+      "ip": "192.168.247.11",
+      "exit": 0,
+      "stdout": "status: done\nls-onedrs-rc-01.candidate-lab.internal\n5.14.0-687.10.1.el9_8.0.1.x86_64\nEnforcing\n 1B-blocks       Used      Avail\n9513709568 1057378304 8456331264\n",
+      "stderr": ""
+    },
+    {
+      "name": "ls-onedrs-rc-02",
+      "ip": "192.168.247.12",
+      "exit": 0,
+      "stdout": "status: done\nls-onedrs-rc-02.candidate-lab.internal\n5.14.0-687.10.1.el9_8.0.1.x86_64\nEnforcing\n 1B-blocks       Used      Avail\n9513709568 1057378304 8456331264\n",
+      "stderr": ""
+    },
+    {
+      "name": "ls-onedrs-rc-03",
+      "ip": "192.168.247.13",
+      "exit": 0,
+      "stdout": "status: done\nls-onedrs-rc-03.candidate-lab.internal\n5.14.0-687.10.1.el9_8.0.1.x86_64\nEnforcing\n 1B-blocks       Used      Avail\n9513709568 1057378304 8456331264\n",
+      "stderr": ""
+    },
+    {
+      "name": "ls-onedrs-rc-04",
+      "ip": "192.168.247.14",
+      "exit": 0,
+      "stdout": "status: done\nls-onedrs-rc-04.candidate-lab.internal\n5.14.0-687.10.1.el9_8.0.1.x86_64\nEnforcing\n 1B-blocks       Used      Avail\n9513709568 1057378304 8456331264\n",
+      "stderr": ""
+    },
+    {
+      "name": "ls-onedrs-rc-05",
+      "ip": "192.168.247.15",
+      "exit": 0,
+      "stdout": "status: done\nls-onedrs-rc-05.candidate-lab.internal\n5.14.0-687.10.1.el9_8.0.1.x86_64\nEnforcing\n 1B-blocks       Used      Avail\n9513709568 1057378304 8456331264\n",
+      "stderr": ""
+    }
+  ],
+  "ssh_host_verification": "preseeded per-node keys; strict checking enabled"
+}

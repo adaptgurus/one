@@ -1,0 +1,49 @@
+{
+  "started": "2026-11-20T05:40:52.993846+00:00",
+  "scope": "FRESH_REALM_LOCAL_SQL_AND_STRICT_NATIVE_SSH_PREPARATION",
+  "nodes": [
+    {
+      "node": "ls-onedrs-rc-01",
+      "started": "2026-11-20T05:40:53.411106+00:00",
+      "ended": "2026-11-20T05:40:56.486641+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-01-controller-prepare-r1.log",
+      "log_sha256": "c730f8e37067025de0656b6fa05895d95dd558db04fb40e220731f4b5b38ed9f"
+    },
+    {
+      "node": "ls-onedrs-rc-02",
+      "started": "2026-11-20T05:40:53.420007+00:00",
+      "ended": "2026-11-20T05:40:56.393940+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-02-controller-prepare-r1.log",
+      "log_sha256": "ba7995eeed7661f780905c01ba9ff59f4c6b10cfa145bb3319ca5103d1724394"
+    },
+    {
+      "node": "ls-onedrs-rc-03",
+      "started": "2026-11-20T05:40:56.821307+00:00",
+      "ended": "2026-11-20T05:41:00.497641+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-03-controller-prepare-r1.log",
+      "log_sha256": "70778ad454a036c52b0b5ce050422b5b21bb625a0674ff2eedb541a4ecd963e2"
+    },
+    {
+      "node": "ls-onedrs-rc-04",
+      "started": "2026-11-20T05:40:56.907836+00:00",
+      "ended": "2026-11-20T05:41:00.721982+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-04-controller-prepare-r1.log",
+      "log_sha256": "2874d699b4043f60c3f362ffe373732a07d7bac56c5f83c7e4aeff3ca67f2a25"
+    },
+    {
+      "node": "ls-onedrs-rc-05",
+      "started": "2026-11-20T05:41:00.912825+00:00",
+      "ended": "2026-11-20T05:41:03.836804+00:00",
+      "exit": 0,
+      "log": "/root/ls-onedrs-rc-20261120/ls-onedrs-rc-05-controller-prepare-r1.log",
+      "log_sha256": "a46d1a539114eedfa177613e7cdae2fccfe24dc7c0016dba83e52a6c99e25d69"
+    }
+  ],
+  "status": "PASS",
+  "ended": "2026-11-20T05:41:03.837721+00:00",
+  "free_host_bytes": 24025214976
+}

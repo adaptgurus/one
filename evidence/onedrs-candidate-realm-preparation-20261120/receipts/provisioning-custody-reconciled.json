@@ -1,0 +1,11 @@
+{
+  "at_utc": "2026-11-20T05:09:35.448463+00:00",
+  "state": "PREEXISTING_RESOURCES_PRESERVED_NEW_REALM_NETWORK_UPDATED",
+  "existing_domains_unchanged": 46,
+  "existing_networks_unchanged_excluding_owned_new_network": 7,
+  "existing_routes_preserved": true,
+  "earlier_strict_difference_retained": true,
+  "difference": "Only the newly created candidate network changed its runtime XML as its five interfaces attached",
+  "native_candidate_installed": false,
+  "soak_started": false
+}

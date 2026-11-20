@@ -1,0 +1,42 @@
+{
+  "versions": {
+    "exit": 0,
+    "stdout": "-3 +4 -4.0 +4.1 +4.2\n",
+    "stderr": ""
+  },
+  "rpc_tcp": {
+    "exit": 0,
+    "stdout": "   program vers proto   port  service\n    100000    4   tcp    111  portmapper\n    100000    3   tcp    111  portmapper\n    100000    2   tcp    111  portmapper\n    100000    4   udp    111  portmapper\n    100000    3   udp    111  portmapper\n    100000    2   udp    111  portmapper\n    100024    1   udp  37935  status\n    100024    1   tcp  60601  status\n    100005    1   udp  20048  mountd\n    100005    1   tcp  20048  mountd\n    100005    2   udp  20048  mountd\n    100005    2   tcp  20048  mountd\n    100003    4   tcp   2049  nfs\n",
+    "stderr": ""
+  },
+  "selinux": {
+    "exit": 0,
+    "stdout": "Enforcing\n",
+    "stderr": ""
+  },
+  "nfs_booleans": {
+    "exit": 0,
+    "stdout": "nfs_export_all_ro --> on\nnfs_export_all_rw --> on\n",
+    "stderr": ""
+  },
+  "share_label": {
+    "exit": 0,
+    "stdout": "system_u:object_r:public_content_rw_t:s0 /srv/ls-onedrs-ha-e2e-nfs\n",
+    "stderr": ""
+  },
+  "mount": {
+    "exit": 0,
+    "stdout": "{\n   \"filesystems\": [\n      {\n         \"target\": \"/\",\n         \"source\": \"/dev/mapper/almalinux-root\",\n         \"fstype\": \"xfs\",\n         \"options\": \"rw,relatime,seclabel,attr2,inode64,logbufs=8,logbsize=32k,noquota\"\n      }\n   ]\n}\n",
+    "stderr": ""
+  },
+  "service": {
+    "exit": 0,
+    "stdout": "MainPID=0\nExecMainStartTimestampMonotonic=849152095213\nId=nfs-server.service\nActiveState=active\nSubState=exited\nActiveEnterTimestampMonotonic=849152127867\n\nMainPID=3351552\nExecMainStartTimestampMonotonic=849151590645\nId=nfs-mountd.service\nActiveState=active\nSubState=running\nActiveEnterTimestampMonotonic=849151590672\n\nMainPID=3351500\nExecMainStartTimestampMonotonic=849151400459\nId=rpcbind.service\nActiveState=active\nSubState=running\nActiveEnterTimestampMonotonic=849151422279\n",
+    "stderr": ""
+  },
+  "rc01_probe": {
+    "exit": 0,
+    "stdout": "{\"nfs3\": {\"exit\": 1, \"stdout\": \"\", \"stderr\": \"rpcinfo: RPC: Remote system error - Connection refused\\n\"}, \"mount3\": {\"exit\": 1, \"stdout\": \"\", \"stderr\": \"rpcinfo: RPC: Remote system error - Connection refused\\n\"}}\n",
+    "stderr": ""
+  }
+}
