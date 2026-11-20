@@ -1,0 +1,60 @@
+{
+  "schema": "onedrs.native-build/v1",
+  "status": "PASS",
+  "qualification": "COMPILE_ONLY",
+  "source_head": "8a1af307879e49ef97ae59aa006245019eb73837",
+  "overlay_base": "625da064a6477105b109a919eb29c602f97a6ec4",
+  "patch_sha256": "4f1ddb6a254db48f2f31f73ab0253336720f747965340b2adac04c2f7b507867",
+  "build_tree": "/root/ls-onedrs-r18-vendor-build-20261120",
+  "started_utc": "2026-11-20T06:56:37.037426+00:00",
+  "command": [
+    "scons",
+    "-Q",
+    "-j4",
+    "mysql=yes",
+    "grpc=yes",
+    "systemd=yes",
+    "sqlite=yes",
+    "xmlrpc_pkgconf=yes",
+    "parsers=no",
+    "gitversion=8a1af307-group-source-wip-ls7.4.1-backport",
+    "src/nebula/oned",
+    "src/monitor/src/monitor/onemonitord"
+  ],
+  "compiler_flags": {
+    "CFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "CXXFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "LDFLAGS": "-Wl,-z,relro -Wl,--as-needed  -Wl,-z,now -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -flto=12"
+  },
+  "native_source_sha256": {
+    "include/LifeCycleManager.h": "f805027b90b338b07287da4dd52cc35cf99edfb8b49fdc4c195f35fe1a3338e9",
+    "include/OneDRSEligibility.h": "55fce2ae3ba5ab99035683149517b33462746d24aa23288d0a4c21689f631e1a",
+    "include/VMGroup.h": "c988f4f498389d2a5a1db86712425c10affc25764c4db002c83f38eb65e63659",
+    "include/VMGroupPool.h": "cb2e52eadd0d40b283d9de851876a84cde5e9228ee628dad7da068e91ba50224",
+    "src/cluster/Cluster.cc": "c8cc21ce8d377896565956abff4d4e3ab486dc7369ce6cb6e5290fc462727e5f",
+    "src/lcm/LifeCycleActions.cc": "59e595d45bf0ff5d118846bfe364dc0f5525f31dce42940529ea3d327f32ad76",
+    "src/rm/api/VMGroupAPI.cc": "5cf3476ea7dc4ba685a6759bd30d38f26ea15cf64c8afcc4b16d7e6338b323de",
+    "src/rm/api/VirtualMachineAPI.cc": "077195cc3a03f6e283a1636c664c88b913c80fa77af48879651405db0bb93be6",
+    "src/schedm/PlanManager.cc": "c32c4944bc562726e6751c5de40b23769fb312cfe21ef79da351c6cc4ff25259",
+    "src/schedm/SchedulerManagerDriver.cc": "d20cf861f0cb254002059496f8da3df5bcf03a84dce948d92c3b1c85c7e1ce9c",
+    "src/vm_group/VMGroup.cc": "a5f8c7c2e73887b30e058df2226dd1d2cc799b3b6e89be77cbb2abada15d8756",
+    "src/vm_group/VMGroupPool.cc": "6e778f0b0e715520f8958047bfac737b43cb9d1afa3fcc6249aeb251ac2ae18c"
+  },
+  "inherited_cache_receipt_sha256": "47830d5049a0af1fa3a4a1e838a78c0af4a8b46d630331f75289dfac54ad4a5d",
+  "inherited_cache_custody_sha256": "74df1c84173b033fbe671a5e38118a5cfc1459600e202a15b9e677e469deecb4",
+  "runtime_tests_executed": false,
+  "checked_vmgroup_scope_promoted": false,
+  "elapsed_seconds": 264.883,
+  "exit_code": 0,
+  "log_sha256": "63d9768022b1fe8041da5e0a3c0b85a6d2058b3e8e32b7743140bd1d2cb80653",
+  "artifacts": {
+    "src/nebula/oned": {
+      "sha256": "3bc2be25cbf16a8a0bbbc5475ef50367e6f206e2b776a064fe651c8678aa643d",
+      "size": 171015200
+    },
+    "src/monitor/src/monitor/onemonitord": {
+      "sha256": "ca071f3c5cd664b909b238066050a14d1723c5fb9ff928dc661bb66ee9c9cb32",
+      "size": 11604632
+    }
+  }
+}

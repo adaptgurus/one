@@ -557,6 +557,7 @@ int VMGroup::insert(SqlDB *db, string& error_str)
 
 int VMGroup::post_update_template(string& error, Template *_old_tmpl)
 {
+    if (check_membership_change(-1, error) != 0) return -1;
     int vms = _roles.vm_size();
 
     if ( vms > 0 )
@@ -777,7 +778,7 @@ namespace
 int settled_group_host(const VirtualMachine& vm, int& hid)
 {
     hid = -1;
-    if (vm.checked_capacity_pending() || vm.is_previous_history_open() ||
+    if (vm.capacity_admission_pending() || vm.is_previous_history_open() ||
         vm.get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING)
     {
         return VMGroup::PLACEMENT_BUSY;
@@ -812,6 +813,14 @@ int settled_group_host(const VirtualMachine& vm, int& hid)
     hid = vm.get_hid();
     return 0;
 }
+}
+
+int VMGroup::placement_host(const VirtualMachine& vm, int& hid, string& error)
+{
+    const int rc = settled_group_host(vm, hid);
+    if (rc != 0)
+        error = "Native VMGroup membership requires a settled or unplaced VM";
+    return rc;
 }
 
 int VMGroup::peer_placements(int excluding_vmid, map<int, int>& placements,
@@ -860,6 +869,42 @@ int VMGroup::peer_placements(int excluding_vmid, map<int, int>& placements,
                 return rc;
             }
             placements[vmid] = hid;
+        }
+    }
+    // A membership removal can persist its group row and then fail the VM
+    // row. Detect that inverse inconsistency before admitting another member.
+    // PoolSQL::search is complete (no LIMIT); inspect current TEMPLATE only,
+    // since archived VM_INFO may contain earlier membership. Numeric values
+    // can use CDATA, so the SQL prefilter deliberately does not parse the ID.
+    vector<int> candidates;
+    if (vmpool->search(candidates, "state <> 6 AND body LIKE '%<VMGROUP>%'") != 0)
+    {
+        error = "Cannot read complete native VMGroup reverse membership";
+        return PLACEMENT_UNAVAILABLE;
+    }
+    for (int vmid : candidates)
+    {
+        if (vmid == excluding_vmid) continue;
+        auto vm = vmpool->get_ro(vmid);
+        if (!vm)
+        {
+            error = "Native VMGroup reverse member is unavailable";
+            return PLACEMENT_UNAVAILABLE;
+        }
+        auto membership = vm->get_template_attribute("VMGROUP");
+        if (!membership) continue;
+        int gid = -1;
+        if (membership->vector_value("VMGROUP_ID", gid) != 0 || gid < 0)
+        {
+            error = "Native VMGroup reverse membership identity is malformed";
+            return PLACEMENT_INVALID;
+        }
+        if (gid != get_oid()) continue;
+        auto role = _roles.get(membership->vector_value("ROLE"));
+        if (!role || seen.count(vmid) == 0 || role->get_vms().count(vmid) == 0)
+        {
+            error = "Native VMGroup reverse member " + to_string(vmid) + " is not in its canonical role";
+            return PLACEMENT_INVALID;
         }
     }
     error.clear();

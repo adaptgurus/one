@@ -22,6 +22,7 @@
 #include "VMGroupRule.h"
 
 class VMGroupPool;
+class VirtualMachine;
 
 enum class VMGroupPolicy;
 
@@ -93,6 +94,10 @@ public:
     {
         return _roles.del_vm(role_name, vmid);
     }
+
+    // Same settled/unplaced classifier used for peer placement and dynamic
+    // membership. It never acquires a VM lock.
+    static int placement_host(const VirtualMachine& vm, int& hid, std::string& error);
 
     VMGroupRoles& roles()
     {

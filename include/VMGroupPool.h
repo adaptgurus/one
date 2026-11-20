@@ -78,6 +78,10 @@ public:
                         std::unique_ptr<VMGroup>& held_group, std::string& error,
                         int max_group_migrations = -1);
 
+    // Read the current native OneDRS disruption limit for a plan-owned move.
+    // This is a policy read, not a second placement authority.
+    int migration_limit(int cluster_id, int& limit, std::string& error);
+
     int drop(PoolObjectSQL* object, std::string& error) override;
 
     std::unique_ptr<VMGroup> get_ro(int oid)

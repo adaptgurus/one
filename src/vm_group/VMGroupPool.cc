@@ -17,6 +17,8 @@
 #include "VMGroupPool.h"
 #include "VirtualMachine.h"
 #include "AuthRequest.h"
+#include "Nebula.h"
+#include "ClusterPool.h"
 
 using namespace std;
 
@@ -208,10 +210,34 @@ int VMGroupPool::placement_guard(VirtualMachine& vm, int target_hid, bool enforc
         membership->vector_value("ROLE"), error, max_group_migrations);
 }
 
+int VMGroupPool::migration_limit(int cluster_id, int& limit, string& error)
+{
+    limit = -1;
+    auto cluster = Nebula::instance().get_clpool()->get_ro(cluster_id);
+    if (!cluster)
+    {
+        error = "Native OneDRS migration policy is unavailable";
+        return VMGroup::PLACEMENT_UNAVAILABLE;
+    }
+    auto policy = cluster->get_template_attribute("ONE_DRS");
+    if (policy && !policy->vector_value("MAX_GROUP_MIGRATIONS").empty() &&
+        (policy->vector_value("MAX_GROUP_MIGRATIONS", limit) != 0 || limit < -1))
+    {
+        error = "Native MAX_GROUP_MIGRATIONS is invalid";
+        return VMGroup::PLACEMENT_INVALID;
+    }
+    return 0;
+}
+
 int VMGroupPool::drop(PoolObjectSQL* object, string& error)
 {
     auto group = static_cast<VMGroup*>(object);
     const int rc = group->check_membership_change(-1, error);
     if (rc != 0) return rc;
+    if (group->roles().vm_size() != 0)
+    {
+        error = "Remove native VMGroup memberships before deleting the group";
+        return VMGroup::PLACEMENT_INVALID;
+    }
     return PoolSQL::drop(object, error);
 }

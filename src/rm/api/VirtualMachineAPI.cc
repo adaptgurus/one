@@ -615,6 +615,16 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
         return Request::ACTION;
     }
 
+    std::unique_ptr<VMGroup> placement_group;
+    const int group_rc = nd.get_vmgrouppool()->placement_guard(*vm, hid,
+        enforce || vm->is_pinned(), placement_group, att.resp_msg);
+    if (group_rc != 0)
+    {
+        att.group_placement_busy = group_rc == VMGroup::PLACEMENT_BUSY &&
+                                   !att.plan_action.generation.empty();
+        return Request::ACTION;
+    }
+
     if ( !check_host(hid, enforce || vm->is_pinned(), vm.get(), att.resp_msg) )
     {
         return Request::ACTION;
@@ -731,6 +741,9 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
 
     DispatchManager * dm = nd.get_dm();
 
+    // New canonical history is already durable. Other group members now see
+    // the unresolved admission even after releasing this object lock.
+    placement_group.reset();
     if (dm->deploy(std::move(vm), att) != 0)
     {
         att.resp_msg = "Cannot persist native deployment dispatch state";
@@ -1049,6 +1062,21 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
         return Request::ACTION;
     }
 
+    std::unique_ptr<VMGroup> placement_group;
+    int group_limit = -1;
+    auto group_pool = nd.get_vmgrouppool();
+    if (!att.plan_action.generation.empty() &&
+        group_pool->migration_limit(vm->get_cid(), group_limit, att.resp_msg) != 0)
+        return Request::ACTION;
+    const int group_rc = group_pool->placement_guard(*vm, hid, enforce,
+        placement_group, att.resp_msg, group_limit);
+    if (group_rc != 0)
+    {
+        att.group_placement_busy = group_rc == VMGroup::PLACEMENT_BUSY &&
+                                   !att.plan_action.generation.empty();
+        return Request::ACTION;
+    }
+
     if (!att.checked_plan_generation.empty() && c_hid != hid)
     {
         // This VM lock remains held until its non-RUNNING pending state is durable.
@@ -1061,7 +1089,8 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
         }
         auto cluster = nd.get_clpool()->get_ro(cluster_id);
         if (!cluster || !one_drs_eligibility::validate(*vm, *target, *cluster,
-                att.checked_eligibility_sha256, false, att.resp_msg))
+                att.checked_eligibility_sha256, false, att.resp_msg, nullptr,
+                placement_group.get()))
         {
             if (att.resp_msg.empty()) att.resp_msg = "Checked migration cluster eligibility is unavailable";
             return Request::ACTION;
@@ -1274,6 +1303,7 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
     // Migrate the VM
     // ------------------------------------------------------------------------
     DispatchManager* dm = nd.get_dm();
+    placement_group.reset();
 
     if (live && (vm->get_lcm_state() == VirtualMachine::RUNNING ||
                  vm->get_lcm_state() == VirtualMachine::CHECKED_MIGRATE_PENDING))
@@ -4503,19 +4533,38 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_add(int vid,
         return Request::ACTION;
     }
 
-    // Check affinity
-    if ( vm->get_state() == VirtualMachine::ACTIVE )
+    // The authoritative group lock must cover both the affinity decision and
+    // publication. The earlier read-only object was used only for authorization.
+    vmg = vmgrouppool->get(vmg_id);
+    if (!vmg)
     {
-        int my_hid = vm->get_hid();
-
-        if ( my_hid != -1 )
+        att.resp_id = vmg_id;
+        att.resp_obj = PoolObjectSQL::VMGROUP;
+        return Request::NO_EXISTS;
+    }
+    vmg->get_permissions(vmg_perms);
+    AuthRequest current_auth(att.uid, att.group_ids);
+    current_auth.add_auth(AuthRequest::USE, vmg_perms);
+    if (UserPool::authorize(current_auth) != 0)
+    {
+        att.resp_msg = current_auth.message;
+        return Request::AUTHORIZATION;
+    }
+    int current_host = -1;
+    if (VMGroup::placement_host(*vm, current_host, att.resp_msg) != 0 ||
+        vmg->check_membership_change(vid, att.resp_msg) != 0)
+        return Request::ACTION;
+    for (auto current_role : vmg->roles())
+    {
+        if (current_role->name() != role && current_role->get_vms().count(vid) != 0)
         {
-            if ( vmg->check_affinity(vid, my_hid, role, att.resp_msg) != 0 )
-            {
-                return Request::ACTION;
-            }
+            att.resp_msg = "Native VMGroup already records this VM in a different role";
+            return Request::ACTION;
         }
     }
+    if (current_host >= 0 &&
+        vmg->check_placement(vid, current_host, role, att.resp_msg, -1, false) != 0)
+        return Request::ACTION;
 
     // Add to VMGroup
     unique_ptr<VectorAttribute> va = make_unique<VectorAttribute>("VMGROUP");
@@ -4523,15 +4572,24 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_add(int vid,
     va->replace("VMGROUP_ID", vmg_id);
     va->replace("ROLE", role);
 
-    if ( vmgrouppool->vmgroup_attribute(va.get(), vm->get_uid(), vid, att.resp_msg) != 0 )
+    if (vmg->add_vm(role, vid) != 0)
     {
+        att.resp_msg = "Role does not exist in native VMGroup";
         return Request::ACTION;
     }
-
+    if (vmgrouppool->update(vmg.get()) != 0)
+    {
+        att.resp_msg = "Cannot persist native VMGroup membership";
+        return Request::INTERNAL;
+    }
     vm->set_template_attribute(va.release());
-
-    vmpool->update(vm.get());
-
+    if (vmpool->update(vm.get()) != 0)
+    {
+        // Do not guess whether an ambiguous write committed. Reverse membership
+        // blocks new placement; retrying this same native operation reconciles it.
+        att.resp_msg = "Cannot persist VM membership; native group remains unresolved";
+        return Request::INTERNAL;
+    }
     return Request::SUCCESS;
 }
 
@@ -4563,12 +4621,44 @@ Request::ErrorCode VirtualMachineAPI::vmgroup_del(int vid,
         return Request::ACTION;
     }
 
-    vm->release_vmgroup();
-
+    auto membership = vm->get_template_attribute("VMGROUP");
+    if (!membership) return Request::SUCCESS;
+    int gid = -1;
+    int current_host = -1;
+    if (membership->vector_value("VMGROUP_ID", gid) != 0 || gid < 0 ||
+        VMGroup::placement_host(*vm, current_host, att.resp_msg) != 0)
+    {
+        if (att.resp_msg.empty()) att.resp_msg = "Native VMGroup membership identity is invalid";
+        return Request::ACTION;
+    }
+    auto group_pool = Nebula::instance().get_vmgrouppool();
+    auto group = group_pool->get(gid);
+    if (!group)
+    {
+        att.resp_obj = PoolObjectSQL::VMGROUP;
+        att.resp_id = gid;
+        return Request::NO_EXISTS;
+    }
+    // Exclude only this explicitly removed VM so the same operation can repair
+    // a group-row success followed by a failed VM-row update.
+    if (group->check_membership_change(vid, att.resp_msg) != 0)
+        return Request::ACTION;
+    if (group->del_vm(membership->vector_value("ROLE"), vid) != 0)
+    {
+        att.resp_msg = "Native VMGroup role is unavailable";
+        return Request::ACTION;
+    }
+    if (group_pool->update(group.get()) != 0)
+    {
+        att.resp_msg = "Cannot persist native VMGroup removal";
+        return Request::INTERNAL;
+    }
     vm->remove_template_attribute("VMGROUP");
-
-    vmpool->update(vm.get());
-
+    if (vmpool->update(vm.get()) != 0)
+    {
+        att.resp_msg = "Cannot persist VM membership removal; native group remains unresolved";
+        return Request::INTERNAL;
+    }
     return Request::SUCCESS;
 }
 

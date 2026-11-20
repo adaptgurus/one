@@ -23,6 +23,7 @@
 #include "HostPool.h"
 #include "VirtualMachinePool.h"
 #include "OneDRSEligibility.h"
+#include "VMGroupPool.h"
 
 #include <sstream>
 
@@ -613,8 +614,16 @@ void Cluster::load_plan()
                     eligibility_reason = "Native recommendation references an unavailable VM or host";
                     break;
                 }
+                std::unique_ptr<VMGroup> group;
+                if (auto membership = vm->get_template_attribute("VMGROUP"))
+                {
+                    int gid = -1;
+                    if (membership->vector_value("VMGROUP_ID", gid) == 0)
+                        group = Nebula::instance().get_vmgrouppool()->get_ro(gid);
+                }
                 if (!one_drs_eligibility::validate(*vm, *host, *this,
-                        action.eligibility_sha256(), false, eligibility_reason, &eligibility_state)) break;
+                        action.eligibility_sha256(), false, eligibility_reason,
+                        &eligibility_state, group.get())) break;
                 if (!vm->checked_migration_supported(action.host_id(), oid, action.ds_id(), eligibility_reason))
                 {
                     eligibility_state = "UNSUPPORTED";
