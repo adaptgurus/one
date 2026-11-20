@@ -203,22 +203,38 @@ public:
         return update(host.get());
     }
 
-    int add_capacity(int oid, HostShareCapacity &sr)
+    int add_capacity(int oid, HostShareCapacity &sr, bool enforce = false,
+                     std::string* error = nullptr,
+                     const std::function<int()>& persist_request = {})
     {
-        int rc = 0;
-
-        if ( auto host = get(oid) )
+        auto host = get(oid);
+        if (!host)
         {
-            host->add_capacity(sr);
-
-            update(host.get());
+            if (error) *error = "Target host is unavailable";
+            return -1;
         }
-        else
+        // The same native ledger is used by checked migration, deploy, migrate
+        // and resize. Retrying a reservation already owned by this VM is a no-op.
+        if (host->get_vm_ids().count(sr.vmid) != 0) return 0;
+        std::string reason;
+        if (enforce && !host->test_capacity(sr, reason, true))
         {
-            rc = -1;
+            if (error) *error = "Enforced capacity admission refused: " + reason;
+            return -2;
         }
-
-        return rc;
+        host->add_capacity(sr);
+        if (enforce && persist_request && persist_request() != 0)
+        {
+            if (error) *error = "Enforced capacity admission could not persist VM allocation metadata";
+            return -3;
+        }
+        const int rc = update(host.get());
+        if (enforce && rc != 0)
+        {
+            if (error) *error = "Enforced capacity admission could not persist host accounting";
+            return -3;
+        }
+        return 0;
     }
 
     /**

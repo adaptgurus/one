@@ -701,6 +701,7 @@ Request::ErrorCode VirtualMachineAPI::deploy(int vid,
                     vmm_mad,
                     tm_mad,
                     ds_id,
+                    enforce,
                     att) != 0)
     {
         vm->release_vnc_port();
@@ -1216,6 +1217,7 @@ Request::ErrorCode VirtualMachineAPI::migrate(int vid,
                     vmm_mad,
                     tm_mad,
                     ds_id,
+                    enforce,
                     att) != 0)
     {
         vm.reset();
@@ -3306,6 +3308,16 @@ Request::ErrorCode VirtualMachineAPI::recover(int vid,
         return Request::ACTION;
     }
 
+    if (op == 1 && vm->capacity_enforced() && vm->capacity_admission_state())
+    {
+        auto target = Nebula::instance().get_hpool()->get(vm->get_hid());
+        if (!target || target->get_vm_ids().count(vid) == 0)
+        {
+            att.resp_msg = "Enforced capacity has not been admitted; retry or recover-failure before reporting success";
+            return Request::ACTION;
+        }
+    }
+
     auto dm = Nebula::instance().get_dm();
 
     switch (op)
@@ -4491,9 +4503,11 @@ int VirtualMachineAPI::add_history(VirtualMachine * vm,
                                    const string&    vmm_mad,
                                    const string&    tm_mad,
                                    int              ds_id,
+                                   bool             enforce,
                                    RequestAttributes& att)
 {
     vm->add_history(hid, cid, hostname, vmm_mad, tm_mad, ds_id);
+    vm->capacity_enforced(enforce);
 
     if (!att.checked_plan_generation.empty())
     {

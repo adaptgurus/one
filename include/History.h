@@ -101,6 +101,10 @@ private:
     unsigned int checked_plan_term = 0;
     bool checked_capacity_pending = false;
 
+    // Preserve the existing deploy/migrate RPC intent across asynchronous LCM.
+    // Old records and explicit force requests retain their previous semantics.
+    bool enforce_capacity = false;
+
     time_t       stime;
     time_t       etime;
 

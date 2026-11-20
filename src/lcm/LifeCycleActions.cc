@@ -80,7 +80,14 @@ void LifeCycleManager::trigger_deploy(int vid)
 
             vm->set_state(vm_state);
 
-            rc = hpool->add_capacity(vm->get_hid(), sr);
+            std::string capacity_error;
+            rc = hpool->add_capacity(vm->get_hid(), sr, vm->capacity_enforced(),
+                                     &capacity_error, [&]() { return vmpool->update(vm.get()); });
+            if (rc != 0 && vm->capacity_enforced())
+            {
+                vm->set_template_error_message(capacity_error);
+                vm->log("LCM", Log::ERROR, capacity_error);
+            }
 
             vm->set_stime(thetime);
 
@@ -88,13 +95,13 @@ void LifeCycleManager::trigger_deploy(int vid)
 
             vm->set_vm_info();
 
-            vmpool->update_history(vm.get());
+            if (vmpool->update_history(vm.get()) != 0 && vm->capacity_enforced()) return;
 
-            vmpool->update(vm.get());
+            if (vmpool->update(vm.get()) != 0 && vm->capacity_enforced()) return;
 
-            if ( rc == -1)
+            if (rc != 0)
             {
-                //The host has been deleted, move VM to FAILURE
+                // Missing host or refused enforced admission: no TM/VMM request.
                 trigger_prolog_failure(vid);
             }
             else
@@ -239,6 +246,57 @@ void LifeCycleManager::trigger_stop(int vid, const RequestAttributes& ra)
 
 /* -------------------------------------------------------------------------- */
 /* -------------------------------------------------------------------------- */
+
+bool LifeCycleManager::has_enforced_capacity(VirtualMachine* vm)
+{
+    if (!vm->capacity_enforced() || !vm->capacity_admission_state()) return true;
+    auto host = hpool->get(vm->get_hid());
+    if (host && host->get_vm_ids().count(vm->get_oid()) != 0) return true;
+    vm->log("LCM", Log::ERROR, "Enforced target capacity is not reserved; refusing driver success");
+    return false;
+}
+
+bool LifeCycleManager::prepare_enforced_prolog_transfer(VirtualMachine* vm)
+{
+    if ((!vm->capacity_enforced() && vm->checked_plan_generation().empty()) ||
+        !vm->hasPreviousHistory()) return true;
+    switch (vm->get_lcm_state())
+    {
+        case VirtualMachine::PROLOG_MIGRATE:
+        case VirtualMachine::PROLOG_MIGRATE_FAILURE:
+        case VirtualMachine::PROLOG_MIGRATE_POWEROFF:
+        case VirtualMachine::PROLOG_MIGRATE_POWEROFF_FAILURE:
+        case VirtualMachine::PROLOG_MIGRATE_SUSPEND:
+        case VirtualMachine::PROLOG_MIGRATE_SUSPEND_FAILURE:
+        case VirtualMachine::PROLOG_MIGRATE_UNKNOWN:
+        case VirtualMachine::PROLOG_MIGRATE_UNKNOWN_FAILURE:
+            break;
+        default: return true;
+    }
+    const auto persisted = [vm](int rc, const char* step)
+    {
+        if (rc == 0) return true;
+        vm->log("LCM", Log::ERROR, std::string("Enforced migration pre-transfer persistence failed: ") + step);
+        return false;
+    };
+    if (vm->is_previous_history_open())
+    {
+        vm->set_previous_etime(time(nullptr));
+        vm->set_previous_running_etime(time(nullptr));
+        if (!persisted(vmpool->update_previous_history(vm), "source history")) return false;
+    }
+    if (vm->get_hid() != vm->get_previous_hid())
+    {
+        HostShareCapacity previous_capacity;
+        Template previous_template;
+        vm->get_previous_capacity(previous_capacity, previous_template);
+        if (!persisted(hpool->del_checked_capacity(vm->get_previous_hid(), previous_capacity),
+                       "source capacity release")) return false;
+        vm->release_previous_vnc_port();
+    }
+    return persisted(vmpool->update_history(vm), "target history") &&
+           persisted(vmpool->update(vm), "VM state");
+}
 
 bool LifeCycleManager::cancel_checked_migration(
         std::unique_ptr<VirtualMachine>& vm, const std::string& reason)
@@ -413,9 +471,17 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
 
             vm->get_capacity(sr);
 
+            int capacity_rc = 0;
+            std::string capacity_error;
             if ( checked_capacity == 0 && vm->get_hid() != vm->get_previous_hid() )
             {
-                hpool->add_capacity(vm->get_hid(), sr);
+                capacity_rc = hpool->add_capacity(vm->get_hid(), sr, vm->capacity_enforced(),
+                        &capacity_error, [&]() { return vmpool->update(vm.get()); });
+                if (capacity_rc != 0 && vm->capacity_enforced())
+                {
+                    vm->set_template_error_message(capacity_error);
+                    vm->log("LCM", Log::ERROR, capacity_error);
+                }
             }
 
             vm->set_stime(the_time);
@@ -432,9 +498,24 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
             }
             else
             {
-                vmpool->update_history(vm.get());
-                vmpool->update_previous_history(vm.get());
-                vmpool->update(vm.get());
+                if (vmpool->update_history(vm.get()) != 0 && vm->capacity_enforced()) return;
+                if (vmpool->update_previous_history(vm.get()) != 0 && vm->capacity_enforced()) return;
+                if (vmpool->update(vm.get()) != 0 && vm->capacity_enforced()) return;
+            }
+
+            if (capacity_rc != 0 && vm->capacity_enforced())
+            {
+                // Before a driver request, ordinary same-datastore unpinned
+                // running migration can use native failure restoration. Other
+                // legacy shapes remain in an explicit unresolved migration state.
+                if (!vm->is_pinned() && sr.nodes.empty() && sr.pci.empty() &&
+                    vm->get_ds_id() == vm->get_previous_ds_id() &&
+                    vm->get_cid() == vm->get_previous_cid())
+                {
+                    trigger_save_failure(vid);
+                }
+                else vm->log("LCM", Log::ERROR, "Enforced migration admission refused before driver dispatch; native recovery is required");
+                return;
             }
 
             //----------------------------------------------------
@@ -476,11 +557,33 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
                                         gid, req_id);
             }
 
+            vm->get_capacity(sr);
+            if (vm->capacity_enforced() && vm->get_hid() != vm->get_previous_hid())
+            {
+                // An offline/UNKNOWN migration must reserve before releasing
+                // source capacity or entering any transfer driver.
+                vm->set_state(VirtualMachine::ACTIVE);
+                std::string capacity_error;
+                const int rc = hpool->add_capacity(vm->get_hid(), sr, true,
+                        &capacity_error, [&]() { return vmpool->update(vm.get()); });
+                if (rc != 0)
+                {
+                    vm->set_template_error_message(capacity_error);
+                    vm->log("LCM", Log::ERROR, capacity_error);
+                    vm->set_stime(the_time);
+                    vm->set_prolog_stime(the_time);
+                    vm->set_action(VMActions::MIGRATE_ACTION, uid, gid, req_id);
+                    if (vmpool->update_history(vm.get()) != 0 || vmpool->update(vm.get()) != 0) return;
+                    trigger_prolog_failure(vid);
+                    return;
+                }
+            }
+
             vm->set_previous_running_etime(the_time);
 
             vm->set_previous_etime(the_time);
 
-            vmpool->update_previous_history(vm.get());
+            if (vmpool->update_previous_history(vm.get()) != 0 && vm->capacity_enforced()) return;
 
             vm->set_state(VirtualMachine::ACTIVE);
 
@@ -499,7 +602,15 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
             {
                 hpool->add_capacity(vm->get_hid(), sr);
 
-                hpool->del_capacity(vm->get_previous_hid(), sr);
+                if (vm->capacity_enforced())
+                {
+                    if (hpool->del_checked_capacity(vm->get_previous_hid(), sr) != 0)
+                    {
+                        vm->log("LCM", Log::ERROR, "Enforced migration source accounting release is unresolved");
+                        return;
+                    }
+                }
+                else hpool->del_capacity(vm->get_previous_hid(), sr);
 
                 vm->release_previous_vnc_port();
             }
@@ -510,9 +621,9 @@ void LifeCycleManager::trigger_migrate(int vid, const RequestAttributes& ra,
 
             vm->set_vm_info();
 
-            vmpool->update_history(vm.get());
+            if (vmpool->update_history(vm.get()) != 0 && vm->capacity_enforced()) return;
 
-            vmpool->update(vm.get());
+            if (vmpool->update(vm.get()) != 0 && vm->capacity_enforced()) return;
 
             //----------------------------------------------------
 
@@ -571,9 +682,17 @@ void LifeCycleManager::trigger_live_migrate(int vid, const RequestAttributes& ra
 
             vm->get_capacity(sr);
 
+            int capacity_rc = 0;
+            std::string capacity_error;
             if ( checked_capacity == 0 && vm->get_hid() != vm->get_previous_hid() )
             {
-                hpool->add_capacity(vm->get_hid(), sr);
+                capacity_rc = hpool->add_capacity(vm->get_hid(), sr, vm->capacity_enforced(),
+                        &capacity_error, [&]() { return vmpool->update(vm.get()); });
+                if (capacity_rc != 0 && vm->capacity_enforced())
+                {
+                    vm->set_template_error_message(capacity_error);
+                    vm->log("LCM", Log::ERROR, capacity_error);
+                }
             }
 
             vm->set_stime(time(0));
@@ -589,9 +708,24 @@ void LifeCycleManager::trigger_live_migrate(int vid, const RequestAttributes& ra
             }
             else
             {
-                vmpool->update_history(vm.get());
-                vmpool->update_previous_history(vm.get());
-                vmpool->update(vm.get());
+                if (vmpool->update_history(vm.get()) != 0 && vm->capacity_enforced()) return;
+                if (vmpool->update_previous_history(vm.get()) != 0 && vm->capacity_enforced()) return;
+                if (vmpool->update(vm.get()) != 0 && vm->capacity_enforced()) return;
+            }
+
+            if (capacity_rc != 0 && vm->capacity_enforced())
+            {
+                // Before a driver request, ordinary same-datastore unpinned
+                // running migration can use native failure restoration. Other
+                // legacy shapes remain in an explicit unresolved migration state.
+                if (!vm->is_pinned() && sr.nodes.empty() && sr.pci.empty() &&
+                    vm->get_ds_id() == vm->get_previous_ds_id() &&
+                    vm->get_cid() == vm->get_previous_cid())
+                {
+                    trigger_deploy_failure(vid);
+                }
+                else vm->log("LCM", Log::ERROR, "Enforced migration admission refused before driver dispatch; native recovery is required");
+                return;
             }
 
             //----------------------------------------------------
@@ -1815,12 +1949,30 @@ void LifeCycleManager::retry(VirtualMachine * vm)
 
     VirtualMachine::LcmState state = vm->get_lcm_state();
 
+    if (vm->capacity_enforced() && vm->capacity_admission_state())
+    {
+        HostShareCapacity capacity;
+        vm->get_capacity(capacity);
+        std::string error;
+        if (hpool->add_capacity(vm->get_hid(), capacity, true, &error,
+                              [&]() { return vmpool->update(vm); }) != 0)
+        {
+            vm->set_template_error_message(error);
+            vm->log("LCM", Log::ERROR, error + "; refusing driver retry");
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
+            return;
+        }
+        if (vmpool->update(vm) != 0) return;
+    }
+
+    if (!prepare_enforced_prolog_transfer(vm)) return;
+
     switch (state)
     {
         case VirtualMachine::BOOT_FAILURE:
             vm->set_state(VirtualMachine::BOOT);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             vmm->trigger_deploy(vid);
             break;
@@ -1828,7 +1980,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::BOOT_MIGRATE_FAILURE:
             vm->set_state(VirtualMachine::BOOT_MIGRATE);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             vmm->trigger_restore(vid);
             break;
@@ -1836,7 +1988,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::BOOT_UNDEPLOY_FAILURE:
             vm->set_state(VirtualMachine::BOOT_UNDEPLOY);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             vmm->trigger_deploy(vid);
             break;
@@ -1844,7 +1996,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::BOOT_STOPPED_FAILURE:
             vm->set_state(VirtualMachine::BOOT_STOPPED);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             vmm->trigger_restore(vid);
             break;
@@ -1852,7 +2004,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::PROLOG_MIGRATE_FAILURE:
             vm->set_state(VirtualMachine::PROLOG_MIGRATE);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_prolog_migr(vm);
             break;
@@ -1860,7 +2012,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::PROLOG_MIGRATE_POWEROFF_FAILURE:
             vm->set_state(VirtualMachine::PROLOG_MIGRATE_POWEROFF);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_prolog_migr(vm);
             break;
@@ -1869,7 +2021,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::PROLOG_MIGRATE_SUSPEND_FAILURE:
             vm->set_state(VirtualMachine::PROLOG_MIGRATE_SUSPEND);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_prolog_migr(vm);
             break;
@@ -1877,7 +2029,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::PROLOG_MIGRATE_UNKNOWN_FAILURE:
             vm->set_state(VirtualMachine::PROLOG_MIGRATE_UNKNOWN);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_prolog_migr(vm);
             break;
@@ -1885,7 +2037,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::PROLOG_RESUME_FAILURE:
             vm->set_state(VirtualMachine::PROLOG_RESUME);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_prolog_resume(vm);
             break;
@@ -1893,7 +2045,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::PROLOG_UNDEPLOY_FAILURE:
             vm->set_state(VirtualMachine::PROLOG_UNDEPLOY);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_prolog_resume(vm);
             break;
@@ -1901,7 +2053,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::PROLOG_FAILURE:
             vm->set_state(VirtualMachine::PROLOG);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_prolog(vm);
             break;
@@ -1909,7 +2061,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::EPILOG_FAILURE:
             vm->set_state(VirtualMachine::EPILOG);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_epilog(false, vm);
             break;
@@ -1917,7 +2069,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::EPILOG_STOP_FAILURE:
             vm->set_state(VirtualMachine::EPILOG_STOP);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_epilog_stop(vm);
             break;
@@ -1925,7 +2077,7 @@ void LifeCycleManager::retry(VirtualMachine * vm)
         case VirtualMachine::EPILOG_UNDEPLOY_FAILURE:
             vm->set_state(VirtualMachine::EPILOG_UNDEPLOY);
 
-            vmpool->update(vm);
+            if (vmpool->update(vm) != 0 && vm->capacity_enforced()) return;
 
             tm->trigger_epilog_stop(vm);
             break;

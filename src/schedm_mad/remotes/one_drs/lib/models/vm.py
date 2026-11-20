@@ -1037,6 +1037,10 @@ class Vm:
                 default=None,
                 metadata={"name": "CHECKED_CAPACITY_PENDING", "type": "Element"},
             )
+            enforce_capacity: Optional[bool] = field(
+                default=None,
+                metadata={"name": "ENFORCE_CAPACITY", "type": "Element"},
+            )
             pstime: Optional[int] = field(
                 default=None,
                 metadata={

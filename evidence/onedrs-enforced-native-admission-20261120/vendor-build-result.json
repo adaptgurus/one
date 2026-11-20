@@ -1,0 +1,54 @@
+{
+  "started_utc": "2026-11-20T04:42:07.296831+00:00",
+  "base_source_commit": "aec6d8656036d2674735ff2542c74633ac585a8d",
+  "base_vendor_build": "/root/ls-onedrs-r15-vendor-build-20261120",
+  "base_binary_sha256": "8a31919626c19a80739877690fa3ccd68133cd5f6f37ac888235f48c4fb89bf1",
+  "patch_sha256": "0a423129a021dbc04a72649273f3d15c98292df0b0190785143afa21d88719e0",
+  "changed_native_files": [
+    "include/History.h",
+    "include/HostPool.h",
+    "include/LifeCycleManager.h",
+    "include/VirtualMachine.h",
+    "src/dm/DispatchManagerActions.cc",
+    "src/lcm/LifeCycleActions.cc",
+    "src/lcm/LifeCycleStates.cc",
+    "src/rm/api/VirtualMachineAPI.cc",
+    "src/rm/api/VirtualMachineAPI.h",
+    "src/vm/History.cc",
+    "src/vm/VirtualMachine.cc"
+  ],
+  "command": [
+    "scons",
+    "-Q",
+    "-j4",
+    "mysql=yes",
+    "grpc=yes",
+    "systemd=yes",
+    "sqlite=yes",
+    "xmlrpc_pkgconf=yes",
+    "parsers=no",
+    "gitversion=aec6d865-enforce-wip-ls7.4.1-backport",
+    "src/nebula/oned",
+    "src/monitor/src/monitor/onemonitord"
+  ],
+  "compiler_flags": {
+    "CFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "CXXFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "LDFLAGS": "-Wl,-z,relro -Wl,--as-needed  -Wl,-z,now -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -flto=12"
+  },
+  "build_directory": "/root/ls-onedrs-r16-vendor-build-20261120",
+  "status": "PASS",
+  "revision": 2,
+  "elapsed_seconds": 63.32,
+  "exit_code": 0,
+  "artifacts": {
+    "src/nebula/oned": {
+      "sha256": "e93458d6aeec3eb59e5671e45dfb535338f664efc8b517a7d86b5f834f1ffd8c",
+      "size": 169487712
+    },
+    "src/monitor/src/monitor/onemonitord": {
+      "sha256": "57701aabb6506eca40afaadfe1fa784a3f35021f388ae7af89580a1921c0b97a",
+      "size": 11604632
+    }
+  }
+}

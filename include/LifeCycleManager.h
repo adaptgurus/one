@@ -90,6 +90,8 @@ public:
     bool cancel_checked_migration(std::unique_ptr<VirtualMachine>& vm, const std::string& reason);
     bool recover_checked_migrations(bool new_epoch, unsigned int term);
     bool persist_checked_migration_admission(VirtualMachine* vm);
+    bool has_enforced_capacity(VirtualMachine* vm);
+    bool prepare_enforced_prolog_transfer(VirtualMachine* vm);
 
     void trigger_save_success(int vid);
     void trigger_save_failure(int vid);

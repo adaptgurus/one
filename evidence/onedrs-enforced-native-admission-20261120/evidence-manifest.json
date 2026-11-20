@@ -1,0 +1,21 @@
+{
+  "api-history-first-green-result.json": "4f31548ab624695fec1f2a14f233aca079ed9dcfd54f9e232fb1d36f71f785b1",
+  "cold-first-green-result.json": "332f60d69ed699ff7c27e8a6bd88e0eaf64aca015787ea1a8f6afb522c03bd74",
+  "downgrade-native-result.json": "e1666f59696fb01d1ee3939098754671ed23466416319a7a43732f0c52c5ee01",
+  "downgrade-unit.log": "f901fbabb56c390d7ec0076b3e0fd921737c4ab64cd9dae784da066e2bb10567",
+  "enforce-first-green-result.json": "408263e50a47ddacb036696991b08660364350c1b8afdfa2692af09848250efc",
+  "legacy-red-result.json": "7ef80e0a39c783ac9848564bd1b0e27b58f0c9b366aaa94408f844c9d470ca7c",
+  "native-full-result.json": "aee1a25942d30e5313aa248424dac3ec4d0cf50d228849b225c2b43c2337334d",
+  "native-full.log": "3eeecbda786f959e7f1a1af31b9d62ae21b3c60c344673d6b5047e11ed430154",
+  "native_driver_fixture_sha256": "588cc804349ab78ffea7a25cc3cd8004b932496efd21afeeb156d1975a855e8d",
+  "native_patch_sha256": "0a423129a021dbc04a72649273f3d15c98292df0b0190785143afa21d88719e0",
+  "native_runner_sha256": "3ba4e7f75340be92275dbd818483f775b6b43c6070cd71751ad47c2ce965b90d",
+  "network-isolation.json": "8aa37080fecbf715532c5354ca8fd8ac5ce8e84b302710608ba84bdeb575cbcd",
+  "prepare-private-runtime.py": "6c4c0ba62af79d4da72db6f6f57142367236c45050040fb2b7a453391e06c4e9",
+  "python-results.json": "e2a78e265400dfcf2e8341eb38ccb1a62307d2dc4d67845e7b40fcc44e79ba50",
+  "rollback-normal.log": "190ec6ef3c6e6f9f16528a73c3cb11d301de2f24e7d9668c40f55e3fffddbb65",
+  "rollback-optimized.log": "c3732bd48e85a7a43e74019aa227f078d037db8334f510c8cc3528746ce60299",
+  "scheduler-normal.log": "35b6313fd7a562952d801e00358592ad42cfa1f3109a0f45cfa366dd906612db",
+  "scheduler-optimized.log": "23584f7caf3471cb33aa927e45bedefd5b4167116c3f641816f2e6944576b92e",
+  "vendor-build-result.json": "1f52bcfd9546e204cb30641c396817137a347f71029323f555f638dca170acf6"
+}

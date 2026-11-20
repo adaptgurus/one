@@ -2806,7 +2806,12 @@ static int test_set_capacity(VirtualMachine * vm, float cpu, long mem, int vcpu,
 
         host->add_capacity(sr);
 
-        hpool->update(host.get());
+        const int stored = hpool->update(host.get());
+        if (stored != 0 && enforce)
+        {
+            error = "Cannot persist enforced resize capacity";
+            return -1;
+        }
     }
     else
     {
@@ -2851,10 +2856,13 @@ int DispatchManager::resize(int vid, float cpu, int vcpu, long memory, bool enfo
 
         case VirtualMachine::ACTIVE:
         {
-            if (vm->get_lcm_state() != VirtualMachine::RUNNING)
+            if (vm->get_lcm_state() != VirtualMachine::RUNNING ||
+                (vm->capacity_enforced() && vm->is_previous_history_open()))
             {
                 rc = -1;
-                error_str = "Cannot resize a VM in state " + vm->state_str();
+                error_str = vm->capacity_enforced() && vm->is_previous_history_open() ?
+                    "Cannot resize while enforced migration history is open" :
+                    "Cannot resize a VM in state " + vm->state_str();
                 break;
             }
 
