@@ -1,0 +1,13 @@
+{
+  "status": "PASS",
+  "at": "2026-11-20T07:37:52.918286+00:00",
+  "scope": "SIGNED_VENDOR_RPM_COPY_ONLY_NO_INSTALL",
+  "source_node": "192.168.247.11",
+  "source_path": "/var/cache/dnf/onedrs-vendor-741-baabeb14d4adae83/packages/opennebula-libs-7.4.1-1.el9.noarch.rpm",
+  "path": "/root/ls-onedrs-rc-20261120/vendor-rpms/opennebula-libs-7.4.1-1.el9.noarch.rpm",
+  "sha256": "d785f97ab0bf4b8dbb2015556f6910aa1e9ee1010d973c57ade95ef9ad278457",
+  "size_bytes": 185468,
+  "source_rpmkeys_checksig": "/var/cache/dnf/onedrs-vendor-741-baabeb14d4adae83/packages/opennebula-libs-7.4.1-1.el9.noarch.rpm: digests signatures OK",
+  "vendor_repo_key_sha256": "614d5c03d905b2b3bb92f196f770e872465a17d27e69df9084df827344174a6f",
+  "transaction_receipt": "/root/ls-onedrs-rc-20261120/vendor-install-r2-result.json"
+}

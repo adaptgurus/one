@@ -1,0 +1,53 @@
+{
+  "scope": "UNPACKED_MATCHED_RPM_RUNTIME_CLOSURE_ONLY_NOT_INSTALLED_OR_FINAL_CANDIDATE",
+  "created_at": "2026-11-20T07:54:02.725493+00:00",
+  "status": "PASS",
+  "python_rc": 0,
+  "ruby_rc": 0,
+  "python": {
+    "status": "PASS",
+    "versions": {
+      "PuLP": "3.3.2",
+      "PyYAML": "6.0.1",
+      "xsdata": "26.2",
+      "typing_extensions": "4.16.0"
+    },
+    "models_imported": [
+      "vm",
+      "plan",
+      "cluster",
+      "vm_group"
+    ],
+    "modules_from_package": true,
+    "cbc_sha256": "2e17077752aa52b06385ad248c9e90bb4f1ce34038c34c94e1012ca6adea5cc7",
+    "solver_status": "Optimal",
+    "integer_objective": 3.0
+  },
+  "ruby": {
+    "scope": "LOCAL_RUBY_PROTOCOL_ONLY",
+    "status": "PASS",
+    "runtime": "/root/ls-onedrs-paired-package-20261120/pair-check-r3/unpacked-joint-payload/usr/lib/one/ruby",
+    "checks": [
+      "protocol_helpers_loaded_from_requested_runtime",
+      "old_request_started",
+      "new_request_started_same_vm",
+      "new_request_completes_before_old",
+      "old_request_completes_after_new",
+      "legacy_request_completed",
+      "old_reply_keeps_original_identity",
+      "new_reply_keeps_new_identity",
+      "untagged_request_does_not_inherit_context",
+      "logs_are_not_response_acknowledgements",
+      "worker_exception_is_preserved",
+      "worker_context_is_restored_on_exception",
+      "input_loop_queues_only_valid_or_legacy_actions",
+      "input_loop_strips_identity_before_action_arguments",
+      "input_loop_binds_immutable_action_context",
+      "input_loop_keeps_legacy_arguments",
+      "input_loop_refuses_malformed_identities"
+    ],
+    "count": 17
+  },
+  "package_receipt_sha256": "0ebf06872539d717bc27f5e44767a4c8a50dd8e1c39ca3498d1b96a43b2667c6",
+  "ruby_fixture_sha256": "8caecc4454efa56de0405f1fef738926fe012d046868d3c42e6fd6afa948d01a"
+}

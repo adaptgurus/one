@@ -6,7 +6,9 @@ require 'tempfile'
 require 'stringio'
 
 root = File.expand_path('../..', __dir__)
-$LOAD_PATH.unshift(File.join(root, 'src/mad/ruby'))
+raise 'Expected zero or one Ruby runtime directory' unless ARGV.size <= 1
+runtime = ARGV.empty? ? File.join(root, 'src/mad/ruby') : File.realpath(ARGV.fetch(0))
+$LOAD_PATH.unshift(runtime)
 require 'ActionManager'
 require 'DriverExecHelper'
 require 'OpenNebulaDriver'
@@ -16,6 +18,12 @@ assert = lambda do |name, condition|
   raise name unless condition
   checks << name
 end
+
+assert.call('protocol_helpers_loaded_from_requested_runtime',
+            %w[ActionManager DriverExecHelper OpenNebulaDriver].all? do |name|
+              expected = File.realpath(File.join(runtime, name + '.rb'))
+              $LOADED_FEATURES.any? { |path| File.exist?(path) && File.realpath(path) == expected }
+            end)
 
 class CorrelationHarness < ActionManager
   include DriverExecHelper
@@ -132,4 +140,4 @@ assert.call('input_loop_binds_immutable_action_context',
 assert.call('input_loop_keeps_legacy_arguments', captured[1][2].nil? && captured[1][3..-1] == ['53', 'legacyPayload'])
 assert.call('input_loop_refuses_malformed_identities', driver.instance_variable_get(:@refused).size == 2)
 puts JSON.pretty_generate({ :scope => 'LOCAL_RUBY_PROTOCOL_ONLY', :status => 'PASS',
-                            :checks => checks, :count => checks.size })
+                            :runtime => runtime, :checks => checks, :count => checks.size })

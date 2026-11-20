@@ -1,0 +1,58 @@
+{
+  "schema": "onedrs.native-rpm-pair/v1",
+  "source_commit": "62461a18d40dc758c1c0a7c2b0ca3d331b320186",
+  "packager_sha256": "fac4574586433d007626684f3bf04a6b9148e35af824b51790c7459fd8e4124c",
+  "created_at": "2026-11-20T07:50:09.173095+00:00",
+  "release": "20.ls.onedrs.62461a18.paircheck.lab.el9",
+  "scope": "PACKAGE_INTEGRITY_ONLY",
+  "production_certified": false,
+  "vendor_libs_sha256": "d785f97ab0bf4b8dbb2015556f6910aa1e9ee1010d973c57ade95ef9ad278457",
+  "vendor_libs_signature": "/root/ls-onedrs-paired-package-20261120/vendor-rpms/opennebula-libs-7.4.1-1.el9.noarch.rpm: digests signatures OK",
+  "status": "FAIL",
+  "packages": [
+    {
+      "verified_regular_files": 242,
+      "vendor_scriptlets_unchanged": true,
+      "dependency_semantics_preserved": true,
+      "dependency_provenance_flags_ignored": [
+        "FIND_REQUIRES",
+        "FIND_PROVIDES"
+      ],
+      "file_modes_flags_ownership_verified": true,
+      "path": "/root/ls-onedrs-paired-package-20261120/pair-check-r1/rpmbuild/RPMS/noarch/opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck.lab.el9.noarch.rpm",
+      "sha256": "d39504961db76b9c88bc53c1e4f79ebc2b9115b16a9d87b5178c2081e10a52cf",
+      "bytes": 227230,
+      "nevra": "opennebula-libs-7.4.1-20.ls.onedrs.62461a18.paircheck.lab.el9.noarch",
+      "spec_sha256": "e29520f5ad3347e3cff1afa7ec173247db060f107f93f76955d43fbeac0783d3",
+      "log_sha256": "d406e7f7b6b15a3536045ab5b5e99eb4afa0f33e95208249c25432e8e81ff052",
+      "signature": "NONE"
+    }
+  ],
+  "vendor_libs_files_verified": 242,
+  "library_changed_files": [
+    "/usr/lib/one/ruby/ActionManager.rb"
+  ],
+  "baseline_files_verified": 1225,
+  "native_build": {
+    "receipt_sha256": "f1a4c4bc5bde94178619585e230aa8db1b7a3070586625b21edb0b8b5e4585ef",
+    "build_source_commit": "e065adf2db79d1a61b5f4dee83915d267b298635",
+    "artifacts": [
+      {
+        "path": "/usr/bin/oned",
+        "before_sha256": "54964060a4c477fb19920315dd745ddab9e12cf32697a285017c15703783ba7b",
+        "sha256": "4940c8a1285b0b8cfd58223971068e4ae45d837afc93ad53c511a2614579490e",
+        "old_build_id": "edbf280608b9a235bda76f6d35215c61bfdcd390",
+        "new_build_id": "1025e812522f453a7689579040ad26a1e413b25d"
+      },
+      {
+        "path": "/usr/lib/one/mads/onemonitord",
+        "before_sha256": "79f13abf3ac6ed04ab70f3c5e18af1f7ad1dd57978fc44e096af23bf5581b405",
+        "sha256": "ef75e360da6e150fac7fb879fbd244f6672e0bf7de03dea7d47c3f8f979e1d22",
+        "old_build_id": "6c21f353af0c54d3ff69389b1c3170ca46fdc7a5",
+        "new_build_id": "d49f98622e7218e96b43de23202dfdf91622df5b"
+      }
+    ]
+  },
+  "removed_stale_runtime_files": [],
+  "error": "Python closure manifest differs"
+}

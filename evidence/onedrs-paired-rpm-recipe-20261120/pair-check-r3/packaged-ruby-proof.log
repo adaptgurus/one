@@ -1,0 +1,25 @@
+{
+  "scope": "LOCAL_RUBY_PROTOCOL_ONLY",
+  "status": "PASS",
+  "runtime": "/root/ls-onedrs-paired-package-20261120/pair-check-r3/unpacked-joint-payload/usr/lib/one/ruby",
+  "checks": [
+    "protocol_helpers_loaded_from_requested_runtime",
+    "old_request_started",
+    "new_request_started_same_vm",
+    "new_request_completes_before_old",
+    "old_request_completes_after_new",
+    "legacy_request_completed",
+    "old_reply_keeps_original_identity",
+    "new_reply_keeps_new_identity",
+    "untagged_request_does_not_inherit_context",
+    "logs_are_not_response_acknowledgements",
+    "worker_exception_is_preserved",
+    "worker_context_is_restored_on_exception",
+    "input_loop_queues_only_valid_or_legacy_actions",
+    "input_loop_strips_identity_before_action_arguments",
+    "input_loop_binds_immutable_action_context",
+    "input_loop_keeps_legacy_arguments",
+    "input_loop_refuses_malformed_identities"
+  ],
+  "count": 17
+}

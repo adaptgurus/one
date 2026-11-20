@@ -1,0 +1,1 @@
+{"status": "PASS", "versions": {"PuLP": "3.3.2", "PyYAML": "6.0.1", "xsdata": "26.2", "typing_extensions": "4.16.0"}, "models_imported": ["vm", "plan", "cluster", "vm_group"], "modules_from_package": true, "cbc_sha256": "2e17077752aa52b06385ad248c9e90bb4f1ce34038c34c94e1012ca6adea5cc7", "solver_status": "Optimal", "integer_objective": 3.0}

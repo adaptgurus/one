@@ -1,0 +1,52 @@
+warning: line 118: It's not recommended to have unversioned Obsoletes: Obsoletes: opennebula-addon-markets
+warning: line 119: It's not recommended to have unversioned Obsoletes: Obsoletes: opennebula-ozones
+warning: line 120: It's not recommended to have unversioned Obsoletes: Obsoletes: opennebula-provision
+warning: line 121: It's not recommended to have unversioned Obsoletes: Obsoletes: opennebula-provision-data
+setting SOURCE_DATE_EPOCH=1794528000
+Executing(%prep): /bin/sh -e /var/tmp/rpm-tmp.Z8gisX
++ umask 022
++ cd /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILD
++ RPM_EC=0
+++ jobs -p
++ exit 0
+Executing(%build): /bin/sh -e /var/tmp/rpm-tmp.AOUeT0
++ umask 022
++ cd /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILD
++ RPM_EC=0
+++ jobs -p
++ exit 0
+Executing(%install): /bin/sh -e /var/tmp/rpm-tmp.bToPLR
++ umask 022
++ cd /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILD
++ '[' /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64 '!=' / ']'
++ rm -rf /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64
+++ dirname /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64
++ mkdir -p /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT
++ mkdir /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64
++ mkdir -p /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64
++ cp -a /root/ls-onedrs-paired-package-20261120/pair-check-r3/server-payload/. /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64/
++ /usr/lib/rpm/check-buildroot
+Processing files: opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64
+warning: Explicit %attr() mode not applicable to symlink: /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64/usr/lib/.build-id/10/25e812522f453a7689579040ad26a1e413b25d
+warning: Explicit %attr() mode not applicable to symlink: /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64/usr/lib/.build-id/1e/008f08db25f30f9bbf627f18e4ef16136d0117
+warning: Explicit %attr() mode not applicable to symlink: /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64/usr/lib/.build-id/36/9e445401646f8b94927bd7cf17939b0380d829
+warning: Explicit %attr() mode not applicable to symlink: /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64/usr/lib/.build-id/5b/9e213c0584a3c45059ef63ce7bc2ebe7e7af3e
+warning: Explicit %attr() mode not applicable to symlink: /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64/usr/lib/.build-id/d4/9f98622e7218e96b43de23202dfdf91622df5b
+Provides: config(opennebula) = 7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9 opennebula = 7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9 opennebula(x86-64) = 7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9 opennebula-server = 7.4.1
+Requires(interp): /bin/sh /bin/sh /bin/sh /bin/sh /bin/sh /bin/sh
+Requires(rpmlib): rpmlib(CompressedFileNames) <= 3.0.4-1 rpmlib(FileDigests) <= 4.6.0-1 rpmlib(PayloadFilesHavePrefix) <= 4.0-1
+Requires(pre): /bin/sh
+Requires(post): /bin/sh
+Requires(preun): /bin/sh
+Requires(postun): /bin/sh
+Requires(posttrans): /bin/sh
+Obsoletes: onescape < 5.13.80 opennebula-addon-markets opennebula-ozones opennebula-provision opennebula-provision-data opennebula-server < 5.13.80
+Checking for unpackaged file(s): /usr/lib/rpm/check-files /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64
+Wrote: /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/RPMS/x86_64/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64.rpm
+Executing(%clean): /bin/sh -e /var/tmp/rpm-tmp.uaMfc2
++ umask 022
++ cd /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILD
++ /usr/bin/rm -rf /root/ls-onedrs-paired-package-20261120/pair-check-r3/rpmbuild/BUILDROOT/opennebula-7.4.1-20.ls.onedrs.62461a18.paircheck3.lab.el9.x86_64
++ RPM_EC=0
+++ jobs -p
++ exit 0

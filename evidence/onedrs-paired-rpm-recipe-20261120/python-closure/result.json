@@ -1,0 +1,55 @@
+{
+  "scope": "STAGED_OFFICIAL_PYTHON_WHEELS_AND_BUNDLED_SOLVER_NOT_INSTALLED_CANDIDATE",
+  "created_at": "2026-11-20T05:32:59.825734+00:00",
+  "wheels": [
+    {
+      "distribution": "PuLP",
+      "version": "3.3.2",
+      "filename": "pulp-3.3.2-py3-none-any.whl",
+      "sha256": "631b166f72086971a9597f7a0233ababa99bb8d50a01cd543f7758be5a9f86c0",
+      "size": 16391742,
+      "source_url": "https://files.pythonhosted.org/packages/dd/6e/d674f1dde91c71e2ac19e5e5cf1ee6d5845e3aefecd9c39ed9c4b0c9a696/pulp-3.3.2-py3-none-any.whl"
+    },
+    {
+      "distribution": "PyYAML",
+      "version": "6.0.1",
+      "filename": "PyYAML-6.0.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "6c22bec3fbe2524cde73d7ada88f6566758a8f7227bfbf93a408a9d86bcc12a0",
+      "size": 724969,
+      "source_url": "https://files.pythonhosted.org/packages/b4/33/720548182ffa8344418126017aa1d4ab4aeec9a2275f04ce3f3573d8ace8/PyYAML-6.0.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+    },
+    {
+      "distribution": "xsdata",
+      "version": "26.2",
+      "filename": "xsdata-26.2-py3-none-any.whl",
+      "sha256": "85a591a4405d903416afbd4a917e8dda8ea44641a3e66d72134bc2a31b3c16b0",
+      "size": 235561,
+      "source_url": "https://files.pythonhosted.org/packages/d3/92/f0edcbc2f895ecea14a68e492b24c157625e251279a94b172a6b263290e7/xsdata-26.2-py3-none-any.whl"
+    },
+    {
+      "distribution": "typing_extensions",
+      "version": "4.16.0",
+      "filename": "typing_extensions-4.16.0-py3-none-any.whl",
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+      "size": 45571,
+      "source_url": "https://files.pythonhosted.org/packages/49/d3/b8441a820a491ddfc024b0b0cf0393375b75ea13866d9c66727e54c2fc80/typing_extensions-4.16.0-py3-none-any.whl"
+    }
+  ],
+  "payload_files": 244,
+  "payload_manifest_sha256": "bf2054ef545ef9496d7c6b439ab89afb53940eae2e9d0a2484b3ef5d60f1eb32",
+  "proof": {
+    "python": "3.12.14 (main, Aug 13 2026, 00:00:00) [GCC 11.5.0 20240719 (Red Hat 11.5.0-14)]",
+    "versions": {
+      "PuLP": "3.3.2",
+      "PyYAML": "6.0.1",
+      "xsdata": "26.2",
+      "typing_extensions": "4.16.0"
+    },
+    "modules_from_staged_payload": true,
+    "cbc_binary": "python/pulp/solverdir/cbc/linux/i64/cbc",
+    "cbc_sha256": "2e17077752aa52b06385ad248c9e90bb4f1ce34038c34c94e1012ca6adea5cc7",
+    "solver_status": "Optimal",
+    "integer_result": 3.0,
+    "status": "PASS"
+  }
+}
