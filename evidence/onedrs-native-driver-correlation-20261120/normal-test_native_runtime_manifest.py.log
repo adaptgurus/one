@@ -1,0 +1,21 @@
+test_correlated_mad_requires_the_matching_libs_component (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_directory_symlink_is_not_followed (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_exact_commit_ignores_later_worktree_edits (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_file_symlink_is_not_followed (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_missing_schema_fails (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_new_module_is_included_without_handwritten_copy_list (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_only_two_entrypoints_get_declared_shebang_transform (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_runtime_content_drift_fails (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_short_or_symbolic_source_identity_is_refused (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_stage_never_overwrites_existing_directory (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_stale_runtime_module_fails (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_stale_schema_fails (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_test_and_download_tools_are_not_shipped (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_unknown_entrypoint_interpreter_fails (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_unknown_runtime_path_cannot_be_silently_omitted (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+test_unpacked_old_payload_missing_new_module_fails (test_native_runtime_manifest.RuntimeManifestTests) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 0.129s
+
+OK

@@ -1,0 +1,50 @@
+{
+  "schema": "onedrs.native-build/v1",
+  "status": "BUILDING",
+  "qualification": "COMPILE_ONLY",
+  "source_head": "8a5741f380e6d680defbfbf47a884c407cd7b755",
+  "overlay_base": "625da064a6477105b109a919eb29c602f97a6ec4",
+  "patch_sha256": "402c8389778fc379813cfe1cb4de0ba9e358bc16ef1c2da07bdd920999988d39",
+  "build_tree": "/root/ls-onedrs-r19-vendor-build-20261120",
+  "started_utc": "2026-11-20T07:05:29.690827+00:00",
+  "command": [
+    "scons",
+    "-Q",
+    "-j4",
+    "mysql=yes",
+    "grpc=yes",
+    "systemd=yes",
+    "sqlite=yes",
+    "xmlrpc_pkgconf=yes",
+    "parsers=no",
+    "gitversion=8a5741f3-correlation-source-wip-ls7.4.1-backport",
+    "src/nebula/oned",
+    "src/monitor/src/monitor/onemonitord"
+  ],
+  "compiler_flags": {
+    "CFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "CXXFLAGS": "-O2 -flto=auto -ffat-lto-objects -fexceptions -g -grecord-gcc-switches -pipe -Wall -Werror=format-security -Wp,-D_FORTIFY_SOURCE=2 -Wp,-D_GLIBCXX_ASSERTIONS -specs=/usr/lib/rpm/redhat/redhat-hardened-cc1 -fstack-protector-strong -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1  -m64 -march=x86-64-v2 -mtune=generic -fasynchronous-unwind-tables -fstack-clash-protection -fcf-protection -DRHEL_FAMILY",
+    "LDFLAGS": "-Wl,-z,relro -Wl,--as-needed  -Wl,-z,now -specs=/usr/lib/rpm/redhat/redhat-hardened-ld -specs=/usr/lib/rpm/redhat/redhat-annobin-cc1 -flto=12"
+  },
+  "native_source_sha256": {
+    "include/History.h": "a07d397767b09d4c1832fd716c46d1ac0dd03d0418946145efc92ffec7ab4e37",
+    "include/LifeCycleManager.h": "5fa43f4b7750049b57b455ab0b8774fc166dea215fd41bd357c65d017563e0fd",
+    "include/NativeDriverRequest.h": "dc225d9f7d44e14806553be62b7131434e3499c8e66ba78692597db317c42e13",
+    "include/VirtualMachine.h": "4d15ada5d1fcb97f8da3da661ac649e99623d3bbff4345f441971c4acdf15800",
+    "src/dm/DispatchManagerActions.cc": "fb12b7a898d00d0c74c44f7c6bdaf65147fe243a7bc0b8f648a16e9fa79ca4ee",
+    "src/lcm/LifeCycleActions.cc": "d70766d19d2853565dd2670a84d743582d769a06ef10c5c6c21011b901dbc220",
+    "src/lcm/LifeCycleStates.cc": "4b848f63939d9890b513ef4e3f139e7362b3760ae1dec1533588e7965756bc4a",
+    "src/rm/api/VirtualMachineAPI.cc": "90f158b5e299588a7f1dadced98c9cb6fc6455a7df2d48bb10da7895a58aa713",
+    "src/tm/TransferManager.cc": "04cb7971c1cd46925cd69ff806c625398a244df29fbfd55d4e6534c17261d0c3",
+    "src/tm/TransferManagerProtocol.cc": "41cbfef2fcd8f99490d9c4a3bcdb16f95c34ddce8c0f58ad6fee18e22879c7e6",
+    "src/vm/History.cc": "218f4039a610861487164a5fd8179a9c3b6c72af1aa7c5ba825e313d0b9ac043",
+    "src/vm/NativeDriverRequest.cc": "7b033e11cb6f20b546d97019656feb834b56107d13bd8c8598491f006485007c",
+    "src/vm/SConstruct": "9c1614bf6413dc021be247bd483310949ed7902ba4f290f86ccffdd2338f5a70",
+    "src/vmm/VirtualMachineManager.cc": "c578edd1cba7b980f45a7f62c651193a9bd1842b3d8845a5868670fe05dc74d3",
+    "src/vmm/VirtualMachineManagerProtocol.cc": "a40e81623f93a4479c2c3b83fef9f754a360c97e2bed519abeeb1347461f2514"
+  },
+  "inherited_cache_receipt_sha256": "47830d5049a0af1fa3a4a1e838a78c0af4a8b46d630331f75289dfac54ad4a5d",
+  "inherited_cache_custody_sha256": "74df1c84173b033fbe671a5e38118a5cfc1459600e202a15b9e677e469deecb4",
+  "runtime_tests_executed": false,
+  "capability_promoted": false
+}
